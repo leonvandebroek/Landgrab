@@ -21,7 +21,8 @@ public class GameService
         {
             Code = code,
             HostUserId = Guid.Parse(hostUserId),
-            ConnectionIds = [connectionId]
+            ConnectionIds = [connectionId],
+            ConnectionMap = { [connectionId] = hostUserId }
         };
 
         var player = new PlayerDto
@@ -52,9 +53,18 @@ public class GameService
 
         if (room.State.Players.Any(p => p.Id == userId))
         {
-            // Rejoin — update connection
-            room.ConnectionIds.Remove(connectionId);
+            // Rejoin — remove all stale connections for this user, then add the new one
+            var staleConnections = room.ConnectionMap
+                .Where(kv => kv.Value == userId)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (var stale in staleConnections)
+            {
+                room.ConnectionIds.Remove(stale);
+                room.ConnectionMap.Remove(stale);
+            }
             room.ConnectionIds.Add(connectionId);
+            room.ConnectionMap[connectionId] = userId;
             var existing = room.State.Players.First(p => p.Id == userId);
             existing.IsConnected = true;
             return (room, null);
@@ -68,6 +78,7 @@ public class GameService
             Color = Colors[colorIndex]
         });
         room.ConnectionIds.Add(connectionId);
+        room.ConnectionMap[connectionId] = userId;
         return (room, null);
     }
 
@@ -82,9 +93,16 @@ public class GameService
         var room = GetRoomByConnection(connectionId);
         if (room == null) return;
         room.ConnectionIds.Remove(connectionId);
-        var player = room.State.Players.FirstOrDefault(p =>
-            room.ConnectionIds.All(cid => cid != connectionId));
-        if (player != null) player.IsConnected = false;
+        if (room.ConnectionMap.TryGetValue(connectionId, out var userId))
+        {
+            room.ConnectionMap.Remove(connectionId);
+            // Mark player disconnected only if they have no remaining connections
+            if (!room.ConnectionMap.ContainsValue(userId))
+            {
+                var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+                if (player != null) player.IsConnected = false;
+            }
+        }
     }
 
     // ─── Alliance setup ──────────────────────────────────────────────────────
@@ -379,8 +397,9 @@ public class GameService
         var hexCaptured = to.Troops <= 0;
         if (hexCaptured)
         {
-            var troopsMoved = Math.Max(numAttackDice, 1);
-            from.Troops -= troopsMoved;
+            // Move at least numAttackDice (min 1) troops, but leave at least 1 behind in source hex
+            var troopsMoved = Math.Min(Math.Max(numAttackDice, 1), Math.Max(1, from.Troops - 1));
+            from.Troops = Math.Max(1, from.Troops - troopsMoved);
             to.OwnerId = attacker.Id;
             to.OwnerAllianceId = attacker.AllianceId;
             to.OwnerName = attacker.Name;

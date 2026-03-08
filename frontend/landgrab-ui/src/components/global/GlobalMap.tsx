@@ -10,21 +10,23 @@ interface Props {
   onAttack: (fromQ: number, fromR: number, toQ: number, toR: number) => void;
 }
 
-const HEX_SIZE = 18;
 const ZOOM = 13;
 
 export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const selectedRef = useRef<[number, number] | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, { zoom: ZOOM });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
+      attribution: '\u00a9 OpenStreetMap contributors'
     }).addTo(map);
+    const layerGroup = L.layerGroup().addTo(map);
     mapRef.current = map;
+    layerGroupRef.current = layerGroup;
   }, []);
 
   useEffect(() => {
@@ -34,24 +36,18 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
     // Center on player's first hex
     const myHex = hexes.find(h => h.ownerUserId === myUserId);
     if (myHex) {
-      const [px, py] = hexToPixel(myHex.q, myHex.r, HEX_SIZE * 1000);
+      const [px, py] = hexToPixel(myHex.q, myHex.r, 18 * 1000);
       map.setView([py / 111320, px / (111320 * Math.cos(py / 111320 * Math.PI / 180))], ZOOM);
     }
   }, [hexes, myUserId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    const layerGroup = layerGroupRef.current;
+    if (!map || !layerGroup) return;
 
-    // Draw hexes as SVG overlay — simplified for global view
-    // Each hex covers ~1km, so we map hex pixel coords to lat/lng
-    const svgBounds: L.LatLngBounds[] = [];
-    hexes.forEach(h => {
-      const [px, py] = hexToPixel(h.q, h.r, HEX_SIZE);
-      const lat = py / 1000;
-      const lng = px / 1000;
-      svgBounds.push(L.latLngBounds([lat - 0.005, lng - 0.005], [lat + 0.005, lng + 0.005]));
-    });
+    // Clear previous markers before redrawing
+    layerGroup.clearLayers();
 
     // For the global map, use L.circleMarker per hex (simpler, more performant at scale)
     hexes.forEach(h => {
@@ -68,7 +64,7 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
         fillOpacity: 0.8,
         weight: 1
       })
-        .bindTooltip(`${h.owner?.username ?? 'Unclaimed'} | ⚔️ ${h.troops}`)
+        .bindTooltip(`${h.owner?.username ?? 'Unclaimed'} | \u2694\ufe0f ${h.troops}`)
         .on('click', () => {
           if (!isMine && selectedRef.current) {
             const [fq, fr] = selectedRef.current;
@@ -78,7 +74,7 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
             selectedRef.current = [h.q, h.r];
           }
         })
-        .addTo(map);
+        .addTo(layerGroup);
     });
   }, [hexes, myUserId, onAttack]);
 

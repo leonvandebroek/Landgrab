@@ -65,6 +65,7 @@ public class GameRoom
     public Guid HostUserId { get; set; }
     public GameState State { get; set; } = new();
     public List<string> ConnectionIds { get; set; } = [];
+    public Dictionary<string, string> ConnectionMap { get; set; } = []; // connectionId → userId
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAt { get; set; }
 }

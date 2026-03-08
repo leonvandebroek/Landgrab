@@ -8,6 +8,15 @@ public class GlobalMapService(AppDbContext db)
 {
     private const int AttackCooldownMinutes = 5;
 
+    public async Task<IEnumerable<GlobalHex>> GetHexesForUserAsync(Guid userId)
+    {
+        return await db.GlobalHexes
+            .Where(h => h.OwnerUserId == userId)
+            .Include(h => h.Owner)
+            .Include(h => h.OwnerAlliance)
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<GlobalHex>> GetHexesNearAsync(double lat, double lng, int radiusKm = 50)
     {
         // Convert lat/lng to approximate hex grid coords at ~1km scale
