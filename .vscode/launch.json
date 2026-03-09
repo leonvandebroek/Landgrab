@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Backend: Debug",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "backend: build",
+            "program": "${workspaceFolder}/backend/Landgrab.Api/bin/Debug/net8.0/Landgrab.Api.dll",
+            "args": [
+                "--urls",
+                "http://localhost:5000"
+            ],
+            "cwd": "${workspaceFolder}/backend/Landgrab.Api",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ConnectionStrings__DefaultConnection": "Host=localhost;Database=landgrab;Username=postgres;Password=postgres"
+            }
+        },
+        {
+            "name": "Frontend: Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/frontend/landgrab-ui/src",
+            "sourceMaps": true
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack: Debug",
+            "configurations": [
+                "Backend: Debug",
+                "Frontend: Chrome"
+            ],
+            "preLaunchTask": "start-dev-services",
+            "stopAll": true
+        }
+    ]
+}
