@@ -183,6 +183,7 @@ public class GlobalMapService(AppDbContext db)
     {
         var allianceId = await db.AllianceMembers
             .Where(am => am.UserId == userId)
+            .OrderByDescending(am => am.JoinedAt)
             .Select(am => am.AllianceId)
             .FirstOrDefaultAsync();
         return allianceId == Guid.Empty ? null : allianceId;
