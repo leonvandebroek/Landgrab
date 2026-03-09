@@ -8,8 +8,9 @@ namespace Landgrab.Api.Auth;
 
 public class JwtService(IConfiguration config)
 {
-    private readonly string _secret = config["Jwt:Secret"]
-        ?? throw new InvalidOperationException("Jwt:Secret not configured");
+    private readonly string _secret = !string.IsNullOrEmpty(config["Jwt:Secret"])
+        ? config["Jwt:Secret"]!
+        : throw new InvalidOperationException("Jwt:Secret is not configured. Provide it via environment variable or user secrets.");
     private readonly string _issuer = config["Jwt:Issuer"] ?? "landgrab";
     private readonly string _audience = config["Jwt:Audience"] ?? "landgrab";
 
@@ -23,6 +24,8 @@ public class JwtService(IConfiguration config)
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
         };
 
         var token = new JwtSecurityToken(
