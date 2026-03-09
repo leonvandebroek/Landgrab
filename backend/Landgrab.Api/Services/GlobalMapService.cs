@@ -54,6 +54,7 @@ public class GlobalMapService(AppDbContext db)
             {
                 Q = toQ, R = toR,
                 OwnerUserId = attackerUserId,
+                OwnerAllianceId = await GetUserAllianceIdAsync(attackerUserId),
                 Troops = 1,
                 LastCaptured = DateTime.UtcNow
             };
@@ -79,12 +80,7 @@ public class GlobalMapService(AppDbContext db)
         if (attackRoll > defendRoll)
         {
             toHex.OwnerUserId = attackerUserId;
-            // Copy alliance from attacker's other hexes
-            var attackerAlliance = await db.AllianceMembers
-                .Where(am => am.UserId == attackerUserId)
-                .Select(am => am.AllianceId)
-                .FirstOrDefaultAsync();
-            toHex.OwnerAllianceId = attackerAlliance == Guid.Empty ? null : attackerAlliance;
+            toHex.OwnerAllianceId = await GetUserAllianceIdAsync(attackerUserId);
             toHex.Troops = 1;
             toHex.LastCaptured = DateTime.UtcNow;
             toHex.AttackCooldownUntil = null;
@@ -122,6 +118,7 @@ public class GlobalMapService(AppDbContext db)
         if (alreadyHasHex) return;
 
         var (q, r) = LatLngToHex(lat, lng);
+        var allianceId = await GetUserAllianceIdAsync(userId);
 
         // Find nearest unclaimed hex
         for (var radius = 0; radius <= 5; radius++)
@@ -137,6 +134,7 @@ public class GlobalMapService(AppDbContext db)
                     {
                         Q = fq, R = fr,
                         OwnerUserId = userId,
+                        OwnerAllianceId = allianceId,
                         Troops = 3,
                         LastCaptured = DateTime.UtcNow
                     });
@@ -179,5 +177,15 @@ public class GlobalMapService(AppDbContext db)
         if (dq > dr && dq > ds) rq = -rr - rs;
         else if (dr > ds) rr = -rq - rs;
         return ((int)rq, (int)rr);
+    }
+
+    private async Task<Guid?> GetUserAllianceIdAsync(Guid userId)
+    {
+        var allianceId = await db.AllianceMembers
+            .Where(am => am.UserId == userId)
+            .OrderByDescending(am => am.JoinedAt)
+            .Select(am => am.AllianceId)
+            .FirstOrDefaultAsync();
+        return allianceId == Guid.Empty ? null : allianceId;
     }
 }

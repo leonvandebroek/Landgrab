@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Landgrab.Api.Models;
 using Landgrab.Api.Services;
@@ -175,6 +176,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? Context.User?.FindFirstValue(JwtRegisteredClaimNames.Sub)
         ?? throw new HubException("Not authenticated.");
 
     private string Username => Context.User?.FindFirstValue(ClaimTypes.Name)
