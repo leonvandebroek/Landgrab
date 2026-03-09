@@ -145,37 +145,42 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Update map center when location is set
   useEffect(() => {
-    if (!mapRef.current || !state.mapLat) return;
+    if (!mapRef.current || state.mapLat === 0) return;
     mapRef.current.setView([state.mapLat, state.mapLng], REFERENCE_ZOOM);
   }, [state.mapLat, state.mapLng]);
 
-  // Create / update SVG overlay whenever grid changes
+  // Create / update SVG overlay whenever grid bounds change (map location / radius)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !state.mapLat || Object.keys(state.grid).length === 0) return;
+    if (!map || state.mapLat === 0) return;
 
     const bounds = computeSvgBounds(map);
 
-    // Remove old overlay
     if (overlayRef.current) {
-      overlayRef.current.remove();
-      overlayRef.current = null;
+      overlayRef.current.setBounds(bounds);
+    } else {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.style.overflow = 'visible';
+      svgLayerRef.current = svg;
+
+      const overlay = L.svgOverlay(svg, bounds, { interactive: true, zIndex: 400 });
+      overlay.addTo(map);
+      overlayRef.current = overlay;
     }
+  }, [state.mapLat, state.mapLng, state.gridRadius, computeSvgBounds]);
 
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.style.overflow = 'visible';
-    svgLayerRef.current = svg;
-
-    const overlay = L.svgOverlay(svg, bounds, { interactive: true, zIndex: 400 });
-    overlay.addTo(map);
-    overlayRef.current = overlay;
+  // Redraw SVG polygon content when game state or selection changes
+  useEffect(() => {
+    const map = mapRef.current;
+    const svg = svgLayerRef.current;
+    if (!map || !svg || Object.keys(state.grid).length === 0) return;
 
     drawGrid(svg, map);
 
     const onMove = () => drawGrid(svg, map);
     map.on('zoomend moveend', onMove);
     return () => { map.off('zoomend moveend', onMove); };
-  }, [state, computeSvgBounds, drawGrid]);
+  }, [drawGrid, state.grid]);
 
   return (
     <div className="game-map-container">

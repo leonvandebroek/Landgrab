@@ -33,9 +33,8 @@ public static class GlobalMapEndpoints
         HttpContext ctx,
         GlobalMapService service)
     {
-        var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        var hexes = await service.GetHexesNearAsync(0, 0, 99999);
-        var mine = hexes.Where(h => h.OwnerUserId?.ToString() == userId);
+        var userId = Guid.Parse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var mine = await service.GetHexesForUserAsync(userId);
         return Results.Ok(mine);
     }
 }

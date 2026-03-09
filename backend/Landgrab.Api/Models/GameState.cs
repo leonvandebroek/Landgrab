@@ -64,7 +64,8 @@ public class GameRoom
     public string Code { get; set; } = "";
     public Guid HostUserId { get; set; }
     public GameState State { get; set; } = new();
-    public List<string> ConnectionIds { get; set; } = [];
+    // Thread-safe map of connectionId → userId; single source of truth for active connections
+    public System.Collections.Concurrent.ConcurrentDictionary<string, string> ConnectionMap { get; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAt { get; set; }
 }
