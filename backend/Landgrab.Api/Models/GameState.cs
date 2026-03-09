@@ -51,6 +51,8 @@ public class GameState
     public int[] LastDiceRoll { get; set; } = [];
     public double? MapLat { get; set; }
     public double? MapLng { get; set; }
+    /// <summary>True when both map coordinates have been set by the host.</summary>
+    public bool HasMapLocation => MapLat.HasValue && MapLng.HasValue;
     public int GridRadius { get; set; } = 8;
     public int TurnNumber { get; set; }
     public string? WinnerId { get; set; }

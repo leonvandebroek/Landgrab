@@ -25,6 +25,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Compute the pixel bounding box of the hex grid at REFERENCE_ZOOM
   const computeSvgBounds = useCallback((map: L.Map) => {
+    if (state.mapLat == null || state.mapLng == null) return L.latLngBounds([0, 0], [0, 0]);
     const radius = state.gridRadius + 2;
     const allPixels = hexSpiral(radius).flatMap(([q, r]) => {
       const [px, py] = hexToPixel(q, r, HEX_SIZE);
@@ -36,7 +37,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     const minY = Math.min(...ys); const maxY = Math.max(...ys);
 
     // Convert grid-pixel offsets to Leaflet LatLng
-    const centerPt = map.project([state.mapLat!, state.mapLng!], REFERENCE_ZOOM);
+    const centerPt = map.project([state.mapLat, state.mapLng], REFERENCE_ZOOM);
     const sw = map.unproject([centerPt.x + minX, centerPt.y + maxY], REFERENCE_ZOOM);
     const ne = map.unproject([centerPt.x + maxX, centerPt.y + minY], REFERENCE_ZOOM);
     return L.latLngBounds(sw, ne);
@@ -47,6 +48,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     svg.innerHTML = '';
     const bounds = overlayRef.current?.getBounds();
     if (!bounds) return;
+    if (state.mapLat == null || state.mapLng == null) return;
 
     const sw = map.project(bounds.getSouthWest(), REFERENCE_ZOOM);
     const ne = map.project(bounds.getNorthEast(), REFERENCE_ZOOM);
@@ -57,7 +59,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     svg.setAttribute('width', String(svgW));
     svg.setAttribute('height', String(svgH));
 
-    const centerPt = map.project([state.mapLat!, state.mapLng!], REFERENCE_ZOOM);
+    const centerPt = map.project([state.mapLat, state.mapLng], REFERENCE_ZOOM);
     const offX = centerPt.x - sw.x;
     const offY = centerPt.y - ne.y;
 
@@ -145,14 +147,14 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Update map center when location is set
   useEffect(() => {
-    if (!mapRef.current || state.mapLat === null) return;
-    mapRef.current.setView([state.mapLat, state.mapLng!], REFERENCE_ZOOM);
+    if (!mapRef.current || state.mapLat == null || state.mapLng == null) return;
+    mapRef.current.setView([state.mapLat, state.mapLng], REFERENCE_ZOOM);
   }, [state.mapLat, state.mapLng]);
 
   // Create / update SVG overlay whenever grid bounds change (map location / radius)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || state.mapLat === null) return;
+    if (!map || state.mapLat == null || state.mapLng == null) return;
 
     const bounds = computeSvgBounds(map);
 

@@ -82,10 +82,8 @@ public class GameService
     public GameRoom? GetRoomByConnection(string connectionId) =>
         _rooms.Values.FirstOrDefault(r => r.ConnectionMap.ContainsKey(connectionId));
 
-    public void RemoveConnection(string connectionId)
+    public void RemoveConnection(GameRoom room, string connectionId)
     {
-        var room = GetRoomByConnection(connectionId);
-        if (room == null) return;
         if (room.ConnectionMap.TryRemove(connectionId, out var userId))
         {
             // Mark player disconnected only if they have no remaining connections
@@ -148,10 +146,10 @@ public class GameService
         if (room == null) return (null, "Room not found.");
         if (room.HostUserId.ToString() != userId) return (null, "Only the host can set the map location.");
 
-        if (double.IsNaN(lat) || double.IsInfinity(lat) || lat < -90 || lat > 90)
-            return (null, "Latitude must be between -90 and 90.");
-        if (double.IsNaN(lng) || double.IsInfinity(lng) || lng < -180 || lng > 180)
-            return (null, "Longitude must be between -180 and 180.");
+        if (!double.IsFinite(lat) || lat < -90 || lat > 90)
+            return (null, "Latitude must be a finite number between -90 and 90.");
+        if (!double.IsFinite(lng) || lng < -180 || lng > 180)
+            return (null, "Longitude must be a finite number between -180 and 180.");
 
         room.State.MapLat = lat;
         room.State.MapLng = lng;
@@ -167,6 +165,8 @@ public class GameService
         if (room.HostUserId.ToString() != userId) return (null, "Only the host can start the game.");
         if (room.State.Players.Count < 2) return (null, "Need at least 2 players.");
         if (room.State.Phase != GamePhase.Lobby) return (null, "Game already started.");
+        if (!room.State.HasMapLocation)
+            return (null, "Map location must be set before starting the game.");
 
         var state = room.State;
         state.Grid = HexService.BuildGrid(state.GridRadius);

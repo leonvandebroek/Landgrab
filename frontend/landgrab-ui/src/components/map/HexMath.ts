@@ -64,14 +64,19 @@ export function hexRound(q: number, r: number): [number, number] {
 /**
  * Global hex (q, r) → geographic [lat, lng].
  * Exact inverse of the backend's LatLngToHex — scale: 1 hex unit ≈ 1 km.
+ * Lat is clamped to ±85° (Leaflet/Mercator valid range) to avoid cos → 0 instability.
  */
 export function hexToLatLng(q: number, r: number): [number, number] {
   const kmPerDegLat = 111.32;
   // Flat-top hexToPixel with size = 1.0 km
   const x = (3 / 2) * q;
   const y = (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
-  const lat = y / kmPerDegLat;
-  const lng = x / (kmPerDegLat * Math.cos(lat * Math.PI / 180));
+  const lat = Math.max(-85, Math.min(85, y / kmPerDegLat));
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  // Guard against polar singularity: cos(±90°) = 0 makes lng undefined
+  const lng = cosLat > 1e-10
+    ? Math.max(-180, Math.min(180, x / (kmPerDegLat * cosLat)))
+    : 0;
   return [lat, lng];
 }
 
