@@ -25,6 +25,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Compute the pixel bounding box of the hex grid at REFERENCE_ZOOM
   const computeSvgBounds = useCallback((map: L.Map) => {
+    if (state.mapLat == null || state.mapLng == null) return L.latLngBounds([0, 0], [0, 0]);
     const radius = state.gridRadius + 2;
     const allPixels = hexSpiral(radius).flatMap(([q, r]) => {
       const [px, py] = hexToPixel(q, r, HEX_SIZE);
@@ -47,6 +48,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     svg.innerHTML = '';
     const bounds = overlayRef.current?.getBounds();
     if (!bounds) return;
+    if (state.mapLat == null || state.mapLng == null) return;
 
     const sw = map.project(bounds.getSouthWest(), REFERENCE_ZOOM);
     const ne = map.project(bounds.getNorthEast(), REFERENCE_ZOOM);
@@ -130,7 +132,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     if (!containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, {
-      center: [state.mapLat || 51.505, state.mapLng || -0.09],
+      center: [state.mapLat ?? 51.505, state.mapLng ?? -0.09],
       zoom: REFERENCE_ZOOM,
       zoomControl: true
     });
@@ -145,14 +147,14 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Update map center when location is set
   useEffect(() => {
-    if (!mapRef.current || state.mapLat === 0) return;
+    if (!mapRef.current || state.mapLat == null || state.mapLng == null) return;
     mapRef.current.setView([state.mapLat, state.mapLng], REFERENCE_ZOOM);
   }, [state.mapLat, state.mapLng]);
 
   // Create / update SVG overlay whenever grid bounds change (map location / radius)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || state.mapLat === 0) return;
+    if (!map || state.mapLat == null || state.mapLng == null) return;
 
     const bounds = computeSvgBounds(map);
 

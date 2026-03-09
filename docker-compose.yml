@@ -27,7 +27,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Host=db;Database=landgrab;Username=postgres;Password=postgres
-      - Jwt__Secret=${JWT_SECRET:-change-me-in-production-use-long-random-secret!!}
+      - Jwt__Secret=${JWT_SECRET:?JWT_SECRET environment variable must be set}
       - App__BaseUrl=${APP_URL:-http://localhost}
       - AllowedOrigins__0=http://localhost
     ports:

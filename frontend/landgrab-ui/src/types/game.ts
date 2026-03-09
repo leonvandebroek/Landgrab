@@ -42,8 +42,8 @@ export interface GameState {
   currentPlayerIndex: number;
   movesRemaining: number;
   lastDiceRoll: number[];
-  mapLat: number;
-  mapLng: number;
+  mapLat: number | null;
+  mapLng: number | null;
   gridRadius: number;
   turnNumber: number;
   winnerId?: string;

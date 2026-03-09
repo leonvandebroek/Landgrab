@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GlobalHex } from '../../types/game';
-import { hexToPixel } from '../map/HexMath';
+import { hexToLatLng } from '../map/HexMath';
 
 interface Props {
   hexes: GlobalHex[];
@@ -36,8 +36,8 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
     // Center on player's first hex
     const myHex = hexes.find(h => h.ownerUserId === myUserId);
     if (myHex) {
-      const [px, py] = hexToPixel(myHex.q, myHex.r, 18 * 1000);
-      map.setView([py / 111320, px / (111320 * Math.cos(py / 111320 * Math.PI / 180))], ZOOM);
+      const [lat, lng] = hexToLatLng(myHex.q, myHex.r);
+      map.setView([lat, lng], ZOOM);
     }
   }, [hexes, myUserId]);
 
@@ -51,9 +51,7 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
 
     // For the global map, use L.circleMarker per hex (simpler, more performant at scale)
     hexes.forEach(h => {
-      const [px, py] = hexToPixel(h.q, h.r, 1);
-      const lat = py / 10;
-      const lng = px / 10;
+      const [lat, lng] = hexToLatLng(h.q, h.r);
       const isMine = h.ownerUserId === myUserId;
       const color = isMine ? '#2ecc71' : (h.ownerUserId ? '#e74c3c' : '#95a5a6');
 
