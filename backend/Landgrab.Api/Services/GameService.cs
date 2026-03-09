@@ -148,6 +148,11 @@ public class GameService
         if (room == null) return (null, "Room not found.");
         if (room.HostUserId.ToString() != userId) return (null, "Only the host can set the map location.");
 
+        if (double.IsNaN(lat) || double.IsInfinity(lat) || lat < -90 || lat > 90)
+            return (null, "Latitude must be between -90 and 90.");
+        if (double.IsNaN(lng) || double.IsInfinity(lng) || lng < -180 || lng > 180)
+            return (null, "Longitude must be between -180 and 180.");
+
         room.State.MapLat = lat;
         room.State.MapLng = lng;
         return (room.State, null);

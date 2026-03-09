@@ -36,7 +36,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     const minY = Math.min(...ys); const maxY = Math.max(...ys);
 
     // Convert grid-pixel offsets to Leaflet LatLng
-    const centerPt = map.project([state.mapLat, state.mapLng], REFERENCE_ZOOM);
+    const centerPt = map.project([state.mapLat!, state.mapLng!], REFERENCE_ZOOM);
     const sw = map.unproject([centerPt.x + minX, centerPt.y + maxY], REFERENCE_ZOOM);
     const ne = map.unproject([centerPt.x + maxX, centerPt.y + minY], REFERENCE_ZOOM);
     return L.latLngBounds(sw, ne);
@@ -57,7 +57,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     svg.setAttribute('width', String(svgW));
     svg.setAttribute('height', String(svgH));
 
-    const centerPt = map.project([state.mapLat, state.mapLng], REFERENCE_ZOOM);
+    const centerPt = map.project([state.mapLat!, state.mapLng!], REFERENCE_ZOOM);
     const offX = centerPt.x - sw.x;
     const offY = centerPt.y - ne.y;
 
@@ -130,7 +130,7 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
     if (!containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, {
-      center: [state.mapLat || 51.505, state.mapLng || -0.09],
+      center: [state.mapLat ?? 51.505, state.mapLng ?? -0.09],
       zoom: REFERENCE_ZOOM,
       zoomControl: true
     });
@@ -145,14 +145,14 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Update map center when location is set
   useEffect(() => {
-    if (!mapRef.current || state.mapLat === 0) return;
-    mapRef.current.setView([state.mapLat, state.mapLng], REFERENCE_ZOOM);
+    if (!mapRef.current || state.mapLat === null) return;
+    mapRef.current.setView([state.mapLat, state.mapLng!], REFERENCE_ZOOM);
   }, [state.mapLat, state.mapLng]);
 
   // Create / update SVG overlay whenever grid bounds change (map location / radius)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || state.mapLat === 0) return;
+    if (!map || state.mapLat === null) return;
 
     const bounds = computeSvgBounds(map);
 

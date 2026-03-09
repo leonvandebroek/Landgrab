@@ -135,16 +135,16 @@ export function GameLobby({
         {isHost && (
           <div className="section">
             <h3>Map Location</h3>
-            {gameState.mapLat !== 0 && (
+            {gameState.mapLat !== null && (
               <p className="info-msg">
-                📍 Set: {gameState.mapLat.toFixed(4)}, {gameState.mapLng.toFixed(4)}
+                📍 Set: {gameState.mapLat.toFixed(4)}, {gameState.mapLng!.toFixed(4)}
               </p>
             )}
             <button className="btn-secondary" onClick={handleUseGPS} disabled={geo.loading}>
               {geo.loading ? 'Getting location…' : '📍 Use My GPS Location'}
             </button>
             {geo.error && <p className="error-msg">{geo.error}</p>}
-            {geo.lat && (
+            {geo.lat !== null && (
               <p className="info-msg">
                 GPS: {geo.lat.toFixed(4)}, {geo.lng?.toFixed(4)}
                 <button className="btn-ghost small" onClick={handleApplyLocation}>Apply</button>
@@ -178,7 +178,7 @@ export function GameLobby({
           <button
             className="btn-primary big"
             onClick={onStartGame}
-            disabled={gameState.players.length < 2 || gameState.mapLat === 0}
+            disabled={gameState.players.length < 2 || gameState.mapLat === null}
           >
             🚀 Start Game
           </button>

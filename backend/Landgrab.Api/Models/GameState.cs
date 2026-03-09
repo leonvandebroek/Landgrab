@@ -49,8 +49,8 @@ public class GameState
     public int CurrentPlayerIndex { get; set; }
     public int MovesRemaining { get; set; }
     public int[] LastDiceRoll { get; set; } = [];
-    public double MapLat { get; set; }
-    public double MapLng { get; set; }
+    public double? MapLat { get; set; }
+    public double? MapLng { get; set; }
     public int GridRadius { get; set; } = 8;
     public int TurnNumber { get; set; }
     public string? WinnerId { get; set; }

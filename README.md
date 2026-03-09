@@ -28,7 +28,7 @@ Landgrab overlays a hexagonal grid on **your real neighborhood map** (OpenStreet
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18 + TypeScript + Vite + Leaflet.js |
+| Frontend | React 19 + TypeScript + Vite + Leaflet.js |
 | Backend | ASP.NET Core 8 Minimal API + SignalR |
 | Realtime | ASP.NET Core SignalR (dev) → Azure SignalR Service (prod) |
 | Database | PostgreSQL + Entity Framework Core |

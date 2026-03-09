@@ -62,8 +62,19 @@ export function hexRound(q: number, r: number): [number, number] {
 }
 
 /**
- * Generate all hex coordinates within axial radius from origin.
+ * Global hex (q, r) → geographic [lat, lng].
+ * Exact inverse of the backend's LatLngToHex — scale: 1 hex unit ≈ 1 km.
  */
+export function hexToLatLng(q: number, r: number): [number, number] {
+  const kmPerDegLat = 111.32;
+  // Flat-top hexToPixel with size = 1.0 km
+  const x = (3 / 2) * q;
+  const y = (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r);
+  const lat = y / kmPerDegLat;
+  const lng = x / (kmPerDegLat * Math.cos(lat * Math.PI / 180));
+  return [lat, lng];
+}
+
 export function hexSpiral(radius: number): [number, number][] {
   const result: [number, number][] = [];
   for (let q = -radius; q <= radius; q++) {

@@ -21,7 +21,10 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
         gameService.RemoveConnection(Context.ConnectionId);
+        if (room != null)
+            await Clients.Group(room.Code).SendAsync("StateUpdated", room.State);
         await base.OnDisconnectedAsync(exception);
     }
 
