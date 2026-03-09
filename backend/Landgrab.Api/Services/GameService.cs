@@ -20,10 +20,9 @@ public class GameService
         var room = new GameRoom
         {
             Code = code,
-            HostUserId = Guid.Parse(hostUserId),
-            ConnectionIds = [connectionId],
-            ConnectionMap = { [connectionId] = hostUserId }
+            HostUserId = Guid.Parse(hostUserId)
         };
+        room.ConnectionMap.TryAdd(connectionId, hostUserId);
 
         var player = new PlayerDto
         {
@@ -59,12 +58,8 @@ public class GameService
                 .Select(kv => kv.Key)
                 .ToList();
             foreach (var stale in staleConnections)
-            {
-                room.ConnectionIds.Remove(stale);
-                room.ConnectionMap.Remove(stale);
-            }
-            room.ConnectionIds.Add(connectionId);
-            room.ConnectionMap[connectionId] = userId;
+                room.ConnectionMap.TryRemove(stale, out _);
+            room.ConnectionMap.TryAdd(connectionId, userId);
             var existing = room.State.Players.First(p => p.Id == userId);
             existing.IsConnected = true;
             return (room, null);
@@ -77,8 +72,7 @@ public class GameService
             Name = username,
             Color = Colors[colorIndex]
         });
-        room.ConnectionIds.Add(connectionId);
-        room.ConnectionMap[connectionId] = userId;
+        room.ConnectionMap.TryAdd(connectionId, userId);
         return (room, null);
     }
 
@@ -86,18 +80,16 @@ public class GameService
         _rooms.TryGetValue(code.ToUpper(), out var r) ? r : null;
 
     public GameRoom? GetRoomByConnection(string connectionId) =>
-        _rooms.Values.FirstOrDefault(r => r.ConnectionIds.Contains(connectionId));
+        _rooms.Values.FirstOrDefault(r => r.ConnectionMap.ContainsKey(connectionId));
 
     public void RemoveConnection(string connectionId)
     {
         var room = GetRoomByConnection(connectionId);
         if (room == null) return;
-        room.ConnectionIds.Remove(connectionId);
-        if (room.ConnectionMap.TryGetValue(connectionId, out var userId))
+        if (room.ConnectionMap.TryRemove(connectionId, out var userId))
         {
-            room.ConnectionMap.Remove(connectionId);
             // Mark player disconnected only if they have no remaining connections
-            if (!room.ConnectionMap.ContainsValue(userId))
+            if (!room.ConnectionMap.Values.Contains(userId))
             {
                 var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
                 if (player != null) player.IsConnected = false;

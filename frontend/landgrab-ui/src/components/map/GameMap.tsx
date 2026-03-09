@@ -145,14 +145,14 @@ export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
 
   // Update map center when location is set
   useEffect(() => {
-    if (!mapRef.current || !state.mapLat) return;
+    if (!mapRef.current || state.mapLat === 0) return;
     mapRef.current.setView([state.mapLat, state.mapLng], REFERENCE_ZOOM);
   }, [state.mapLat, state.mapLng]);
 
   // Create / update SVG overlay whenever grid bounds change (map location / radius)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !state.mapLat) return;
+    if (!map || state.mapLat === 0) return;
 
     const bounds = computeSvgBounds(map);
 
