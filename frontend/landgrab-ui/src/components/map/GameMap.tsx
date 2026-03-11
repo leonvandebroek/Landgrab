@@ -141,9 +141,9 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       const fillColor = cell.isMasterTile
         ? hostColor
         : cell.ownerColor ?? '#9fb3c8';
-      const fillOpacity = cell.isMasterTile ? 0.45 : cell.ownerId ? (isMine ? 0.72 : 0.5) : 0.16;
-      let borderColor = '#dfe6e9';
-      let borderWeight = 1;
+      const fillOpacity = cell.isMasterTile ? 0.45 : cell.ownerId ? (isMine ? 0.72 : 0.5) : 0.30;
+      let borderColor = cell.ownerId ? '#dfe6e9' : '#7f8c8d';
+      let borderWeight = cell.ownerId ? 1 : 1.5;
 
       if (cell.isMasterTile) {
         borderColor = '#f1c40f';
@@ -161,7 +161,7 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       const polygon = L.polygon(corners, {
         color: borderColor,
         weight: borderWeight,
-        opacity: cell.ownerId || cell.isMasterTile ? 0.95 : 0.45,
+        opacity: cell.ownerId || cell.isMasterTile ? 0.95 : 0.80,
         fillColor,
         fillOpacity
       });
