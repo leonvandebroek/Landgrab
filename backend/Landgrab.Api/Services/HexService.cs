@@ -4,6 +4,7 @@ namespace Landgrab.Api.Services;
 
 public static class HexService
 {
+    private const double MetersPerDegreeLat = 111_320d;
     private static readonly (int q, int r)[] Directions =
         [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
 
@@ -15,7 +16,6 @@ public static class HexService
     public static bool AreAdjacent(int q1, int r1, int q2, int r2) =>
         Neighbors(q1, r1).Any(n => n.q == q2 && n.r == r2);
 
-    /// <summary>Generates all hex coordinates within axial radius of origin (0,0).</summary>
     public static IEnumerable<(int q, int r)> Spiral(int radius)
     {
         for (var q = -radius; q <= radius; q++)
@@ -27,7 +27,6 @@ public static class HexService
         }
     }
 
-    /// <summary>Builds an empty grid of HexCells for a room.</summary>
     public static Dictionary<string, HexCell> BuildGrid(int radius)
     {
         var grid = new Dictionary<string, HexCell>();
@@ -36,26 +35,27 @@ public static class HexService
         return grid;
     }
 
-    /// <summary>Returns true if (q,r) is adjacent to any hex owned by playerId (or their alliance).</summary>
     public static bool IsAdjacentToOwned(Dictionary<string, HexCell> grid, int q, int r,
         string playerId, string? allianceId)
     {
         return Neighbors(q, r).Any(n =>
         {
-            if (!grid.TryGetValue(Key(n.q, n.r), out var cell)) return false;
+            if (!grid.TryGetValue(Key(n.q, n.r), out var cell))
+                return false;
+
             return cell.OwnerId == playerId ||
                    (allianceId != null && cell.OwnerAllianceId == allianceId);
         });
     }
 
-    /// <summary>Counts ally hexes bordering the target (for alliance defense bonus).</summary>
     public static int CountAllyBorderHexes(Dictionary<string, HexCell> grid, int q, int r,
         string defenderId, string? defenderAllianceId)
     {
         return Neighbors(q, r).Count(n =>
         {
-            if (!grid.TryGetValue(Key(n.q, n.r), out var cell)) return false;
-            if (cell.Q == q && cell.R == r) return false;
+            if (!grid.TryGetValue(Key(n.q, n.r), out var cell))
+                return false;
+
             return cell.OwnerId != null && cell.OwnerId != defenderId &&
                    cell.OwnerAllianceId != null && cell.OwnerAllianceId == defenderAllianceId;
         });
@@ -66,4 +66,52 @@ public static class HexService
 
     public static int AllianceTerritoryCount(Dictionary<string, HexCell> grid, string allianceId) =>
         grid.Values.Count(c => c.OwnerAllianceId == allianceId);
+
+    public static (double lat, double lng) HexToLatLng(int q, int r, double mapLat, double mapLng,
+        int tileSizeMeters)
+    {
+        var xMeters = tileSizeMeters * 1.5d * q;
+        var yMeters = tileSizeMeters * Math.Sqrt(3d) * (r + q / 2d);
+        var lat = mapLat + yMeters / MetersPerDegreeLat;
+        var cosLat = Math.Cos(mapLat * Math.PI / 180d);
+        var lng = mapLng + xMeters / (MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d));
+        return (lat, lng);
+    }
+
+    public static (int q, int r) LatLngToHexForRoom(double lat, double lng, double mapLat,
+        double mapLng, int tileSizeMeters)
+    {
+        var yMeters = (lat - mapLat) * MetersPerDegreeLat;
+        var cosLat = Math.Cos(mapLat * Math.PI / 180d);
+        var xMeters = (lng - mapLng) * MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d);
+
+        var q = (2d / 3d * xMeters) / tileSizeMeters;
+        var r = (-1d / 3d * xMeters + Math.Sqrt(3d) / 3d * yMeters) / tileSizeMeters;
+        return HexRound(q, r);
+    }
+
+    public static bool IsPlayerInHex(double playerLat, double playerLng, int q, int r,
+        double mapLat, double mapLng, int tileSizeMeters)
+    {
+        var playerHex = LatLngToHexForRoom(playerLat, playerLng, mapLat, mapLng, tileSizeMeters);
+        return playerHex.q == q && playerHex.r == r;
+    }
+
+    private static (int q, int r) HexRound(double q, double r)
+    {
+        var s = -q - r;
+        var roundedQ = Math.Round(q);
+        var roundedR = Math.Round(r);
+        var roundedS = Math.Round(s);
+        var deltaQ = Math.Abs(roundedQ - q);
+        var deltaR = Math.Abs(roundedR - r);
+        var deltaS = Math.Abs(roundedS - s);
+
+        if (deltaQ > deltaR && deltaQ > deltaS)
+            roundedQ = -roundedR - roundedS;
+        else if (deltaR > deltaS)
+            roundedR = -roundedQ - roundedS;
+
+        return ((int)roundedQ, (int)roundedR);
+    }
 }

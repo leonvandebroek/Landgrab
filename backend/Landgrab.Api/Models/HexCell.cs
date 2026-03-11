@@ -8,10 +8,10 @@ public class HexCell
     public string? OwnerAllianceId { get; set; }
     public string? OwnerName { get; set; }
     public string? OwnerColor { get; set; }
-    public int Troops { get; set; } = 0;
+    public int Troops { get; set; }
+    public bool IsMasterTile { get; set; }
 }
 
-// Persistent global hex (stored in DB)
 public class GlobalHex
 {
     public int Q { get; set; }

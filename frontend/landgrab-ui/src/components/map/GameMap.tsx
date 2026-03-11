@@ -1,192 +1,206 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
-import {
-  hexCornerPoints, hexToPixel, hexKey, hexSpiral
-} from './HexMath';
+import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
+
+interface LocationPoint {
+  lat: number;
+  lng: number;
+}
 
 interface Props {
   state: GameState;
   myUserId: string;
-  onHexClick: (q: number, r: number, cell: HexCell | undefined) => void;
-  selectedHex: [number, number] | null;
+  currentLocation: LocationPoint | null;
+  onHexClick?: (q: number, r: number, cell: HexCell | undefined) => void;
+  selectedHex?: [number, number] | null;
 }
 
-// Hex visual size in pixels at the game's reference zoom level
-const HEX_SIZE = 38;
-const REFERENCE_ZOOM = 16;
+const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 
-export function GameMap({ state, myUserId, onHexClick, selectedHex }: Props) {
+export function GameMap({ state, myUserId, currentLocation, onHexClick, selectedHex = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const svgLayerRef = useRef<SVGSVGElement | null>(null);
-  const overlayRef = useRef<L.SVGOverlay | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const geometryKeyRef = useRef('');
+  const initialCenterRef = useRef<[number, number]>(
+    state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER
+  );
 
-  // Compute the pixel bounding box of the hex grid at REFERENCE_ZOOM
-  const computeSvgBounds = useCallback((map: L.Map) => {
-    if (state.mapLat == null || state.mapLng == null) return L.latLngBounds([0, 0], [0, 0]);
-    const radius = state.gridRadius + 2;
-    const allPixels = hexSpiral(radius).flatMap(([q, r]) => {
-      const [px, py] = hexToPixel(q, r, HEX_SIZE);
-      return [[px - HEX_SIZE, py - HEX_SIZE], [px + HEX_SIZE, py + HEX_SIZE]];
-    });
-    const xs = allPixels.map(p => p[0]);
-    const ys = allPixels.map(p => p[1]);
-    const minX = Math.min(...xs); const maxX = Math.max(...xs);
-    const minY = Math.min(...ys); const maxY = Math.max(...ys);
-
-    // Convert grid-pixel offsets to Leaflet LatLng
-    const centerPt = map.project([state.mapLat, state.mapLng], REFERENCE_ZOOM);
-    const sw = map.unproject([centerPt.x + minX, centerPt.y + maxY], REFERENCE_ZOOM);
-    const ne = map.unproject([centerPt.x + maxX, centerPt.y + minY], REFERENCE_ZOOM);
-    return L.latLngBounds(sw, ne);
-  }, [state.mapLat, state.mapLng, state.gridRadius]);
-
-  // Draw all hex polygons into the SVG layer
-  const drawGrid = useCallback((svg: SVGSVGElement, map: L.Map) => {
-    svg.innerHTML = '';
-    const bounds = overlayRef.current?.getBounds();
-    if (!bounds) return;
-    if (state.mapLat == null || state.mapLng == null) return;
-
-    const sw = map.project(bounds.getSouthWest(), REFERENCE_ZOOM);
-    const ne = map.project(bounds.getNorthEast(), REFERENCE_ZOOM);
-    const svgW = ne.x - sw.x;
-    const svgH = sw.y - ne.y;
-
-    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
-    svg.setAttribute('width', String(svgW));
-    svg.setAttribute('height', String(svgH));
-
-    const centerPt = map.project([state.mapLat, state.mapLng], REFERENCE_ZOOM);
-    const offX = centerPt.x - sw.x;
-    const offY = centerPt.y - ne.y;
-
-    const currentPlayer = state.players[state.currentPlayerIndex % state.players.length];
-
-    for (const [q, r] of hexSpiral(state.gridRadius)) {
-      const [px, py] = hexToPixel(q, r, HEX_SIZE);
-      const cx = px + offX;
-      const cy = py + offY;
-
-      const key = hexKey(q, r);
-      const cell: HexCell | undefined = state.grid[key];
-
-      const isSelected = selectedHex?.[0] === q && selectedHex?.[1] === r;
-      const isMine = cell?.ownerId === myUserId;
-      const isEmpty = !cell?.ownerId;
-      const isEnemy = cell?.ownerId && cell.ownerId !== myUserId;
-
-      // Fill color
-      let fill = '#e8f4f8';
-      if (cell?.ownerColor) fill = cell.ownerColor + (isMine ? 'ee' : '99');
-      if (isEmpty) fill = '#f0f4f8cc';
-
-      // Glow for interactive hexes on current player's turn
-      const isMyTurn = currentPlayer?.id === myUserId;
-      let stroke = '#ffffff44';
-      let strokeWidth = 1;
-      if (isSelected) { stroke = '#ffffff'; strokeWidth = 3; }
-      else if (isMyTurn && (state.phase === 'Claim' || state.phase === 'Reinforce')) {
-        if (isMine) { stroke = '#ffffffaa'; strokeWidth = 2; }
-        else if (isEmpty) { stroke = '#2ecc71aa'; strokeWidth = 2; }
-        else if (isEnemy) { stroke = '#e74c3caa'; strokeWidth = 2; }
-      }
-
-      const points = hexCornerPoints(cx, cy, HEX_SIZE - 1);
-
-      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      poly.setAttribute('points', points);
-      poly.setAttribute('fill', fill);
-      poly.setAttribute('stroke', stroke);
-      poly.setAttribute('stroke-width', String(strokeWidth));
-      poly.setAttribute('data-q', String(q));
-      poly.setAttribute('data-r', String(r));
-      poly.style.cursor = 'pointer';
-      poly.style.transition = 'fill 0.2s';
-
-      poly.addEventListener('click', () => onHexClick(q, r, cell));
-
-      svg.appendChild(poly);
-
-      // Troop count label
-      if (cell?.troops && cell.troops > 0) {
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', String(cx));
-        text.setAttribute('y', String(cy + 5));
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('font-size', '13');
-        text.setAttribute('font-weight', 'bold');
-        text.setAttribute('fill', '#fff');
-        text.setAttribute('pointer-events', 'none');
-        text.setAttribute('style', 'text-shadow: 0 1px 2px #000;');
-        text.textContent = String(cell.troops);
-        svg.appendChild(text);
-      }
+  const currentHex = useMemo(() => {
+    if (!currentLocation || state.mapLat == null || state.mapLng == null) {
+      return null;
     }
-  }, [state, myUserId, selectedHex, onHexClick]);
 
-  // Initialize map once
+    return latLngToRoomHex(
+      currentLocation.lat,
+      currentLocation.lng,
+      state.mapLat,
+      state.mapLng,
+      state.tileSizeMeters
+    );
+  }, [currentLocation, state.mapLat, state.mapLng, state.tileSizeMeters]);
+
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current || mapRef.current) {
+      return;
+    }
 
     const map = L.map(containerRef.current, {
-      center: [state.mapLat ?? 51.505, state.mapLng ?? -0.09],
-      zoom: REFERENCE_ZOOM,
+      center: initialCenterRef.current,
+      zoom: 16,
       zoomControl: true
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution: '© OpenStreetMap contributors',
       maxZoom: 19
     }).addTo(map);
 
+    layerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update map center when location is set
-  useEffect(() => {
-    if (!mapRef.current || state.mapLat == null || state.mapLng == null) return;
-    mapRef.current.setView([state.mapLat, state.mapLng], REFERENCE_ZOOM);
-  }, [state.mapLat, state.mapLng]);
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      layerGroupRef.current = null;
+      geometryKeyRef.current = '';
+    };
+  }, []);
 
-  // Create / update SVG overlay whenever grid bounds change (map location / radius)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || state.mapLat == null || state.mapLng == null) return;
-
-    const bounds = computeSvgBounds(map);
-
-    if (overlayRef.current) {
-      overlayRef.current.setBounds(bounds);
-    } else {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.style.overflow = 'visible';
-      svgLayerRef.current = svg;
-
-      const overlay = L.svgOverlay(svg, bounds, { interactive: true, zIndex: 400 });
-      overlay.addTo(map);
-      overlayRef.current = overlay;
+    if (!map || state.mapLat == null || state.mapLng == null) {
+      return;
     }
-  }, [state.mapLat, state.mapLng, state.gridRadius, computeSvgBounds]);
 
-  // Redraw SVG polygon content when game state or selection changes
+    const geometryKey = `${state.mapLat}:${state.mapLng}:${state.tileSizeMeters}:${state.gridRadius}`;
+    if (geometryKeyRef.current === geometryKey) {
+      return;
+    }
+
+    geometryKeyRef.current = geometryKey;
+
+    const points = Object.values(state.grid)
+      .flatMap(cell => roomHexCornerLatLngs(cell.q, cell.r, state.mapLat!, state.mapLng!, state.tileSizeMeters))
+      .map(([lat, lng]) => L.latLng(lat, lng));
+
+    if (points.length === 0) {
+      map.setView([state.mapLat, state.mapLng], 16);
+      return;
+    }
+
+    map.fitBounds(L.latLngBounds(points), { padding: [24, 24] });
+  }, [state.grid, state.gridRadius, state.mapLat, state.mapLng, state.tileSizeMeters]);
+
   useEffect(() => {
     const map = mapRef.current;
-    const svg = svgLayerRef.current;
-    if (!map || !svg || Object.keys(state.grid).length === 0) return;
+    const layerGroup = layerGroupRef.current;
+    if (!map || !layerGroup || state.mapLat == null || state.mapLng == null) {
+      return;
+    }
 
-    drawGrid(svg, map);
+    layerGroup.clearLayers();
 
-    const onMove = () => drawGrid(svg, map);
-    map.on('zoomend moveend', onMove);
-    return () => { map.off('zoomend moveend', onMove); };
-  }, [drawGrid, state.grid]);
+    const hostPlayer = state.players.find(player => player.isHost);
+    const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
+
+    for (const cell of Object.values(state.grid)) {
+      const corners = roomHexCornerLatLngs(
+        cell.q,
+        cell.r,
+        state.mapLat,
+        state.mapLng,
+        state.tileSizeMeters
+      );
+      const [centerLat, centerLng] = roomHexToLatLng(
+        cell.q,
+        cell.r,
+        state.mapLat,
+        state.mapLng,
+        state.tileSizeMeters
+      );
+
+      const isMine = cell.ownerId === myUserId;
+      const isCurrentHex = currentHex?.[0] === cell.q && currentHex?.[1] === cell.r;
+      const isSelected = selectedHex?.[0] === cell.q && selectedHex?.[1] === cell.r;
+      const fillColor = cell.isMasterTile
+        ? hostColor
+        : cell.ownerColor ?? '#9fb3c8';
+      const fillOpacity = cell.isMasterTile ? 0.45 : cell.ownerId ? (isMine ? 0.72 : 0.5) : 0.16;
+      let borderColor = '#dfe6e9';
+      let borderWeight = 1;
+
+      if (cell.isMasterTile) {
+        borderColor = '#f1c40f';
+        borderWeight = 3;
+      }
+      if (isCurrentHex) {
+        borderColor = '#2ecc71';
+        borderWeight = Math.max(borderWeight, 3);
+      }
+      if (isSelected) {
+        borderColor = '#ffffff';
+        borderWeight = Math.max(borderWeight, 4);
+      }
+
+      const polygon = L.polygon(corners, {
+        color: borderColor,
+        weight: borderWeight,
+        opacity: cell.ownerId || cell.isMasterTile ? 0.95 : 0.45,
+        fillColor,
+        fillOpacity
+      });
+
+      polygon.bindTooltip(buildHexTooltip(cell), { sticky: true });
+      if (onHexClick) {
+        polygon.on('click', () => onHexClick(cell.q, cell.r, cell));
+      }
+      polygon.addTo(layerGroup);
+
+      if (cell.troops > 0 || cell.isMasterTile) {
+        L.marker([centerLat, centerLng], {
+          icon: L.divIcon({
+            className: 'hex-label-wrapper',
+            html: `<div class="hex-label${cell.isMasterTile ? ' master' : ''}">${cell.isMasterTile ? '👑 ' : ''}${cell.troops}</div>`
+          }),
+          interactive: false
+        }).addTo(layerGroup);
+      }
+    }
+
+    for (const player of state.players) {
+      if (player.currentLat == null || player.currentLng == null) {
+        continue;
+      }
+
+      const marker = L.circleMarker([player.currentLat, player.currentLng], {
+        radius: player.id === myUserId ? 7 : 5,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: player.allianceColor ?? player.color,
+        fillOpacity: 0.95
+      }).addTo(layerGroup);
+
+      marker.bindTooltip(player.id === myUserId ? `${player.name} (You)` : player.name, {
+        permanent: true,
+        direction: 'top',
+        offset: [0, -6],
+        className: 'player-location-label'
+      });
+    }
+  }, [currentHex, currentLocation, myUserId, onHexClick, selectedHex, state]);
 
   return (
     <div className="game-map-container">
       <div ref={containerRef} className="leaflet-map" />
     </div>
   );
+}
+
+function buildHexTooltip(cell: HexCell): string {
+  const owner = cell.ownerName ?? 'Unclaimed';
+  const masterLabel = cell.isMasterTile ? ' | Master Tile' : '';
+  return `${owner} | Troops: ${cell.troops}${masterLabel}`;
 }

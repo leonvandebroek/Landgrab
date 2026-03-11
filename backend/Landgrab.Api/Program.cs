@@ -21,6 +21,7 @@ builder.Services.AddScoped<GlobalMapService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddHostedService<TroopRegenerationService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 

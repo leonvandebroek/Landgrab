@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface GeoState {
   lat: number | null;
@@ -7,32 +7,48 @@ interface GeoState {
   loading: boolean;
 }
 
-export function useGeolocation(): GeoState & { request: () => void } {
-  const [state, setState] = useState<GeoState>({
-    lat: null, lng: null, error: null, loading: false
+export function useGeolocation(enabled = true): GeoState {
+  const supported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
+  const [position, setPosition] = useState<{ lat: number | null; lng: number | null }>({
+    lat: null,
+    lng: null
   });
+  const [error, setError] = useState<string | null>(
+    supported ? null : 'Geolocation is not supported by your browser.'
+  );
 
-  const request = () => {
-    if (!navigator.geolocation) {
-      setState(s => ({ ...s, error: 'Geolocation not supported by your browser.' }));
+  useEffect(() => {
+    if (!enabled || !supported) {
       return;
     }
-    setState(s => ({ ...s, loading: true, error: null }));
-    navigator.geolocation.getCurrentPosition(
-      pos => setState({
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        error: null,
-        loading: false
-      }),
-      err => setState({
-        lat: null, lng: null,
-        error: err.message || 'Location access denied.',
-        loading: false
-      }),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
 
-  return { ...state, request };
+    const watchId = navigator.geolocation.watchPosition(
+      position => {
+        setPosition({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setError(null);
+      },
+      error => {
+        setError(error.message || 'Location access was denied.');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000
+      }
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [enabled, supported]);
+
+  return {
+    lat: position.lat,
+    lng: position.lng,
+    error,
+    loading: enabled && supported && position.lat == null && position.lng == null && error == null
+  };
 }

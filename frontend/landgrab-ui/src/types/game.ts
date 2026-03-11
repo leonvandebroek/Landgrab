@@ -1,5 +1,7 @@
-export type GamePhase = 'Lobby' | 'Reinforce' | 'Roll' | 'Claim' | 'GameOver';
+export type GamePhase = 'Lobby' | 'Playing' | 'GameOver';
 export type GameMode = 'Alliances' | 'FreeForAll';
+export type ClaimMode = 'PresenceOnly' | 'PresenceWithTroop' | 'AdjacencyRequired';
+export type WinConditionType = 'TerritoryPercent' | 'Elimination' | 'TimedGame';
 
 export interface HexCell {
   q: number;
@@ -9,6 +11,7 @@ export interface HexCell {
   ownerName?: string;
   ownerColor?: string;
   troops: number;
+  isMasterTile: boolean;
 }
 
 export interface Player {
@@ -18,7 +21,11 @@ export interface Player {
   allianceId?: string;
   allianceName?: string;
   allianceColor?: string;
-  troopsToPlace: number;
+  carriedTroops: number;
+  carriedTroopsSourceQ?: number | null;
+  carriedTroopsSourceR?: number | null;
+  currentLat?: number | null;
+  currentLng?: number | null;
   isHost: boolean;
   isConnected: boolean;
   territoryCount: number;
@@ -39,13 +46,18 @@ export interface GameState {
   players: Player[];
   alliances: AllianceDto[];
   grid: Record<string, HexCell>;
-  currentPlayerIndex: number;
-  movesRemaining: number;
-  lastDiceRoll: number[];
   mapLat: number | null;
   mapLng: number | null;
+  hasMapLocation: boolean;
   gridRadius: number;
-  turnNumber: number;
+  tileSizeMeters: number;
+  claimMode: ClaimMode;
+  winConditionType: WinConditionType;
+  winConditionValue: number;
+  gameDurationMinutes: number | null;
+  masterTileQ: number | null;
+  masterTileR: number | null;
+  gameStartedAt: string | null;
   winnerId?: string;
   winnerName?: string;
   isAllianceVictory: boolean;
