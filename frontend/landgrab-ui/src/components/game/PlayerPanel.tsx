@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
 import { hexKey } from '../map/HexMath';
+import { GameEventLog } from './GameEventLog';
 
 interface LocationPoint {
   lat: number;
@@ -149,6 +150,8 @@ export function PlayerPanel({
 
       {locationError && <p className="error-msg">{locationError}</p>}
       {error && <p className="error-msg">{error}</p>}
+
+      <GameEventLog events={state.eventLog} />
 
       <div className="scoreboard">
         <h4>{t('game.territories')}</h4>

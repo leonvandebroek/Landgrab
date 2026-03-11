@@ -39,12 +39,30 @@ export interface AllianceDto {
   territoryCount: number;
 }
 
+export interface GameEventLogEntry {
+  createdAt: string;
+  type: string;
+  message: string;
+  playerId?: string;
+  playerName?: string;
+  targetPlayerId?: string;
+  targetPlayerName?: string;
+  allianceId?: string;
+  allianceName?: string;
+  q?: number;
+  r?: number;
+  winnerId?: string;
+  winnerName?: string;
+  isAllianceVictory?: boolean;
+}
+
 export interface GameState {
   roomCode: string;
   phase: GamePhase;
   gameMode: GameMode;
   players: Player[];
   alliances: AllianceDto[];
+  eventLog: GameEventLogEntry[];
   grid: Record<string, HexCell>;
   mapLat: number | null;
   mapLng: number | null;
