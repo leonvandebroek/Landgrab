@@ -11,6 +11,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"];
 
     private static readonly string[] AllianceColors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
+    private const int MaxEventLogEntries = 100;
 
     public GameRoom CreateRoom(string hostUserId, string hostUsername, string connectionId)
     {
@@ -77,6 +78,13 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             });
 
             room.ConnectionMap.TryAdd(connectionId, userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "PlayerJoined",
+                Message = $"{username} joined the room.",
+                PlayerId = userId,
+                PlayerName = username
+            });
             QueuePersistence(room, SnapshotState(room.State));
             return (room, null);
         }
@@ -213,7 +221,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         return roomCodes;
     }
 
-    public void RemoveConnection(GameRoom room, string connectionId)
+    public void RemoveConnection(GameRoom room, string connectionId, bool returnedToLobby = false)
     {
         if (!room.ConnectionMap.TryRemove(connectionId, out var userId))
             return;
@@ -231,6 +239,15 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             player.CurrentLat = null;
             player.CurrentLng = null;
             ReturnCarriedTroops(room.State, player);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = returnedToLobby ? "PlayerReturnedToLobby" : "PlayerLeft",
+                Message = returnedToLobby
+                    ? $"{player.Name} returned to the lobby."
+                    : $"{player.Name} left the room.",
+                PlayerId = player.Id,
+                PlayerName = player.Name
+            });
             QueuePersistence(room, SnapshotState(room.State));
         }
     }
@@ -254,6 +271,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (player == null)
                 return (null, "Player not in room.");
 
+            var previousAllianceId = player.AllianceId;
+            var previousAllianceName = player.AllianceName;
             var normalizedName = allianceName.Trim();
             var alliance = room.State.Alliances.FirstOrDefault(a =>
                 a.Name.Equals(normalizedName, StringComparison.OrdinalIgnoreCase));
@@ -289,6 +308,22 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             }
 
             RefreshTerritoryCount(room.State);
+            if (!string.Equals(previousAllianceId, player.AllianceId, StringComparison.Ordinal))
+            {
+                var changeMessage = previousAllianceName == null
+                    ? $"{player.Name} joined alliance {alliance.Name}."
+                    : $"{player.Name} changed alliance from {previousAllianceName} to {alliance.Name}.";
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "AllianceChanged",
+                    Message = changeMessage,
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    AllianceId = alliance.Id,
+                    AllianceName = alliance.Name
+                });
+            }
+
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -422,10 +457,9 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
         lock (room.SyncRoot)
         {
-            if (!IsHost(room, userId))
-                return (null, "Only the host can set the master tile.");
-            if (room.State.Phase != GamePhase.Lobby)
-                return (null, "The master tile can only be changed in the lobby.");
+            var placementError = ValidateMasterTilePlacement(room, userId);
+            if (placementError != null)
+                return (null, placementError);
 
             EnsureGrid(room.State);
 
@@ -438,29 +472,28 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (room.State.MapLat is null || room.State.MapLng is null)
                 return (null, "Set the map location before placing the master tile.");
 
-            if (room.State.MasterTileQ is int previousQ && room.State.MasterTileR is int previousR &&
-                room.State.Grid.TryGetValue(HexService.Key(previousQ, previousR), out var previousCell))
-            {
-                previousCell.IsMasterTile = false;
-                if (previousCell.OwnerId == null)
-                    previousCell.Troops = 0;
-            }
-
             var (q, r) = HexService.LatLngToHexForRoom(lat, lng,
                 room.State.MapLat.Value, room.State.MapLng.Value, room.State.TileSizeMeters);
 
-            if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var masterCell))
-                return (null, "Master tile must be inside the room grid.");
-            if (masterCell.OwnerId != null)
-                return (null, "The master tile must be an unowned hex.");
+            return SetMasterTileByHexCore(room, q, r);
+        }
+    }
 
-            masterCell.IsMasterTile = true;
-            masterCell.Troops = Math.Max(masterCell.Troops, 1);
-            room.State.MasterTileQ = q;
-            room.State.MasterTileR = r;
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
+    public (GameState? state, string? error) SetMasterTileByHex(string roomCode, string userId,
+        int q, int r)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var placementError = ValidateMasterTilePlacement(room, userId);
+            if (placementError != null)
+                return (null, placementError);
+
+            EnsureGrid(room.State);
+            return SetMasterTileByHexCore(room, q, r);
         }
     }
 
@@ -494,6 +527,18 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             SetCellOwner(cell, player);
             cell.Troops = 3;
             RefreshTerritoryCount(room.State);
+            var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "StartingTileAssigned",
+                Message = $"{player.Name} was assigned a starting tile at ({q}, {r}).",
+                PlayerId = userId,
+                PlayerName = host?.Name,
+                TargetPlayerId = player.Id,
+                TargetPlayerName = player.Name,
+                Q = q,
+                R = r
+            });
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -527,6 +572,14 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
             room.State.Phase = GamePhase.Playing;
             room.State.GameStartedAt = DateTime.UtcNow;
+            var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "GameStarted",
+                Message = "The game has started.",
+                PlayerId = userId,
+                PlayerName = host?.Name
+            });
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -556,7 +609,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             var previousPhase = room.State.Phase;
             player.CurrentLat = lat;
             player.CurrentLng = lng;
-            ApplyWinCondition(room.State, DateTime.UtcNow);
+            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
             return (snapshot, null);
@@ -599,7 +652,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             player.CarriedTroopsSourceR = r;
             player.CurrentLat = playerLat;
             player.CurrentLng = playerLng;
-            ApplyWinCondition(room.State, DateTime.UtcNow);
+            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -637,7 +690,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
                 cell.Troops += player.CarriedTroops;
                 ResetCarriedTroops(player);
-                ApplyWinCondition(room.State, DateTime.UtcNow);
+                ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
                 return (reinforceSnapshot, null);
@@ -650,7 +703,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                     return (null, neutralClaimError);
 
                 RefreshTerritoryCount(room.State);
-                ApplyWinCondition(room.State, DateTime.UtcNow);
+                ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
                 return (neutralClaimSnapshot, null);
@@ -661,12 +714,25 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (player.CarriedTroops <= cell.Troops)
                 return (null, "You need to carry more troops than the target hex currently has.");
 
+            var previousOwnerId = cell.OwnerId;
+            var previousOwnerName = cell.OwnerName;
             var defendingTroops = cell.Troops;
             SetCellOwner(cell, player);
             cell.Troops = player.CarriedTroops - defendingTroops;
             ResetCarriedTroops(player);
             RefreshTerritoryCount(room.State);
-            ApplyWinCondition(room.State, DateTime.UtcNow);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "TileCaptured",
+                Message = $"{player.Name} captured hex ({q}, {r}) from {previousOwnerName ?? "another player"}.",
+                PlayerId = player.Id,
+                PlayerName = player.Name,
+                TargetPlayerId = previousOwnerId,
+                TargetPlayerName = previousOwnerName,
+                Q = q,
+                R = r
+            });
+            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var attackSnapshot = SnapshotState(room.State);
             QueuePersistence(room, attackSnapshot);
             return (attackSnapshot, null);
@@ -687,7 +753,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
                 cell.Troops++;
 
-            ApplyWinCondition(room.State, DateTime.UtcNow);
+            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -710,6 +776,59 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             return;
 
         QueuePersistence(room, stateSnapshot);
+    }
+
+    private static string? ValidateMasterTilePlacement(GameRoom room, string userId)
+    {
+        if (!IsHost(room, userId))
+            return "Only the host can set the master tile.";
+        if (room.State.Phase != GamePhase.Lobby)
+            return "The master tile can only be changed in the lobby.";
+
+        return null;
+    }
+
+    private (GameState? state, string? error) SetMasterTileByHexCore(GameRoom room, int q, int r)
+    {
+        if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var masterCell))
+            return (null, "Master tile must be inside the room grid.");
+        if (masterCell.OwnerId != null)
+            return (null, "The master tile must be an unowned hex.");
+
+        if (room.State.MasterTileQ is int previousQ && room.State.MasterTileR is int previousR &&
+            room.State.Grid.TryGetValue(HexService.Key(previousQ, previousR), out var previousCell))
+        {
+            previousCell.IsMasterTile = false;
+            if (previousCell.OwnerId == null)
+                previousCell.Troops = 0;
+        }
+
+        masterCell.IsMasterTile = true;
+        masterCell.Troops = Math.Max(masterCell.Troops, 1);
+        room.State.MasterTileQ = q;
+        room.State.MasterTileR = r;
+        var host = room.State.Players.FirstOrDefault(player => player.IsHost);
+        AppendEventLog(room.State, new GameEventLogEntry
+        {
+            Type = "MasterTileAssigned",
+            Message = $"The master tile was assigned to hex ({q}, {r}).",
+            PlayerId = host?.Id,
+            PlayerName = host?.Name,
+            Q = q,
+            R = r
+        });
+        var snapshot = SnapshotState(room.State);
+        QueuePersistence(room, snapshot);
+        return (snapshot, null);
+    }
+
+    private static void AppendEventLog(GameState state, GameEventLogEntry entry)
+    {
+        state.EventLog.Add(entry);
+        if (state.EventLog.Count <= MaxEventLogEntries)
+            return;
+
+        state.EventLog.RemoveRange(0, state.EventLog.Count - MaxEventLogEntries);
     }
 
     private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r)
@@ -830,6 +949,25 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
         foreach (var alliance in state.Alliances)
             alliance.TerritoryCount = HexService.AllianceTerritoryCount(state.Grid, alliance.Id);
+    }
+
+    private static void ApplyWinConditionAndLog(GameState state, DateTime now)
+    {
+        var previousPhase = state.Phase;
+        ApplyWinCondition(state, now);
+        if (previousPhase == GamePhase.GameOver || state.Phase != GamePhase.GameOver)
+            return;
+
+        AppendEventLog(state, new GameEventLogEntry
+        {
+            Type = "GameOver",
+            Message = state.WinnerName == null
+                ? "The game is over."
+                : $"{state.WinnerName} won the game.",
+            WinnerId = state.WinnerId,
+            WinnerName = state.WinnerName,
+            IsAllianceVictory = state.IsAllianceVictory
+        });
     }
 
     private static void ApplyWinCondition(GameState state, DateTime now)
@@ -983,6 +1121,23 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 Color = alliance.Color,
                 MemberIds = [.. alliance.MemberIds],
                 TerritoryCount = alliance.TerritoryCount
+            }).ToList(),
+            EventLog = state.EventLog.Select(entry => new GameEventLogEntry
+            {
+                CreatedAt = entry.CreatedAt,
+                Type = entry.Type,
+                Message = entry.Message,
+                PlayerId = entry.PlayerId,
+                PlayerName = entry.PlayerName,
+                TargetPlayerId = entry.TargetPlayerId,
+                TargetPlayerName = entry.TargetPlayerName,
+                AllianceId = entry.AllianceId,
+                AllianceName = entry.AllianceName,
+                Q = entry.Q,
+                R = entry.R,
+                WinnerId = entry.WinnerId,
+                WinnerName = entry.WinnerName,
+                IsAllianceVictory = entry.IsAllianceVictory
             }).ToList(),
             Grid = state.Grid.ToDictionary(
                 entry => entry.Key,

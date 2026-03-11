@@ -93,7 +93,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         if (room == null)
             return;
 
-        gameService.RemoveConnection(room, Context.ConnectionId);
+        gameService.RemoveConnection(room, Context.ConnectionId, returnedToLobby: true);
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, room.Code);
         var state = gameService.GetStateSnapshot(room.Code);
         if (state != null)
@@ -207,6 +207,25 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         }
 
         var (state, error) = gameService.SetMasterTile(room.Code, UserId, lat, lng);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetMasterTileByHex(int q, int r)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetMasterTileByHex(room.Code, UserId, q, r);
         if (error != null)
         {
             await SendError(error);
