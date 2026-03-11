@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<GlobalHex> GlobalHexes => Set<GlobalHex>();
     public DbSet<GameEvent> GameEvents => Set<GameEvent>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PersistedRoom> PersistedRooms => Set<PersistedRoom>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -55,6 +56,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(t => t.Id);
             e.HasOne(t => t.User).WithMany().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<PersistedRoom>(e =>
+        {
+            e.HasKey(room => room.Code);
+            e.Property(room => room.Code).HasMaxLength(6).IsRequired();
+            e.Property(room => room.StateJson).HasColumnType("jsonb").IsRequired();
+            e.Property(room => room.Phase).HasMaxLength(30).IsRequired();
+            e.Property(room => room.IsActive).HasDefaultValue(true);
+            e.HasIndex(room => room.IsActive);
+            e.HasIndex(room => room.UpdatedAt);
         });
     }
 }

@@ -17,6 +17,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddSingleton<GameService>();        // in-memory game rooms
+builder.Services.AddSingleton<RoomPersistenceService>();
 builder.Services.AddScoped<GlobalMapService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
@@ -124,14 +125,23 @@ app.MapHub<GameHub>("/hub/game");
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var roomPersistence = scope.ServiceProvider.GetRequiredService<RoomPersistenceService>();
+    var gameService = scope.ServiceProvider.GetRequiredService<GameService>();
+    var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
         await db.Database.MigrateAsync();
+        var staleRooms = await roomPersistence.DeactivateStaleRoomsAsync();
+        var restoredRooms = await roomPersistence.RestoreActiveRoomsAsync();
+        var restoredRoomCount = gameService.RestoreRooms(restoredRooms);
+        log.LogInformation(
+            "Room persistence startup complete. Deactivated {StaleRoomCount} stale rooms and restored {RestoredRoomCount} active rooms.",
+            staleRooms, restoredRoomCount);
     }
     catch (Exception ex)
     {
-        var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        log.LogWarning(ex, "Could not run database migrations (DB may not be available). Continuing...");
+        log.LogWarning(ex,
+            "Could not initialize persisted rooms (migrations/restore may require the database). Continuing...");
     }
 }
 

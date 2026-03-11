@@ -62,6 +62,8 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
     mapRef.current = map;
 
     return () => {
+      map.stop();
+      map.off();
       map.remove();
       mapRef.current = null;
       layerGroupRef.current = null;
@@ -100,11 +102,11 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       .map(([lat, lng]) => L.latLng(lat, lng));
 
     if (points.length === 0) {
-      map.setView([state.mapLat, state.mapLng], 16);
+      map.setView([state.mapLat, state.mapLng], 16, { animate: false });
       return;
     }
 
-    map.fitBounds(L.latLngBounds(points), { padding: [24, 24] });
+    map.fitBounds(L.latLngBounds(points), { padding: [24, 24], animate: false });
   }, [state.grid, state.gridRadius, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
   useEffect(() => {

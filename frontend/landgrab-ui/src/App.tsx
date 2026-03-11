@@ -11,6 +11,16 @@ import { latLngToRoomHex } from './components/map/HexMath';
 import type { ClaimMode, GameState, HexCell, WinConditionType } from './types/game';
 import './styles/index.css';
 
+const SESSION_STORAGE_KEY = 'landgrab_session';
+const RESUME_TIMEOUT_MS = 5000;
+
+type ResumeSource = 'join' | 'rejoin';
+
+type ResumeOutcome =
+  | { status: 'success'; roomCode: string }
+  | { status: 'error'; source: ResumeSource; message: string }
+  | { status: 'timeout'; source: ResumeSource };
+
 interface LocationPoint {
   lat: number;
   lng: number;
@@ -22,6 +32,18 @@ interface PickupPrompt {
   max: number;
 }
 
+interface SavedSession {
+  roomCode: string;
+  userId: string;
+}
+
+interface PendingResume {
+  source: ResumeSource;
+  expectedRoomCode?: string;
+  resolve: (outcome: ResumeOutcome) => void;
+  timeoutId: number;
+}
+
 export default function App() {
   const { auth, login, register, logout } = useAuth();
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -29,8 +51,111 @@ export default function App() {
   const [view, setView] = useState<'lobby' | 'game' | 'gameover'>('lobby');
   const [pickupPrompt, setPickupPrompt] = useState<PickupPrompt | null>(null);
   const [pickupCount, setPickupCount] = useState(1);
+  const [autoResuming, setAutoResuming] = useState(false);
+  const [savedSession, setSavedSession] = useState<SavedSession | null>(loadSavedSession);
   const location = useGeolocation(Boolean(auth));
   const lastLocationRef = useRef('');
+  const previousConnectedRef = useRef(false);
+  const pendingResumeRef = useRef<PendingResume | null>(null);
+  const savedSessionRef = useRef<SavedSession | null>(savedSession);
+  const resumeSequenceRef = useRef(0);
+  const savedRoomCode = savedSession?.roomCode ?? '';
+
+  useEffect(() => {
+    savedSessionRef.current = savedSession;
+  }, [savedSession]);
+
+  const saveSession = useCallback((roomCode: string) => {
+    if (!auth?.userId) {
+      return;
+    }
+
+    const normalizedRoomCode = roomCode.trim().toUpperCase();
+    if (!normalizedRoomCode) {
+      return;
+    }
+
+    const next = { roomCode: normalizedRoomCode, userId: auth.userId };
+    savedSessionRef.current = next;
+    setSavedSession(next);
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
+  }, [auth]);
+
+  const clearSession = useCallback(() => {
+    savedSessionRef.current = null;
+    setSavedSession(null);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  }, []);
+
+  const clearPendingResume = useCallback((outcome?: ResumeOutcome) => {
+    const pending = pendingResumeRef.current;
+    if (!pending) {
+      return false;
+    }
+
+    window.clearTimeout(pending.timeoutId);
+    pendingResumeRef.current = null;
+    if (outcome) {
+      pending.resolve(outcome);
+    }
+    return true;
+  }, []);
+
+  const beginResumeAttempt = useCallback((source: ResumeSource, expectedRoomCode?: string) => {
+    clearPendingResume();
+    return new Promise<ResumeOutcome>(resolve => {
+      const timeoutId = window.setTimeout(() => {
+        if (pendingResumeRef.current?.resolve === resolve) {
+          pendingResumeRef.current = null;
+          resolve({ status: 'timeout', source });
+        }
+      }, RESUME_TIMEOUT_MS);
+
+      pendingResumeRef.current = {
+        source,
+        expectedRoomCode,
+        resolve,
+        timeoutId
+      };
+    });
+  }, [clearPendingResume]);
+
+  const resolveResumeFromState = useCallback((state: GameState) => {
+    const pending = pendingResumeRef.current;
+    if (!pending || !state.roomCode) {
+      return false;
+    }
+
+    if (pending.expectedRoomCode && state.roomCode !== pending.expectedRoomCode) {
+      return false;
+    }
+
+    return clearPendingResume({ status: 'success', roomCode: state.roomCode });
+  }, [clearPendingResume]);
+
+  const resolveResumeFromError = useCallback((message: string) => {
+    const pending = pendingResumeRef.current;
+    if (!pending) {
+      return false;
+    }
+
+    return clearPendingResume({ status: 'error', source: pending.source, message });
+  }, [clearPendingResume]);
+
+  const runResumeAction = useCallback(async (
+    source: ResumeSource,
+    action: () => Promise<unknown>,
+    expectedRoomCode?: string
+  ) => {
+    const outcomePromise = beginResumeAttempt(source, expectedRoomCode);
+    try {
+      await action();
+    } catch (cause) {
+      clearPendingResume({ status: 'error', source, message: getErrorMessage(cause) });
+    }
+
+    return outcomePromise;
+  }, [beginResumeAttempt, clearPendingResume]);
 
   const currentLocation = useMemo<LocationPoint | null>(() => {
     if (location.lat == null || location.lng == null) {
@@ -42,36 +167,49 @@ export default function App() {
 
   const clearError = () => setError('');
 
-  const { connected, invoke } = useSignalR(auth?.token ?? null, {
-    onRoomCreated: (_, state) => {
-      setGameState(state);
-      setView('lobby');
-      setPickupPrompt(null);
-      clearError();
+  const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
+    resolveResumeFromState(state);
+    if (state.roomCode) {
+      saveSession(state.roomCode);
+    }
+    setGameState(state);
+    setPickupPrompt(null);
+
+    if (nextView) {
+      setView(nextView);
+    } else if (state.phase === 'Playing') {
+      setView('game');
+    } else if (state.phase === 'GameOver') {
+      setView('gameover');
+    }
+
+    clearError();
+  }, [resolveResumeFromState, saveSession]);
+
+  const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, {
+    onRoomCreated: (code, state) => {
+      saveSession(code || state.roomCode);
+      applyIncomingState(state, 'lobby');
     },
     onPlayerJoined: (state) => {
-      setGameState(state);
-      setView('lobby');
-      clearError();
+      applyIncomingState(state, state.phase === 'Lobby' ? 'lobby' : undefined);
     },
     onGameStarted: (state) => {
-      setGameState(state);
-      setView('game');
-      setPickupPrompt(null);
-      clearError();
+      applyIncomingState(state, 'game');
     },
     onStateUpdated: (state) => {
-      setGameState(state);
-      if (state.phase === 'Playing') {
-        setView('game');
-      }
-      if (state.phase === 'GameOver') {
-        setView('gameover');
-      }
-      clearError();
+      applyIncomingState(state);
     },
     onGameOver: () => setView('gameover'),
-    onError: (message) => setError(message)
+    onError: (message) => {
+      if (resolveResumeFromError(message)) {
+        return;
+      }
+      setError(message);
+    },
+    onReconnected: () => {
+      clearError();
+    }
   });
 
   const myPlayer = useMemo(() => {
@@ -112,13 +250,108 @@ export default function App() {
       .catch(cause => setError(String(cause)));
   }, [connected, currentLocation, gameState?.phase, invoke]);
 
+  useEffect(() => {
+    const justConnected = connected && !previousConnectedRef.current;
+    previousConnectedRef.current = connected;
+
+    if (!justConnected || !auth) {
+      return;
+    }
+
+    const savedSession = savedSessionRef.current;
+    if (!savedSession?.roomCode) {
+      return;
+    }
+
+    let cancelled = false;
+    const sequence = ++resumeSequenceRef.current;
+
+    void Promise.resolve().then(async () => {
+      if (cancelled || resumeSequenceRef.current !== sequence) {
+        return;
+      }
+
+      if (savedSession.userId !== auth.userId) {
+        clearSession();
+        return;
+      }
+
+      setAutoResuming(true);
+      clearError();
+
+      const rejoinOutcome = await runResumeAction('rejoin', () => invoke('RejoinRoom', savedSession.roomCode));
+      if (cancelled || resumeSequenceRef.current !== sequence) {
+        return;
+      }
+
+      if (rejoinOutcome.status === 'success') {
+        setAutoResuming(false);
+        return;
+      }
+
+      const fallbackUnavailable = rejoinOutcome.status === 'error' && isMissingRejoinMethodFailure(rejoinOutcome.message);
+      if (fallbackUnavailable) {
+        const joinOutcome = await runResumeAction('join', () => invoke('JoinRoom', savedSession.roomCode), savedSession.roomCode);
+        if (cancelled || resumeSequenceRef.current !== sequence) {
+          return;
+        }
+
+        if (joinOutcome.status === 'success') {
+          setAutoResuming(false);
+          return;
+        }
+
+        const joinClearlyStale = joinOutcome.status === 'error' && isClearlyStaleJoinFailure(joinOutcome.message);
+        if (joinClearlyStale) {
+          clearSession();
+          setGameState(null);
+          setPickupPrompt(null);
+          setView('lobby');
+          setError('Your saved room is no longer available.');
+        } else if (joinOutcome.status === 'error') {
+          setError(joinOutcome.message);
+        } else {
+          setError('Timed out while restoring your saved room.');
+        }
+      } else if (rejoinOutcome.status === 'error' && isClearlyStaleRejoinFailure(rejoinOutcome.message)) {
+        clearSession();
+        setGameState(null);
+        setPickupPrompt(null);
+        setView('lobby');
+        setError('Your saved room is no longer available.');
+      } else if (rejoinOutcome.status === 'error') {
+        setError(rejoinOutcome.message);
+      } else {
+        setError('Timed out while restoring your saved room.');
+      }
+
+      setAutoResuming(false);
+    });
+
+    return () => {
+      cancelled = true;
+      clearPendingResume({ status: 'timeout', source: pendingResumeRef.current?.source ?? 'join' });
+      setAutoResuming(false);
+    };
+  }, [auth, clearPendingResume, clearSession, connected, invoke, runResumeAction]);
+
   const handleCreateRoom = useCallback(() => {
+    if (autoResuming || pendingResumeRef.current) {
+      setError('Please wait while we restore your saved room.');
+      return;
+    }
+
     invoke('CreateRoom').catch(cause => setError(String(cause)));
-  }, [invoke]);
+  }, [autoResuming, invoke]);
 
   const handleJoinRoom = useCallback((code: string) => {
+    if (autoResuming || pendingResumeRef.current) {
+      setError('Please wait while we restore your saved room.');
+      return;
+    }
+
     invoke('JoinRoom', code).catch(cause => setError(String(cause)));
-  }, [invoke]);
+  }, [autoResuming, invoke]);
 
   const handleSetAlliance = useCallback((name: string) => {
     invoke('SetAlliance', name).catch(cause => setError(String(cause)));
@@ -199,72 +432,163 @@ export default function App() {
   }, [currentLocation, invoke, pickupCount, pickupPrompt]);
 
   const handlePlayAgain = useCallback(() => {
+    clearSession();
     setGameState(null);
     setView('lobby');
     setError('');
     setPickupPrompt(null);
-  }, []);
+  }, [clearSession]);
+
+  const connectionBanner = autoResuming
+    ? `Restoring room ${savedRoomCode}…`
+    : reconnecting
+      ? 'Reconnecting to game…'
+      : '';
 
   if (!auth) {
     return <AuthPage onLogin={login} onRegister={register} />;
   }
 
   if (view === 'gameover' && gameState) {
-    return <GameOver state={gameState} onPlayAgain={handlePlayAgain} />;
+    return (
+      <>
+        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+        <GameOver state={gameState} onPlayAgain={handlePlayAgain} />
+      </>
+    );
   }
 
   if (view === 'game' && gameState) {
     return (
-      <div className="game-layout">
-        <GameMap
-          state={gameState}
-          myUserId={auth.userId}
-          currentLocation={currentLocation}
-          onHexClick={handleHexClick}
-        />
-        <PlayerPanel
-          state={gameState}
-          myUserId={auth.userId}
-          currentLocation={currentLocation}
-          currentHex={currentHex}
-          pickupPrompt={pickupPrompt}
-          pickupCount={pickupCount}
-          onPickupCountChange={setPickupCount}
-          onConfirmPickup={handleConfirmPickup}
-          onCancelPickup={() => setPickupPrompt(null)}
-          error={error}
-          locationError={location.error}
-        />
-      </div>
+      <>
+        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+        <div className="game-layout">
+          <GameMap
+            state={gameState}
+            myUserId={auth.userId}
+            currentLocation={currentLocation}
+            onHexClick={handleHexClick}
+          />
+          <PlayerPanel
+            state={gameState}
+            myUserId={auth.userId}
+            currentLocation={currentLocation}
+            currentHex={currentHex}
+            pickupPrompt={pickupPrompt}
+            pickupCount={pickupCount}
+            onPickupCountChange={setPickupCount}
+            onConfirmPickup={handleConfirmPickup}
+            onCancelPickup={() => setPickupPrompt(null)}
+            error={error}
+            locationError={location.error}
+          />
+        </div>
+      </>
     );
   }
 
   return (
-    <GameLobby
-      username={auth.username}
-      myUserId={auth.userId}
-      gameState={gameState}
-      connected={connected}
-      currentLocation={currentLocation}
-      locationError={location.error}
-      locationLoading={location.loading}
-      onCreateRoom={handleCreateRoom}
-      onJoinRoom={handleJoinRoom}
-      onSetAlliance={handleSetAlliance}
-      onSetMapLocation={handleSetMapLocation}
-      onSetTileSize={handleSetTileSize}
-      onSetClaimMode={handleSetClaimMode}
-      onSetWinCondition={handleSetWinCondition}
-      onSetMasterTile={handleSetMasterTile}
-      onAssignStartingTile={handleAssignStartingTile}
-      onStartGame={handleStartGame}
-      onLogout={() => {
-        logout();
-        setGameState(null);
-        setPickupPrompt(null);
-        setView('lobby');
+    <>
+      {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+      <GameLobby
+        username={auth.username}
+        myUserId={auth.userId}
+        gameState={gameState}
+        connected={connected}
+        currentLocation={currentLocation}
+        locationError={location.error}
+        locationLoading={location.loading}
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
+        onSetAlliance={handleSetAlliance}
+        onSetMapLocation={handleSetMapLocation}
+        onSetTileSize={handleSetTileSize}
+        onSetClaimMode={handleSetClaimMode}
+        onSetWinCondition={handleSetWinCondition}
+        onSetMasterTile={handleSetMasterTile}
+        onAssignStartingTile={handleAssignStartingTile}
+        onStartGame={handleStartGame}
+        onLogout={() => {
+          clearSession();
+          logout();
+          setGameState(null);
+          setPickupPrompt(null);
+          setView('lobby');
+        }}
+        error={error}
+      />
+    </>
+  );
+}
+
+function loadSavedSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<SavedSession> | null;
+    if (!parsed?.roomCode || typeof parsed.roomCode !== 'string'
+      || !parsed.userId || typeof parsed.userId !== 'string') {
+      return null;
+    }
+
+    const roomCode = parsed.roomCode.trim().toUpperCase();
+    const userId = parsed.userId.trim();
+    return roomCode && userId ? { roomCode, userId } : null;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isClearlyStaleJoinFailure(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('room not found');
+}
+
+function isClearlyStaleRejoinFailure(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('no active room');
+}
+
+function isMissingRejoinMethodFailure(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('does not exist')
+    || normalized.includes('unknown hub method')
+    || normalized.includes('method not found')
+    || normalized.includes('not implemented');
+}
+
+function ConnectionBanner({ message }: { message: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: 'fixed',
+        top: 12,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 1000,
+        padding: '0.55rem 0.9rem',
+        borderRadius: 999,
+        background: 'rgba(26, 39, 64, 0.94)',
+        border: '1px solid rgba(136, 153, 170, 0.35)',
+        color: '#ecf0f1',
+        fontSize: '0.85rem',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
       }}
-      error={error}
-    />
+    >
+      {message}
+    </div>
   );
 }

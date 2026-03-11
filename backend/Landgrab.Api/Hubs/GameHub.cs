@@ -56,6 +56,37 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
             await BroadcastState(room.Code, state, "PlayerJoined");
     }
 
+    public async Task<string> RejoinRoom(string roomCode)
+    {
+        var existingRoom = gameService.GetRoomByUserId(UserId, roomCode);
+        if (existingRoom == null)
+        {
+            const string message = "No active room found for the current user.";
+            await SendError(message);
+            throw new HubException(message);
+        }
+
+        var (room, error) = gameService.JoinRoom(existingRoom.Code, UserId, Username, Context.ConnectionId);
+        if (error != null || room == null)
+        {
+            var message = error ?? "Unable to rejoin the active room.";
+            await SendError(message);
+            throw new HubException(message);
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, room.Code);
+        var state = gameService.GetStateSnapshot(room.Code);
+        if (state == null)
+        {
+            const string message = "Unable to load the current room state.";
+            await SendError(message);
+            throw new HubException(message);
+        }
+
+        await BroadcastState(room.Code, state, "PlayerJoined");
+        return room.Code;
+    }
+
     public async Task SetMapLocation(double lat, double lng)
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
@@ -294,6 +325,20 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         if (state.Phase == GamePhase.GameOver)
         {
             await Clients.Group(roomCode).SendAsync("GameOver", new
+            {
+                state.WinnerId,
+                state.WinnerName,
+                state.IsAllianceVictory
+            });
+        }
+    }
+
+    private async Task SendStateToCaller(GameState state)
+    {
+        await Clients.Caller.SendAsync("StateUpdated", state);
+        if (state.Phase == GamePhase.GameOver)
+        {
+            await Clients.Caller.SendAsync("GameOver", new
             {
                 state.WinnerId,
                 state.WinnerName,

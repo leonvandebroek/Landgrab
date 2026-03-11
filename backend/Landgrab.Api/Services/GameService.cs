@@ -3,7 +3,7 @@ using Landgrab.Api.Models;
 
 namespace Landgrab.Api.Services;
 
-public class GameService
+public class GameService(RoomPersistenceService roomPersistenceService, ILogger<GameService> logger)
 {
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
 
@@ -33,6 +33,7 @@ public class GameService
         });
 
         _rooms[code] = room;
+        QueuePersistence(room, SnapshotState(room.State));
         return room;
     }
 
@@ -57,6 +58,7 @@ public class GameService
 
                 room.ConnectionMap.TryAdd(connectionId, userId);
                 existingPlayer.IsConnected = true;
+                QueuePersistence(room, SnapshotState(room.State));
                 return (room, null);
             }
 
@@ -75,6 +77,7 @@ public class GameService
             });
 
             room.ConnectionMap.TryAdd(connectionId, userId);
+            QueuePersistence(room, SnapshotState(room.State));
             return (room, null);
         }
     }
@@ -94,6 +97,73 @@ public class GameService
 
     public GameRoom? GetRoomByConnection(string connectionId) =>
         _rooms.Values.FirstOrDefault(room => room.ConnectionMap.ContainsKey(connectionId));
+
+    public GameRoom? GetRoomByUserId(string userId, string? roomCode = null)
+    {
+        if (!string.IsNullOrWhiteSpace(roomCode))
+        {
+            var room = GetRoom(roomCode);
+            if (room == null)
+                return null;
+
+            lock (room.SyncRoot)
+            {
+                return room.State.Phase != GamePhase.GameOver &&
+                       room.State.Players.Any(player => player.Id == userId)
+                    ? room
+                    : null;
+            }
+        }
+
+        foreach (var room in _rooms.Values)
+        {
+            lock (room.SyncRoot)
+            {
+                if (room.State.Phase != GamePhase.GameOver &&
+                    room.State.Players.Any(player => player.Id == userId))
+                    return room;
+            }
+        }
+
+        return null;
+    }
+
+    public int RestoreRooms(IEnumerable<GameRoom> rooms)
+    {
+        ArgumentNullException.ThrowIfNull(rooms);
+
+        var restoredCount = 0;
+        foreach (var room in rooms)
+        {
+            if (string.IsNullOrWhiteSpace(room.Code))
+            {
+                logger.LogWarning("Skipping restored room with an empty room code.");
+                continue;
+            }
+
+            var normalizedCode = room.Code.ToUpperInvariant();
+            lock (room.SyncRoot)
+            {
+                room.Code = normalizedCode;
+                room.State.RoomCode = normalizedCode;
+                room.ConnectionMap.Clear();
+
+                foreach (var player in room.State.Players)
+                    player.IsConnected = false;
+            }
+
+            if (_rooms.TryAdd(normalizedCode, room))
+            {
+                restoredCount++;
+                continue;
+            }
+
+            logger.LogWarning("Skipping restored room {RoomCode} because it already exists in memory.",
+                normalizedCode);
+        }
+
+        return restoredCount;
+    }
 
     public IReadOnlyList<string> GetPlayingRoomCodes()
     {
@@ -128,6 +198,7 @@ public class GameService
             player.CurrentLat = null;
             player.CurrentLng = null;
             ReturnCarriedTroops(room.State, player);
+            QueuePersistence(room, SnapshotState(room.State));
         }
     }
 
@@ -185,7 +256,9 @@ public class GameService
             }
 
             RefreshTerritoryCount(room.State);
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -209,7 +282,9 @@ public class GameService
 
             room.State.MapLat = lat;
             room.State.MapLng = lng;
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -227,7 +302,9 @@ public class GameService
                 return (null, "Tile size can only be changed in the lobby.");
 
             room.State.TileSizeMeters = Math.Clamp(meters, 50, 1000);
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -249,7 +326,9 @@ public class GameService
                 return (null, "Claim mode can only be changed in the lobby.");
 
             room.State.ClaimMode = parsedClaimMode;
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -291,7 +370,9 @@ public class GameService
             }
 
             room.State.WinConditionType = parsedWinCondition;
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -344,7 +425,9 @@ public class GameService
             masterCell.Troops = Math.Max(masterCell.Troops, 1);
             room.State.MasterTileQ = q;
             room.State.MasterTileR = r;
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -378,7 +461,9 @@ public class GameService
             SetCellOwner(cell, player);
             cell.Troops = 3;
             RefreshTerritoryCount(room.State);
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -409,7 +494,9 @@ public class GameService
 
             room.State.Phase = GamePhase.Playing;
             room.State.GameStartedAt = DateTime.UtcNow;
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -433,10 +520,13 @@ public class GameService
             if (player == null)
                 return (null, "Player not in room.");
 
+            var previousPhase = room.State.Phase;
             player.CurrentLat = lat;
             player.CurrentLng = lng;
             ApplyWinCondition(room.State, DateTime.UtcNow);
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistenceIfGameOver(room, snapshot, previousPhase);
+            return (snapshot, null);
         }
     }
 
@@ -477,7 +567,9 @@ public class GameService
             player.CurrentLat = playerLat;
             player.CurrentLng = playerLng;
             ApplyWinCondition(room.State, DateTime.UtcNow);
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -513,7 +605,9 @@ public class GameService
                 cell.Troops += player.CarriedTroops;
                 ResetCarriedTroops(player);
                 ApplyWinCondition(room.State, DateTime.UtcNow);
-                return (SnapshotState(room.State), null);
+                var reinforceSnapshot = SnapshotState(room.State);
+                QueuePersistence(room, reinforceSnapshot);
+                return (reinforceSnapshot, null);
             }
 
             if (cell.OwnerId == null)
@@ -524,7 +618,9 @@ public class GameService
 
                 RefreshTerritoryCount(room.State);
                 ApplyWinCondition(room.State, DateTime.UtcNow);
-                return (SnapshotState(room.State), null);
+                var neutralClaimSnapshot = SnapshotState(room.State);
+                QueuePersistence(room, neutralClaimSnapshot);
+                return (neutralClaimSnapshot, null);
             }
 
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
@@ -538,7 +634,9 @@ public class GameService
             ResetCarriedTroops(player);
             RefreshTerritoryCount(room.State);
             ApplyWinCondition(room.State, DateTime.UtcNow);
-            return (SnapshotState(room.State), null);
+            var attackSnapshot = SnapshotState(room.State);
+            QueuePersistence(room, attackSnapshot);
+            return (attackSnapshot, null);
         }
     }
 
@@ -557,8 +655,28 @@ public class GameService
                 cell.Troops++;
 
             ApplyWinCondition(room.State, DateTime.UtcNow);
-            return (SnapshotState(room.State), null);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
+    }
+
+    private void QueuePersistence(GameRoom room, GameState stateSnapshot)
+    {
+        _ = roomPersistenceService.PersistRoomStateAsync(
+            room.Code,
+            room.HostUserId,
+            room.CreatedAt,
+            stateSnapshot,
+            DateTime.UtcNow);
+    }
+
+    private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase)
+    {
+        if (previousPhase == GamePhase.GameOver || stateSnapshot.Phase != GamePhase.GameOver)
+            return;
+
+        QueuePersistence(room, stateSnapshot);
     }
 
     private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r)
