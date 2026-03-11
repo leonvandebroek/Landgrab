@@ -248,12 +248,18 @@ input:focus { border-color: var(--accent); }
   height: 100%;
 }
 
-/* ── Zoom-to-location map button ────────────────────────────────────────── */
-.zoom-to-location-btn {
+/* ── Map controls ───────────────────────────────────────────────────────── */
+.game-map-controls {
   position: absolute;
   bottom: 24px;
   left: 10px;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-control-btn {
   background: white;
   border: 2px solid rgba(0, 0, 0, 0.2);
   border-radius: 4px;
@@ -267,7 +273,12 @@ input:focus { border-color: var(--accent); }
   padding: 0;
   line-height: 1;
 }
-.zoom-to-location-btn:hover { background: #f4f4f4; }
+.map-control-btn:hover { background: #f4f4f4; }
+
+.map-control-btn.is-active {
+  background: var(--accent);
+  color: white;
+}
 
 /* ── Player panel (sidebar) ─────────────────────────────────────────────── */
 .player-panel {

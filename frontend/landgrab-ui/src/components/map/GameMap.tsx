@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import L from 'leaflet';
@@ -25,6 +25,8 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const [isFollowingMe, setIsFollowingMe] = useState(false);
+  const followedLocationKeyRef = useRef('');
 
   function handleZoomToLocation() {
     const map = mapRef.current;
@@ -93,6 +95,30 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
 
     return () => window.cancelAnimationFrame(frameId);
   }, [state.mapLat, state.mapLng, state.masterTileQ, state.masterTileR, state.tileSizeMeters]);
+
+  useEffect(() => {
+    if (!isFollowingMe) {
+      followedLocationKeyRef.current = '';
+      return;
+    }
+
+    const map = mapRef.current;
+    if (!map || !currentLocation) {
+      return;
+    }
+
+    const locationKey = `${currentLocation.lat.toFixed(6)},${currentLocation.lng.toFixed(6)}`;
+    if (followedLocationKeyRef.current === locationKey) {
+      return;
+    }
+
+    followedLocationKeyRef.current = locationKey;
+    map.panTo([currentLocation.lat, currentLocation.lng], {
+      animate: true,
+      duration: 0.8,
+      easeLinearity: 0.25
+    });
+  }, [currentLocation, isFollowingMe]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -221,15 +247,27 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
     <div className="game-map-container">
       <div ref={containerRef} className="leaflet-map" />
       {currentLocation && (
-        <button
-          type="button"
-          className="zoom-to-location-btn"
-          onClick={handleZoomToLocation}
-          title={t('game.zoomToLocation')}
-          aria-label={t('game.zoomToLocation')}
-        >
-          📍
-        </button>
+        <div className="game-map-controls">
+          <button
+            type="button"
+            className={`map-control-btn${isFollowingMe ? ' is-active' : ''}`}
+            onClick={() => setIsFollowingMe(enabled => !enabled)}
+            title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+            aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+            aria-pressed={isFollowingMe}
+          >
+            🧭
+          </button>
+          <button
+            type="button"
+            className="map-control-btn"
+            onClick={handleZoomToLocation}
+            title={t('game.zoomToLocation')}
+            aria-label={t('game.zoomToLocation')}
+          >
+            📍
+          </button>
+        </div>
       )}
     </div>
   );

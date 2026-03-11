@@ -25,6 +25,7 @@ interface Props {
   onSetClaimMode: (mode: ClaimMode) => void;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetMasterTile: (lat: number, lng: number) => void;
+  onSetMasterTileByHex: (q: number, r: number) => void;
   onAssignStartingTile: (q: number, r: number, playerId: string) => void;
   onStartGame: () => void;
   onReturnToLobby: () => void;
@@ -52,6 +53,7 @@ export function GameLobby({
   onSetClaimMode,
   onSetWinCondition,
   onSetMasterTile,
+  onSetMasterTileByHex,
   onAssignStartingTile,
   onStartGame,
   onReturnToLobby,
@@ -154,6 +156,14 @@ export function GameLobby({
     }
 
     onAssignStartingTile(selectedHex[0], selectedHex[1], effectiveSelectedPlayerId);
+  };
+
+  const assignMasterTileFromSelectedHex = () => {
+    if (!selectedHex) {
+      return;
+    }
+
+    onSetMasterTileByHex(selectedHex[0], selectedHex[1]);
   };
 
   const joinAlliance = (name: string) => {
@@ -420,11 +430,11 @@ export function GameLobby({
         {locationError && <p className="error-msg">{locationError}</p>}
         {error && <p className="error-msg">{error}</p>}
 
-        {gameState.masterTileQ !== null && gameState.masterTileR !== null && gameState.mapLat !== null && gameState.mapLng !== null && (
+        {gameState.mapLat !== null && gameState.mapLng !== null && (
           <div className="map-card">
             <div>
-              <h3>{t('lobby.startingTileAssignment')}</h3>
-              <p className="section-note">{t('lobby.startingTileNote')}</p>
+              <h3>{t('lobby.hexSetup')}</h3>
+              <p className="section-note">{t('lobby.hexSetupNote')}</p>
             </div>
 
             <div className="lobby-map">
@@ -450,6 +460,15 @@ export function GameLobby({
                 </span>
 
                 <div className="settings-row">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={assignMasterTileFromSelectedHex}
+                    disabled={!selectedHex}
+                  >
+                    {gameState.masterTileQ !== null ? t('lobby.moveMasterTileToSelectedHex') : t('lobby.setMasterTileToSelectedHex')}
+                  </button>
+
                   <select
                     className="inline-select"
                     value={effectiveSelectedPlayerId}
@@ -464,7 +483,7 @@ export function GameLobby({
                     type="button"
                     className="btn-secondary"
                     onClick={assignStartingTile}
-                    disabled={!selectedHex || !effectiveSelectedPlayerId}
+                    disabled={!selectedHex || !effectiveSelectedPlayerId || gameState.masterTileQ === null || gameState.masterTileR === null}
                   >
                     {t('lobby.assignTile')}
                   </button>

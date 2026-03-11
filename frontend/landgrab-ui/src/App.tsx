@@ -413,6 +413,10 @@ export default function App() {
     invoke('SetMasterTile', lat, lng).catch(cause => setError(String(cause)));
   }, [invoke]);
 
+  const handleSetMasterTileByHex = useCallback((q: number, r: number) => {
+    invoke('SetMasterTileByHex', q, r).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
   const handleAssignStartingTile = useCallback((q: number, r: number, playerId: string) => {
     invoke('AssignStartingTile', q, r, playerId).catch(cause => setError(String(cause)));
   }, [invoke]);
@@ -560,6 +564,7 @@ export default function App() {
         onSetClaimMode={handleSetClaimMode}
         onSetWinCondition={handleSetWinCondition}
         onSetMasterTile={handleSetMasterTile}
+        onSetMasterTileByHex={handleSetMasterTileByHex}
         onAssignStartingTile={handleAssignStartingTile}
         onStartGame={handleStartGame}
         onReturnToLobby={handleReturnToLobby}
