@@ -71,6 +71,19 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      map.invalidateSize();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [state.mapLat, state.mapLng, state.masterTileQ, state.masterTileR, state.tileSizeMeters]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map || state.mapLat == null || state.mapLng == null) {
       return;
     }

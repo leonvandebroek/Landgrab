@@ -167,6 +167,18 @@ input:focus { border-color: var(--accent); }
   color: white; font-weight: 600;
 }
 
+.alliance-badge-button {
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alliance-badge-button.is-active {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
 .manual-location { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .manual-location input { min-width: 100px; }
 
@@ -441,6 +453,10 @@ input:focus { border-color: var(--accent); }
   height: 360px;
   border-radius: 12px;
   overflow: hidden;
+}
+
+.lobby-map .game-map-container {
+  height: 100%;
 }
 
 .selected-hex-card,

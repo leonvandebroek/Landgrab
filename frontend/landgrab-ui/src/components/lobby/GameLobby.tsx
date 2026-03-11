@@ -114,8 +114,20 @@ export function GameLobby({
     const lat = Number(manualLat);
     const lng = Number(manualLng);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setManualLat(formatCoordinate(lat));
+      setManualLng(formatCoordinate(lng));
       onSetMapLocation(lat, lng);
     }
+  };
+
+  const useCurrentGpsForMapLocation = () => {
+    if (!currentLocation) {
+      return;
+    }
+
+    setManualLat(formatCoordinate(currentLocation.lat));
+    setManualLng(formatCoordinate(currentLocation.lng));
+    onSetMapLocation(currentLocation.lat, currentLocation.lng);
   };
 
   const applyWinCondition = () => {
@@ -157,6 +169,16 @@ export function GameLobby({
     }
 
     onAssignStartingTile(selectedHex[0], selectedHex[1], effectiveSelectedPlayerId);
+  };
+
+  const joinAlliance = (name: string) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      return;
+    }
+
+    setAllianceName(trimmedName);
+    onSetAlliance(trimmedName);
   };
 
   if (!gameState) {
@@ -222,29 +244,36 @@ export function GameLobby({
         <div className="section">
           <h3>Your Alliance</h3>
           <div className="join-form">
-            <input
-              type="text"
-              value={allianceName}
-              onChange={event => setAllianceName(event.target.value)}
-              placeholder="Alliance name (e.g. Red Team)"
+              <input
+                type="text"
+                value={allianceName}
+                onChange={event => setAllianceName(event.target.value)}
+                placeholder="Alliance name (e.g. Red Team)"
               maxLength={30}
             />
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => allianceName.trim() && onSetAlliance(allianceName)}
-              disabled={!allianceName.trim()}
-            >
-              Join / Create
-            </button>
-          </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => joinAlliance(allianceName)}
+                disabled={!allianceName.trim()}
+              >
+                Join / Create
+              </button>
+            </div>
 
           {gameState.alliances.length > 0 && (
             <div className="alliances-row">
               {gameState.alliances.map(alliance => (
-                <span key={alliance.id} className="alliance-badge" style={{ background: alliance.color }}>
+                <button
+                  key={alliance.id}
+                  type="button"
+                  className={`alliance-badge alliance-badge-button${me?.allianceId === alliance.id ? ' is-active' : ''}`}
+                  style={{ background: alliance.color }}
+                  aria-pressed={me?.allianceId === alliance.id}
+                  onClick={() => joinAlliance(alliance.name)}
+                >
                   {alliance.name} ({alliance.memberIds.length})
-                </span>
+                </button>
               ))}
             </div>
           )}
@@ -273,7 +302,7 @@ export function GameLobby({
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => currentLocation && onSetMapLocation(currentLocation.lat, currentLocation.lng)}
+                  onClick={useCurrentGpsForMapLocation}
                   disabled={!currentLocation || locationLoading}
                 >
                   {locationLoading ? 'Locating…' : 'Use My Current GPS'}
@@ -454,4 +483,8 @@ function formatDistance(meters: number): string {
   }
 
   return `${meters} m`;
+}
+
+function formatCoordinate(value: number): string {
+  return value.toFixed(5);
 }

@@ -23,6 +23,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
   useEffect(() => {
     if (!token) return;
 
+    let disposed = false;
     const conn = new signalR.HubConnectionBuilder()
       .withUrl('/hub/game', {
         accessTokenFactory: () => token,
@@ -42,15 +43,43 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('GlobalMapLoaded', (hexes: unknown[]) => eventsRef.current.onGlobalMapLoaded?.(hexes));
     conn.on('Error', (msg: string) => eventsRef.current.onError?.(msg));
 
-    conn.start()
-      .then(() => setConnected(true))
-      .catch(err => console.error('SignalR connect error:', err));
+    void Promise.resolve().then(async () => {
+      if (disposed) {
+        return;
+      }
 
-    conn.onreconnected(() => setConnected(true));
-    conn.onclose(() => setConnected(false));
+      try {
+        await conn.start();
+        if (!disposed) {
+          setConnected(true);
+        }
+      } catch (err) {
+        if (!disposed && !isExpectedStartAbort(err)) {
+          console.error('SignalR connect error:', err);
+        }
+      }
+    });
+
+    conn.onreconnected(() => {
+      if (!disposed) {
+        setConnected(true);
+      }
+    });
+    conn.onclose(() => {
+      if (!disposed) {
+        setConnected(false);
+      }
+    });
 
     connectionRef.current = conn;
-    return () => { conn.stop(); };
+    return () => {
+      disposed = true;
+      if (connectionRef.current === conn) {
+        connectionRef.current = null;
+      }
+      setConnected(false);
+      void conn.stop();
+    };
   }, [token]);
 
   const invoke = useCallback(<T = void>(method: string, ...args: unknown[]): Promise<T> => {
@@ -59,4 +88,12 @@ export function useSignalR(token: string | null, events: GameEvents) {
   }, []);
 
   return { connected, invoke };
+}
+
+function isExpectedStartAbort(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.name === 'AbortError' || error.message.includes('stopped during negotiation');
 }
