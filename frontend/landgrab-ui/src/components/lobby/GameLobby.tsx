@@ -33,9 +33,15 @@ export function GameLobby({
     geo.request();
   };
 
-  const handleApplyLocation = () => {
-    const lat = geo.lat ?? parseFloat(manualLat);
-    const lng = geo.lng ?? parseFloat(manualLng);
+  const handleApplyGPS = () => {
+    if (geo.lat !== null && geo.lng !== null) {
+      onSetMapLocation(geo.lat, geo.lng);
+    }
+  };
+
+  const handleSetManual = () => {
+    const lat = parseFloat(manualLat);
+    const lng = parseFloat(manualLng);
     if (!isNaN(lat) && !isNaN(lng)) {
       onSetMapLocation(lat, lng);
     }
@@ -147,7 +153,7 @@ export function GameLobby({
             {geo.lat !== null && (
               <p className="info-msg">
                 GPS: {geo.lat.toFixed(4)}, {geo.lng?.toFixed(4)}
-                <button className="btn-ghost small" onClick={handleApplyLocation}>Apply</button>
+                <button className="btn-ghost small" onClick={handleApplyGPS}>Apply</button>
               </p>
             )}
             <div className="manual-location">
@@ -165,7 +171,7 @@ export function GameLobby({
                 placeholder="Longitude (e.g. -0.1278)"
                 step="0.0001"
               />
-              <button className="btn-ghost small" onClick={handleApplyLocation}>
+              <button className="btn-ghost small" onClick={handleSetManual}>
                 Set Manual
               </button>
             </div>

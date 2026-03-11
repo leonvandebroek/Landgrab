@@ -5,7 +5,8 @@
         {
             "label": "db: start postgres",
             "type": "shell",
-            "command": "docker compose up db -d",
+            // In a devcontainer, Postgres is already running as a service — this is a safe no-op.
+            "command": "docker info >/dev/null 2>&1 && docker compose up db -d || echo 'Docker unavailable — assuming DB is already running'",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -43,12 +44,11 @@
         {
             "label": "backend: watch",
             "type": "shell",
-            "command": "dotnet watch run --urls http://localhost:5000",
+            "command": "dotnet watch run --urls http://0.0.0.0:5001",
             "options": {
                 "cwd": "${workspaceFolder}/backend/Landgrab.Api",
                 "env": {
-                    "ASPNETCORE_ENVIRONMENT": "Development",
-                    "ConnectionStrings__DefaultConnection": "Host=localhost;Database=landgrab;Username=postgres;Password=postgres"
+                    "ASPNETCORE_ENVIRONMENT": "Development"
                 }
             },
             "isBackground": true,
@@ -118,6 +118,17 @@
         },
         // ── Compound ──────────────────────────────────────────────────────────
         {
+            "label": "dev: start all",
+            "detail": "Start Postgres, backend (watch), and Vite dev server",
+            "dependsOn": [
+                "db: start postgres",
+                "backend: watch",
+                "frontend: dev"
+            ],
+            "dependsOrder": "parallel",
+            "problemMatcher": []
+        },
+        {
             "label": "start-dev-services",
             "detail": "Start Postgres + Vite dev server (used by Full Stack compound launch)",
             "dependsOn": [
@@ -133,10 +144,7 @@
             "type": "shell",
             "command": "dotnet ef migrations add ${input:migrationName}",
             "options": {
-                "cwd": "${workspaceFolder}/backend/Landgrab.Api",
-                "env": {
-                    "ConnectionStrings__DefaultConnection": "Host=localhost;Database=landgrab;Username=postgres;Password=postgres"
-                }
+                "cwd": "${workspaceFolder}/backend/Landgrab.Api"
             },
             "problemMatcher": []
         },
@@ -145,10 +153,7 @@
             "type": "shell",
             "command": "dotnet ef database update",
             "options": {
-                "cwd": "${workspaceFolder}/backend/Landgrab.Api",
-                "env": {
-                    "ConnectionStrings__DefaultConnection": "Host=localhost;Database=landgrab;Username=postgres;Password=postgres"
-                }
+                "cwd": "${workspaceFolder}/backend/Landgrab.Api"
             },
             "problemMatcher": []
         }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
 import type { GameState, CombatResult } from '../types/game';
 
@@ -18,7 +18,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const [connected, setConnected] = useState(false);
   const eventsRef = useRef(events);
-  eventsRef.current = events;
+  useLayoutEffect(() => { eventsRef.current = events; });
 
   useEffect(() => {
     if (!token) return;

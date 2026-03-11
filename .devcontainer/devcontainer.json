@@ -1,0 +1,50 @@
+{
+  "name": "Landgrab",
+  "dockerComposeFile": "docker-compose.devcontainer.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/Landgrab",
+  // Install Node.js LTS alongside the .NET 8 base image
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+  // Environment available to every process in the container,
+  // including dotnet run, dotnet watch, EF CLI, and the debugger.
+  "remoteEnv": {
+    "ASPNETCORE_ENVIRONMENT": "Development",
+    "ConnectionStrings__DefaultConnection": "Host=db;Database=landgrab;Username=postgres;Password=postgres",
+    "ASPNETCORE_URLS": "http://+:7000"
+  },
+  // Install frontend dependencies once the container is created
+  "postCreateCommand": "cd /workspaces/Landgrab/frontend/landgrab-ui && npm install",
+  // Forward backend and Vite dev server to the host
+  "forwardPorts": [
+    7000,
+    7173
+  ],
+  "portsAttributes": {
+    "7000": {
+      "label": "Backend API",
+      "onAutoForward": "silent"
+    },
+    "7173": {
+      "label": "Frontend (Vite)",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // .NET – C# language support + debugger
+        "ms-dotnettools.csdevkit",
+        // Frontend
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "Landgrab.sln"
+      }
+    }
+  }
+}

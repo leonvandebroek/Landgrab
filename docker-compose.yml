@@ -31,7 +31,7 @@ services:
       - App__BaseUrl=${APP_URL:-http://localhost}
       - AllowedOrigins__0=http://localhost
     ports:
-      - "5000:8080"
+      - "7000:8080"
 
   frontend:
     build:

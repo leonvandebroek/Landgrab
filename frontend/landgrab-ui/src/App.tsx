@@ -30,12 +30,14 @@ export default function App() {
     onStateUpdated: (state) => {
       setGameState(state);
       setRolling(false);
+      clearError();
       if (state.phase === 'GameOver') setView('gameover');
     },
     onCombatResult: (result) => {
       setCombatResult(result);
       setGameState(result.newState);
       setSelectedHex(null);
+      clearError();
       if (result.newState.phase === 'GameOver') setView('gameover');
     },
     onGameOver: () => setView('gameover'),

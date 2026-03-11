@@ -58,7 +58,10 @@ builder.Services.AddAuthorization();
 
 // ── SignalR ───────────────────────────────────────────────────────────────
 
-var signalRBuilder = builder.Services.AddSignalR();
+var signalRBuilder = builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
 // In production, add NuGet package Microsoft.Azure.SignalR and uncomment:
 // var azureSignalR = builder.Configuration["Azure:SignalR:ConnectionString"];
@@ -68,7 +71,7 @@ var signalRBuilder = builder.Services.AddSignalR();
 // ── CORS ──────────────────────────────────────────────────────────────────
 
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:5173", "http://localhost:3000"];
+    ?? ["http://localhost:7173", "http://localhost:3000"];
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>

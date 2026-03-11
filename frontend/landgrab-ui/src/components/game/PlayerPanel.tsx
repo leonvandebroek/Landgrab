@@ -62,8 +62,10 @@ export function PlayerPanel({ state, myUserId, onRollDice, onEndTurn, rolling, e
           )}
           {state.phase === 'Reinforce' && currentPlayer?.troopsToPlace > 0 && (
             <p className="hint">
-              Place {currentPlayer.troopsToPlace} troop{currentPlayer.troopsToPlace !== 1 ? 's' : ''}.
-              Click your territory (or any empty hex for first placement).
+              Place {currentPlayer.troopsToPlace} troop{currentPlayer.troopsToPlace !== 1 ? 's' : ''}.{' '}
+              {state.turnNumber === 0
+                ? 'Click any empty hex to place your first troop.'
+                : 'Click your territory to add a troop.'}
             </p>
           )}
         </div>
