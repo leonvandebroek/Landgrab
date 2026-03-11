@@ -165,6 +165,39 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         return restoredCount;
     }
 
+    public IReadOnlyList<RoomSummaryDto> GetRoomsForUser(string userId)
+    {
+        var result = new List<RoomSummaryDto>();
+        foreach (var room in _rooms.Values)
+        {
+            lock (room.SyncRoot)
+            {
+                if (room.State.Phase == GamePhase.GameOver)
+                    continue;
+
+                var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+                if (player == null)
+                    continue;
+
+                var host = room.State.Players.FirstOrDefault(p => p.IsHost);
+                result.Add(new RoomSummaryDto
+                {
+                    Code = room.Code,
+                    Phase = room.State.Phase,
+                    PlayerCount = room.State.Players.Count,
+                    IsConnected = player.IsConnected,
+                    HostName = host?.Name ?? "",
+                    CreatedAt = room.CreatedAt
+                });
+            }
+        }
+
+        return result
+            .OrderByDescending(room => room.IsConnected)
+            .ThenByDescending(room => room.CreatedAt)
+            .ToList();
+    }
+
     public IReadOnlyList<string> GetPlayingRoomCodes()
     {
         var roomCodes = new List<string>();

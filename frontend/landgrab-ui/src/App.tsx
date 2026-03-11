@@ -170,16 +170,6 @@ export default function App() {
 
   const clearError = () => setError('');
 
-  const refreshMyRooms = useCallback(async () => {
-    if (!auth || !connected) {
-      setMyRooms([]);
-      return;
-    }
-
-    const rooms = await invoke<RoomSummary[]>('GetMyRooms');
-    setMyRooms(Array.isArray(rooms) ? rooms : []);
-  }, [auth, connected, invoke]);
-
   const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
     resolveResumeFromState(state);
     if (state.roomCode) {
@@ -224,6 +214,16 @@ export default function App() {
       clearError();
     }
   });
+
+  const refreshMyRooms = useCallback(async () => {
+    if (!auth || !connected) {
+      setMyRooms([]);
+      return;
+    }
+
+    const rooms = await invoke<RoomSummary[]>('GetMyRooms');
+    setMyRooms(Array.isArray(rooms) ? rooms : []);
+  }, [auth, connected, invoke]);
 
   const myPlayer = useMemo(() => {
     if (!auth || !gameState) {
@@ -350,14 +350,26 @@ export default function App() {
 
   useEffect(() => {
     if (!auth || !connected || gameState || autoResuming) {
-      if (!auth || !connected) {
-        setMyRooms([]);
-      }
       return;
     }
 
-    void refreshMyRooms().catch(cause => setError(String(cause)));
-  }, [auth, autoResuming, connected, gameState, refreshMyRooms]);
+    let cancelled = false;
+    void invoke<RoomSummary[]>('GetMyRooms')
+      .then(rooms => {
+        if (!cancelled) {
+          setMyRooms(Array.isArray(rooms) ? rooms : []);
+        }
+      })
+      .catch(cause => {
+        if (!cancelled) {
+          setError(String(cause));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, autoResuming, connected, gameState, invoke]);
 
   const handleCreateRoom = useCallback(() => {
     if (autoResuming || pendingResumeRef.current) {
@@ -483,6 +495,8 @@ export default function App() {
       ? t('errors.reconnecting')
       : '';
 
+  const visibleRecentRooms = auth && connected ? myRooms : [];
+
   if (!auth) {
     return <AuthPage onLogin={login} onRegister={register} />;
   }
@@ -537,7 +551,7 @@ export default function App() {
         currentLocation={currentLocation}
         locationError={location.error}
         locationLoading={location.loading}
-        recentRooms={myRooms}
+        recentRooms={visibleRecentRooms}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
         onSetAlliance={handleSetAlliance}

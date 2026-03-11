@@ -119,6 +119,16 @@ public class GameEvent
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class RoomSummaryDto
+{
+    public string Code { get; set; } = "";
+    public GamePhase Phase { get; set; }
+    public int PlayerCount { get; set; }
+    public bool IsConnected { get; set; }
+    public string HostName { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+}
+
 public class PasswordResetToken
 {
     public Guid Id { get; set; } = Guid.NewGuid();

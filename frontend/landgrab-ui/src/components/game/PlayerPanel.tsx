@@ -25,6 +25,7 @@ interface Props {
   onPickupCountChange: (count: number) => void;
   onConfirmPickup: () => void;
   onCancelPickup: () => void;
+  onReturnToLobby: () => void;
   error: string;
   locationError: string | null;
 }
@@ -39,6 +40,7 @@ export function PlayerPanel({
   onPickupCountChange,
   onConfirmPickup,
   onCancelPickup,
+  onReturnToLobby,
   error,
   locationError
 }: Props) {
@@ -72,13 +74,13 @@ export function PlayerPanel({
   return (
     <div className="player-panel">
       <div className="room-code-banner">
-        <small>Room</small>
+        <small>{t('game.roomLabel')}</small>
         <span className="room-code">{state.roomCode}</span>
       </div>
 
       <div className="turn-banner">
         <span className="turn-label">{t('game.realtimeMatch')}</span>
-        <span className="phase-badge">{state.phase}</span>
+        <span className="phase-badge">{t(`phase.${state.phase}`)}</span>
       </div>
 
       <div className="status-grid">
@@ -140,6 +142,9 @@ export function PlayerPanel({
             {t('game.gpsLocation', { lat: currentLocation.lat.toFixed(5), lng: currentLocation.lng.toFixed(5) })}
           </p>
         )}
+        <button type="button" className="btn-secondary" onClick={onReturnToLobby}>
+          {t('game.returnToLobby')}
+        </button>
       </div>
 
       {locationError && <p className="error-msg">{locationError}</p>}

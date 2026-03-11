@@ -87,6 +87,21 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         return room.Code;
     }
 
+    public async Task ReturnToLobby()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+            return;
+
+        gameService.RemoveConnection(room, Context.ConnectionId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, room.Code);
+        var state = gameService.GetStateSnapshot(room.Code);
+        if (state != null)
+            await BroadcastState(room.Code, state);
+    }
+
+    public IReadOnlyList<RoomSummaryDto> GetMyRooms() => gameService.GetRoomsForUser(UserId);
+
     public async Task SetMapLocation(double lat, double lng)
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);

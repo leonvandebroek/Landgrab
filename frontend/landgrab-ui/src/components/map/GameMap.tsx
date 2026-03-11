@@ -22,10 +22,9 @@ interface Props {
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 
 export function GameMap({ state, myUserId, currentLocation, onHexClick, selectedHex = null }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  // useTranslation keeps the component reactive to language changes.
-  useTranslation();
 
   function handleZoomToLocation() {
     const map = mapRef.current;
@@ -226,7 +225,8 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
           type="button"
           className="zoom-to-location-btn"
           onClick={handleZoomToLocation}
-          title="Zoom to my location"
+          title={t('game.zoomToLocation')}
+          aria-label={t('game.zoomToLocation')}
         >
           📍
         </button>

@@ -79,6 +79,15 @@ export interface AuthState {
   userId: string;
 }
 
+export interface RoomSummary {
+  code: string;
+  phase: GamePhase;
+  playerCount: number;
+  isConnected: boolean;
+  hostName: string;
+  createdAt: string;
+}
+
 export interface GlobalHex {
   q: number;
   r: number;
