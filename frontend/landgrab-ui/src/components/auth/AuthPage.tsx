@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   onLogin: (usernameOrEmail: string, password: string) => Promise<unknown>;
@@ -6,6 +7,7 @@ interface Props {
 }
 
 export function AuthPage({ onLogin, onRegister }: Props) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -24,7 +26,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
         await onRegister(username, email, password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setError(err instanceof Error ? err.message : t('auth.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -36,7 +38,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
         <div className="auth-logo">
           <span className="logo-icon">🗺️</span>
           <h1>Landgrab</h1>
-          <p>Conquer your neighborhood!</p>
+          <p>{t('auth.tagline')}</p>
         </div>
 
         <div className="auth-tabs">
@@ -44,24 +46,24 @@ export function AuthPage({ onLogin, onRegister }: Props) {
             className={mode === 'login' ? 'active' : ''}
             onClick={() => setMode('login')}
           >
-            Sign In
+            {t('auth.signIn')}
           </button>
           <button
             className={mode === 'register' ? 'active' : ''}
             onClick={() => setMode('register')}
           >
-            Sign Up
+            {t('auth.signUp')}
           </button>
         </div>
 
         <form onSubmit={submit} className="auth-form">
           <div className="field">
-            <label>{mode === 'login' ? 'Username or Email' : 'Username'}</label>
+            <label>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.username')}</label>
             <input
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder={mode === 'login' ? 'username or email' : 'AwesomeKid42'}
+              placeholder={mode === 'login' ? t('auth.usernameOrEmailPlaceholder') : t('auth.usernamePlaceholder')}
               required
               autoComplete="username"
             />
@@ -69,12 +71,12 @@ export function AuthPage({ onLogin, onRegister }: Props) {
 
           {mode === 'register' && (
             <div className="field">
-              <label>Email</label>
+              <label>{t('auth.email')}</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 required
                 autoComplete="email"
               />
@@ -82,7 +84,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
           )}
 
           <div className="field">
-            <label>Password</label>
+            <label>{t('auth.password')}</label>
             <input
               type="password"
               value={password}
@@ -97,13 +99,12 @@ export function AuthPage({ onLogin, onRegister }: Props) {
           {error && <p className="error-msg">{error}</p>}
 
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            {loading ? t('auth.pleaseWait') : mode === 'login' ? t('auth.signIn') : t('auth.createAccount')}
           </button>
         </form>
 
         <p className="auth-footer">
-          Only your username is visible to other players.
-          Your email is never shared.
+          {t('auth.footer')}
         </p>
       </div>
     </div>

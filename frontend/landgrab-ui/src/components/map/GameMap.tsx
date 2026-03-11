@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
@@ -22,6 +24,15 @@ const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 export function GameMap({ state, myUserId, currentLocation, onHexClick, selectedHex = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  // useTranslation keeps the component reactive to language changes.
+  useTranslation();
+
+  function handleZoomToLocation() {
+    const map = mapRef.current;
+    if (map && currentLocation) {
+      map.setView([currentLocation.lat, currentLocation.lng], Math.max(map.getZoom(), 17));
+    }
+  }
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const geometryKeyRef = useRef('');
   const initialCenterRef = useRef<[number, number]>(
@@ -198,7 +209,7 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
         fillOpacity: 0.95
       }).addTo(layerGroup);
 
-      marker.bindTooltip(player.id === myUserId ? `${player.name} (You)` : player.name, {
+      marker.bindTooltip(player.id === myUserId ? `${player.name}${i18n.t('map.youSuffix')}` : player.name, {
         permanent: true,
         direction: 'top',
         offset: [0, -6],
@@ -210,12 +221,24 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
   return (
     <div className="game-map-container">
       <div ref={containerRef} className="leaflet-map" />
+      {currentLocation && (
+        <button
+          type="button"
+          className="zoom-to-location-btn"
+          onClick={handleZoomToLocation}
+          title="Zoom to my location"
+        >
+          📍
+        </button>
+      )}
     </div>
   );
 }
 
 function buildHexTooltip(cell: HexCell): string {
-  const owner = cell.ownerName ?? 'Unclaimed';
-  const masterLabel = cell.isMasterTile ? ' | Master Tile' : '';
-  return `${owner} | Troops: ${cell.troops}${masterLabel}`;
+  const owner = cell.ownerName ?? i18n.t('map.unclaimed');
+  if (cell.isMasterTile) {
+    return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops });
+  }
+  return i18n.t('map.hexTooltip', { owner, count: cell.troops });
 }

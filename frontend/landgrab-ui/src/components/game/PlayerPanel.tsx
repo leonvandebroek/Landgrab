@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
 import { hexKey } from '../map/HexMath';
 
@@ -40,6 +42,7 @@ export function PlayerPanel({
   error,
   locationError
 }: Props) {
+  const { t } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
   const me = state.players.find(player => player.id === myUserId) ?? null;
   const currentCell = currentHex ? state.grid[hexKey(currentHex[0], currentHex[1])] : undefined;
@@ -68,43 +71,48 @@ export function PlayerPanel({
 
   return (
     <div className="player-panel">
+      <div className="room-code-banner">
+        <small>Room</small>
+        <span className="room-code">{state.roomCode}</span>
+      </div>
+
       <div className="turn-banner">
-        <span className="turn-label">⚡ Real-time match</span>
+        <span className="turn-label">{t('game.realtimeMatch')}</span>
         <span className="phase-badge">{state.phase}</span>
       </div>
 
       <div className="status-grid">
         <div className="stat-card">
-          <small>Carried troops</small>
+          <small>{t('game.carriedTroops')}</small>
           <strong>{me?.carriedTroops ?? 0}</strong>
         </div>
 
         <div className="stat-card">
-          <small>Current tile</small>
-          <strong>{currentHex ? `${currentHex[0]}, ${currentHex[1]}` : 'Unknown'}</strong>
+          <small>{t('game.currentTile')}</small>
+          <strong>{currentHex ? `${currentHex[0]}, ${currentHex[1]}` : t('game.unknown')}</strong>
           <span className="section-note">
             {currentCell
-              ? describeCurrentHex(currentCell, me)
+              ? describeCurrentHex(currentCell, me, t)
               : currentLocation
-                ? 'Move until your GPS locks onto a room hex.'
-                : 'Waiting for your GPS position.'}
+                ? t('game.moveToLock')
+                : t('game.waitingForGps')}
           </span>
         </div>
 
         {state.winConditionType === 'TimedGame' && timeRemaining !== null && (
           <div className="stat-card">
-            <small>Timer</small>
+            <small>{t('game.timer')}</small>
             <strong>{formatDuration(timeRemaining)}</strong>
-            <span className="section-note">Highest territory count wins when time expires.</span>
+            <span className="section-note">{t('game.timerNote')}</span>
           </div>
         )}
       </div>
 
       {pickupPrompt && (
         <div className="pickup-card">
-          <h4>Pick up troops from {pickupPrompt.q}, {pickupPrompt.r}</h4>
+          <h4>{t('game.pickUpTroops', { q: pickupPrompt.q, r: pickupPrompt.r })}</h4>
           <div className="range-field">
-            <span>Count <strong className="range-value">{pickupCount}</strong></span>
+            <span>{t('game.count')} <strong className="range-value">{pickupCount}</strong></span>
             <input
               type="range"
               min={1}
@@ -115,8 +123,8 @@ export function PlayerPanel({
           </div>
 
           <div className="pickup-actions">
-            <button type="button" className="btn-primary" onClick={onConfirmPickup}>Confirm</button>
-            <button type="button" className="btn-secondary" onClick={onCancelPickup}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={onConfirmPickup}>{t('game.confirm')}</button>
+            <button type="button" className="btn-secondary" onClick={onCancelPickup}>{t('game.cancel')}</button>
           </div>
         </div>
       )}
@@ -124,12 +132,12 @@ export function PlayerPanel({
       <div className="actions">
         <p className="hint">
           {(me?.carriedTroops ?? 0) > 0
-            ? 'Stand on any hex and tap it to place troops or conquer it.'
-            : 'Stand on one of your own hexes and tap it to pick up troops.'}
+            ? t('game.hintWithTroops')
+            : t('game.hintNoTroops')}
         </p>
         {currentLocation && (
           <p className="section-note">
-            GPS: {currentLocation.lat.toFixed(5)}, {currentLocation.lng.toFixed(5)}
+            {t('game.gpsLocation', { lat: currentLocation.lat.toFixed(5), lng: currentLocation.lng.toFixed(5) })}
           </p>
         )}
       </div>
@@ -138,7 +146,7 @@ export function PlayerPanel({
       {error && <p className="error-msg">{error}</p>}
 
       <div className="scoreboard">
-        <h4>Territories</h4>
+        <h4>{t('game.territories')}</h4>
         {(state.alliances.length > 0 ? state.alliances : state.players).map(entity => (
           <ScoreRow key={entity.id} player={entity} totalHexes={claimableHexes} />
         ))}
@@ -159,20 +167,20 @@ function ScoreRow({ player, totalHexes }: { player: Pick<Player, 'id' | 'name' |
   );
 }
 
-function describeCurrentHex(cell: GameState['grid'][string], me: Player | null): string {
+function describeCurrentHex(cell: GameState['grid'][string], me: Player | null, t: TFunction): string {
   if (cell.isMasterTile) {
-    return `Master tile • ${cell.troops} troop${cell.troops === 1 ? '' : 's'}`;
+    return t('game.masterTileDesc', { count: cell.troops });
   }
 
   if (!cell.ownerId) {
-    return 'Neutral hex';
+    return t('game.neutralHex');
   }
 
   if (cell.ownerId === me?.id) {
-    return `Your hex • ${cell.troops} troop${cell.troops === 1 ? '' : 's'}`;
+    return t('game.yourHexDesc', { count: cell.troops });
   }
 
-  return `${cell.ownerName ?? 'Enemy'} • ${cell.troops} troop${cell.troops === 1 ? '' : 's'}`;
+  return t('game.enemyHexDesc', { name: cell.ownerName ?? 'Enemy', count: cell.troops });
 }
 
 function formatDuration(milliseconds: number): string {

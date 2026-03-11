@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import i18n from '../../i18n';
 import type { GlobalHex } from '../../types/game';
 import { hexToLatLng } from '../map/HexMath';
 
@@ -62,7 +63,7 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
         fillOpacity: 0.8,
         weight: 1
       })
-        .bindTooltip(`${h.owner?.username ?? 'Unclaimed'} | \u2694\ufe0f ${h.troops}`)
+        .bindTooltip(`${h.owner?.username ?? i18n.t('map.unclaimed')} | \u2694\ufe0f ${h.troops}`)
         .on('click', () => {
           if (!isMine && selectedRef.current) {
             const [fq, fr] = selectedRef.current;

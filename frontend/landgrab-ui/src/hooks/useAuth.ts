@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import i18n from '../i18n';
 import type { AuthState } from '../types/game';
 
 const STORAGE_KEY = 'landgrab_auth';
@@ -29,7 +30,7 @@ export function useAuth() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Login failed.');
+      throw new Error(data.error || i18n.t('auth.loginFailed'));
     }
     const data: AuthState & { token: string; username: string; userId: string } = await res.json();
     setAuth({ token: data.token, username: data.username, userId: data.userId });
@@ -44,7 +45,7 @@ export function useAuth() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || 'Registration failed.');
+      throw new Error(data.error || i18n.t('auth.registrationFailed'));
     }
     const data: AuthState & { token: string; username: string; userId: string } = await res.json();
     setAuth({ token: data.token, username: data.username, userId: data.userId });

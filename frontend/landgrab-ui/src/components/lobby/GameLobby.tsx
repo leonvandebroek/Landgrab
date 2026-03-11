@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { ClaimMode, GameState, WinConditionType } from '../../types/game';
+import { useTranslation } from 'react-i18next';
+import type { ClaimMode, GameState, RoomSummary, WinConditionType } from '../../types/game';
 import { GameMap } from '../map/GameMap';
 
 interface LocationPoint {
@@ -15,6 +16,7 @@ interface Props {
   currentLocation: LocationPoint | null;
   locationError: string | null;
   locationLoading: boolean;
+  recentRooms: RoomSummary[];
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
   onSetAlliance: (name: string) => void;
@@ -25,33 +27,13 @@ interface Props {
   onSetMasterTile: (lat: number, lng: number) => void;
   onAssignStartingTile: (q: number, r: number, playerId: string) => void;
   onStartGame: () => void;
+  onReturnToLobby: () => void;
   onLogout: () => void;
   error: string;
 }
 
-const CLAIM_MODE_DETAILS: Array<{ mode: ClaimMode; title: string; detail: string }> = [
-  {
-    mode: 'PresenceOnly',
-    title: 'Presence only',
-    detail: 'Neutral tiles can be claimed by standing on them.'
-  },
-  {
-    mode: 'PresenceWithTroop',
-    title: 'Presence with troop',
-    detail: 'Neutral claims spend 1 carried troop.'
-  },
-  {
-    mode: 'AdjacencyRequired',
-    title: 'Adjacency required',
-    detail: 'Neutral claims must border your alliance territory.'
-  }
-];
-
-const WIN_CONDITION_LABELS: Record<WinConditionType, string> = {
-  TerritoryPercent: 'Territory %',
-  Elimination: 'Elimination',
-  TimedGame: 'Timed game'
-};
+const CLAIM_MODES: ClaimMode[] = ['PresenceOnly', 'PresenceWithTroop', 'AdjacencyRequired'];
+const WIN_CONDITION_TYPES: WinConditionType[] = ['TerritoryPercent', 'Elimination', 'TimedGame'];
 
 export function GameLobby({
   username,
@@ -61,6 +43,7 @@ export function GameLobby({
   currentLocation,
   locationError,
   locationLoading,
+  recentRooms,
   onCreateRoom,
   onJoinRoom,
   onSetAlliance,
@@ -71,9 +54,11 @@ export function GameLobby({
   onSetMasterTile,
   onAssignStartingTile,
   onStartGame,
+  onReturnToLobby,
   onLogout,
   error
 }: Props) {
+  const { t } = useTranslation();
   const [joinCode, setJoinCode] = useState('');
   const [allianceName, setAllianceName] = useState('');
   const [manualLat, setManualLat] = useState('');
@@ -185,21 +170,21 @@ export function GameLobby({
     return (
       <div className="lobby-page">
         <div className="lobby-card">
-          <h2>Welcome, {username}!</h2>
-          <p className="subtitle">Choose your battle:</p>
+          <h2>{t('lobby.welcome', { username })}</h2>
+          <p className="subtitle">{t('lobby.chooseYourBattle')}</p>
 
           <button type="button" className="btn-primary big" onClick={onCreateRoom} disabled={!connected}>
-            🏠 Create Room
+            {t('lobby.createRoom')}
           </button>
 
-          <div className="divider">— or join —</div>
+          <div className="divider">{t('lobby.orJoin')}</div>
 
           <div className="join-form">
             <input
               type="text"
               value={joinCode}
               onChange={event => setJoinCode(event.target.value.toUpperCase())}
-              placeholder="Room code (e.g. ABC123)"
+              placeholder={t('lobby.roomCodePlaceholder')}
               maxLength={6}
             />
             <button
@@ -208,14 +193,43 @@ export function GameLobby({
               onClick={() => onJoinRoom(joinCode)}
               disabled={!connected || joinCode.length < 4}
             >
-              Join
+              {t('lobby.join')}
             </button>
           </div>
 
-          {error && <p className="error-msg">{error}</p>}
-          {!connected && <p className="info-msg">Connecting to server…</p>}
+          {recentRooms.length > 0 && (
+            <div className="section">
+              <h3>{t('lobby.recentRooms')}</h3>
+              <div className="recent-rooms-list">
+                {recentRooms.map(room => (
+                  <button
+                    key={room.code}
+                    type="button"
+                    className="recent-room-button"
+                    onClick={() => onJoinRoom(room.code)}
+                  >
+                    <div className="recent-room-copy">
+                      <div className="recent-room-heading">
+                        <span className="room-code">{room.code}</span>
+                        <span className="phase-badge">{t(`phase.${room.phase}`)}</span>
+                      </div>
+                      <span className="section-note">
+                        {t('lobby.roomHostedBy', { name: room.hostName })} · {t('lobby.roomPlayerCount', { count: room.playerCount })}
+                      </span>
+                    </div>
+                    <span className="recent-room-status">
+                      {room.isConnected ? t('lobby.roomStatusConnected') : t('lobby.roomStatusDisconnected')}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <button type="button" className="btn-ghost" onClick={onLogout}>Sign out</button>
+          {error && <p className="error-msg">{error}</p>}
+          {!connected && <p className="info-msg">{t('lobby.connectingToServer')}</p>}
+
+          <button type="button" className="btn-ghost" onClick={onLogout}>{t('lobby.signOut')}</button>
         </div>
       </div>
     );
@@ -224,8 +238,8 @@ export function GameLobby({
   return (
     <div className="lobby-page">
       <div className="lobby-card">
-        <h2>Room: <span className="room-code">{gameState.roomCode}</span></h2>
-        <p className="subtitle">Share this code with friends and configure the battlefield.</p>
+        <h2>{t('lobby.roomTitle', { code: gameState.roomCode })}</h2>
+        <p className="subtitle">{t('lobby.roomSubtitle')}</p>
 
         <div className="players-list">
           {gameState.players.map(player => (
@@ -242,13 +256,13 @@ export function GameLobby({
         </div>
 
         <div className="section">
-          <h3>Your Alliance</h3>
+          <h3>{t('lobby.yourAlliance')}</h3>
           <div className="join-form">
               <input
                 type="text"
                 value={allianceName}
                 onChange={event => setAllianceName(event.target.value)}
-                placeholder="Alliance name (e.g. Red Team)"
+                placeholder={t('lobby.allianceNamePlaceholder')}
               maxLength={30}
             />
               <button
@@ -257,7 +271,7 @@ export function GameLobby({
                 onClick={() => joinAlliance(allianceName)}
                 disabled={!allianceName.trim()}
               >
-                Join / Create
+                {t('lobby.joinCreate')}
               </button>
             </div>
 
@@ -280,22 +294,22 @@ export function GameLobby({
         </div>
 
         <div className="status-list">
-          <span className="status-chip">Tile size: {formatDistance(gameState.tileSizeMeters)}</span>
-          <span className="status-chip">Claim: {CLAIM_MODE_DETAILS.find(item => item.mode === gameState.claimMode)?.title ?? gameState.claimMode}</span>
-          <span className="status-chip">Win: {WIN_CONDITION_LABELS[gameState.winConditionType]}</span>
+          <span className="status-chip">{t('lobby.tileSizeChip', { distance: formatDistance(gameState.tileSizeMeters) })}</span>
+          <span className="status-chip">{t('lobby.claimChip', { mode: t(`claimMode.${gameState.claimMode}.title`) })}</span>
+          <span className="status-chip">{t('lobby.winChip', { condition: t(`winCondition.${gameState.winConditionType}`) })}</span>
           {gameState.masterTileQ !== null && gameState.masterTileR !== null && (
-            <span className="status-chip">Master tile: {gameState.masterTileQ}, {gameState.masterTileR}</span>
+            <span className="status-chip">{t('lobby.masterTileChip', { q: gameState.masterTileQ, r: gameState.masterTileR })}</span>
           )}
         </div>
 
         {isHost && (
           <div className="setting-grid">
             <div className="setting-card">
-              <h3>Map Center</h3>
+              <h3>{t('lobby.mapCenter')}</h3>
               {gameState.mapLat !== null && gameState.mapLng !== null ? (
                 <p className="info-msg">📍 {gameState.mapLat.toFixed(5)}, {gameState.mapLng.toFixed(5)}</p>
               ) : (
-                <p className="section-note">Set a map center explicitly, or let the master tile use your current GPS as the anchor.</p>
+                <p className="section-note">{t('lobby.mapCenterNote')}</p>
               )}
 
               <div className="location-actions">
@@ -305,7 +319,7 @@ export function GameLobby({
                   onClick={useCurrentGpsForMapLocation}
                   disabled={!currentLocation || locationLoading}
                 >
-                  {locationLoading ? 'Locating…' : 'Use My Current GPS'}
+                  {locationLoading ? t('lobby.locating') : t('lobby.useMyCurrentGps')}
                 </button>
               </div>
 
@@ -314,27 +328,27 @@ export function GameLobby({
                   type="number"
                   value={manualLat}
                   onChange={event => setManualLat(event.target.value)}
-                  placeholder="Latitude"
+                  placeholder={t('lobby.latitude')}
                   step="0.0001"
                 />
                 <input
                   type="number"
                   value={manualLng}
                   onChange={event => setManualLng(event.target.value)}
-                  placeholder="Longitude"
+                  placeholder={t('lobby.longitude')}
                   step="0.0001"
                 />
                 <button type="button" className="btn-ghost small" onClick={applyManualLocation}>
-                  Apply manual
+                  {t('lobby.applyManual')}
                 </button>
               </div>
             </div>
 
             <div className="setting-card">
-              <h3>Room Settings</h3>
+              <h3>{t('lobby.roomSettings')}</h3>
 
               <label className="range-field">
-                <span>Tile size <strong className="range-value">{formatDistance(gameState.tileSizeMeters)}</strong></span>
+                <span>{t('lobby.tileSizeLabel')} <strong className="range-value">{formatDistance(gameState.tileSizeMeters)}</strong></span>
                 <input
                   type="range"
                   min={50}
@@ -346,7 +360,7 @@ export function GameLobby({
               </label>
 
               <div className="claim-mode-grid">
-                {CLAIM_MODE_DETAILS.map(({ mode, title, detail }) => (
+                {CLAIM_MODES.map(mode => (
                   <label key={mode} className={`claim-mode-option${gameState.claimMode === mode ? ' active' : ''}`}>
                     <input
                       type="radio"
@@ -355,8 +369,8 @@ export function GameLobby({
                       onChange={() => onSetClaimMode(mode)}
                     />
                     <span className="claim-mode-copy">
-                      <strong>{title}</strong>
-                      <span>{detail}</span>
+                      <strong>{t(`claimMode.${mode}.title`)}</strong>
+                      <span>{t(`claimMode.${mode}.detail`)}</span>
                     </span>
                   </label>
                 ))}
@@ -368,8 +382,8 @@ export function GameLobby({
                   value={gameState.winConditionType}
                   onChange={event => handleWinConditionTypeChange(event.target.value as WinConditionType)}
                 >
-                  {Object.entries(WIN_CONDITION_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                  {WIN_CONDITION_TYPES.map(type => (
+                    <option key={type} value={type}>{t(`winCondition.${type}`)}</option>
                   ))}
                 </select>
 
@@ -380,12 +394,14 @@ export function GameLobby({
                     max={gameState.winConditionType === 'TerritoryPercent' ? 100 : undefined}
                     value={effectiveWinValue}
                     onChange={event => setWinValueDraft(event.target.value)}
-                    placeholder={gameState.winConditionType === 'TimedGame' ? 'Minutes' : 'Percent'}
+                    placeholder={gameState.winConditionType === 'TimedGame'
+                      ? t('lobby.minutesPlaceholder')
+                      : t('lobby.percentPlaceholder')}
                   />
                 )}
 
                 <button type="button" className="btn-secondary" onClick={applyWinCondition}>
-                  Apply
+                  {t('lobby.apply')}
                 </button>
               </div>
 
@@ -395,7 +411,7 @@ export function GameLobby({
                 onClick={() => currentLocation && onSetMasterTile(currentLocation.lat, currentLocation.lng)}
                 disabled={!currentLocation || locationLoading}
               >
-                {gameState.masterTileQ !== null ? 'Move Master Tile to My GPS' : 'Set Master Tile from My GPS'}
+                {gameState.masterTileQ !== null ? t('lobby.moveMasterTile') : t('lobby.setMasterTile')}
               </button>
             </div>
           </div>
@@ -407,8 +423,8 @@ export function GameLobby({
         {gameState.masterTileQ !== null && gameState.masterTileR !== null && gameState.mapLat !== null && gameState.mapLng !== null && (
           <div className="map-card">
             <div>
-              <h3>Starting Tile Assignment</h3>
-              <p className="section-note">Click a hex, choose a player, then assign their starting tile.</p>
+              <h3>{t('lobby.startingTileAssignment')}</h3>
+              <p className="section-note">{t('lobby.startingTileNote')}</p>
             </div>
 
             <div className="lobby-map">
@@ -429,8 +445,8 @@ export function GameLobby({
             {isHost && (
               <div className="selected-hex-card">
                 <span>
-                  Selected hex:{' '}
-                  <strong>{selectedHex ? `${selectedHex[0]}, ${selectedHex[1]}` : 'Pick one on the map'}</strong>
+                  {t('lobby.selectedHex')}{' '}
+                  <strong>{selectedHex ? `${selectedHex[0]}, ${selectedHex[1]}` : t('lobby.pickOne')}</strong>
                 </span>
 
                 <div className="settings-row">
@@ -450,7 +466,7 @@ export function GameLobby({
                     onClick={assignStartingTile}
                     disabled={!selectedHex || !effectiveSelectedPlayerId}
                   >
-                    Assign tile
+                    {t('lobby.assignTile')}
                   </button>
                 </div>
               </div>
@@ -465,13 +481,18 @@ export function GameLobby({
             onClick={onStartGame}
             disabled={!canStart}
           >
-            🚀 Start Real-Time Game
+            {t('lobby.startGame')}
           </button>
         ) : (
-          <p className="info-msg">Waiting for the host to finish setup and start the match…</p>
+          <p className="info-msg">{t('lobby.waitingForHost')}</p>
         )}
 
-        <button type="button" className="btn-ghost" onClick={onLogout}>Leave &amp; Sign out</button>
+        <div className="secondary-actions">
+          <button type="button" className="btn-secondary" onClick={onReturnToLobby}>
+            {t('lobby.returnToLobby')}
+          </button>
+          <button type="button" className="btn-ghost" onClick={onLogout}>{t('lobby.leaveSignOut')}</button>
+        </div>
       </div>
     </div>
   );

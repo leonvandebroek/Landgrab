@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import i18n from '../i18n';
 
 interface GeoState {
   lat: number | null;
@@ -14,7 +15,7 @@ export function useGeolocation(enabled = true): GeoState {
     lng: null
   });
   const [error, setError] = useState<string | null>(
-    supported ? null : 'Geolocation is not supported by your browser.'
+    supported ? null : i18n.t('errors.geolocationNotSupported')
   );
 
   useEffect(() => {
@@ -31,7 +32,7 @@ export function useGeolocation(enabled = true): GeoState {
         setError(null);
       },
       error => {
-        setError(error.message || 'Location access was denied.');
+        setError(error.message || i18n.t('errors.locationDenied'));
       },
       {
         enableHighAccuracy: true,

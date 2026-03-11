@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './hooks/useAuth';
 import { useSignalR } from './hooks/useSignalR';
 import { useGeolocation } from './hooks/useGeolocation';
@@ -8,7 +9,7 @@ import { GameMap } from './components/map/GameMap';
 import { PlayerPanel } from './components/game/PlayerPanel';
 import { GameOver } from './components/game/GameOver';
 import { latLngToRoomHex } from './components/map/HexMath';
-import type { ClaimMode, GameState, HexCell, WinConditionType } from './types/game';
+import type { ClaimMode, GameState, HexCell, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
 const SESSION_STORAGE_KEY = 'landgrab_session';
@@ -45,6 +46,7 @@ interface PendingResume {
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const { auth, login, register, logout } = useAuth();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [error, setError] = useState('');
@@ -53,6 +55,7 @@ export default function App() {
   const [pickupCount, setPickupCount] = useState(1);
   const [autoResuming, setAutoResuming] = useState(false);
   const [savedSession, setSavedSession] = useState<SavedSession | null>(loadSavedSession);
+  const [myRooms, setMyRooms] = useState<RoomSummary[]>([]);
   const location = useGeolocation(Boolean(auth));
   const lastLocationRef = useRef('');
   const previousConnectedRef = useRef(false);
@@ -166,6 +169,16 @@ export default function App() {
   }, [location.lat, location.lng]);
 
   const clearError = () => setError('');
+
+  const refreshMyRooms = useCallback(async () => {
+    if (!auth || !connected) {
+      setMyRooms([]);
+      return;
+    }
+
+    const rooms = await invoke<RoomSummary[]>('GetMyRooms');
+    setMyRooms(Array.isArray(rooms) ? rooms : []);
+  }, [auth, connected, invoke]);
 
   const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
     resolveResumeFromState(state);
@@ -307,22 +320,22 @@ export default function App() {
           setGameState(null);
           setPickupPrompt(null);
           setView('lobby');
-          setError('Your saved room is no longer available.');
+          setError(t('errors.roomNoLongerAvailable'));
         } else if (joinOutcome.status === 'error') {
           setError(joinOutcome.message);
         } else {
-          setError('Timed out while restoring your saved room.');
+          setError(t('errors.timedOut'));
         }
       } else if (rejoinOutcome.status === 'error' && isClearlyStaleRejoinFailure(rejoinOutcome.message)) {
         clearSession();
         setGameState(null);
         setPickupPrompt(null);
         setView('lobby');
-        setError('Your saved room is no longer available.');
+        setError(t('errors.roomNoLongerAvailable'));
       } else if (rejoinOutcome.status === 'error') {
         setError(rejoinOutcome.message);
       } else {
-        setError('Timed out while restoring your saved room.');
+        setError(t('errors.timedOut'));
       }
 
       setAutoResuming(false);
@@ -333,25 +346,36 @@ export default function App() {
       clearPendingResume({ status: 'timeout', source: pendingResumeRef.current?.source ?? 'join' });
       setAutoResuming(false);
     };
-  }, [auth, clearPendingResume, clearSession, connected, invoke, runResumeAction]);
+  }, [auth, clearPendingResume, clearSession, connected, invoke, runResumeAction, t]);
+
+  useEffect(() => {
+    if (!auth || !connected || gameState || autoResuming) {
+      if (!auth || !connected) {
+        setMyRooms([]);
+      }
+      return;
+    }
+
+    void refreshMyRooms().catch(cause => setError(String(cause)));
+  }, [auth, autoResuming, connected, gameState, refreshMyRooms]);
 
   const handleCreateRoom = useCallback(() => {
     if (autoResuming || pendingResumeRef.current) {
-      setError('Please wait while we restore your saved room.');
+      setError(t('errors.pleaseWait'));
       return;
     }
 
     invoke('CreateRoom').catch(cause => setError(String(cause)));
-  }, [autoResuming, invoke]);
+  }, [autoResuming, invoke, t]);
 
   const handleJoinRoom = useCallback((code: string) => {
     if (autoResuming || pendingResumeRef.current) {
-      setError('Please wait while we restore your saved room.');
+      setError(t('errors.pleaseWait'));
       return;
     }
 
     invoke('JoinRoom', code).catch(cause => setError(String(cause)));
-  }, [autoResuming, invoke]);
+  }, [autoResuming, invoke, t]);
 
   const handleSetAlliance = useCallback((name: string) => {
     invoke('SetAlliance', name).catch(cause => setError(String(cause)));
@@ -385,20 +409,32 @@ export default function App() {
     invoke('StartGame').catch(cause => setError(String(cause)));
   }, [invoke]);
 
+  const handleReturnToLobby = useCallback(() => {
+    void invoke('ReturnToLobby')
+      .catch(cause => setError(String(cause)))
+      .finally(() => {
+        clearSession();
+        setGameState(null);
+        setPickupPrompt(null);
+        setView('lobby');
+        void refreshMyRooms().catch(cause => setError(String(cause)));
+      });
+  }, [clearSession, invoke, refreshMyRooms]);
+
   const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined) => {
     if (!auth || !gameState || gameState.phase !== 'Playing') {
       return;
     }
     if (!currentLocation || !currentHex) {
-      setError('Your GPS location is required before you can interact with the map.');
+      setError(t('errors.gpsRequired'));
       return;
     }
     if (currentHex[0] !== q || currentHex[1] !== r) {
-      setError('You must be standing inside a hex to interact with it.');
+      setError(t('errors.mustBeOnHex'));
       return;
     }
     if (cell?.isMasterTile) {
-      setError('The master tile cannot be conquered.');
+      setError(t('errors.masterTileConquer'));
       return;
     }
 
@@ -407,7 +443,7 @@ export default function App() {
     const carriedTroops = myPlayer?.carriedTroops ?? 0;
     if (cell?.ownerId === auth.userId && carriedTroops === 0) {
       if (cell.troops < 1) {
-        setError('There are no troops to pick up from this hex.');
+        setError(t('errors.noTroopsPickup'));
         return;
       }
 
@@ -419,7 +455,7 @@ export default function App() {
     invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng)
       .then(() => setPickupPrompt(null))
       .catch(cause => setError(String(cause)));
-  }, [auth, currentHex, currentLocation, gameState, invoke, myPlayer]);
+  }, [auth, currentHex, currentLocation, gameState, invoke, myPlayer, t]);
 
   const handleConfirmPickup = useCallback(() => {
     if (!pickupPrompt || !currentLocation) {
@@ -433,16 +469,18 @@ export default function App() {
 
   const handlePlayAgain = useCallback(() => {
     clearSession();
+    setMyRooms([]);
     setGameState(null);
     setView('lobby');
     setError('');
     setPickupPrompt(null);
-  }, [clearSession]);
+    void refreshMyRooms().catch(cause => setError(String(cause)));
+  }, [clearSession, refreshMyRooms]);
 
   const connectionBanner = autoResuming
-    ? `Restoring room ${savedRoomCode}…`
+    ? t('errors.restoringRoom', { code: savedRoomCode })
     : reconnecting
-      ? 'Reconnecting to game…'
+      ? t('errors.reconnecting')
       : '';
 
   if (!auth) {
@@ -479,6 +517,7 @@ export default function App() {
             onPickupCountChange={setPickupCount}
             onConfirmPickup={handleConfirmPickup}
             onCancelPickup={() => setPickupPrompt(null)}
+            onReturnToLobby={handleReturnToLobby}
             error={error}
             locationError={location.error}
           />
@@ -498,6 +537,7 @@ export default function App() {
         currentLocation={currentLocation}
         locationError={location.error}
         locationLoading={location.loading}
+        recentRooms={myRooms}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
         onSetAlliance={handleSetAlliance}
@@ -508,8 +548,10 @@ export default function App() {
         onSetMasterTile={handleSetMasterTile}
         onAssignStartingTile={handleAssignStartingTile}
         onStartGame={handleStartGame}
+        onReturnToLobby={handleReturnToLobby}
         onLogout={() => {
           clearSession();
+          setMyRooms([]);
           logout();
           setGameState(null);
           setPickupPrompt(null);
