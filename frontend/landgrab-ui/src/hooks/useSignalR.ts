@@ -13,6 +13,7 @@ export interface GameEvents {
   onStateUpdated?: (state: GameState) => void;
   onCombatResult?: (result: CombatResult) => void;
   onGameOver?: (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => void;
+  onTileLost?: (data: { Q: number; R: number; AttackerName: string }) => void;
   onGlobalHexUpdated?: (hex: unknown) => void;
   onGlobalMapLoaded?: (hexes: unknown[]) => void;
   onError?: (message: string) => void;
@@ -119,6 +120,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('StateUpdated', (state: GameState) => eventsRef.current.onStateUpdated?.(state));
     conn.on('CombatResult', (result: CombatResult) => eventsRef.current.onCombatResult?.(result));
     conn.on('GameOver', (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => eventsRef.current.onGameOver?.(data));
+    conn.on('TileLost', (data: { Q: number; R: number; AttackerName: string }) => eventsRef.current.onTileLost?.(data));
     conn.on('GlobalHexUpdated', (hex: unknown) => eventsRef.current.onGlobalHexUpdated?.(hex));
     conn.on('GlobalMapLoaded', (hexes: unknown[]) => eventsRef.current.onGlobalMapLoaded?.(hexes));
     conn.on('Error', (msg: string) => eventsRef.current.onError?.(msg));

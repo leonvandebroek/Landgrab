@@ -101,7 +101,10 @@ export function GuestWizardView({
                         <TeamsStep
                             gameState={gameState}
                             myUserId={myUserId}
+                            isHost={false}
                             onSetAlliance={onSetAlliance}
+                            onConfigureAlliances={() => { }}
+                            onDistributePlayers={() => { }}
                         />
                     )}
                     {effectiveStep === 2 && (

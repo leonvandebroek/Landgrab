@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameState } from '../../types/game';
+import type { GameState, HexCell } from '../../types/game';
 import { hexKey } from '../map/HexMath';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
+import { TileActionPanel } from './TileActionPanel';
 import { getTileInteractionStatus } from './tileInteraction';
-import type { MapInteractionFeedback } from './tileInteraction';
+import type { MapInteractionFeedback, TileAction, TileActionType } from './tileInteraction';
 
 interface PickupPrompt {
   q: number;
@@ -27,6 +28,9 @@ interface Props {
   onReturnToLobby: () => void;
   error: string;
   locationError: string | null;
+  tileActions?: TileAction[];
+  onTileAction?: (actionType: TileActionType) => void;
+  onDismissTileActions?: () => void;
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
@@ -46,12 +50,36 @@ export function PlayingHud({
   onReturnToLobby,
   error,
   locationError,
+  tileActions,
+  onTileAction,
+  onDismissTileActions,
   debugToggle,
   debugPanel,
   children
 }: Props) {
   const { t } = useTranslation();
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+
+  const isTimedGame = state.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
+
+  // Game countdown timer for TimedGame win condition
+  useEffect(() => {
+    if (!isTimedGame) return;
+
+    const endTime = new Date(state.gameStartedAt!).getTime() + state.gameDurationMinutes! * 60 * 1000;
+
+    const tick = () => {
+      const remaining = Math.max(0, endTime - Date.now());
+      setTimeRemaining(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [isTimedGame, state.gameStartedAt, state.gameDurationMinutes]);
+
+  // Derive displayed time — null when not a timed game
+  const displayTimeRemaining = isTimedGame ? timeRemaining : null;
 
   const me = state.players.find((p) => p.id === myUserId);
   const myTotalTroops = useMemo(() => {
@@ -83,6 +111,15 @@ export function PlayingHud({
     });
   }, [state, me, currentHex, selectedHex, t, pickupPrompt]);
 
+  // Resolve the target cell for TileActionPanel from selectedHex
+  const selectedCell: HexCell | undefined = selectedHex
+    ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
+    : undefined;
+
+  const showTileActions = Boolean(
+    tileActions && tileActions.length > 0 && !pickupPrompt && onTileAction && onDismissTileActions
+  );
+
   return (
     <div className="game-layout hud-active">
       <div className="top-status-bar">
@@ -99,6 +136,14 @@ export function PlayingHud({
               <span className="stat-value secondary">{myTotalTroops}</span>
               <span className="stat-label">{t('game.hudTroops')}</span>
             </div>
+            {displayTimeRemaining !== null && (
+              <div className="stat-item">
+                <span className={`stat-value ${displayTimeRemaining < 60000 ? 'danger' : displayTimeRemaining < 300000 ? 'warning' : 'primary'}`}>
+                  {formatTimeRemaining(displayTimeRemaining)}
+                </span>
+                <span className="stat-label">{t('game.hudTimer')}</span>
+              </div>
+            )}
           </div>
           <button className="hud-menu-btn-flat" onClick={() => setActiveModal('menu')} aria-label={t('game.hudMenu')}>
             <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
@@ -134,7 +179,18 @@ export function PlayingHud({
             </div>
           )}
 
-          {!pickupPrompt && interactionStatus && interactionStatus.action !== 'none' && (
+          {showTileActions && selectedHex && (
+            <TileActionPanel
+              actions={tileActions!}
+              targetCell={selectedCell}
+              targetHex={selectedHex}
+              player={me ?? null}
+              onAction={onTileAction!}
+              onDismiss={onDismissTileActions!}
+            />
+          )}
+
+          {!pickupPrompt && !showTileActions && interactionStatus && interactionStatus.action !== 'none' && (
             <div className={`glass-panel hud-context-pill context-${interactionStatus.tone === 'error' ? 'danger' : 'info'}`}>
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
               {interactionStatus.message}
@@ -200,4 +256,11 @@ export function PlayingHud({
       {debugPanel}
     </div>
   );
+}
+
+function formatTimeRemaining(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }

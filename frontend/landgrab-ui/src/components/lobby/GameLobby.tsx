@@ -32,6 +32,9 @@ interface Props {
   onSetMasterTile: (lat: number, lng: number) => void;
   onSetMasterTileByHex: (q: number, r: number) => void;
   onAssignStartingTile: (q: number, r: number, playerId: string) => void;
+  onConfigureAlliances: (names: string[]) => void;
+  onDistributePlayers: () => void;
+  onAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
   onStartGame: () => void;
   onReturnToLobby: () => void;
   onLogout: () => void;
@@ -50,6 +53,8 @@ export function GameLobby({
   onCreateRoom,
   onJoinRoom,
   onSetAlliance,
+  onConfigureAlliances,
+  onDistributePlayers,
   onSetMapLocation,
   onSetTileSize,
   onUseCenteredGameArea,
@@ -214,6 +219,8 @@ export function GameLobby({
         locationLoading={locationLoading}
         onSetMapLocation={onSetMapLocation}
         onSetAlliance={onSetAlliance}
+        onConfigureAlliances={onConfigureAlliances}
+        onDistributePlayers={onDistributePlayers}
         onSetTileSize={onSetTileSize}
         onUseCenteredGameArea={onUseCenteredGameArea}
         onSetPatternGameArea={onSetPatternGameArea}

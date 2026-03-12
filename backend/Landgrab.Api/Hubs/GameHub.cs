@@ -140,6 +140,63 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task ConfigureAlliances(List<string> allianceNames)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ConfigureAlliances(room.Code, UserId, allianceNames);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task DistributePlayers()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.DistributePlayersRandomly(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task AssignAllianceStartingTile(int q, int r, string allianceId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.AssignAllianceStartingTile(room.Code, UserId, q, r, allianceId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     public async Task SetTileSize(int meters)
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
@@ -377,7 +434,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
             return;
         }
 
-        var (state, error) = gameService.PlaceTroops(room.Code, UserId, q, r, playerLat, playerLng);
+        var (state, error, previousOwnerId) = gameService.PlaceTroops(room.Code, UserId, q, r, playerLat, playerLng);
         if (error != null)
         {
             await SendError(error);
@@ -385,6 +442,15 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         }
 
         await BroadcastState(room.Code, state!);
+
+        if (previousOwnerId != null)
+        {
+            var lostConnections = room.ConnectionMap
+                .Where(kv => kv.Value == previousOwnerId)
+                .Select(kv => kv.Key);
+            foreach (var connId in lostConnections)
+                await Clients.Client(connId).SendAsync("TileLost", new { Q = q, R = r, AttackerName = Username });
+        }
     }
 
     public async Task AttackGlobalHex(int fromQ, int fromR, int toQ, int toR)

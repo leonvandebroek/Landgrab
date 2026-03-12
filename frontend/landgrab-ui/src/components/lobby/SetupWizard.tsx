@@ -19,6 +19,8 @@ interface Props {
     locationLoading: boolean;
     onSetMapLocation: (lat: number, lng: number) => void;
     onSetAlliance: (name: string) => void;
+    onConfigureAlliances: (names: string[]) => void;
+    onDistributePlayers: () => void;
     onSetTileSize: (meters: number) => void;
     onUseCenteredGameArea: () => void;
     onSetPatternGameArea: (pattern: GameAreaPattern) => void;
@@ -43,6 +45,8 @@ export function SetupWizard({
     locationLoading,
     onSetMapLocation,
     onSetAlliance,
+    onConfigureAlliances,
+    onDistributePlayers,
     onSetTileSize,
     onUseCenteredGameArea,
     onSetPatternGameArea,
@@ -62,7 +66,7 @@ export function SetupWizard({
 
     const stepComplete = useMemo(() => ({
         location: gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
-        teams: gameState.players.length >= 2 && gameState.players.every(p => p.allianceId),
+        teams: gameState.alliances.length > 0 && gameState.players.length >= 2 && gameState.players.every(p => p.allianceId),
         rules: true, // rules always have defaults
         review: false, // review step is never "complete" — it terminates the wizard
     }), [gameState]);
@@ -154,7 +158,10 @@ export function SetupWizard({
                         <TeamsStep
                             gameState={gameState}
                             myUserId={myUserId}
+                            isHost={isHost}
                             onSetAlliance={onSetAlliance}
+                            onConfigureAlliances={onConfigureAlliances}
+                            onDistributePlayers={onDistributePlayers}
                         />
                     )}
                     {step === 2 && (

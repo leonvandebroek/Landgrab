@@ -6,6 +6,20 @@ interface Props {
   onPlayAgain: () => void;
 }
 
+const confettiColors = [
+  '#f39c12', '#e74c3c', '#2ecc71', '#3498db', '#9b59b6',
+  '#1abc9c', '#e67e22', '#f1c40f', '#e84393', '#00cec9',
+];
+
+// Pre-computed random confetti styles (module-level to avoid impure render calls)
+const confettiStyles = Array.from({ length: 40 }, () => ({
+  left: `${Math.random() * 100}%`,
+  animationDelay: `${Math.random() * 2}s`,
+  animationDuration: `${2 + Math.random() * 3}s`,
+  width: `${8 + Math.random() * 6}px`,
+  height: `${8 + Math.random() * 6}px`,
+}));
+
 export function GameOver({ state, onPlayAgain }: Props) {
   const { i18n, t } = useTranslation();
   const winnerColor = state.isAllianceVictory
@@ -16,9 +30,29 @@ export function GameOver({ state, onPlayAgain }: Props) {
 
   return (
     <div className="gameover-page">
+      {/* Pure CSS confetti celebration */}
+      <div className="confetti-container">
+        {confettiStyles.map((style, i) => (
+          <div
+            key={i}
+            className="confetti-piece"
+            style={{
+              ...style,
+              backgroundColor: confettiColors[i % confettiColors.length],
+              borderRadius: i % 3 === 0 ? '50%' : '2px',
+            }}
+          />
+        ))}
+      </div>
+
       <div className="gameover-card">
         <div className="trophy">🏆</div>
-        <h1>{state.winnerName}</h1>
+        <h1
+          className="winner-glow"
+          style={{ '--winner-color': winnerColor ?? '#f39c12' } as React.CSSProperties}
+        >
+          {state.winnerName}
+        </h1>
         <p className="subtitle" style={{ color: winnerColor }}>
           {state.isAllianceVictory ? t('gameover.allianceVictory') : t('gameover.playerVictory')}
         </p>

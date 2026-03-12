@@ -10,6 +10,155 @@ export interface MapInteractionFeedback {
   targetHex?: [number, number] | null;
 }
 
+/* ── Explicit tile-action types (used by TileActionPanel) ── */
+
+export type TileActionType = 'claim' | 'attack' | 'reinforce' | 'pickup' | 'ignore';
+
+export interface TileAction {
+  type: TileActionType;
+  label: string;   // i18n key
+  icon: string;     // emoji
+  tone: 'primary' | 'danger' | 'neutral' | 'info';
+  enabled: boolean;
+  disabledReason?: string; // i18n key
+}
+
+/**
+ * Returns the set of explicit actions available for a tile the player is
+ * standing on.  Returns an empty array when no panel should be shown
+ * (e.g. player is on a different hex, or target is the master tile).
+ */
+export function getTileActions({
+  state,
+  player,
+  targetHex,
+  targetCell,
+  currentHex,
+}: {
+  state: GameState;
+  player: Player | null;
+  targetHex: [number, number] | null;
+  targetCell?: GameState['grid'][string];
+  currentHex: [number, number] | null;
+}): TileAction[] {
+  if (!targetHex || !targetCell || !player || !currentHex) return [];
+
+  // Player must be standing on the target hex
+  if (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1]) return [];
+
+  // No actions on the master tile
+  if (targetCell.isMasterTile) return [];
+
+  const carriedTroops = player.carriedTroops ?? 0;
+  const isOwnHex = targetCell.ownerId === player.id;
+  const isAlliedHex = Boolean(
+    player.allianceId && targetCell.ownerAllianceId === player.allianceId && !isOwnHex
+  );
+  const isNeutral = !targetCell.ownerId;
+  const isEnemy = !isNeutral && !isOwnHex && !isAlliedHex;
+
+  const ignore: TileAction = {
+    type: 'ignore',
+    label: 'game.tileAction.ignoreBtn',
+    icon: '👋',
+    tone: 'neutral',
+    enabled: true,
+  };
+
+  const actions: TileAction[] = [];
+
+  /* ── Neutral tile ── */
+  if (isNeutral) {
+    if (state.claimMode === 'PresenceWithTroop') {
+      actions.push({
+        type: 'claim',
+        label: 'game.tileAction.claimBtn',
+        icon: '🏴',
+        tone: 'primary',
+        enabled: carriedTroops > 0,
+        disabledReason: carriedTroops > 0 ? undefined : 'game.tileAction.neutralNeedsTroop',
+      });
+    } else if (state.claimMode === 'AdjacencyRequired') {
+      const adjacent = isAdjacentToOwnedTerritory(state.grid, targetHex, player);
+      actions.push({
+        type: 'claim',
+        label: 'game.tileAction.claimBtn',
+        icon: '🏴',
+        tone: 'primary',
+        enabled: adjacent,
+        disabledReason: adjacent ? undefined : 'game.tileAction.neutralNeedsAdjacency',
+      });
+    } else {
+      // PresenceOnly – always allowed
+      actions.push({
+        type: 'claim',
+        label: 'game.tileAction.claimBtn',
+        icon: '🏴',
+        tone: 'primary',
+        enabled: true,
+      });
+    }
+    actions.push(ignore);
+    return actions;
+  }
+
+  /* ── Enemy tile ── */
+  if (isEnemy) {
+    const canAttack = carriedTroops > targetCell.troops;
+    actions.push({
+      type: 'attack',
+      label: 'game.tileAction.attackBtn',
+      icon: '⚔️',
+      tone: 'danger',
+      enabled: canAttack,
+      disabledReason: canAttack ? undefined : 'game.tileAction.enemyAttackBlocked',
+    });
+    actions.push(ignore);
+    return actions;
+  }
+
+  /* ── Own tile ── */
+  if (isOwnHex) {
+    if (carriedTroops > 0) {
+      actions.push({
+        type: 'reinforce',
+        label: 'game.tileAction.reinforceBtn',
+        icon: '🛡️',
+        tone: 'info',
+        enabled: true,
+      });
+    }
+    if (targetCell.troops > 0) {
+      actions.push({
+        type: 'pickup',
+        label: 'game.tileAction.pickupBtn',
+        icon: '📦',
+        tone: 'info',
+        enabled: true,
+      });
+    }
+    actions.push(ignore);
+    return actions;
+  }
+
+  /* ── Allied tile ── */
+  if (isAlliedHex) {
+    if (carriedTroops > 0) {
+      actions.push({
+        type: 'reinforce',
+        label: 'game.tileAction.reinforceBtn',
+        icon: '🛡️',
+        tone: 'info',
+        enabled: true,
+      });
+    }
+    actions.push(ignore);
+    return actions;
+  }
+
+  return [];
+}
+
 interface TileInteractionStatus {
   action: 'none' | 'pickup' | 'place';
   tone: Exclude<MapInteractionTone, 'success'>;

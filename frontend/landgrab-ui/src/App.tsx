@@ -4,14 +4,15 @@ import type { TFunction } from 'i18next';
 import { useAuth } from './hooks/useAuth';
 import { useSignalR } from './hooks/useSignalR';
 import { useGeolocation } from './hooks/useGeolocation';
+import { useSound } from './hooks/useSound';
 import { AuthPage } from './components/auth/AuthPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameLobby } from './components/lobby/GameLobby';
 import { GameMap } from './components/map/GameMap';
 import { PlayingHud } from './components/game/PlayingHud';
 import { GameOver } from './components/game/GameOver';
-import { getTileInteractionStatus } from './components/game/tileInteraction';
-import type { MapInteractionFeedback } from './components/game/tileInteraction';
+import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
+import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import type { ClaimMode, GameAreaPattern, GameState, HexCell, HexCoordinate, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
@@ -67,6 +68,7 @@ export default function App() {
   const [debugLocationEnabled, setDebugLocationEnabled] = useState(false);
   const [debugLocation, setDebugLocation] = useState<LocationPoint | null>(null);
   const location = useGeolocation(Boolean(auth));
+  const { playSound } = useSound();
   const lastLocationRef = useRef('');
   const previousConnectedRef = useRef(false);
   const pendingResumeRef = useRef<PendingResume | null>(null);
@@ -250,8 +252,17 @@ export default function App() {
       applyIncomingState(state);
     },
     onGameOver: () => {
+      playSound('victory');
       clearGameplayUi();
       setView('gameover');
+    },
+    onTileLost: (data) => {
+      playSound('notification');
+      setMapFeedback({
+        tone: 'error',
+        message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
+        targetHex: [data.Q, data.R]
+      });
     },
     onError: (message) => {
       if (resolveResumeFromError(message)) {
@@ -570,6 +581,18 @@ export default function App() {
     invoke('AssignStartingTile', q, r, playerId).catch(cause => setError(String(cause)));
   }, [invoke]);
 
+  const handleConfigureAlliances = useCallback((names: string[]) => {
+    invoke('ConfigureAlliances', names).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
+  const handleDistributePlayers = useCallback(() => {
+    invoke('DistributePlayers').catch(cause => setError(String(cause)));
+  }, [invoke]);
+
+  const handleAssignAllianceStartingTile = useCallback((q: number, r: number, allianceId: string) => {
+    invoke('AssignAllianceStartingTile', q, r, allianceId).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
   const handleStartGame = useCallback(() => {
     invoke('StartGame').catch(cause => setError(String(cause)));
   }, [invoke]);
@@ -597,54 +620,82 @@ export default function App() {
     setPickupPrompt(null);
     clearError();
 
-    const interactionStatus = getTileInteractionStatus({
+    // Check if player is NOT on this hex - show info message
+    if (!currentHex || currentHex[0] !== q || currentHex[1] !== r) {
+      const interactionStatus = getTileInteractionStatus({
+        state: gameState,
+        player: myPlayer,
+        targetHex,
+        targetCell: cell,
+        currentHex,
+        t
+      });
+      setMapFeedback({
+        tone: interactionStatus.action === 'none' ? interactionStatus.tone : 'info',
+        message: interactionStatus.message,
+        targetHex
+      });
+      return;
+    }
+
+    // Player IS on this hex - TileActionPanel will show via tileActions memo
+    // Clear any old feedback
+    setMapFeedback(null);
+  }, [auth, currentHex, gameState, myPlayer, t]);
+
+  const tileActions = useMemo<TileAction[]>(() => {
+    if (!gameState || gameState.phase !== 'Playing' || !selectedHex) return [];
+    const targetCell = gameState.grid[`${selectedHex[0]},${selectedHex[1]}`];
+    return getTileActions({
       state: gameState,
       player: myPlayer,
-      targetHex,
-      targetCell: cell,
+      targetHex: selectedHex,
+      targetCell,
       currentHex,
-      t
     });
+  }, [gameState, selectedHex, myPlayer, currentHex]);
 
-    if (interactionStatus.action === 'none' || !currentLocation) {
-      setMapFeedback({
-        tone: interactionStatus.action === 'none' ? interactionStatus.tone : 'error',
-        message: interactionStatus.action === 'none'
-          ? interactionStatus.message
-          : t('game.mapFeedback.locationRequired'),
-        targetHex
-      });
-      return;
+  const handleTileAction = useCallback((actionType: TileActionType) => {
+    if (!selectedHex || !currentLocation || !gameState) return;
+    const [q, r] = selectedHex;
+
+    switch (actionType) {
+      case 'claim':
+      case 'reinforce':
+      case 'attack':
+        invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng)
+          .then(() => {
+            setPickupPrompt(null);
+            const tone = actionType === 'attack' ? 'attack' : actionType === 'reinforce' ? 'reinforce' : 'claim';
+            playSound(tone === 'attack' ? 'attack' : actionType === 'reinforce' ? 'reinforce' : 'claim');
+            setMapFeedback({
+              tone: 'success',
+              message: getPlaceSuccessMessage(actionType === 'attack' ? 'capture' : actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
+              targetHex: selectedHex
+            });
+          })
+          .catch(cause => {
+            playSound('error');
+            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: selectedHex });
+          });
+        break;
+      case 'pickup': {
+        const cell = gameState.grid[`${q},${r}`];
+        setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
+        setPickupCount(1);
+        break;
+      }
+      case 'ignore':
+        setSelectedHex(null);
+        setMapFeedback(null);
+        break;
     }
+  }, [selectedHex, currentLocation, gameState, invoke, playSound, t]);
 
-    if (interactionStatus.action === 'pickup') {
-      setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
-      setPickupCount(1);
-      setMapFeedback({
-        tone: 'info',
-        message: t('game.mapFeedback.pickupReady'),
-        targetHex
-      });
-      return;
-    }
-
-    invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng)
-      .then(() => {
-        setPickupPrompt(null);
-        setMapFeedback({
-          tone: 'success',
-          message: getPlaceSuccessMessage(interactionStatus.placeOutcome, q, r, t),
-          targetHex
-        });
-      })
-      .catch(cause => {
-        setMapFeedback({
-          tone: 'error',
-          message: getErrorMessage(cause),
-          targetHex
-        });
-      });
-  }, [auth, currentHex, currentLocation, gameState, invoke, myPlayer, t]);
+  const handleDismissTileActions = useCallback(() => {
+    setSelectedHex(null);
+    setMapFeedback(null);
+  }, []);
 
   const handleConfirmPickup = useCallback(() => {
     if (!pickupPrompt || !currentLocation) {
@@ -657,6 +708,7 @@ export default function App() {
     invoke('PickUpTroops', pickupPrompt.q, pickupPrompt.r, pickupCount, currentLocation.lat, currentLocation.lng)
       .then(() => {
         setPickupPrompt(null);
+        playSound('pickup');
         setMapFeedback({
           tone: 'success',
           message: t('game.mapFeedback.pickedUp', {
@@ -674,7 +726,7 @@ export default function App() {
           targetHex
         });
       });
-  }, [currentLocation, invoke, pickupCount, pickupPrompt, t]);
+  }, [currentLocation, invoke, pickupCount, pickupPrompt, playSound, t]);
 
   const handlePlayAgain = useCallback(() => {
     clearSession();
@@ -746,6 +798,9 @@ export default function App() {
           onReturnToLobby={handleReturnToLobby}
           error={error}
           locationError={effectiveLocationError}
+          tileActions={tileActions}
+          onTileAction={handleTileAction}
+          onDismissTileActions={handleDismissTileActions}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
         >
@@ -787,6 +842,9 @@ export default function App() {
         onSetMasterTile={handleSetMasterTile}
         onSetMasterTileByHex={handleSetMasterTileByHex}
         onAssignStartingTile={handleAssignStartingTile}
+        onConfigureAlliances={handleConfigureAlliances}
+        onDistributePlayers={handleDistributePlayers}
+        onAssignAllianceStartingTile={handleAssignAllianceStartingTile}
         onStartGame={handleStartGame}
         onReturnToLobby={handleReturnToLobby}
         onLogout={() => {

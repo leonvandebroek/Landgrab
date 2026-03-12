@@ -12,9 +12,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
     private const int MinimumDrawnHexCount = 7;
 
     private static readonly string[] Colors =
-        ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"];
+        ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
+         "#e91e63", "#00bcd4", "#8bc34a", "#ff5722", "#673ab7", "#009688", "#ffc107", "#795548"];
 
-    private static readonly string[] AllianceColors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12"];
+    private static readonly string[] AllianceColors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"];
     private const int MaxEventLogEntries = 100;
 
     public GameRoom CreateRoom(string hostUserId, string hostUsername, string connectionId)
@@ -73,8 +74,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Game already in progress.");
 
-            if (room.State.Players.Count >= 4)
-                return (null, "Room is full (max 4 players).");
+            if (room.State.Players.Count >= 30)
+                return (null, "Room is full (max 30 players).");
 
             var colorIndex = room.State.Players.Count % Colors.Length;
             room.State.Players.Add(new PlayerDto
@@ -290,8 +291,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
             if (alliance == null)
             {
-                if (room.State.Alliances.Count >= 4)
-                    return (null, "Max 4 alliances per game.");
+                if (room.State.Alliances.Count >= 8)
+                    return (null, "Max 8 alliances per game.");
 
                 alliance = new AllianceDto
                 {
@@ -335,6 +336,161 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 });
             }
 
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) ConfigureAlliances(string roomCode, string userId, List<string> allianceNames)
+    {
+        if (allianceNames == null || allianceNames.Count == 0)
+            return (null, "At least one alliance name is required.");
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can configure alliances.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Alliances can only be configured in the lobby.");
+
+            room.State.Alliances.Clear();
+            for (var i = 0; i < allianceNames.Count; i++)
+            {
+                var name = allianceNames[i].Trim();
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+
+                room.State.Alliances.Add(new AllianceDto
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Name = name,
+                    Color = AllianceColors[i % AllianceColors.Length]
+                });
+            }
+
+            foreach (var player in room.State.Players)
+            {
+                player.AllianceId = null;
+                player.AllianceName = null;
+                player.AllianceColor = null;
+            }
+
+            var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "AlliancesConfigured",
+                Message = $"The host configured {room.State.Alliances.Count} alliances.",
+                PlayerId = userId,
+                PlayerName = host?.Name
+            });
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) DistributePlayersRandomly(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can distribute players.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Players can only be distributed in the lobby.");
+            if (room.State.Alliances.Count == 0)
+                return (null, "Configure at least one alliance before distributing players.");
+
+            var shuffledPlayers = room.State.Players.OrderBy(_ => Random.Shared.Next()).ToList();
+            for (var i = 0; i < shuffledPlayers.Count; i++)
+            {
+                var alliance = room.State.Alliances[i % room.State.Alliances.Count];
+                var player = shuffledPlayers[i];
+                player.AllianceId = alliance.Id;
+                player.AllianceName = alliance.Name;
+                player.AllianceColor = alliance.Color;
+                player.Color = alliance.Color;
+            }
+
+            foreach (var alliance in room.State.Alliances)
+            {
+                alliance.MemberIds.Clear();
+                alliance.MemberIds.AddRange(
+                    room.State.Players.Where(p => p.AllianceId == alliance.Id).Select(p => p.Id));
+            }
+
+            var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "PlayersDistributed",
+                Message = "The host randomly distributed all players across alliances.",
+                PlayerId = userId,
+                PlayerName = host?.Name
+            });
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) AssignAllianceStartingTile(string roomCode, string userId,
+        int q, int r, string allianceId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can assign alliance starting tiles.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Starting tiles can only be assigned in the lobby.");
+            if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
+                return (null, "Set the master tile before assigning starting tiles.");
+
+            var alliance = room.State.Alliances.FirstOrDefault(a => a.Id == allianceId);
+            if (alliance == null)
+                return (null, "Alliance not found.");
+
+            var firstMember = room.State.Players.FirstOrDefault(p => p.AllianceId == allianceId);
+            if (firstMember == null)
+                return (null, "Alliance has no members.");
+
+            if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
+                return (null, "Invalid hex.");
+            if (cell.IsMasterTile)
+                return (null, "The master tile cannot be assigned as a starting tile.");
+            if (cell.OwnerId != null)
+                return (null, "This hex is already assigned.");
+
+            cell.OwnerId = firstMember.Id;
+            cell.OwnerAllianceId = alliance.Id;
+            cell.OwnerName = firstMember.Name;
+            cell.OwnerColor = alliance.Color;
+            cell.Troops = 3;
+            RefreshTerritoryCount(room.State);
+
+            var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "AllianceStartingTileAssigned",
+                Message = $"Alliance {alliance.Name} was assigned a starting tile at ({q}, {r}).",
+                PlayerId = userId,
+                PlayerName = host?.Name,
+                AllianceId = alliance.Id,
+                AllianceName = alliance.Name,
+                Q = q,
+                R = r
+            });
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -669,7 +825,76 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             }
         }
 
-        // Auto-assign starting tiles for players who don't have one
+        // When alliances exist, assign starting tiles per-alliance instead of per-player
+        if (room.State.Alliances.Count > 0)
+        {
+            var alliancesNeedingTile = room.State.Alliances
+                .Where(a => a.MemberIds.Count > 0 &&
+                            HexService.AllianceTerritoryCount(room.State.Grid, a.Id) == 0)
+                .ToList();
+
+            if (alliancesNeedingTile.Count == 0)
+                return;
+
+            const int preferredRingRadius = 4;
+            var positions = HexService.GetEvenlySpacedRing(
+                alliancesNeedingTile.Count,
+                preferredRingRadius,
+                room.State.GridRadius);
+
+            var available = positions
+                .Where(pos =>
+                {
+                    var key = HexService.Key(pos.q, pos.r);
+                    return room.State.Grid.TryGetValue(key, out var cell)
+                           && cell.OwnerId == null
+                           && !cell.IsMasterTile;
+                })
+                .ToList();
+
+            if (available.Count < alliancesNeedingTile.Count)
+            {
+                available = room.State.Grid.Values
+                    .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
+                    .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
+                    .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
+                    .Select(cell => (cell.Q, cell.R))
+                    .ToList();
+            }
+
+            var host2 = room.State.Players.FirstOrDefault(p => p.IsHost);
+            for (var i = 0; i < alliancesNeedingTile.Count && i < available.Count; i++)
+            {
+                var alliance = alliancesNeedingTile[i];
+                var firstMember = room.State.Players.FirstOrDefault(p => p.AllianceId == alliance.Id);
+                if (firstMember == null)
+                    continue;
+
+                var (q, r) = available[i];
+                var cell = room.State.Grid[HexService.Key(q, r)];
+                cell.OwnerId = firstMember.Id;
+                cell.OwnerAllianceId = alliance.Id;
+                cell.OwnerName = firstMember.Name;
+                cell.OwnerColor = alliance.Color;
+                cell.Troops = 3;
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "AllianceStartingTileAssigned",
+                    Message = $"Alliance {alliance.Name} was auto-assigned a starting tile at ({q}, {r}).",
+                    PlayerId = host2?.Id,
+                    PlayerName = host2?.Name,
+                    AllianceId = alliance.Id,
+                    AllianceName = alliance.Name,
+                    Q = q,
+                    R = r
+                });
+            }
+
+            RefreshTerritoryCount(room.State);
+            return;
+        }
+
+        // Auto-assign starting tiles for players who don't have one (original logic)
         var playersNeedingTile = room.State.Players
             .Where(p => HexService.TerritoryCount(room.State.Grid, p.Id) == 0)
             .ToList();
@@ -677,14 +902,14 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (playersNeedingTile.Count == 0)
             return;
 
-        const int preferredRingRadius = 4;
-        var positions = HexService.GetEvenlySpacedRing(
+        const int preferredRingRadius2 = 4;
+        var positions2 = HexService.GetEvenlySpacedRing(
             playersNeedingTile.Count,
-            preferredRingRadius,
+            preferredRingRadius2,
             room.State.GridRadius);
 
         // Filter out positions that are taken or are the master tile
-        var available = positions
+        var available2 = positions2
             .Where(pos =>
             {
                 var key = HexService.Key(pos.q, pos.r);
@@ -695,9 +920,9 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             .ToList();
 
         // If not enough positions on the preferred ring, try a wider ring
-        if (available.Count < playersNeedingTile.Count)
+        if (available2.Count < playersNeedingTile.Count)
         {
-            available = room.State.Grid.Values
+            available2 = room.State.Grid.Values
                 .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
                 .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
                 .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
@@ -705,11 +930,11 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 .ToList();
         }
 
-        var host2 = room.State.Players.FirstOrDefault(p => p.IsHost);
-        for (var i = 0; i < playersNeedingTile.Count && i < available.Count; i++)
+        var host3 = room.State.Players.FirstOrDefault(p => p.IsHost);
+        for (var i = 0; i < playersNeedingTile.Count && i < available2.Count; i++)
         {
             var player = playersNeedingTile[i];
-            var (q, r) = available[i];
+            var (q, r) = available2[i];
             var cell = room.State.Grid[HexService.Key(q, r)];
             SetCellOwner(cell, player);
             cell.Troops = 3;
@@ -717,8 +942,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             {
                 Type = "StartingTileAssigned",
                 Message = $"{player.Name} was auto-assigned a starting tile at ({q}, {r}).",
-                PlayerId = host2?.Id,
-                PlayerName = host2?.Name,
+                PlayerId = host3?.Id,
+                PlayerName = host3?.Name,
                 TargetPlayerId = player.Id,
                 TargetPlayerName = player.Name,
                 Q = q,
@@ -849,25 +1074,25 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         }
     }
 
-    public (GameState? state, string? error) PlaceTroops(string roomCode, string userId,
+    public (GameState? state, string? error, string? previousOwnerId) PlaceTroops(string roomCode, string userId,
         int q, int r, double playerLat, double playerLng)
     {
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
-            return (null, error);
+            return (null, error, null);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.");
+            return (null, "Room not found.", null);
 
         lock (room.SyncRoot)
         {
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
-                return (null, validationError);
+                return (null, validationError, null);
             if (cell.IsMasterTile)
-                return (null, "The master tile is invincible and cannot be conquered.");
+                return (null, "The master tile is invincible and cannot be conquered.", null);
 
             player.CurrentLat = playerLat;
             player.CurrentLng = playerLng;
@@ -876,33 +1101,33 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (cell.OwnerId == userId || sameAllianceHex)
             {
                 if (player.CarriedTroops <= 0)
-                    return (null, "You are not carrying any troops.");
+                    return (null, "You are not carrying any troops.", null);
 
                 cell.Troops += player.CarriedTroops;
                 ResetCarriedTroops(player);
                 ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
-                return (reinforceSnapshot, null);
+                return (reinforceSnapshot, null, null);
             }
 
             if (cell.OwnerId == null)
             {
                 var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r);
                 if (neutralClaimError != null)
-                    return (null, neutralClaimError);
+                    return (null, neutralClaimError, null);
 
                 RefreshTerritoryCount(room.State);
                 ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
-                return (neutralClaimSnapshot, null);
+                return (neutralClaimSnapshot, null, null);
             }
 
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
-                return (null, "You cannot attack an allied hex.");
+                return (null, "You cannot attack an allied hex.", null);
             if (player.CarriedTroops <= cell.Troops)
-                return (null, "You need to carry more troops than the target hex currently has.");
+                return (null, "You need to carry more troops than the target hex currently has.", null);
 
             var previousOwnerId = cell.OwnerId;
             var previousOwnerName = cell.OwnerName;
@@ -925,7 +1150,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var attackSnapshot = SnapshotState(room.State);
             QueuePersistence(room, attackSnapshot);
-            return (attackSnapshot, null);
+            return (attackSnapshot, null, previousOwnerId);
         }
     }
 
