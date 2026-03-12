@@ -4,10 +4,12 @@ import { DiceRoller } from './DiceRoller';
 
 interface Props {
   result: CombatResult;
+  gameMode?: string;
+  onReClaim?: (mode: 'Alliance' | 'Self' | 'Abandon') => void;
   onClose: () => void;
 }
 
-export function CombatModal({ result, onClose }: Props) {
+export function CombatModal({ result, gameMode, onReClaim, onClose }: Props) {
   const { t } = useTranslation();
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -30,7 +32,38 @@ export function CombatModal({ result, onClose }: Props) {
           </div>
         </div>
 
-        <button className="btn-primary" onClick={onClose}>{t('combat.continue')}</button>
+        {result.hexCaptured ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
+            <h4 style={{ margin: 0, textAlign: 'center' }}>{t('combat.postCombatTitle')}</h4>
+            {gameMode === 'Alliances' ? (
+              <>
+                <button className="btn-primary" onClick={() => { onReClaim?.('Alliance'); onClose(); }}>
+                  {t('combat.claimForAlliance')}
+                </button>
+                <button className="btn-secondary" onClick={() => { onReClaim?.('Self'); onClose(); }}>
+                  {t('combat.claimForSelf')}
+                </button>
+                <button className="btn-secondary" style={{ color: 'var(--danger, #e74c3c)' }} onClick={() => { onReClaim?.('Abandon'); onClose(); }}>
+                  {t('combat.abandon')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="btn-primary" onClick={onClose}>
+                  {t('combat.continue')}
+                </button>
+                <button className="btn-secondary" style={{ color: 'var(--danger, #e74c3c)' }} onClick={() => { onReClaim?.('Abandon'); onClose(); }}>
+                  {t('combat.abandon')}
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
+            <p style={{ textAlign: 'center', margin: 0 }}>{t('combat.youLost')}</p>
+            <button className="btn-primary" onClick={onClose}>{t('combat.continue')}</button>
+          </div>
+        )}
       </div>
     </div>
   );

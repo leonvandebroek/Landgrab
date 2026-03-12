@@ -20,6 +20,13 @@ const confettiStyles = Array.from({ length: 40 }, () => ({
   height: `${8 + Math.random() * 6}px`,
 }));
 
+const achievementIcons: Record<string, string> = {
+  territoryLeader: '🗺️',
+  armyCommander: '⚔️',
+  conqueror: '🏹',
+  firstStrike: '⚡',
+};
+
 export function GameOver({ state, onPlayAgain }: Props) {
   const { i18n, t } = useTranslation();
   const winnerColor = state.isAllianceVictory
@@ -27,6 +34,8 @@ export function GameOver({ state, onPlayAgain }: Props) {
     : state.players.find(p => p.id === state.winnerId)?.color;
 
   const totalHexes = Object.values(state.grid).filter(cell => !cell.isMasterTile).length;
+
+  const playerColorMap = new Map(state.players.map(p => [p.id, p.color]));
 
   return (
     <div className="gameover-page">
@@ -94,6 +103,70 @@ export function GameOver({ state, onPlayAgain }: Props) {
                 ))
           }
         </div>
+
+        {state.achievements && state.achievements.length > 0 && (
+          <div className="achievements-section" style={{ textAlign: 'left' }}>
+            <h3 style={{
+              marginBottom: '0.8rem',
+              color: 'var(--muted)',
+              fontSize: '0.9rem',
+              textTransform: 'uppercase',
+            }}>
+              🏆 {t('gameover.achievements' as never)}
+            </h3>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem',
+            }}>
+              {state.achievements.map(achievement => {
+                const playerColor = playerColorMap.get(achievement.playerId) ?? '#888';
+                const icon = achievementIcons[achievement.id] ?? '🏅';
+                return (
+                  <div
+                    key={achievement.id}
+                    style={{
+                      background: 'rgba(18, 25, 38, 0.75)',
+                      backdropFilter: 'blur(16px)',
+                      WebkitBackdropFilter: 'blur(16px)',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '12px',
+                      padding: '0.6rem 0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem',
+                      borderLeft: `3px solid ${playerColor}`,
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>{icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        color: '#fff',
+                      }}>
+                        {t(achievement.titleKey as never)}
+                      </div>
+                      <div style={{
+                        fontSize: '0.75rem',
+                        color: playerColor,
+                        fontWeight: 500,
+                      }}>
+                        {achievement.playerName}
+                        {achievement.value && (
+                          <span style={{ color: 'var(--muted)', marginLeft: '0.3rem' }}>
+                            ({achievement.value})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <button className="btn-primary big" onClick={onPlayAgain}>
           {t('gameover.playAgain')}

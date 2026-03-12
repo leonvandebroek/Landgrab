@@ -45,6 +45,8 @@ public enum GameAreaPattern
     Starburst
 }
 
+public enum ReClaimMode { Alliance, Self, Abandon }
+
 public class HexCoordinateDto
 {
     public int Q { get; set; }
@@ -122,6 +124,7 @@ public class GameState
     public string? WinnerId { get; set; }
     public string? WinnerName { get; set; }
     public bool IsAllianceVictory { get; set; }
+    public List<Achievement> Achievements { get; set; } = [];
 }
 
 public class GameRoom
@@ -138,6 +141,15 @@ public class GameRoom
     public DateTime? EndedAt { get; set; }
 }
 
+public class Achievement
+{
+    public string Id { get; set; } = "";
+    public string PlayerId { get; set; } = "";
+    public string PlayerName { get; set; } = "";
+    public string TitleKey { get; set; } = "";
+    public string? Value { get; set; }
+}
+
 public class CombatResult
 {
     public int[] AttackDice { get; set; } = [];
@@ -147,6 +159,9 @@ public class CombatResult
     public int DefenderLost { get; set; }
     public bool HexCaptured { get; set; }
     public GameState NewState { get; set; } = null!;
+    public int Q { get; set; }
+    public int R { get; set; }
+    public string? PreviousOwnerName { get; set; }
 }
 
 public class GameEvent

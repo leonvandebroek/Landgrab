@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, HexCell } from '../../types/game';
 import { hexKey } from '../map/HexMath';
+import { useSound } from '../../hooks/useSound';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
 import { TileActionPanel } from './TileActionPanel';
@@ -12,6 +13,13 @@ interface PickupPrompt {
   q: number;
   r: number;
   max: number;
+}
+
+interface AttackPrompt {
+  q: number;
+  r: number;
+  max: number;
+  defenderTroops: number;
 }
 
 interface Props {
@@ -31,6 +39,11 @@ interface Props {
   tileActions?: TileAction[];
   onTileAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
+  attackPrompt: AttackPrompt | null;
+  attackCount: number;
+  onAttackCountChange: (count: number) => void;
+  onConfirmAttack: () => void;
+  onCancelAttack: () => void;
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
@@ -53,11 +66,17 @@ export function PlayingHud({
   tileActions,
   onTileAction,
   onDismissTileActions,
+  attackPrompt,
+  attackCount,
+  onAttackCountChange,
+  onConfirmAttack,
+  onCancelAttack,
   debugToggle,
   debugPanel,
   children
 }: Props) {
   const { t } = useTranslation();
+  const { soundEnabled, toggleSound } = useSound();
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
@@ -117,7 +136,7 @@ export function PlayingHud({
     : undefined;
 
   const showTileActions = Boolean(
-    tileActions && tileActions.length > 0 && !pickupPrompt && onTileAction && onDismissTileActions
+    tileActions && tileActions.length > 0 && !pickupPrompt && !attackPrompt && onTileAction && onDismissTileActions
   );
 
   return (
@@ -179,6 +198,30 @@ export function PlayingHud({
             </div>
           )}
 
+          {attackPrompt && (
+            <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
+              <div>{t('game.tileAction.defenderTroops', { count: attackPrompt.defenderTroops })}</div>
+              <div className="pickup-controls">
+                <span>{attackPrompt.defenderTroops + 1}</span>
+                <input
+                  type="range"
+                  min={attackPrompt.defenderTroops + 1}
+                  max={attackPrompt.max}
+                  value={attackCount}
+                  onChange={(e) => onAttackCountChange(Number(e.target.value))}
+                />
+                <span>{attackPrompt.max}</span>
+              </div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
+                {t('game.tileAction.deployCount', { count: attackCount })}
+              </div>
+              <div className="hud-action-bar">
+                <button className="hud-btn" onClick={onCancelAttack}>{t('game.cancel')}</button>
+                <button className="hud-btn primary" onClick={onConfirmAttack}>{t('game.confirm')}</button>
+              </div>
+            </div>
+          )}
+
           {showTileActions && selectedHex && (
             <TileActionPanel
               actions={tileActions!}
@@ -190,14 +233,14 @@ export function PlayingHud({
             />
           )}
 
-          {!pickupPrompt && !showTileActions && interactionStatus && interactionStatus.action !== 'none' && (
+          {!pickupPrompt && !attackPrompt && !showTileActions && interactionStatus && interactionStatus.action !== 'none' && (
             <div className={`glass-panel hud-context-pill context-${interactionStatus.tone === 'error' ? 'danger' : 'info'}`}>
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
               {interactionStatus.message}
             </div>
           )}
 
-          {interactionFeedback && !pickupPrompt && (
+          {interactionFeedback && !pickupPrompt && !attackPrompt && (
              <div className={`hud-toast toast-${interactionFeedback.tone === 'error' ? 'danger' : interactionFeedback.tone === 'success' ? 'success' : 'info'}`}>
                {interactionFeedback.message}
              </div>
@@ -247,6 +290,9 @@ export function PlayingHud({
           <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <button className="btn-secondary" style={{ width: '100%' }} onClick={toggleSound}>
+            {soundEnabled ? '🔊' : '🔇'} {t('game.soundToggle')}
+          </button>
           {debugToggle}
           <button className="btn-secondary" style={{width: '100%', color: 'var(--danger, #e74c3c)'}} onClick={onReturnToLobby}>
             {t('game.returnToLobby')}

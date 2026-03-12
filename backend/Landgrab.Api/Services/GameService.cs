@@ -1074,25 +1074,26 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         }
     }
 
-    public (GameState? state, string? error, string? previousOwnerId) PlaceTroops(string roomCode, string userId,
-        int q, int r, double playerLat, double playerLng)
+    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(
+        string roomCode, string userId, int q, int r, double playerLat, double playerLng,
+        int? troopCount = null, bool claimForSelf = false)
     {
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
-            return (null, error, null);
+            return (null, error, null, null);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.", null);
+            return (null, "Room not found.", null, null);
 
         lock (room.SyncRoot)
         {
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
-                return (null, validationError, null);
+                return (null, validationError, null, null);
             if (cell.IsMasterTile)
-                return (null, "The master tile is invincible and cannot be conquered.", null);
+                return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
             player.CurrentLat = playerLat;
             player.CurrentLng = playerLng;
@@ -1101,40 +1102,49 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (cell.OwnerId == userId || sameAllianceHex)
             {
                 if (player.CarriedTroops <= 0)
-                    return (null, "You are not carrying any troops.", null);
+                    return (null, "You are not carrying any troops.", null, null);
 
                 cell.Troops += player.CarriedTroops;
                 ResetCarriedTroops(player);
                 ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
-                return (reinforceSnapshot, null, null);
+                return (reinforceSnapshot, null, null, null);
             }
 
             if (cell.OwnerId == null)
             {
-                var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r);
+                var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r, claimForSelf);
                 if (neutralClaimError != null)
-                    return (null, neutralClaimError, null);
+                    return (null, neutralClaimError, null, null);
 
                 RefreshTerritoryCount(room.State);
                 ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
-                return (neutralClaimSnapshot, null, null);
+                return (neutralClaimSnapshot, null, null, null);
             }
 
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
-                return (null, "You cannot attack an allied hex.", null);
-            if (player.CarriedTroops <= cell.Troops)
-                return (null, "You need to carry more troops than the target hex currently has.", null);
+                return (null, "You cannot attack an allied hex.", null, null);
+
+            var deployedTroops = troopCount ?? player.CarriedTroops;
+            if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
+                return (null, "Troop count must be between 1 and your carried troops.", null, null);
+            if (deployedTroops <= cell.Troops)
+                return (null, "You need to carry more troops than the target hex currently has.", null, null);
 
             var previousOwnerId = cell.OwnerId;
             var previousOwnerName = cell.OwnerName;
             var defendingTroops = cell.Troops;
-            SetCellOwner(cell, player);
-            cell.Troops = player.CarriedTroops - defendingTroops;
-            ResetCarriedTroops(player);
+            if (claimForSelf)
+                SetCellOwnerForSelf(cell, player);
+            else
+                SetCellOwner(cell, player);
+            cell.Troops = deployedTroops - defendingTroops;
+            player.CarriedTroops -= deployedTroops;
+            if (player.CarriedTroops == 0)
+                ResetCarriedTroops(player);
             RefreshTerritoryCount(room.State);
             AppendEventLog(room.State, new GameEventLogEntry
             {
@@ -1150,7 +1160,69 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var attackSnapshot = SnapshotState(room.State);
             QueuePersistence(room, attackSnapshot);
-            return (attackSnapshot, null, previousOwnerId);
+            var combatResult = new CombatResult
+            {
+                AttackerWon = true,
+                HexCaptured = true,
+                AttackDice = [],
+                DefendDice = [],
+                AttackerLost = 0,
+                DefenderLost = defendingTroops,
+                Q = q,
+                R = r,
+                PreviousOwnerName = previousOwnerName,
+                NewState = attackSnapshot
+            };
+            return (attackSnapshot, null, previousOwnerId, combatResult);
+        }
+    }
+
+    public (GameState? state, string? error) ReClaimHex(string roomCode, string userId,
+        int q, int r, ReClaimMode mode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (room.State.Phase != GamePhase.Playing)
+                return (null, "This action is only available while the game is playing.");
+
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+
+            if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
+                return (null, "Invalid hex.");
+
+            if (cell.OwnerId != userId)
+                return (null, "You can only reclaim your own hexes.");
+
+            switch (mode)
+            {
+                case ReClaimMode.Alliance:
+                    cell.OwnerAllianceId = player.AllianceId;
+                    cell.OwnerColor = player.AllianceColor ?? player.Color;
+                    break;
+                case ReClaimMode.Self:
+                    cell.OwnerAllianceId = null;
+                    cell.OwnerColor = player.Color;
+                    break;
+                case ReClaimMode.Abandon:
+                    cell.OwnerId = null;
+                    cell.OwnerName = null;
+                    cell.OwnerAllianceId = null;
+                    cell.OwnerColor = null;
+                    cell.Troops = 0;
+                    break;
+            }
+
+            RefreshTerritoryCount(room.State);
+            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
         }
     }
 
@@ -1284,14 +1356,18 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         state.EventLog.RemoveRange(0, state.EventLog.Count - MaxEventLogEntries);
     }
 
-    private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r)
+    private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r,
+        bool claimForSelf = false)
     {
         switch (state.ClaimMode)
         {
             case ClaimMode.PresenceOnly:
                 {
                     var troopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
-                    SetCellOwner(cell, player);
+                    if (claimForSelf)
+                        SetCellOwnerForSelf(cell, player);
+                    else
+                        SetCellOwner(cell, player);
                     cell.Troops = troopsPlaced;
                     ResetCarriedTroops(player);
                     return null;
@@ -1300,7 +1376,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 if (player.CarriedTroops < 1)
                     return "You must be carrying at least 1 troop to claim a neutral hex in this room.";
 
-                SetCellOwner(cell, player);
+                if (claimForSelf)
+                    SetCellOwnerForSelf(cell, player);
+                else
+                    SetCellOwner(cell, player);
                 cell.Troops = 1;
                 player.CarriedTroops -= 1;
                 if (player.CarriedTroops == 0)
@@ -1311,7 +1390,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                     return "This room requires neutral claims to border your territory.";
 
                 var adjacentTroopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
-                SetCellOwner(cell, player);
+                if (claimForSelf)
+                    SetCellOwnerForSelf(cell, player);
+                else
+                    SetCellOwner(cell, player);
                 cell.Troops = adjacentTroopsPlaced;
                 ResetCarriedTroops(player);
                 return null;
@@ -1451,6 +1533,14 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         cell.OwnerColor = player.AllianceColor ?? player.Color;
     }
 
+    private static void SetCellOwnerForSelf(HexCell cell, PlayerDto player)
+    {
+        cell.OwnerId = player.Id;
+        cell.OwnerName = player.Name;
+        cell.OwnerColor = player.Color;
+        cell.OwnerAllianceId = null;
+    }
+
     private static void ResetCarriedTroops(PlayerDto player)
     {
         player.CarriedTroops = 0;
@@ -1493,6 +1583,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (previousPhase == GamePhase.GameOver || state.Phase != GamePhase.GameOver)
             return;
 
+        ComputeAchievements(state);
         AppendEventLog(state, new GameEventLogEntry
         {
             Type = "GameOver",
@@ -1503,6 +1594,104 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             WinnerName = state.WinnerName,
             IsAllianceVictory = state.IsAllianceVictory
         });
+    }
+
+    private static void ComputeAchievements(GameState state)
+    {
+        state.Achievements.Clear();
+
+        // Territory Leader: player with highest TerritoryCount
+        var maxTerritory = state.Players.Max(p => p.TerritoryCount);
+        if (maxTerritory > 0)
+        {
+            foreach (var p in state.Players.Where(p => p.TerritoryCount == maxTerritory))
+            {
+                state.Achievements.Add(new Achievement
+                {
+                    Id = "territoryLeader",
+                    PlayerId = p.Id,
+                    PlayerName = p.Name,
+                    TitleKey = "achievement.territoryLeader",
+                    Value = maxTerritory.ToString()
+                });
+            }
+        }
+
+        // Army Commander: player with most total troops on the map
+        var troopsByPlayer = state.Players.Select(p => new
+        {
+            Player = p,
+            TotalTroops = state.Grid.Values.Where(c => c.OwnerId == p.Id).Sum(c => c.Troops)
+        }).ToList();
+        var maxTroops = troopsByPlayer.Count > 0 ? troopsByPlayer.Max(t => t.TotalTroops) : 0;
+        if (maxTroops > 0)
+        {
+            foreach (var t in troopsByPlayer.Where(t => t.TotalTroops == maxTroops))
+            {
+                state.Achievements.Add(new Achievement
+                {
+                    Id = "armyCommander",
+                    PlayerId = t.Player.Id,
+                    PlayerName = t.Player.Name,
+                    TitleKey = "achievement.armyCommander",
+                    Value = maxTroops.ToString()
+                });
+            }
+        }
+
+        // Conqueror: player with most TileCaptured events as attacker
+        var capturesByPlayer = state.EventLog
+            .Where(e => e.Type == "TileCaptured" && e.PlayerId != null)
+            .GroupBy(e => e.PlayerId!)
+            .Select(g => new { PlayerId = g.Key, Count = g.Count() })
+            .ToList();
+        if (capturesByPlayer.Count > 0)
+        {
+            var maxCaptures = capturesByPlayer.Max(c => c.Count);
+            foreach (var c in capturesByPlayer.Where(c => c.Count == maxCaptures))
+            {
+                var player = state.Players.FirstOrDefault(p => p.Id == c.PlayerId);
+                if (player != null)
+                {
+                    state.Achievements.Add(new Achievement
+                    {
+                        Id = "conqueror",
+                        PlayerId = player.Id,
+                        PlayerName = player.Name,
+                        TitleKey = "achievement.conqueror",
+                        Value = maxCaptures.ToString()
+                    });
+                }
+            }
+        }
+
+        // First Strike: player with earliest TileCaptured event
+        var firstCapture = state.EventLog
+            .Where(e => e.Type == "TileCaptured" && e.PlayerId != null)
+            .OrderBy(e => e.CreatedAt)
+            .FirstOrDefault();
+        if (firstCapture != null)
+        {
+            var earliestTime = firstCapture.CreatedAt;
+            var firstStrikers = state.EventLog
+                .Where(e => e.Type == "TileCaptured" && e.PlayerId != null && e.CreatedAt == earliestTime)
+                .Select(e => e.PlayerId!)
+                .Distinct();
+            foreach (var playerId in firstStrikers)
+            {
+                var player = state.Players.FirstOrDefault(p => p.Id == playerId);
+                if (player != null)
+                {
+                    state.Achievements.Add(new Achievement
+                    {
+                        Id = "firstStrike",
+                        PlayerId = player.Id,
+                        PlayerName = player.Name,
+                        TitleKey = "achievement.firstStrike"
+                    });
+                }
+            }
+        }
     }
 
     private static void ApplyWinCondition(GameState state, DateTime now)
@@ -1702,7 +1891,15 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             GameStartedAt = state.GameStartedAt,
             WinnerId = state.WinnerId,
             WinnerName = state.WinnerName,
-            IsAllianceVictory = state.IsAllianceVictory
+            IsAllianceVictory = state.IsAllianceVictory,
+            Achievements = state.Achievements.Select(a => new Achievement
+            {
+                Id = a.Id,
+                PlayerId = a.PlayerId,
+                PlayerName = a.PlayerName,
+                TitleKey = a.TitleKey,
+                Value = a.Value
+            }).ToList()
         };
     }
 

@@ -12,7 +12,7 @@ export interface MapInteractionFeedback {
 
 /* ── Explicit tile-action types (used by TileActionPanel) ── */
 
-export type TileActionType = 'claim' | 'attack' | 'reinforce' | 'pickup' | 'ignore';
+export type TileActionType = 'claim' | 'claimAlliance' | 'claimSelf' | 'attack' | 'reinforce' | 'pickup' | 'ignore';
 
 export interface TileAction {
   type: TileActionType;
@@ -69,35 +69,47 @@ export function getTileActions({
 
   /* ── Neutral tile ── */
   if (isNeutral) {
+    let claimEnabled = true;
+    let disabledReason: string | undefined;
+
     if (state.claimMode === 'PresenceWithTroop') {
-      actions.push({
-        type: 'claim',
-        label: 'game.tileAction.claimBtn',
-        icon: '🏴',
-        tone: 'primary',
-        enabled: carriedTroops > 0,
-        disabledReason: carriedTroops > 0 ? undefined : 'game.tileAction.neutralNeedsTroop',
-      });
+      claimEnabled = carriedTroops > 0;
+      disabledReason = claimEnabled ? undefined : 'game.tileAction.neutralNeedsTroop';
     } else if (state.claimMode === 'AdjacencyRequired') {
       const adjacent = isAdjacentToOwnedTerritory(state.grid, targetHex, player);
+      claimEnabled = adjacent;
+      disabledReason = adjacent ? undefined : 'game.tileAction.neutralNeedsAdjacency';
+    }
+    // else PresenceOnly – always allowed
+
+    if (player.allianceId) {
       actions.push({
-        type: 'claim',
-        label: 'game.tileAction.claimBtn',
-        icon: '🏴',
+        type: 'claimAlliance',
+        label: 'game.tileAction.claimAllianceBtn',
+        icon: '🏰',
         tone: 'primary',
-        enabled: adjacent,
-        disabledReason: adjacent ? undefined : 'game.tileAction.neutralNeedsAdjacency',
+        enabled: claimEnabled,
+        disabledReason,
+      });
+      actions.push({
+        type: 'claimSelf',
+        label: 'game.tileAction.claimSelfBtn',
+        icon: '🏠',
+        tone: 'neutral',
+        enabled: claimEnabled,
+        disabledReason,
       });
     } else {
-      // PresenceOnly – always allowed
       actions.push({
         type: 'claim',
         label: 'game.tileAction.claimBtn',
         icon: '🏴',
         tone: 'primary',
-        enabled: true,
+        enabled: claimEnabled,
+        disabledReason,
       });
     }
+
     actions.push(ignore);
     return actions;
   }

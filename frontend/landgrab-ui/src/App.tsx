@@ -10,11 +10,12 @@ import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameLobby } from './components/lobby/GameLobby';
 import { GameMap } from './components/map/GameMap';
 import { PlayingHud } from './components/game/PlayingHud';
+import { CombatModal } from './components/game/CombatModal';
 import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
-import type { ClaimMode, GameAreaPattern, GameState, HexCell, HexCoordinate, RoomSummary, WinConditionType } from './types/game';
+import type { ClaimMode, CombatResult, GameAreaPattern, GameState, HexCell, HexCoordinate, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
@@ -67,6 +68,9 @@ export default function App() {
   const [showDebugTools, setShowDebugTools] = useState(false);
   const [debugLocationEnabled, setDebugLocationEnabled] = useState(false);
   const [debugLocation, setDebugLocation] = useState<LocationPoint | null>(null);
+  const [attackPrompt, setAttackPrompt] = useState<{ q: number; r: number; max: number; defenderTroops: number } | null>(null);
+  const [attackCount, setAttackCount] = useState(1);
+  const [combatResult, setCombatResult] = useState<CombatResult | null>(null);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
@@ -204,6 +208,8 @@ export default function App() {
   const clearGameplayUi = useCallback(() => {
     setSelectedHex(null);
     setMapFeedback(null);
+    setAttackPrompt(null);
+    setCombatResult(null);
   }, []);
 
   // Auto-dismiss map feedback toasts after 3.5s
@@ -254,7 +260,11 @@ export default function App() {
     onGameOver: () => {
       playSound('victory');
       clearGameplayUi();
+      setCombatResult(null);
       setView('gameover');
+    },
+    onCombatResult: (result) => {
+      setCombatResult(result);
     },
     onTileLost: (data) => {
       playSound('notification');
@@ -662,15 +672,16 @@ export default function App() {
     switch (actionType) {
       case 'claim':
       case 'reinforce':
-      case 'attack':
-        invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng)
+      case 'claimAlliance':
+      case 'claimSelf': {
+        const claimForSelf = actionType === 'claimSelf';
+        invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng, null, claimForSelf)
           .then(() => {
             setPickupPrompt(null);
-            const tone = actionType === 'attack' ? 'attack' : actionType === 'reinforce' ? 'reinforce' : 'claim';
-            playSound(tone === 'attack' ? 'attack' : actionType === 'reinforce' ? 'reinforce' : 'claim');
+            playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
             setMapFeedback({
               tone: 'success',
-              message: getPlaceSuccessMessage(actionType === 'attack' ? 'capture' : actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
+              message: getPlaceSuccessMessage(actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
               targetHex: selectedHex
             });
           })
@@ -679,6 +690,15 @@ export default function App() {
             setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: selectedHex });
           });
         break;
+      }
+      case 'attack': {
+        const cell = gameState.grid[`${q},${r}`];
+        const defenderTroops = cell?.troops ?? 0;
+        const maxTroops = myPlayer?.carriedTroops ?? 0;
+        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
+        setAttackCount(maxTroops);
+        break;
+      }
       case 'pickup': {
         const cell = gameState.grid[`${q},${r}`];
         setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
@@ -690,7 +710,7 @@ export default function App() {
         setMapFeedback(null);
         break;
     }
-  }, [selectedHex, currentLocation, gameState, invoke, playSound, t]);
+  }, [selectedHex, currentLocation, gameState, myPlayer, invoke, playSound, t]);
 
   const handleDismissTileActions = useCallback(() => {
     setSelectedHex(null);
@@ -727,6 +747,40 @@ export default function App() {
         });
       });
   }, [currentLocation, invoke, pickupCount, pickupPrompt, playSound, t]);
+
+  const handleConfirmAttack = useCallback(async () => {
+    if (!attackPrompt || !currentLocation) return;
+    try {
+      await invoke('PlaceTroops', attackPrompt.q, attackPrompt.r, currentLocation.lat, currentLocation.lng, attackCount, false);
+      playSound('attack');
+      // CombatResult will come via SignalR event
+    } catch (err) {
+      playSound('error');
+      setMapFeedback({ tone: 'error', message: getErrorMessage(err), targetHex: [attackPrompt.q, attackPrompt.r] });
+    } finally {
+      setAttackPrompt(null);
+    }
+  }, [attackPrompt, attackCount, currentLocation, invoke, playSound]);
+
+  const handleCancelAttack = useCallback(() => {
+    setAttackPrompt(null);
+  }, []);
+
+  const handleReClaimHex = useCallback(async (mode: ReClaimMode) => {
+    if (!combatResult) return;
+    if (mode === 'Alliance') {
+      // Default behavior — tile is already claimed for alliance by PlaceTroops
+      setCombatResult(null);
+      return;
+    }
+    try {
+      await invoke('ReClaimHex', combatResult.q, combatResult.r, mode);
+    } catch (err) {
+      setMapFeedback({ tone: 'error', message: getErrorMessage(err), targetHex: [combatResult.q, combatResult.r] });
+    } finally {
+      setCombatResult(null);
+    }
+  }, [combatResult, invoke]);
 
   const handlePlayAgain = useCallback(() => {
     clearSession();
@@ -801,6 +855,11 @@ export default function App() {
           tileActions={tileActions}
           onTileAction={handleTileAction}
           onDismissTileActions={handleDismissTileActions}
+          attackPrompt={attackPrompt}
+          attackCount={attackCount}
+          onAttackCountChange={setAttackCount}
+          onConfirmAttack={handleConfirmAttack}
+          onCancelAttack={handleCancelAttack}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
         >
@@ -813,6 +872,14 @@ export default function App() {
             selectedHex={selectedHex}
           />
         </PlayingHud>
+        {combatResult && (
+          <CombatModal
+            result={combatResult}
+            gameMode={gameState.gameMode}
+            onReClaim={handleReClaimHex}
+            onClose={() => setCombatResult(null)}
+          />
+        )}
       </>
     );
   }

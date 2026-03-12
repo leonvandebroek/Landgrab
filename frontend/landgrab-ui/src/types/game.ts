@@ -89,7 +89,18 @@ export interface GameState {
   winnerId?: string;
   winnerName?: string;
   isAllianceVictory: boolean;
+  achievements?: Achievement[];
 }
+
+export interface Achievement {
+  id: string;
+  playerId: string;
+  playerName: string;
+  titleKey: string;
+  value?: string;
+}
+
+export type ReClaimMode = 'Alliance' | 'Self' | 'Abandon';
 
 export interface CombatResult {
   attackDice: number[];
@@ -99,6 +110,9 @@ export interface CombatResult {
   defenderLost: number;
   hexCaptured: boolean;
   newState: GameState;
+  q: number;
+  r: number;
+  previousOwnerName?: string;
 }
 
 export interface AuthState {
