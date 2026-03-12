@@ -423,6 +423,8 @@ const en = {
     rulesTileSizeLimit: 'Current shape allows up to {{max}} per tile to stay within a 1 km footprint.',
     rulesClaimModeLabel: 'Claim mode',
     rulesClaimModeDesc: 'How players capture neutral territory.',
+    rulesAllowSelfClaim: 'Allow Personal Claims',
+    rulesAllowSelfClaimDesc: 'Players can claim tiles for themselves instead of their alliance',
     rulesWinConditionLabel: 'Win condition',
     rulesWinConditionDesc: 'What ends the game.',
     rulesDefaultsNote: 'These defaults work great for most games.',

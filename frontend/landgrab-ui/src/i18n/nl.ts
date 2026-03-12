@@ -423,6 +423,8 @@ const nl = {
     rulesTileSizeLimit: 'De huidige vorm laat maximaal {{max}} per tegel toe om binnen 1 km te blijven.',
     rulesClaimModeLabel: 'Claimmodus',
     rulesClaimModeDesc: 'Hoe spelers neutraal gebied veroveren.',
+    rulesAllowSelfClaim: 'Persoonlijke claims toestaan',
+    rulesAllowSelfClaimDesc: 'Spelers mogen tegels voor zichzelf claimen in plaats van hun alliantie',
     rulesWinConditionLabel: 'Winstconditie',
     rulesWinConditionDesc: 'Wat het spel beëindigt.',
     rulesDefaultsNote: 'Deze standaardwaarden werken prima voor de meeste spellen.',

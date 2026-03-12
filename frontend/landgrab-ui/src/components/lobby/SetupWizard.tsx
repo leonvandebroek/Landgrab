@@ -26,6 +26,7 @@ interface Props {
     onSetPatternGameArea: (pattern: GameAreaPattern) => void;
     onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
     onSetClaimMode: (mode: ClaimMode) => void;
+    onSetAllowSelfClaim: (allow: boolean) => void;
     onSetWinCondition: (type: WinConditionType, value: number) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
@@ -52,6 +53,7 @@ export function SetupWizard({
     onSetPatternGameArea,
     onSetCustomGameArea,
     onSetClaimMode,
+    onSetAllowSelfClaim,
     onSetWinCondition,
     onSetMasterTileByHex,
     onAssignStartingTile,
@@ -170,6 +172,7 @@ export function SetupWizard({
                             isHost={isHost}
                             onSetTileSize={onSetTileSize}
                             onSetClaimMode={onSetClaimMode}
+                            onSetAllowSelfClaim={onSetAllowSelfClaim}
                             onSetWinCondition={onSetWinCondition}
                         />
                     )}

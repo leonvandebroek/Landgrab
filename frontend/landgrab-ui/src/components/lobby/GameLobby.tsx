@@ -28,6 +28,7 @@ interface Props {
   onSetPatternGameArea: (pattern: GameAreaPattern) => void;
   onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   onSetClaimMode: (mode: ClaimMode) => void;
+  onSetAllowSelfClaim: (allow: boolean) => void;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetMasterTile: (lat: number, lng: number) => void;
   onSetMasterTileByHex: (q: number, r: number) => void;
@@ -61,6 +62,7 @@ export function GameLobby({
   onSetPatternGameArea,
   onSetCustomGameArea,
   onSetClaimMode,
+  onSetAllowSelfClaim,
   onSetWinCondition,
   onSetMasterTileByHex,
   onAssignStartingTile,
@@ -226,6 +228,7 @@ export function GameLobby({
         onSetPatternGameArea={onSetPatternGameArea}
         onSetCustomGameArea={onSetCustomGameArea}
         onSetClaimMode={onSetClaimMode}
+        onSetAllowSelfClaim={onSetAllowSelfClaim}
         onSetWinCondition={onSetWinCondition}
         onSetMasterTileByHex={onSetMasterTileByHex}
         onAssignStartingTile={onAssignStartingTile}

@@ -80,6 +80,7 @@ export interface GameState {
   gameAreaPattern: GameAreaPattern | null;
   tileSizeMeters: number;
   claimMode: ClaimMode;
+  allowSelfClaim?: boolean;
   winConditionType: WinConditionType;
   winConditionValue: number;
   gameDurationMinutes: number | null;

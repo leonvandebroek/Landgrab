@@ -12,10 +12,11 @@ interface Props {
     isHost: boolean;
     onSetTileSize: (meters: number) => void;
     onSetClaimMode: (mode: ClaimMode) => void;
+    onSetAllowSelfClaim: (allow: boolean) => void;
     onSetWinCondition: (type: WinConditionType, value: number) => void;
 }
 
-export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, onSetWinCondition }: Props) {
+export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, onSetAllowSelfClaim, onSetWinCondition }: Props) {
     const { t } = useTranslation();
     const [winValueDraft, setWinValueDraft] = useState<string | null>(null);
     const [tileSizeDraft, setTileSizeDraft] = useState<number | null>(null);
@@ -113,6 +114,23 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         ))}
                     </div>
                 </div>
+
+                {/* Allow self-claiming (Alliances only) */}
+                {gameState.gameMode === 'Alliances' && (
+                    <div className="wizard-rule-card">
+                        <h3>{t('wizard.rulesAllowSelfClaim' as never)}</h3>
+                        <p className="wizard-hint">{t('wizard.rulesAllowSelfClaimDesc' as never)}</p>
+                        <label className="toggle-row">
+                            <input
+                                type="checkbox"
+                                checked={gameState.allowSelfClaim !== false}
+                                onChange={e => isHost && onSetAllowSelfClaim(e.target.checked)}
+                                disabled={!isHost}
+                            />
+                            <span>{t('wizard.rulesAllowSelfClaim' as never)}</span>
+                        </label>
+                    </div>
+                )}
 
                 {/* Win condition */}
                 <div className="wizard-rule-card">

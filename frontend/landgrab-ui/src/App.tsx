@@ -559,6 +559,10 @@ export default function App() {
     invoke('SetClaimMode', mode).catch(cause => setError(String(cause)));
   }, [invoke]);
 
+  const handleSetAllowSelfClaim = useCallback(async (allow: boolean) => {
+    await invoke('SetAllowSelfClaim', allow);
+  }, [invoke]);
+
   const handleSetWinCondition = useCallback((type: WinConditionType, value: number) => {
     invoke('SetWinCondition', type, value).catch(cause => setError(String(cause)));
   }, [invoke]);
@@ -876,6 +880,7 @@ export default function App() {
           <CombatModal
             result={combatResult}
             gameMode={gameState.gameMode}
+            allowSelfClaim={gameState?.allowSelfClaim !== false}
             onReClaim={handleReClaimHex}
             onClose={() => setCombatResult(null)}
           />
@@ -905,6 +910,7 @@ export default function App() {
         onSetPatternGameArea={handleSetPatternGameArea}
         onSetCustomGameArea={handleSetCustomGameArea}
         onSetClaimMode={handleSetClaimMode}
+        onSetAllowSelfClaim={handleSetAllowSelfClaim}
         onSetWinCondition={handleSetWinCondition}
         onSetMasterTile={handleSetMasterTile}
         onSetMasterTileByHex={handleSetMasterTileByHex}

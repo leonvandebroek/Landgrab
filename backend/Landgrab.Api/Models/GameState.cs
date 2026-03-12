@@ -117,6 +117,7 @@ public class GameState
     public ClaimMode ClaimMode { get; set; } = ClaimMode.AdjacencyRequired;
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;
+    public bool AllowSelfClaim { get; set; } = true;
     public int? GameDurationMinutes { get; set; }
     public int? MasterTileQ { get; set; }
     public int? MasterTileR { get; set; }

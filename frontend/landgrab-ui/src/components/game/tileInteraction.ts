@@ -91,14 +91,16 @@ export function getTileActions({
         enabled: claimEnabled,
         disabledReason,
       });
-      actions.push({
-        type: 'claimSelf',
-        label: 'game.tileAction.claimSelfBtn',
-        icon: '🏠',
-        tone: 'neutral',
-        enabled: claimEnabled,
-        disabledReason,
-      });
+      if (state.allowSelfClaim !== false) {
+        actions.push({
+          type: 'claimSelf',
+          label: 'game.tileAction.claimSelfBtn',
+          icon: '🏠',
+          tone: 'neutral',
+          enabled: claimEnabled,
+          disabledReason,
+        });
+      }
     } else {
       actions.push({
         type: 'claim',

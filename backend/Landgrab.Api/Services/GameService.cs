@@ -642,6 +642,27 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         }
     }
 
+    public (GameState? state, string? error) SetAllowSelfClaim(string roomCode, string userId,
+        bool allow)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can change self-claim settings.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Self-claim settings can only be changed in the lobby.");
+
+            room.State.AllowSelfClaim = allow;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) SetWinCondition(string roomCode, string userId,
         string winConditionType, int value)
     {
@@ -1098,6 +1119,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             player.CurrentLat = playerLat;
             player.CurrentLng = playerLng;
 
+            // Silently downgrade self-claim to alliance claim when disallowed
+            if (claimForSelf && !room.State.AllowSelfClaim)
+                claimForSelf = false;
+
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
             if (cell.OwnerId == userId || sameAllianceHex)
             {
@@ -1198,6 +1223,9 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
             if (cell.OwnerId != userId)
                 return (null, "You can only reclaim your own hexes.");
+
+            if (mode == ReClaimMode.Self && !room.State.AllowSelfClaim)
+                return (null, "Self-claiming is not allowed in this game.");
 
             switch (mode)
             {
@@ -1885,6 +1913,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             ClaimMode = state.ClaimMode,
             WinConditionType = state.WinConditionType,
             WinConditionValue = state.WinConditionValue,
+            AllowSelfClaim = state.AllowSelfClaim,
             GameDurationMinutes = state.GameDurationMinutes,
             MasterTileQ = state.MasterTileQ,
             MasterTileR = state.MasterTileR,

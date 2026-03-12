@@ -5,11 +5,12 @@ import { DiceRoller } from './DiceRoller';
 interface Props {
   result: CombatResult;
   gameMode?: string;
+  allowSelfClaim?: boolean;
   onReClaim?: (mode: 'Alliance' | 'Self' | 'Abandon') => void;
   onClose: () => void;
 }
 
-export function CombatModal({ result, gameMode, onReClaim, onClose }: Props) {
+export function CombatModal({ result, gameMode, allowSelfClaim, onReClaim, onClose }: Props) {
   const { t } = useTranslation();
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -40,9 +41,11 @@ export function CombatModal({ result, gameMode, onReClaim, onClose }: Props) {
                 <button className="btn-primary" onClick={() => { onReClaim?.('Alliance'); onClose(); }}>
                   {t('combat.claimForAlliance')}
                 </button>
-                <button className="btn-secondary" onClick={() => { onReClaim?.('Self'); onClose(); }}>
-                  {t('combat.claimForSelf')}
-                </button>
+                {allowSelfClaim !== false && (
+                  <button className="btn-secondary" onClick={() => { onReClaim?.('Self'); onClose(); }}>
+                    {t('combat.claimForSelf')}
+                  </button>
+                )}
                 <button className="btn-secondary" style={{ color: 'var(--danger, #e74c3c)' }} onClick={() => { onReClaim?.('Abandon'); onClose(); }}>
                   {t('combat.abandon')}
                 </button>
