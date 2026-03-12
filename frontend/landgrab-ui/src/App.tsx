@@ -171,18 +171,19 @@ export default function App() {
   const clearError = () => setError('');
 
   const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
-    resolveResumeFromState(state);
-    if (state.roomCode) {
-      saveSession(state.roomCode);
+    const normalizedState = normalizeGameState(state);
+    resolveResumeFromState(normalizedState);
+    if (normalizedState.roomCode) {
+      saveSession(normalizedState.roomCode);
     }
-    setGameState(state);
+    setGameState(normalizedState);
     setPickupPrompt(null);
 
     if (nextView) {
       setView(nextView);
-    } else if (state.phase === 'Playing') {
+    } else if (normalizedState.phase === 'Playing') {
       setView('game');
-    } else if (state.phase === 'GameOver') {
+    } else if (normalizedState.phase === 'GameOver') {
       setView('gameover');
     }
 
@@ -609,6 +610,13 @@ function getErrorMessage(error: unknown): string {
   }
 
   return String(error);
+}
+
+function normalizeGameState(state: GameState): GameState {
+  return {
+    ...state,
+    eventLog: Array.isArray(state.eventLog) ? state.eventLog : []
+  };
 }
 
 function isClearlyStaleJoinFailure(message: string): boolean {

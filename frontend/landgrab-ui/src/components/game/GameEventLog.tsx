@@ -4,14 +4,16 @@ import type { GameEventLogEntry } from '../../types/game';
 import { formatGameLogEntry } from './gameLogFormat';
 
 interface Props {
-  events: GameEventLogEntry[];
+  events?: GameEventLogEntry[] | null;
 }
 
 export function GameEventLog({ events }: Props) {
   const { i18n, t } = useTranslation();
 
   const sortedEvents = useMemo(
-    () => [...events].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)),
+    () => (Array.isArray(events) ? [...events] : []).sort(
+      (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)
+    ),
     [events]
   );
 

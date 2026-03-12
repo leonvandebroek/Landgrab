@@ -62,7 +62,7 @@ export interface GameState {
   gameMode: GameMode;
   players: Player[];
   alliances: AllianceDto[];
-  eventLog: GameEventLogEntry[];
+  eventLog?: GameEventLogEntry[] | null;
   grid: Record<string, HexCell>;
   mapLat: number | null;
   mapLng: number | null;
