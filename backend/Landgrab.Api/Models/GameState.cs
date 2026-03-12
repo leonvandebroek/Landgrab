@@ -47,6 +47,67 @@ public enum GameAreaPattern
 
 public enum ReClaimMode { Alliance, Self, Abandon }
 
+public enum CopresenceMode
+{
+    None,
+    Standoff,
+    PresenceBattle,
+    PresenceBonus,
+    Ambush,
+    Toll,
+    Duel,
+    Rally,
+    Drain,
+    Stealth,
+    Hostage,
+    Scout,
+    Beacon,
+    FrontLine,
+    Relay,
+    JagerProoi,
+    Shepherd,
+    CommandoRaid
+}
+
+public enum TerrainType
+{
+    None,
+    Water,
+    Building,
+    Road,
+    Path,
+    Forest,
+    Park,
+    Hills,
+    Steep
+}
+
+public enum PlayerRole
+{
+    None,
+    Commander,
+    Scout,
+    Defender,
+    Saboteur,
+    Engineer
+}
+
+public class GameDynamics
+{
+    public List<CopresenceMode> ActiveCopresenceModes { get; set; } = [];
+    public string? CopresencePreset { get; set; }
+    public bool TerrainEnabled { get; set; }
+    public bool PlayerRolesEnabled { get; set; }
+    public bool FogOfWarEnabled { get; set; }
+    public bool SupplyLinesEnabled { get; set; }
+    public bool HQEnabled { get; set; }
+    public bool TimedEscalationEnabled { get; set; }
+    public bool UnderdogPactEnabled { get; set; }
+    public bool NeutralNPCEnabled { get; set; }
+    public bool RandomEventsEnabled { get; set; }
+    public bool MissionSystemEnabled { get; set; }
+}
+
 public class HexCoordinateDto
 {
     public int Q { get; set; }
@@ -118,6 +179,7 @@ public class GameState
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;
     public bool AllowSelfClaim { get; set; } = true;
+    public GameDynamics Dynamics { get; set; } = new();
     public int? GameDurationMinutes { get; set; }
     public int? MasterTileQ { get; set; }
     public int? MasterTileR { get; set; }

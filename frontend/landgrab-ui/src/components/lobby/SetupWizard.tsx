@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ClaimMode, GameAreaPattern, GameState, HexCoordinate, WinConditionType } from '../../types/game';
+import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, WinConditionType } from '../../types/game';
 import { LocationStep } from './LocationStep';
 import { TeamsStep } from './TeamsStep';
 import { RulesStep } from './RulesStep';
+import { DynamicsStep } from './DynamicsStep';
 import { ReviewStep } from './ReviewStep';
 
 interface LocationPoint {
@@ -28,6 +29,9 @@ interface Props {
     onSetClaimMode: (mode: ClaimMode) => void;
     onSetAllowSelfClaim: (allow: boolean) => void;
     onSetWinCondition: (type: WinConditionType, value: number) => void;
+    onSetCopresenceModes: (modes: CopresenceMode[]) => void;
+    onSetCopresencePreset: (preset: string) => void;
+    onSetGameDynamics: (dynamics: GameDynamics) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
     onStartGame: () => void;
@@ -36,7 +40,7 @@ interface Props {
     error: string;
 }
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 export function SetupWizard({
     gameState,
@@ -55,6 +59,9 @@ export function SetupWizard({
     onSetClaimMode,
     onSetAllowSelfClaim,
     onSetWinCondition,
+    onSetCopresenceModes,
+    onSetCopresencePreset,
+    onSetGameDynamics,
     onSetMasterTileByHex,
     onAssignStartingTile,
     onStartGame,
@@ -70,6 +77,7 @@ export function SetupWizard({
         location: gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
         teams: gameState.alliances.length > 0 && gameState.players.length >= 2 && gameState.players.every(p => p.allianceId),
         rules: true, // rules always have defaults
+        dynamics: true, // dynamics always have defaults (Klassiek preset)
         review: false, // review step is never "complete" — it terminates the wizard
     }), [gameState]);
 
@@ -93,6 +101,7 @@ export function SetupWizard({
             case 0: return stepComplete.location;
             case 1: return stepComplete.teams;
             case 2: return true; // rules always valid (have defaults)
+            case 3: return true; // dynamics always valid (have defaults)
             default: return false;
         }
     }, [step, stepComplete]);
@@ -177,6 +186,15 @@ export function SetupWizard({
                         />
                     )}
                     {step === 3 && (
+                        <DynamicsStep
+                            gameState={gameState}
+                            isHost={isHost}
+                            onSetCopresenceModes={onSetCopresenceModes}
+                            onSetCopresencePreset={onSetCopresencePreset}
+                            onSetGameDynamics={onSetGameDynamics}
+                        />
+                    )}
+                    {step === 4 && (
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}

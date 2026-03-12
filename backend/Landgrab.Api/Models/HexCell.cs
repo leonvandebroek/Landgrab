@@ -10,6 +10,7 @@ public class HexCell
     public string? OwnerColor { get; set; }
     public int Troops { get; set; }
     public bool IsMasterTile { get; set; }
+    public TerrainType TerrainType { get; set; }
 }
 
 public class GlobalHex

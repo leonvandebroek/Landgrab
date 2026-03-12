@@ -330,6 +330,63 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task SetCopresenceModes(List<string> modes)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetCopresenceModes(room.Code, UserId, modes);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetCopresencePreset(string preset)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetCopresencePreset(room.Code, UserId, preset);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetGameDynamics(GameDynamics dynamics)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetGameDynamics(room.Code, UserId, dynamics);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     public async Task SetMasterTile(double lat, double lng)
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);

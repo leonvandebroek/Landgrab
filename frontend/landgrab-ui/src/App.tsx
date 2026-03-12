@@ -15,7 +15,7 @@ import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
-import type { ClaimMode, CombatResult, GameAreaPattern, GameState, HexCell, HexCoordinate, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
+import type { ClaimMode, CombatResult, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
@@ -582,6 +582,18 @@ export default function App() {
     invoke('SetWinCondition', type, value).catch(cause => setError(String(cause)));
   }, [invoke]);
 
+  const handleSetCopresenceModes = useCallback((modes: CopresenceMode[]) => {
+    invoke('SetCopresenceModes', modes).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
+  const handleSetCopresencePreset = useCallback((preset: string) => {
+    invoke('SetCopresencePreset', preset).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
+  const handleSetGameDynamics = useCallback((dynamics: GameDynamics) => {
+    invoke('SetGameDynamics', dynamics).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
   const handleSetMasterTile = useCallback((lat: number, lng: number) => {
     invoke('SetMasterTile', lat, lng).catch(cause => setError(String(cause)));
   }, [invoke]);
@@ -927,6 +939,9 @@ export default function App() {
         onSetClaimMode={handleSetClaimMode}
         onSetAllowSelfClaim={handleSetAllowSelfClaim}
         onSetWinCondition={handleSetWinCondition}
+        onSetCopresenceModes={handleSetCopresenceModes}
+        onSetCopresencePreset={handleSetCopresencePreset}
+        onSetGameDynamics={handleSetGameDynamics}
         onSetMasterTile={handleSetMasterTile}
         onSetMasterTileByHex={handleSetMasterTileByHex}
         onAssignStartingTile={handleAssignStartingTile}
@@ -990,7 +1005,21 @@ function normalizeGameState(state: GameState, previousState?: GameState | null):
 
   return {
     ...state,
-    eventLog: Array.isArray(state.eventLog) ? state.eventLog : previousEventLog
+    eventLog: Array.isArray(state.eventLog) ? state.eventLog : previousEventLog,
+    dynamics: state.dynamics ?? {
+      activeCopresenceModes: [],
+      copresencePreset: null,
+      terrainEnabled: false,
+      playerRolesEnabled: false,
+      fogOfWarEnabled: false,
+      supplyLinesEnabled: false,
+      hqEnabled: false,
+      timedEscalationEnabled: false,
+      underdogPactEnabled: false,
+      neutralNPCEnabled: false,
+      randomEventsEnabled: false,
+      missionSystemEnabled: false,
+    },
   };
 }
 

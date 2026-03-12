@@ -2878,3 +2878,110 @@ input:focus {
 .custom-select-option.is-selected::before {
   content: '✓ ';
 }
+
+/* ── Dynamics step ──────────────────────────────────────────────────── */
+
+/* Preset grid: 2-column on wider screens, collapses to 1 col on mobile */
+.preset-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.65rem;
+}
+
+@media (max-width: 480px) {
+  .preset-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Toggle-card grid for custom copresence modes */
+.toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.55rem;
+}
+
+@media (max-width: 480px) {
+  .toggle-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.toggle-card {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #334466;
+  background: #1b2638;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.toggle-card:hover:not(:has(input:disabled)) {
+  border-color: #4a6a8a;
+}
+
+.toggle-card.active {
+  border-color: var(--accent);
+  background: #223654;
+}
+
+.toggle-card input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.toggle-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.toggle-card-copy strong {
+  font-size: 0.85rem;
+}
+
+.toggle-card-copy span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+/* Toggle row for feature flags */
+.toggle-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.6rem 0;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(51, 68, 102, 0.35);
+}
+
+.toggle-row:last-child {
+  border-bottom: none;
+}
+
+.toggle-row input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.toggle-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.toggle-row-copy strong {
+  font-size: 0.88rem;
+}
+
+.toggle-row-copy span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

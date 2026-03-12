@@ -18,6 +18,17 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
     private static readonly string[] AllianceColors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"];
     private const int MaxEventLogEntries = 100;
 
+    private static readonly Dictionary<string, List<CopresenceMode>> CopresencePresets = new()
+    {
+        ["Klassiek"] = [],
+        ["Territorium"] = [CopresenceMode.Shepherd, CopresenceMode.Drain],
+        ["Formatie"] = [CopresenceMode.FrontLine, CopresenceMode.Rally],
+        ["Logistiek"] = [CopresenceMode.Shepherd, CopresenceMode.Relay, CopresenceMode.FrontLine],
+        ["Infiltratie"] = [CopresenceMode.Stealth, CopresenceMode.CommandoRaid, CopresenceMode.Scout],
+        ["Chaos"] = [CopresenceMode.JagerProoi, CopresenceMode.Duel, CopresenceMode.PresenceBonus],
+        ["Tolweg"] = [CopresenceMode.Beacon, CopresenceMode.Toll, CopresenceMode.Drain],
+    };
+
     public GameRoom CreateRoom(string hostUserId, string hostUsername, string connectionId)
     {
         var code = GenerateCode();
@@ -701,6 +712,94 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             }
 
             room.State.WinConditionType = parsedWinCondition;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) SetCopresenceModes(string roomCode, string userId,
+        List<string> modes)
+    {
+        var parsed = new List<CopresenceMode>();
+        foreach (var mode in modes)
+        {
+            if (!Enum.TryParse<CopresenceMode>(mode, true, out var parsedMode) || parsedMode == CopresenceMode.None)
+                return (null, $"Invalid copresence mode: {mode}");
+            parsed.Add(parsedMode);
+        }
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can change copresence modes.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Copresence modes can only be changed in the lobby.");
+
+            room.State.Dynamics.ActiveCopresenceModes = parsed;
+            room.State.Dynamics.CopresencePreset = "Aangepast";
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) SetCopresencePreset(string roomCode, string userId,
+        string preset)
+    {
+        if (preset != "Aangepast" && !CopresencePresets.ContainsKey(preset))
+            return (null, $"Unknown preset: {preset}");
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can change the copresence preset.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Copresence preset can only be changed in the lobby.");
+
+            room.State.Dynamics.CopresencePreset = preset;
+            if (preset != "Aangepast" && CopresencePresets.TryGetValue(preset, out var presetModes))
+                room.State.Dynamics.ActiveCopresenceModes = [.. presetModes];
+
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId,
+        GameDynamics dynamics)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (null, "Only the host can change game dynamics.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Game dynamics can only be changed in the lobby.");
+
+            room.State.Dynamics.TerrainEnabled = dynamics.TerrainEnabled;
+            room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
+            room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
+            room.State.Dynamics.SupplyLinesEnabled = dynamics.SupplyLinesEnabled;
+            room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
+            room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
+            room.State.Dynamics.UnderdogPactEnabled = dynamics.UnderdogPactEnabled;
+            room.State.Dynamics.NeutralNPCEnabled = dynamics.NeutralNPCEnabled;
+            room.State.Dynamics.RandomEventsEnabled = dynamics.RandomEventsEnabled;
+            room.State.Dynamics.MissionSystemEnabled = dynamics.MissionSystemEnabled;
+
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -1553,6 +1652,16 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
     private static bool IsHost(GameRoom room, string userId) => room.HostUserId.ToString() == userId;
 
+    private static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r)
+    {
+        if (!state.HasMapLocation) return [];
+        return state.Players
+            .Where(p => p.CurrentLat.HasValue && p.CurrentLng.HasValue
+                && HexService.IsPlayerInHex(p.CurrentLat.Value, p.CurrentLng.Value, q, r,
+                    state.MapLat!.Value, state.MapLng!.Value, state.TileSizeMeters))
+            .ToList();
+    }
+
     private static void SetCellOwner(HexCell cell, PlayerDto player)
     {
         cell.OwnerId = player.Id;
@@ -1902,7 +2011,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                     OwnerName = entry.Value.OwnerName,
                     OwnerColor = entry.Value.OwnerColor,
                     Troops = entry.Value.Troops,
-                    IsMasterTile = entry.Value.IsMasterTile
+                    IsMasterTile = entry.Value.IsMasterTile,
+                    TerrainType = entry.Value.TerrainType,
                 }),
             MapLat = state.MapLat,
             MapLng = state.MapLng,
@@ -1914,6 +2024,21 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             WinConditionType = state.WinConditionType,
             WinConditionValue = state.WinConditionValue,
             AllowSelfClaim = state.AllowSelfClaim,
+            Dynamics = new GameDynamics
+            {
+                ActiveCopresenceModes = [.. state.Dynamics.ActiveCopresenceModes],
+                CopresencePreset = state.Dynamics.CopresencePreset,
+                TerrainEnabled = state.Dynamics.TerrainEnabled,
+                PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
+                FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
+                SupplyLinesEnabled = state.Dynamics.SupplyLinesEnabled,
+                HQEnabled = state.Dynamics.HQEnabled,
+                TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
+                UnderdogPactEnabled = state.Dynamics.UnderdogPactEnabled,
+                NeutralNPCEnabled = state.Dynamics.NeutralNPCEnabled,
+                RandomEventsEnabled = state.Dynamics.RandomEventsEnabled,
+                MissionSystemEnabled = state.Dynamics.MissionSystemEnabled,
+            },
             GameDurationMinutes = state.GameDurationMinutes,
             MasterTileQ = state.MasterTileQ,
             MasterTileR = state.MasterTileR,

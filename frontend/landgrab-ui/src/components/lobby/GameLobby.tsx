@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { ClaimMode, GameAreaPattern, GameState, HexCoordinate, RoomSummary, WinConditionType } from '../../types/game';
+import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, RoomSummary, WinConditionType } from '../../types/game';
 import { SetupWizard } from './SetupWizard';
 import { GuestWizardView } from './GuestWizardView';
 
@@ -30,6 +30,9 @@ interface Props {
   onSetClaimMode: (mode: ClaimMode) => void;
   onSetAllowSelfClaim: (allow: boolean) => void;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
+  onSetCopresenceModes: (modes: CopresenceMode[]) => void;
+  onSetCopresencePreset: (preset: string) => void;
+  onSetGameDynamics: (dynamics: GameDynamics) => void;
   onSetMasterTile: (lat: number, lng: number) => void;
   onSetMasterTileByHex: (q: number, r: number) => void;
   onAssignStartingTile: (q: number, r: number, playerId: string) => void;
@@ -64,6 +67,9 @@ export function GameLobby({
   onSetClaimMode,
   onSetAllowSelfClaim,
   onSetWinCondition,
+  onSetCopresenceModes,
+  onSetCopresencePreset,
+  onSetGameDynamics,
   onSetMasterTileByHex,
   onAssignStartingTile,
   onStartGame,
@@ -230,6 +236,9 @@ export function GameLobby({
         onSetClaimMode={onSetClaimMode}
         onSetAllowSelfClaim={onSetAllowSelfClaim}
         onSetWinCondition={onSetWinCondition}
+        onSetCopresenceModes={onSetCopresenceModes}
+        onSetCopresencePreset={onSetCopresencePreset}
+        onSetGameDynamics={onSetGameDynamics}
         onSetMasterTileByHex={onSetMasterTileByHex}
         onAssignStartingTile={onAssignStartingTile}
         onStartGame={onStartGame}
