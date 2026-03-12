@@ -317,6 +317,21 @@ export default function App() {
     );
   }, [currentLocation, gameState]);
 
+  // Auto-show tile actions when the player physically moves to a new hex
+  const prevCurrentHexRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
+    if (key === prevCurrentHexRef.current) return;
+    prevCurrentHexRef.current = key;
+
+    if (gameState?.phase === 'Playing' && currentHex) {
+      setSelectedHex(currentHex);
+      setMapFeedback(null);
+      setPickupPrompt(null);
+      setAttackPrompt(null);
+    }
+  }, [currentHex, gameState?.phase]);
+
   const canStepDebugByHex = Boolean(
     gameState?.mapLat != null
     && gameState?.mapLng != null
