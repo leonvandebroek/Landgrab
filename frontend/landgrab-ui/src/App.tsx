@@ -4,14 +4,16 @@ import { useAuth } from './hooks/useAuth';
 import { useSignalR } from './hooks/useSignalR';
 import { useGeolocation } from './hooks/useGeolocation';
 import { AuthPage } from './components/auth/AuthPage';
+import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameLobby } from './components/lobby/GameLobby';
 import { GameMap } from './components/map/GameMap';
 import { PlayerPanel } from './components/game/PlayerPanel';
 import { GameOver } from './components/game/GameOver';
-import { latLngToRoomHex } from './components/map/HexMath';
+import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import type { ClaimMode, GameState, HexCell, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
+const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
 const SESSION_STORAGE_KEY = 'landgrab_session';
 const RESUME_TIMEOUT_MS = 5000;
 
@@ -56,6 +58,8 @@ export default function App() {
   const [autoResuming, setAutoResuming] = useState(false);
   const [savedSession, setSavedSession] = useState<SavedSession | null>(loadSavedSession);
   const [myRooms, setMyRooms] = useState<RoomSummary[]>([]);
+  const [debugLocationEnabled, setDebugLocationEnabled] = useState(false);
+  const [debugLocation, setDebugLocation] = useState<LocationPoint | null>(null);
   const location = useGeolocation(Boolean(auth));
   const lastLocationRef = useRef('');
   const previousConnectedRef = useRef(false);
@@ -160,13 +164,33 @@ export default function App() {
     return outcomePromise;
   }, [beginResumeAttempt, clearPendingResume]);
 
-  const currentLocation = useMemo<LocationPoint | null>(() => {
+  const liveLocation = useMemo<LocationPoint | null>(() => {
     if (location.lat == null || location.lng == null) {
       return null;
     }
 
     return { lat: location.lat, lng: location.lng };
   }, [location.lat, location.lng]);
+
+  const usingDebugLocation = DEBUG_GPS_AVAILABLE && debugLocationEnabled && debugLocation !== null;
+
+  const currentLocation = useMemo<LocationPoint | null>(() => {
+    if (usingDebugLocation) {
+      return debugLocation;
+    }
+
+    return liveLocation;
+  }, [debugLocation, liveLocation, usingDebugLocation]);
+
+  const effectiveLocationError = usingDebugLocation ? null : location.error;
+  const effectiveLocationLoading = usingDebugLocation ? false : location.loading;
+  const mapCenterLocation = useMemo<LocationPoint | null>(() => {
+    if (!gameState || gameState.mapLat == null || gameState.mapLng == null) {
+      return null;
+    }
+
+    return { lat: gameState.mapLat, lng: gameState.mapLng };
+  }, [gameState]);
 
   const clearError = () => setError('');
 
@@ -247,6 +271,54 @@ export default function App() {
       gameState.tileSizeMeters
     );
   }, [currentLocation, gameState]);
+
+  const canStepDebugByHex = Boolean(
+    gameState?.mapLat != null
+    && gameState?.mapLng != null
+    && (currentLocation ?? mapCenterLocation)
+  );
+
+  const applyDebugLocation = useCallback((lat: number, lng: number) => {
+    setDebugLocation({ lat, lng });
+    setDebugLocationEnabled(true);
+    setError('');
+  }, []);
+
+  const disableDebugLocation = useCallback(() => {
+    setDebugLocationEnabled(false);
+    setDebugLocation(null);
+    setError('');
+  }, []);
+
+  const stepDebugLocationByHex = useCallback((dq: number, dr: number): LocationPoint | null => {
+    if (!gameState || gameState.mapLat == null || gameState.mapLng == null) {
+      return null;
+    }
+
+    const seedLocation = currentLocation ?? mapCenterLocation;
+    if (!seedLocation) {
+      return null;
+    }
+
+    const [baseQ, baseR] = latLngToRoomHex(
+      seedLocation.lat,
+      seedLocation.lng,
+      gameState.mapLat,
+      gameState.mapLng,
+      gameState.tileSizeMeters
+    );
+    const [nextLat, nextLng] = roomHexToLatLng(
+      baseQ + dq,
+      baseR + dr,
+      gameState.mapLat,
+      gameState.mapLng,
+      gameState.tileSizeMeters
+    );
+
+    const nextLocation = { lat: nextLat, lng: nextLng };
+    applyDebugLocation(nextLocation.lat, nextLocation.lng);
+    return nextLocation;
+  }, [applyDebugLocation, currentLocation, gameState, mapCenterLocation]);
 
   useEffect(() => {
     if (!connected || gameState?.phase !== 'Playing' || !currentLocation) {
@@ -501,6 +573,19 @@ export default function App() {
       : '';
 
   const visibleRecentRooms = auth && connected ? myRooms : [];
+  const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
+    <DebugLocationPanel
+      enabled={usingDebugLocation}
+      liveLocation={liveLocation}
+      simulatedLocation={debugLocation}
+      mapCenter={mapCenterLocation}
+      currentHex={currentHex}
+      canStepByHex={canStepDebugByHex}
+      onApply={applyDebugLocation}
+      onDisable={disableDebugLocation}
+      onStepByHex={stepDebugLocationByHex}
+    />
+  ) : null;
 
   if (!auth) {
     return <AuthPage onLogin={login} onRegister={register} />;
@@ -538,9 +623,10 @@ export default function App() {
             onCancelPickup={() => setPickupPrompt(null)}
             onReturnToLobby={handleReturnToLobby}
             error={error}
-            locationError={location.error}
+            locationError={effectiveLocationError}
           />
         </div>
+        {debugGpsPanel}
       </>
     );
   }
@@ -554,8 +640,8 @@ export default function App() {
         gameState={gameState}
         connected={connected}
         currentLocation={currentLocation}
-        locationError={location.error}
-        locationLoading={location.loading}
+        locationError={effectiveLocationError}
+        locationLoading={effectiveLocationLoading}
         recentRooms={visibleRecentRooms}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
@@ -571,6 +657,7 @@ export default function App() {
         onReturnToLobby={handleReturnToLobby}
         onLogout={() => {
           clearSession();
+          disableDebugLocation();
           setMyRooms([]);
           logout();
           setGameState(null);
@@ -579,6 +666,7 @@ export default function App() {
         }}
         error={error}
       />
+      {debugGpsPanel}
     </>
   );
 }

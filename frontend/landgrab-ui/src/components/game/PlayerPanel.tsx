@@ -140,7 +140,7 @@ export function PlayerPanel({
         </p>
         {currentLocation && (
           <p className="section-note">
-            {t('game.gpsLocation', { lat: currentLocation.lat.toFixed(5), lng: currentLocation.lng.toFixed(5) })}
+            {t('game.gpsLocation', { lat: currentLocation.lat.toFixed(5), lon: currentLocation.lng.toFixed(5) })}
           </p>
         )}
         <button type="button" className="btn-secondary" onClick={onReturnToLobby}>
