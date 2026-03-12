@@ -35,6 +35,7 @@ export interface Player {
   currentLng?: number | null;
   isHost: boolean;
   isConnected: boolean;
+  isWinner?: boolean;
   territoryCount: number;
 }
 

@@ -193,6 +193,13 @@ const nl = {
     TimedGame: 'Tijdsspel',
   },
   game: {
+    hudLands: 'Landen',
+    hudTroops: 'Troepen',
+    hudPlayers: 'Spelers',
+    hudFeed: 'Feed',
+    hudMenu: 'Menu',
+    hudActivityFeed: 'Activiteit',
+    pickupPrompt: 'Troepen ophalen',
     roomLabel: 'Kamer',
     realtimeMatch: '\u26A1 Realtime spel',
     carriedTroops: 'Gedragen troepen',

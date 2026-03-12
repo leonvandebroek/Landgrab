@@ -23,17 +23,6 @@ interface Props {
   inactiveHexKeys?: string[];
 }
 
-interface MapControlButtonProps {
-  active?: boolean;
-  icon: string;
-  label: string;
-  status?: string;
-  onClick: () => void;
-  title: string;
-  ariaLabel: string;
-  ariaPressed?: boolean;
-}
-
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const GRID_FIT_PADDING = L.point(24, 24);
 
@@ -55,6 +44,10 @@ export function GameMap({
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const geometryKeyRef = useRef('');
+  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const onHexClickRef = useRef(onHexClick);
+  useEffect(() => { onHexClickRef.current = onHexClick; });
+
   const initialCenterRef = useRef<[number, number]>(
     state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER
   );
@@ -93,7 +86,7 @@ export function GameMap({
       maxZoom: MAP_MAX_ZOOM,
       maxBoundsViscosity: constrainViewportToGrid ? 1 : undefined,
       zoom: 16,
-      zoomControl: true
+      zoomControl: false
     });
 
     const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
@@ -106,6 +99,11 @@ export function GameMap({
 
     layerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+
+    // Track pointer start to distinguish taps from pans/zooms
+    map.getContainer().addEventListener('pointerdown', (e: PointerEvent) => {
+      pointerDownRef.current = { x: e.clientX, y: e.clientY };
+    }, { passive: true });
 
     return () => {
       baseLayerControlRef.current?.remove();
@@ -273,9 +271,18 @@ export function GameMap({
       });
 
       polygon.bindTooltip(buildHexTooltip(cell), { sticky: true });
-      if (onHexClick) {
-        polygon.on('click', () => onHexClick(cell.q, cell.r, cell));
-      }
+
+      // Only fire hex click on genuine taps (not after pan/zoom drag)
+      polygon.on('click', (e: L.LeafletMouseEvent) => {
+        const down = pointerDownRef.current;
+        if (down) {
+          const dx = e.originalEvent.clientX - down.x;
+          const dy = e.originalEvent.clientY - down.y;
+          if (dx * dx + dy * dy > 100) return; // 10px threshold squared
+        }
+        onHexClickRef.current?.(cell.q, cell.r, cell);
+      });
+
       polygon.addTo(layerGroup);
 
       if (!isInactive && (cell.troops > 0 || cell.isMasterTile)) {
@@ -309,62 +316,35 @@ export function GameMap({
         className: 'player-location-label'
       });
     }
-  }, [currentHex, currentLocation, inactiveHexKeySet, myUserId, onHexClick, renderedGrid, selectedHex, state]);
+  }, [currentHex, currentLocation, inactiveHexKeySet, myUserId, renderedGrid, selectedHex, state]);
 
   return (
     <div className="game-map-container">
       <div ref={containerRef} className="leaflet-map" />
-      {currentLocation && (
-        <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
-          <MapControlButton
-            active={isFollowingMe}
-            icon="🧭"
-            label={t('game.followMe')}
-            status={isFollowingMe ? t('game.followMeOn') : t('game.followMeOff')}
-            onClick={() => setIsFollowingMe(enabled => !enabled)}
-            title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-            ariaLabel={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-            ariaPressed={isFollowingMe}
-          />
-          <MapControlButton
-            icon="📍"
-            label={t('game.zoomToLocation')}
-            status={t('game.centerOnMe')}
-            onClick={handleZoomToLocation}
-            title={t('game.zoomToLocation')}
-            ariaLabel={t('game.zoomToLocation')}
-          />
-        </div>
-      )}
+      <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
+        <button
+          type="button"
+          className={`map-control-fab${isFollowingMe ? ' is-active' : ''}`}
+          onClick={() => setIsFollowingMe(enabled => !enabled)}
+          title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+          aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+          aria-pressed={isFollowingMe ? 'true' : 'false'}
+          disabled={!currentLocation}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+        </button>
+        <button
+          type="button"
+          className="map-control-fab"
+          onClick={handleZoomToLocation}
+          title={t('game.zoomToLocation')}
+          aria-label={t('game.zoomToLocation')}
+          disabled={!currentLocation}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"></circle><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 6.9 8 11.7z"></path></svg>
+        </button>
+      </div>
     </div>
-  );
-}
-
-function MapControlButton({
-  active = false,
-  icon,
-  label,
-  status,
-  onClick,
-  title,
-  ariaLabel,
-  ariaPressed
-}: MapControlButtonProps) {
-  return (
-    <button
-      type="button"
-      className={`map-control-btn map-control-btn--wide${active ? ' is-active' : ''}`}
-      onClick={onClick}
-      title={title}
-      aria-label={ariaLabel}
-      aria-pressed={ariaPressed}
-    >
-      <span className="map-control-icon" aria-hidden="true">{icon}</span>
-      <span className="map-control-copy">
-        <strong>{label}</strong>
-        {status && <span>{status}</span>}
-      </span>
-    </button>
   );
 }
 

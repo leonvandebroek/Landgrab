@@ -248,7 +248,7 @@ export function PlayerPanel({
   );
 }
 
-function ScoreRow({
+export function ScoreRow({
   player,
   totalHexes,
   language,

@@ -8,7 +8,7 @@ import { AuthPage } from './components/auth/AuthPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameLobby } from './components/lobby/GameLobby';
 import { GameMap } from './components/map/GameMap';
-import { PlayerPanel } from './components/game/PlayerPanel';
+import { PlayingHud } from './components/game/PlayingHud';
 import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus } from './components/game/tileInteraction';
 import type { MapInteractionFeedback } from './components/game/tileInteraction';
@@ -203,6 +203,13 @@ export default function App() {
     setSelectedHex(null);
     setMapFeedback(null);
   }, []);
+
+  // Auto-dismiss map feedback toasts after 3.5s
+  useEffect(() => {
+    if (!mapFeedback) return;
+    const timer = setTimeout(() => setMapFeedback(null), 3500);
+    return () => clearTimeout(timer);
+  }, [mapFeedback]);
 
   const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
     const normalizedState = normalizeGameState(state, gameState);
@@ -690,10 +697,7 @@ export default function App() {
   const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && showDebugTools && view !== 'gameover' ? (
     <DebugLocationPanel
       enabled={usingDebugLocation}
-      liveLocation={liveLocation}
-      simulatedLocation={debugLocation}
       mapCenter={mapCenterLocation}
-      currentHex={currentHex}
       canStepByHex={canStepDebugByHex}
       onApply={applyDebugLocation}
       onDisable={disableDebugLocation}
@@ -703,9 +707,9 @@ export default function App() {
   const debugToggleButton = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
     <button
       type="button"
-      className="debug-tools-toggle"
+      className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
       onClick={() => setShowDebugTools(value => !value)}
-      aria-pressed={showDebugTools}
+      aria-pressed={showDebugTools ? 'true' : 'false'}
     >
       {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
     </button>
@@ -728,7 +732,23 @@ export default function App() {
     return (
       <>
         {connectionBanner && <ConnectionBanner message={connectionBanner} />}
-        <div className="game-layout">
+        <PlayingHud
+          state={gameState}
+          myUserId={auth.userId}
+          currentHex={currentHex}
+          selectedHex={selectedHex}
+          interactionFeedback={mapFeedback}
+          pickupPrompt={pickupPrompt}
+          pickupCount={pickupCount}
+          onPickupCountChange={setPickupCount}
+          onConfirmPickup={handleConfirmPickup}
+          onCancelPickup={() => setPickupPrompt(null)}
+          onReturnToLobby={handleReturnToLobby}
+          error={error}
+          locationError={effectiveLocationError}
+          debugToggle={debugToggleButton}
+          debugPanel={debugGpsPanel}
+        >
           <GameMap
             state={gameState}
             myUserId={auth.userId}
@@ -737,25 +757,7 @@ export default function App() {
             onHexClick={handleHexClick}
             selectedHex={selectedHex}
           />
-          <PlayerPanel
-            state={gameState}
-            myUserId={auth.userId}
-            currentLocation={currentLocation}
-            currentHex={currentHex}
-            selectedHex={selectedHex}
-            interactionFeedback={mapFeedback}
-            pickupPrompt={pickupPrompt}
-            pickupCount={pickupCount}
-            onPickupCountChange={setPickupCount}
-            onConfirmPickup={handleConfirmPickup}
-            onCancelPickup={() => setPickupPrompt(null)}
-            onReturnToLobby={handleReturnToLobby}
-            error={error}
-            locationError={effectiveLocationError}
-          />
-        </div>
-        {debugGpsPanel}
-        {debugToggleButton}
+        </PlayingHud>
       </>
     );
   }
@@ -872,8 +874,9 @@ function isMissingHubMethodFailure(message: string): boolean {
     || normalized.includes('does not exist');
 }
 
-function localizeLobbyError(message: string, t: TFunction): string {
-  const normalized = message.toLowerCase();
+function localizeLobbyError(message: unknown, t: TFunction): string {
+  const text = typeof message === 'string' ? message : JSON.stringify(message);
+  const normalized = text.toLowerCase();
 
   if (normalized.includes('room not found')) {
     return t('lobby.joinErrors.roomNotFound');
@@ -895,7 +898,7 @@ function localizeLobbyError(message: string, t: TFunction): string {
     return t('lobby.joinErrors.notInRoom');
   }
 
-  return message;
+  return text;
 }
 
 function getPlaceSuccessMessage(
@@ -920,20 +923,7 @@ function ConnectionBanner({ message }: { message: string }) {
     <div
       role="status"
       aria-live="polite"
-      style={{
-        position: 'fixed',
-        top: 12,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 1000,
-        padding: '0.55rem 0.9rem',
-        borderRadius: 999,
-        background: 'rgba(26, 39, 64, 0.94)',
-        border: '1px solid rgba(136, 153, 170, 0.35)',
-        color: '#ecf0f1',
-        fontSize: '0.85rem',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)'
-      }}
+      className="connection-banner"
     >
       {message}
     </div>

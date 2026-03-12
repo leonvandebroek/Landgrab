@@ -193,6 +193,13 @@ const en = {
     TimedGame: 'Timed game',
   },
   game: {
+    hudLands: 'Lands',
+    hudTroops: 'Troops',
+    hudPlayers: 'Players',
+    hudFeed: 'Feed',
+    hudMenu: 'Menu',
+    hudActivityFeed: 'Activity Feed',
+    pickupPrompt: 'Pick up troops',
     roomLabel: 'Room',
     realtimeMatch: '\u26A1 Real-time match',
     carriedTroops: 'Carried troops',

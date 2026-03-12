@@ -21,7 +21,8 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
     const [tileSizeDraft, setTileSizeDraft] = useState<number | null>(null);
     const maxTileSizeMeters = getMaxTileSizeForArea(Object.values(gameState.grid).map(cell => ({ q: cell.q, r: cell.r })));
     const effectiveTileSizeMeters = Math.min(gameState.tileSizeMeters, maxTileSizeMeters);
-    const displayedTileSizeMeters = tileSizeDraft ?? effectiveTileSizeMeters;
+    const tileSizeMatchesServer = tileSizeDraft != null && tileSizeDraft === effectiveTileSizeMeters;
+    const displayedTileSizeMeters = tileSizeMatchesServer ? effectiveTileSizeMeters : (tileSizeDraft ?? effectiveTileSizeMeters);
 
     useEffect(() => {
         if (!isHost || gameState.tileSizeMeters <= maxTileSizeMeters) {
@@ -30,16 +31,6 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
 
         onSetTileSize(maxTileSizeMeters);
     }, [gameState.tileSizeMeters, isHost, maxTileSizeMeters, onSetTileSize]);
-
-    useEffect(() => {
-        if (tileSizeDraft == null) {
-            return;
-        }
-
-        if (tileSizeDraft === effectiveTileSizeMeters) {
-            setTileSizeDraft(null);
-        }
-    }, [effectiveTileSizeMeters, tileSizeDraft]);
 
     const derivedWinValue = gameState.winConditionType === 'TimedGame'
         ? gameState.gameDurationMinutes ?? gameState.winConditionValue

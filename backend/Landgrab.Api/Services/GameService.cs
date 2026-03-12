@@ -739,8 +739,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         {
             if (!IsHost(room, userId))
                 return (null, "Only the host can start the game.");
-            if (room.State.Players.Count < 1)
-                return (null, "Need at least 1 players.");
+            if (room.State.Players.Count < 2)
+                return (null, "Need at least 2 players.");
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Game already started.");
             if (!room.State.HasMapLocation)
