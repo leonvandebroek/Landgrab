@@ -9,6 +9,7 @@ interface Props {
 
 export function GameEventLog({ events }: Props) {
   const { i18n, t } = useTranslation();
+  const hasEventLog = Array.isArray(events);
 
   const sortedEvents = useMemo(
     () => (Array.isArray(events) ? [...events] : []).sort(
@@ -21,10 +22,12 @@ export function GameEventLog({ events }: Props) {
     <section className="game-log" aria-labelledby="game-log-title">
       <div className="game-log-header">
         <h4 id="game-log-title">{t('gameLog.title')}</h4>
-        <span className="game-log-count">{sortedEvents.length}</span>
+        <span className="game-log-count">{hasEventLog ? sortedEvents.length : '—'}</span>
       </div>
 
-      {sortedEvents.length === 0 ? (
+      {!hasEventLog ? (
+        <p className="game-log-empty">{t('gameLog.unavailable')}</p>
+      ) : sortedEvents.length === 0 ? (
         <p className="game-log-empty">{t('gameLog.empty')}</p>
       ) : (
         <div className="game-log-list">

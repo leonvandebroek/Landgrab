@@ -7,12 +7,12 @@ interface Props {
 }
 
 export function GameOver({ state, onPlayAgain }: Props) {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const winnerColor = state.isAllianceVictory
     ? state.alliances.find(a => a.id === state.winnerId)?.color
     : state.players.find(p => p.id === state.winnerId)?.color;
 
-  const totalHexes = Object.keys(state.grid).length;
+  const totalHexes = Object.values(state.grid).filter(cell => !cell.isMasterTile).length;
 
   return (
     <div className="gameover-page">
@@ -26,26 +26,34 @@ export function GameOver({ state, onPlayAgain }: Props) {
         <div className="final-scores">
           <h3>{t('gameover.finalScores')}</h3>
           {state.isAllianceVictory
-            ? state.alliances
+            ? [...state.alliances]
                 .sort((a, b) => b.territoryCount - a.territoryCount)
                 .map(a => (
                   <div key={a.id} className="score-row final">
                     <span className="score-dot" style={{ background: a.color }} />
-                    <span>{a.name}</span>
+                    <span className="score-name">{a.name}</span>
                     <span className="score-count">
-                      {t('gameover.hexCount', { count: a.territoryCount, percent: Math.round(a.territoryCount / totalHexes * 100) })}
+                      {t('gameover.hexCount', {
+                        count: a.territoryCount,
+                        total: totalHexes,
+                        percent: formatTerritoryShare(totalHexes > 0 ? (a.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
+                      })}
                     </span>
                     {a.id === state.winnerId && <span className="crown">👑</span>}
                   </div>
                 ))
-            : state.players
+            : [...state.players]
                 .sort((a, b) => b.territoryCount - a.territoryCount)
                 .map(p => (
                   <div key={p.id} className="score-row final">
                     <span className="score-dot" style={{ background: p.color }} />
-                    <span>{p.name}</span>
+                    <span className="score-name">{p.name}</span>
                     <span className="score-count">
-                      {t('gameover.hexCount', { count: p.territoryCount, percent: Math.round(p.territoryCount / totalHexes * 100) })}
+                      {t('gameover.hexCount', {
+                        count: p.territoryCount,
+                        total: totalHexes,
+                        percent: formatTerritoryShare(totalHexes > 0 ? (p.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
+                      })}
                     </span>
                     {p.id === state.winnerId && <span className="crown">👑</span>}
                   </div>
@@ -59,4 +67,17 @@ export function GameOver({ state, onPlayAgain }: Props) {
       </div>
     </div>
   );
+}
+
+function formatTerritoryShare(share: number, language?: string): string {
+  if (share <= 0) {
+    return '0%';
+  }
+
+  const formatter = new Intl.NumberFormat(language, {
+    minimumFractionDigits: share < 10 ? 1 : 0,
+    maximumFractionDigits: share < 10 ? 1 : 0
+  });
+
+  return `${formatter.format(share)}%`;
 }

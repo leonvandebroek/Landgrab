@@ -4,6 +4,8 @@ import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
 import { hexKey } from '../map/HexMath';
 import { GameEventLog } from './GameEventLog';
+import { getTileInteractionStatus } from './tileInteraction';
+import type { MapInteractionFeedback } from './tileInteraction';
 
 interface LocationPoint {
   lat: number;
@@ -21,6 +23,8 @@ interface Props {
   myUserId: string;
   currentLocation: LocationPoint | null;
   currentHex: [number, number] | null;
+  selectedHex: [number, number] | null;
+  interactionFeedback: MapInteractionFeedback | null;
   pickupPrompt: PickupPrompt | null;
   pickupCount: number;
   onPickupCountChange: (count: number) => void;
@@ -36,6 +40,8 @@ export function PlayerPanel({
   myUserId,
   currentLocation,
   currentHex,
+  selectedHex,
+  interactionFeedback,
   pickupPrompt,
   pickupCount,
   onPickupCountChange,
@@ -45,14 +51,45 @@ export function PlayerPanel({
   error,
   locationError
 }: Props) {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
   const me = state.players.find(player => player.id === myUserId) ?? null;
   const currentCell = currentHex ? state.grid[hexKey(currentHex[0], currentHex[1])] : undefined;
+  const selectedCell = selectedHex ? state.grid[hexKey(selectedHex[0], selectedHex[1])] : undefined;
   const claimableHexes = useMemo(
     () => Object.values(state.grid).filter(cell => !cell.isMasterTile).length,
     [state.grid]
   );
+  const focusedHex = selectedHex ?? currentHex;
+  const focusedCell = selectedHex ? selectedCell : currentCell;
+  const tileInteractionStatus = useMemo(
+    () => getTileInteractionStatus({
+      state,
+      player: me,
+      targetHex: focusedHex,
+      targetCell: focusedCell,
+      currentHex,
+      t
+    }),
+    [currentHex, focusedCell, focusedHex, me, state, t]
+  );
+  const visibleInteractionFeedback = useMemo(() => {
+    if (!interactionFeedback) {
+      return null;
+    }
+
+    if (!interactionFeedback.targetHex || !focusedHex) {
+      return interactionFeedback.message === tileInteractionStatus.message
+        ? null
+        : interactionFeedback;
+    }
+
+    return interactionFeedback.targetHex[0] === focusedHex[0]
+      && interactionFeedback.targetHex[1] === focusedHex[1]
+      && interactionFeedback.message !== tileInteractionStatus.message
+      ? interactionFeedback
+      : null;
+  }, [focusedHex, interactionFeedback, tileInteractionStatus.message]);
 
   useEffect(() => {
     if (state.phase !== 'Playing' || state.winConditionType !== 'TimedGame' || !state.gameStartedAt || !state.gameDurationMinutes) {
@@ -111,6 +148,32 @@ export function PlayerPanel({
         )}
       </div>
 
+      <div className="selected-hex-card gameplay-card">
+        <div className="gameplay-card-header">
+          <small>{selectedHex ? t('game.selectedTile') : t('game.nextStep')}</small>
+          {focusedHex && <strong className="tile-coordinates">{focusedHex[0]}, {focusedHex[1]}</strong>}
+        </div>
+        <span className="section-note">
+          {focusedCell
+            ? describeCurrentHex(focusedCell, me, t)
+            : currentLocation
+              ? t('game.moveToLock')
+              : t('game.waitingForGps')}
+        </span>
+        <p className="hint gameplay-hint">
+          {focusedCell && focusedHex
+            ? tileInteractionStatus.message
+            : currentLocation
+              ? t('game.tapTilePrompt')
+              : t('game.waitingForGps')}
+        </p>
+        {visibleInteractionFeedback && (
+          <p className={`map-feedback is-${visibleInteractionFeedback.tone}`}>
+            {visibleInteractionFeedback.message}
+          </p>
+        )}
+      </div>
+
       {pickupPrompt && (
         <div className="pickup-card">
           <h4>{t('game.pickUpTroops', { q: pickupPrompt.q, r: pickupPrompt.r })}</h4>
@@ -156,21 +219,43 @@ export function PlayerPanel({
       <div className="scoreboard">
         <h4>{t('game.territories')}</h4>
         {(state.alliances.length > 0 ? state.alliances : state.players).map(entity => (
-          <ScoreRow key={entity.id} player={entity} totalHexes={claimableHexes} />
+          <ScoreRow
+            key={entity.id}
+            player={entity}
+            totalHexes={claimableHexes}
+            language={i18n.resolvedLanguage}
+            t={t}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function ScoreRow({ player, totalHexes }: { player: Pick<Player, 'id' | 'name' | 'color' | 'territoryCount'> & { color?: string }; totalHexes: number }) {
-  const share = totalHexes > 0 ? Math.round((player.territoryCount / totalHexes) * 100) : 0;
+function ScoreRow({
+  player,
+  totalHexes,
+  language,
+  t
+}: {
+  player: Pick<Player, 'id' | 'name' | 'color' | 'territoryCount'> & { color?: string };
+  totalHexes: number;
+  language?: string;
+  t: TFunction;
+}) {
+  const share = totalHexes > 0 ? (player.territoryCount / totalHexes) * 100 : 0;
 
   return (
     <div className="score-row">
       <span className="score-dot" style={{ background: player.color ?? '#95a5a6' }} />
-      <span>{player.name}</span>
-      <span className="score-count">{player.territoryCount} ({share}%)</span>
+      <span className="score-name">{player.name}</span>
+      <span className="score-count">
+        {t('game.territoryProgress', {
+          count: player.territoryCount,
+          total: totalHexes,
+          percent: formatTerritoryShare(share, language)
+        })}
+      </span>
     </div>
   );
 }
@@ -196,4 +281,17 @@ function formatDuration(milliseconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatTerritoryShare(share: number, language?: string): string {
+  if (share <= 0) {
+    return '0%';
+  }
+
+  const formatter = new Intl.NumberFormat(language, {
+    minimumFractionDigits: share < 10 ? 1 : 0,
+    maximumFractionDigits: share < 10 ? 1 : 0
+  });
+
+  return `${formatter.format(share)}%`;
 }

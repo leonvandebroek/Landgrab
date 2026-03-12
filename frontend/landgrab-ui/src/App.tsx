@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useAuth } from './hooks/useAuth';
 import { useSignalR } from './hooks/useSignalR';
 import { useGeolocation } from './hooks/useGeolocation';
@@ -9,6 +10,8 @@ import { GameLobby } from './components/lobby/GameLobby';
 import { GameMap } from './components/map/GameMap';
 import { PlayerPanel } from './components/game/PlayerPanel';
 import { GameOver } from './components/game/GameOver';
+import { getTileInteractionStatus } from './components/game/tileInteraction';
+import type { MapInteractionFeedback } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import type { ClaimMode, GameState, HexCell, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
@@ -53,6 +56,8 @@ export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [error, setError] = useState('');
   const [view, setView] = useState<'lobby' | 'game' | 'gameover'>('lobby');
+  const [selectedHex, setSelectedHex] = useState<[number, number] | null>(null);
+  const [mapFeedback, setMapFeedback] = useState<MapInteractionFeedback | null>(null);
   const [pickupPrompt, setPickupPrompt] = useState<PickupPrompt | null>(null);
   const [pickupCount, setPickupCount] = useState(1);
   const [autoResuming, setAutoResuming] = useState(false);
@@ -193,9 +198,13 @@ export default function App() {
   }, [gameState]);
 
   const clearError = () => setError('');
+  const clearGameplayUi = useCallback(() => {
+    setSelectedHex(null);
+    setMapFeedback(null);
+  }, []);
 
   const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
-    const normalizedState = normalizeGameState(state);
+    const normalizedState = normalizeGameState(state, gameState);
     resolveResumeFromState(normalizedState);
     if (normalizedState.roomCode) {
       saveSession(normalizedState.roomCode);
@@ -211,8 +220,12 @@ export default function App() {
       setView('gameover');
     }
 
+    if ((nextView && nextView !== 'game') || (!nextView && normalizedState.phase !== 'Playing')) {
+      clearGameplayUi();
+    }
+
     clearError();
-  }, [resolveResumeFromState, saveSession]);
+  }, [clearGameplayUi, gameState, resolveResumeFromState, saveSession]);
 
   const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, {
     onRoomCreated: (code, state) => {
@@ -228,7 +241,10 @@ export default function App() {
     onStateUpdated: (state) => {
       applyIncomingState(state);
     },
-    onGameOver: () => setView('gameover'),
+    onGameOver: () => {
+      clearGameplayUi();
+      setView('gameover');
+    },
     onError: (message) => {
       if (resolveResumeFromError(message)) {
         return;
@@ -392,6 +408,7 @@ export default function App() {
           clearSession();
           setGameState(null);
           setPickupPrompt(null);
+          clearGameplayUi();
           setView('lobby');
           setError(t('errors.roomNoLongerAvailable'));
         } else if (joinOutcome.status === 'error') {
@@ -403,6 +420,7 @@ export default function App() {
         clearSession();
         setGameState(null);
         setPickupPrompt(null);
+        clearGameplayUi();
         setView('lobby');
         setError(t('errors.roomNoLongerAvailable'));
       } else if (rejoinOutcome.status === 'error') {
@@ -419,7 +437,7 @@ export default function App() {
       clearPendingResume({ status: 'timeout', source: pendingResumeRef.current?.source ?? 'join' });
       setAutoResuming(false);
     };
-  }, [auth, clearPendingResume, clearSession, connected, invoke, runResumeAction, t]);
+  }, [auth, clearGameplayUi, clearPendingResume, clearSession, connected, invoke, runResumeAction, t]);
 
   useEffect(() => {
     if (!auth || !connected || gameState || autoResuming) {
@@ -505,45 +523,69 @@ export default function App() {
         clearSession();
         setGameState(null);
         setPickupPrompt(null);
+        clearGameplayUi();
         setView('lobby');
         void refreshMyRooms().catch(cause => setError(String(cause)));
       });
-  }, [clearSession, invoke, refreshMyRooms]);
+  }, [clearGameplayUi, clearSession, invoke, refreshMyRooms]);
 
   const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined) => {
     if (!auth || !gameState || gameState.phase !== 'Playing') {
       return;
     }
-    if (!currentLocation || !currentHex) {
-      setError(t('errors.gpsRequired'));
-      return;
-    }
-    if (currentHex[0] !== q || currentHex[1] !== r) {
-      setError(t('errors.mustBeOnHex'));
-      return;
-    }
-    if (cell?.isMasterTile) {
-      setError(t('errors.masterTileConquer'));
-      return;
-    }
 
+    const targetHex: [number, number] = [q, r];
+    setSelectedHex(targetHex);
+    setPickupPrompt(null);
     clearError();
 
-    const carriedTroops = myPlayer?.carriedTroops ?? 0;
-    if (cell?.ownerId === auth.userId && carriedTroops === 0) {
-      if (cell.troops < 1) {
-        setError(t('errors.noTroopsPickup'));
-        return;
-      }
+    const interactionStatus = getTileInteractionStatus({
+      state: gameState,
+      player: myPlayer,
+      targetHex,
+      targetCell: cell,
+      currentHex,
+      t
+    });
 
-      setPickupPrompt({ q, r, max: cell.troops });
+    if (interactionStatus.action === 'none' || !currentLocation) {
+      setMapFeedback({
+        tone: interactionStatus.action === 'none' ? interactionStatus.tone : 'error',
+        message: interactionStatus.action === 'none'
+          ? interactionStatus.message
+          : t('game.mapFeedback.locationRequired'),
+        targetHex
+      });
+      return;
+    }
+
+    if (interactionStatus.action === 'pickup') {
+      setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
       setPickupCount(1);
+      setMapFeedback({
+        tone: 'info',
+        message: t('game.mapFeedback.pickupReady'),
+        targetHex
+      });
       return;
     }
 
     invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng)
-      .then(() => setPickupPrompt(null))
-      .catch(cause => setError(String(cause)));
+      .then(() => {
+        setPickupPrompt(null);
+        setMapFeedback({
+          tone: 'success',
+          message: getPlaceSuccessMessage(interactionStatus.placeOutcome, q, r, t),
+          targetHex
+        });
+      })
+      .catch(cause => {
+        setMapFeedback({
+          tone: 'error',
+          message: getErrorMessage(cause),
+          targetHex
+        });
+      });
   }, [auth, currentHex, currentLocation, gameState, invoke, myPlayer, t]);
 
   const handleConfirmPickup = useCallback(() => {
@@ -551,20 +593,41 @@ export default function App() {
       return;
     }
 
+    const targetHex: [number, number] = [pickupPrompt.q, pickupPrompt.r];
+    clearError();
+    setSelectedHex(targetHex);
     invoke('PickUpTroops', pickupPrompt.q, pickupPrompt.r, pickupCount, currentLocation.lat, currentLocation.lng)
-      .then(() => setPickupPrompt(null))
-      .catch(cause => setError(String(cause)));
-  }, [currentLocation, invoke, pickupCount, pickupPrompt]);
+      .then(() => {
+        setPickupPrompt(null);
+        setMapFeedback({
+          tone: 'success',
+          message: t('game.mapFeedback.pickedUp', {
+            count: pickupCount,
+            q: pickupPrompt.q,
+            r: pickupPrompt.r
+          }),
+          targetHex
+        });
+      })
+      .catch(cause => {
+        setMapFeedback({
+          tone: 'error',
+          message: getErrorMessage(cause),
+          targetHex
+        });
+      });
+  }, [currentLocation, invoke, pickupCount, pickupPrompt, t]);
 
   const handlePlayAgain = useCallback(() => {
     clearSession();
     setMyRooms([]);
     setGameState(null);
+    clearGameplayUi();
     setView('lobby');
     setError('');
     setPickupPrompt(null);
     void refreshMyRooms().catch(cause => setError(String(cause)));
-  }, [clearSession, refreshMyRooms]);
+  }, [clearGameplayUi, clearSession, refreshMyRooms]);
 
   const connectionBanner = autoResuming
     ? t('errors.restoringRoom', { code: savedRoomCode })
@@ -610,12 +673,15 @@ export default function App() {
             myUserId={auth.userId}
             currentLocation={currentLocation}
             onHexClick={handleHexClick}
+            selectedHex={selectedHex}
           />
           <PlayerPanel
             state={gameState}
             myUserId={auth.userId}
             currentLocation={currentLocation}
             currentHex={currentHex}
+            selectedHex={selectedHex}
+            interactionFeedback={mapFeedback}
             pickupPrompt={pickupPrompt}
             pickupCount={pickupCount}
             onPickupCountChange={setPickupCount}
@@ -662,6 +728,7 @@ export default function App() {
           logout();
           setGameState(null);
           setPickupPrompt(null);
+          clearGameplayUi();
           setView('lobby');
         }}
         error={error}
@@ -700,10 +767,14 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function normalizeGameState(state: GameState): GameState {
+function normalizeGameState(state: GameState, previousState?: GameState | null): GameState {
+  const previousEventLog = previousState?.roomCode === state.roomCode && Array.isArray(previousState.eventLog)
+    ? previousState.eventLog
+    : undefined;
+
   return {
     ...state,
-    eventLog: Array.isArray(state.eventLog) ? state.eventLog : []
+    eventLog: Array.isArray(state.eventLog) ? state.eventLog : previousEventLog
   };
 }
 
@@ -723,6 +794,23 @@ function isMissingRejoinMethodFailure(message: string): boolean {
     || normalized.includes('unknown hub method')
     || normalized.includes('method not found')
     || normalized.includes('not implemented');
+}
+
+function getPlaceSuccessMessage(
+  placeOutcome: 'claim' | 'reinforce' | 'capture' | undefined,
+  q: number,
+  r: number,
+  t: TFunction
+): string {
+  switch (placeOutcome) {
+    case 'reinforce':
+      return t('game.mapFeedback.reinforced', { q, r });
+    case 'capture':
+      return t('game.mapFeedback.captured', { q, r });
+    case 'claim':
+    default:
+      return t('game.mapFeedback.claimed', { q, r });
+  }
 }
 
 function ConnectionBanner({ message }: { message: string }) {
