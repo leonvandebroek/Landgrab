@@ -2,6 +2,13 @@ export type GamePhase = 'Lobby' | 'Playing' | 'GameOver';
 export type GameMode = 'Alliances' | 'FreeForAll';
 export type ClaimMode = 'PresenceOnly' | 'PresenceWithTroop' | 'AdjacencyRequired';
 export type WinConditionType = 'TerritoryPercent' | 'Elimination' | 'TimedGame';
+export type GameAreaMode = 'Centered' | 'Drawn' | 'Pattern';
+export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starburst';
+
+export interface HexCoordinate {
+  q: number;
+  r: number;
+}
 
 export interface HexCell {
   q: number;
@@ -68,6 +75,8 @@ export interface GameState {
   mapLng: number | null;
   hasMapLocation: boolean;
   gridRadius: number;
+  gameAreaMode: GameAreaMode;
+  gameAreaPattern: GameAreaPattern | null;
   tileSizeMeters: number;
   claimMode: ClaimMode;
   winConditionType: WinConditionType;

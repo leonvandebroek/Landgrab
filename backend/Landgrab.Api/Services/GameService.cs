@@ -6,6 +6,10 @@ namespace Landgrab.Api.Services;
 public class GameService(RoomPersistenceService roomPersistenceService, ILogger<GameService> logger)
 {
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
+    private const int DefaultGridRadius = 8;
+    private const int DefaultTileSizeMeters = 25;
+    private const int MaxFootprintMeters = 1_000;
+    private const int MinimumDrawnHexCount = 7;
 
     private static readonly string[] Colors =
         ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"];
@@ -24,7 +28,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
         room.ConnectionMap.TryAdd(connectionId, hostUserId);
         room.State.RoomCode = code;
-        room.State.Grid = HexService.BuildGrid(room.State.GridRadius);
+        room.State.GridRadius = DefaultGridRadius;
+        room.State.GameAreaMode = GameAreaMode.Centered;
+        room.State.Grid = BuildGridForState(room.State);
+        room.State.TileSizeMeters = GetAllowedTileSizeMeters(room.State.Grid.Values.Select(cell => (cell.Q, cell.R)), DefaultTileSizeMeters);
         room.State.Players.Add(new PlayerDto
         {
             Id = hostUserId,
@@ -155,6 +162,9 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 room.Code = normalizedCode;
                 room.State.RoomCode = normalizedCode;
                 room.ConnectionMap.Clear();
+                room.State.TileSizeMeters = GetAllowedTileSizeMeters(
+                    room.State.Grid.Values.Select(cell => (cell.Q, cell.R)),
+                    room.State.TileSizeMeters);
 
                 foreach (var player in room.State.Players)
                     player.IsConnected = false;
@@ -162,6 +172,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
             if (_rooms.TryAdd(normalizedCode, room))
             {
+                QueuePersistence(room, SnapshotState(room.State));
                 restoredCount++;
                 continue;
             }
@@ -350,6 +361,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
             room.State.MapLat = lat;
             room.State.MapLng = lng;
+            EnsureGrid(room.State);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -369,10 +381,84 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Tile size can only be changed in the lobby.");
 
-            room.State.TileSizeMeters = Math.Clamp(meters, 50, 1000);
+            var targetMeters = Math.Clamp(meters, 15, 1000);
+            var maxAllowedMeters = GetAllowedTileSizeMeters(room.State.Grid.Values.Select(cell => (cell.Q, cell.R)), 1000);
+            if (targetMeters > maxAllowedMeters)
+                return (null, $"This game area can use at most {maxAllowedMeters} meters per tile to stay within 1 kilometer.");
+
+            room.State.TileSizeMeters = targetMeters;
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) UseCenteredGameArea(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var validationError = ValidateGameAreaUpdate(room, userId);
+            if (validationError != null)
+                return (null, validationError);
+
+            return ApplyGameArea(room, GameAreaMode.Centered, null, HexService.Spiral(DefaultGridRadius),
+                "The host switched the game area to the centered field.");
+        }
+    }
+
+    public (GameState? state, string? error) SetPatternGameArea(string roomCode, string userId,
+        string pattern)
+    {
+        if (!Enum.TryParse<GameAreaPattern>(pattern, true, out var parsedPattern))
+            return (null, "Invalid game area pattern.");
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var validationError = ValidateGameAreaUpdate(room, userId);
+            if (validationError != null)
+                return (null, validationError);
+
+            return ApplyGameArea(room, GameAreaMode.Pattern, parsedPattern,
+                BuildPatternCoordinates(parsedPattern),
+                $"The host applied the {parsedPattern} game area pattern.");
+        }
+    }
+
+    public (GameState? state, string? error) SetCustomGameArea(string roomCode, string userId,
+        IReadOnlyList<HexCoordinateDto> coordinates)
+    {
+        ArgumentNullException.ThrowIfNull(coordinates);
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var validationError = ValidateGameAreaUpdate(room, userId);
+            if (validationError != null)
+                return (null, validationError);
+
+            var selectedCoordinates = coordinates
+                .Select(coord => (coord.Q, coord.R))
+                .Distinct()
+                .ToList();
+
+            if (selectedCoordinates.Count < MinimumDrawnHexCount)
+                return (null, $"Draw at least {MinimumDrawnHexCount} tiles for a custom game area.");
+            if (!HexService.IsConnected(selectedCoordinates))
+                return (null, "Custom game areas must be one connected shape.");
+
+            return ApplyGameArea(room, GameAreaMode.Drawn, null, selectedCoordinates,
+                "The host drew a custom game area.");
         }
     }
 
@@ -545,6 +631,104 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         }
     }
 
+    /// <summary>
+    /// Auto-assigns master tile at (0,0) and evenly-spaced starting tiles for any
+    /// players who don't already have one. Call before StartGame validation.
+    /// Must be called while holding <c>room.SyncRoot</c>.
+    /// </summary>
+    private void AutoAssignTiles(GameRoom room)
+    {
+        EnsureGrid(room.State);
+
+        // Auto-place master tile at the most central available hex if not yet set.
+        if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
+        {
+            var centerCell = room.State.Grid.Values
+                .Where(cell => cell.OwnerId == null)
+                .OrderBy(cell => HexService.HexDistance(cell.Q, cell.R))
+                .ThenBy(cell => cell.Q)
+                .ThenBy(cell => cell.R)
+                .FirstOrDefault();
+
+            if (centerCell != null)
+            {
+                centerCell.IsMasterTile = true;
+                centerCell.Troops = Math.Max(centerCell.Troops, 1);
+                room.State.MasterTileQ = centerCell.Q;
+                room.State.MasterTileR = centerCell.R;
+                var host = room.State.Players.FirstOrDefault(p => p.IsHost);
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "MasterTileAssigned",
+                    Message = $"The master tile was auto-assigned to hex ({centerCell.Q}, {centerCell.R}).",
+                    PlayerId = host?.Id,
+                    PlayerName = host?.Name,
+                    Q = centerCell.Q,
+                    R = centerCell.R
+                });
+            }
+        }
+
+        // Auto-assign starting tiles for players who don't have one
+        var playersNeedingTile = room.State.Players
+            .Where(p => HexService.TerritoryCount(room.State.Grid, p.Id) == 0)
+            .ToList();
+
+        if (playersNeedingTile.Count == 0)
+            return;
+
+        const int preferredRingRadius = 4;
+        var positions = HexService.GetEvenlySpacedRing(
+            playersNeedingTile.Count,
+            preferredRingRadius,
+            room.State.GridRadius);
+
+        // Filter out positions that are taken or are the master tile
+        var available = positions
+            .Where(pos =>
+            {
+                var key = HexService.Key(pos.q, pos.r);
+                return room.State.Grid.TryGetValue(key, out var cell)
+                       && cell.OwnerId == null
+                       && !cell.IsMasterTile;
+            })
+            .ToList();
+
+        // If not enough positions on the preferred ring, try a wider ring
+        if (available.Count < playersNeedingTile.Count)
+        {
+            available = room.State.Grid.Values
+                .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
+                .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
+                .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
+                .Select(cell => (cell.Q, cell.R))
+                .ToList();
+        }
+
+        var host2 = room.State.Players.FirstOrDefault(p => p.IsHost);
+        for (var i = 0; i < playersNeedingTile.Count && i < available.Count; i++)
+        {
+            var player = playersNeedingTile[i];
+            var (q, r) = available[i];
+            var cell = room.State.Grid[HexService.Key(q, r)];
+            SetCellOwner(cell, player);
+            cell.Troops = 3;
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "StartingTileAssigned",
+                Message = $"{player.Name} was auto-assigned a starting tile at ({q}, {r}).",
+                PlayerId = host2?.Id,
+                PlayerName = host2?.Name,
+                TargetPlayerId = player.Id,
+                TargetPlayerName = player.Name,
+                Q = q,
+                R = r
+            });
+        }
+
+        RefreshTerritoryCount(room.State);
+    }
+
     public (GameState? state, string? error) StartGame(string roomCode, string userId)
     {
         var room = GetRoom(roomCode);
@@ -555,16 +739,22 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         {
             if (!IsHost(room, userId))
                 return (null, "Only the host can start the game.");
-            if (room.State.Players.Count < 2)
-                return (null, "Need at least 2 players.");
+            if (room.State.Players.Count < 1)
+                return (null, "Need at least 1 players.");
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Game already started.");
             if (!room.State.HasMapLocation)
                 return (null, "Map location must be set before starting the game.");
-            if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
-                return (null, "The master tile must be set before starting the game.");
             if (room.State.Players.Any(player => string.IsNullOrWhiteSpace(player.AllianceId)))
                 return (null, "Every player must join an alliance before the game can start.");
+            if (room.State.Grid.Count < room.State.Players.Count + 1)
+                return (null, "The game area must have enough tiles for the master tile and every player.");
+
+            // Auto-assign master tile and starting tiles for any players who missed manual placement
+            AutoAssignTiles(room);
+
+            if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
+                return (null, "The master tile must be set before starting the game.");
 
             RefreshTerritoryCount(room.State);
             if (room.State.Players.Any(player => player.TerritoryCount == 0))
@@ -788,6 +978,44 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         return null;
     }
 
+    private static string? ValidateGameAreaUpdate(GameRoom room, string userId)
+    {
+        if (!IsHost(room, userId))
+            return "Only the host can change the game area.";
+        if (room.State.Phase != GamePhase.Lobby)
+            return "The game area can only be changed in the lobby.";
+
+        return null;
+    }
+
+    private (GameState? state, string? error) ApplyGameArea(GameRoom room, GameAreaMode mode,
+        GameAreaPattern? pattern, IEnumerable<(int q, int r)> coordinates, string eventMessage)
+    {
+        var normalizedCoordinates = coordinates.Distinct().ToList();
+        if (normalizedCoordinates.Count == 0)
+            return (null, "The game area must contain at least one tile.");
+
+        room.State.GameAreaMode = mode;
+        room.State.GameAreaPattern = pattern;
+        room.State.Grid = HexService.BuildGrid(normalizedCoordinates);
+        room.State.GridRadius = Math.Max(1, HexService.InferRadius(normalizedCoordinates));
+        room.State.TileSizeMeters = GetAllowedTileSizeMeters(normalizedCoordinates, room.State.TileSizeMeters);
+        ResetBoardStateForAreaChange(room.State);
+
+        var host = room.State.Players.FirstOrDefault(player => player.IsHost);
+        AppendEventLog(room.State, new GameEventLogEntry
+        {
+            Type = "GameAreaUpdated",
+            Message = eventMessage,
+            PlayerId = host?.Id,
+            PlayerName = host?.Name
+        });
+
+        var snapshot = SnapshotState(room.State);
+        QueuePersistence(room, snapshot);
+        return (snapshot, null);
+    }
+
     private (GameState? state, string? error) SetMasterTileByHexCore(GameRoom room, int q, int r)
     {
         if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var masterCell))
@@ -836,13 +1064,13 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         switch (state.ClaimMode)
         {
             case ClaimMode.PresenceOnly:
-            {
-                var troopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
-                SetCellOwner(cell, player);
-                cell.Troops = troopsPlaced;
-                ResetCarriedTroops(player);
-                return null;
-            }
+                {
+                    var troopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
+                    SetCellOwner(cell, player);
+                    cell.Troops = troopsPlaced;
+                    ResetCarriedTroops(player);
+                    return null;
+                }
             case ClaimMode.PresenceWithTroop:
                 if (player.CarriedTroops < 1)
                     return "You must be carrying at least 1 troop to claim a neutral hex in this room.";
@@ -900,10 +1128,92 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         return null;
     }
 
+    private static Dictionary<string, HexCell> BuildGridForState(GameState state)
+    {
+        return state.GameAreaMode switch
+        {
+            GameAreaMode.Pattern when state.GameAreaPattern.HasValue =>
+                HexService.BuildGrid(BuildPatternCoordinates(state.GameAreaPattern.Value)),
+            GameAreaMode.Drawn when state.Grid.Count > 0 =>
+                HexService.BuildGrid(state.Grid.Values.Select(cell => (cell.Q, cell.R))),
+            _ => HexService.BuildGrid(HexService.Spiral(Math.Max(1, state.GridRadius)))
+        };
+    }
+
+    private static int GetAllowedTileSizeMeters(IEnumerable<(int q, int r)> coordinates, int requestedMeters)
+    {
+        var maxAllowedMeters = Math.Max(15,
+            HexService.GetMaxTileSizeForFootprint(coordinates, MaxFootprintMeters));
+        return Math.Clamp(requestedMeters, 15, maxAllowedMeters);
+    }
+
+    private static IEnumerable<(int q, int r)> BuildPatternCoordinates(GameAreaPattern pattern)
+    {
+        return HexService.Spiral(DefaultGridRadius).Where(coord => pattern switch
+        {
+            GameAreaPattern.WideFront => FitsWideFront(coord.q, coord.r),
+            GameAreaPattern.TallFront => FitsTallFront(coord.q, coord.r),
+            GameAreaPattern.Crossroads => FitsCrossroads(coord.q, coord.r),
+            GameAreaPattern.Starburst => FitsStarburst(coord.q, coord.r),
+            _ => true
+        });
+    }
+
+    private static bool FitsWideFront(int q, int r)
+    {
+        var s = -q - r;
+        return Math.Abs(q) <= 8 && Math.Abs(r) <= 4 && Math.Abs(s) <= 8;
+    }
+
+    private static bool FitsTallFront(int q, int r)
+    {
+        var s = -q - r;
+        return Math.Abs(q) <= 4 && Math.Abs(r) <= 8 && Math.Abs(s) <= 8;
+    }
+
+    private static bool FitsCrossroads(int q, int r)
+    {
+        var s = -q - r;
+        var radius = HexService.HexDistance(q, r);
+        return radius <= 4 || Math.Abs(q) <= 1 || Math.Abs(r) <= 1 || Math.Abs(s) <= 1;
+    }
+
+    private static bool FitsStarburst(int q, int r)
+    {
+        var s = -q - r;
+        var radius = HexService.HexDistance(q, r);
+        return radius <= 5 || (radius <= DefaultGridRadius && (q == 0 || r == 0 || s == 0));
+    }
+
+    private static void ResetBoardStateForAreaChange(GameState state)
+    {
+        state.MasterTileQ = null;
+        state.MasterTileR = null;
+
+        foreach (var cell in state.Grid.Values)
+        {
+            cell.OwnerId = null;
+            cell.OwnerAllianceId = null;
+            cell.OwnerName = null;
+            cell.OwnerColor = null;
+            cell.Troops = 0;
+            cell.IsMasterTile = false;
+        }
+
+        foreach (var player in state.Players)
+        {
+            ResetCarriedTroops(player);
+            player.TerritoryCount = 0;
+        }
+
+        foreach (var alliance in state.Alliances)
+            alliance.TerritoryCount = 0;
+    }
+
     private static void EnsureGrid(GameState state)
     {
         if (state.Grid.Count == 0)
-            state.Grid = HexService.BuildGrid(state.GridRadius);
+            state.Grid = BuildGridForState(state);
     }
 
     private static bool IsHost(GameRoom room, string userId) => room.HostUserId.ToString() == userId;
@@ -1155,6 +1465,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             MapLat = state.MapLat,
             MapLng = state.MapLng,
             GridRadius = state.GridRadius,
+            GameAreaMode = state.GameAreaMode,
+            GameAreaPattern = state.GameAreaPattern,
             TileSizeMeters = state.TileSizeMeters,
             ClaimMode = state.ClaimMode,
             WinConditionType = state.WinConditionType,

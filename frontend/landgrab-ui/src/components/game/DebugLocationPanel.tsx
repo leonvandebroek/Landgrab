@@ -125,14 +125,14 @@ export function DebugLocationPanel({
           type="number"
           value={latDraft}
           onChange={event => setLatDraft(event.target.value)}
-          placeholder={t('lobby.latitude')}
+          placeholder={t('debugGps.latitudePlaceholder')}
           step="0.0001"
         />
         <input
           type="number"
           value={lngDraft}
           onChange={event => setLngDraft(event.target.value)}
-          placeholder={t('lobby.longitude')}
+          placeholder={t('debugGps.longitudePlaceholder')}
           step="0.0001"
         />
       </div>
@@ -145,6 +145,7 @@ export function DebugLocationPanel({
           className="btn-ghost small"
           onClick={() => applyPreset(liveLocation)}
           disabled={!liveLocation}
+          title={!liveLocation ? t('debugGps.disabledReason.liveMissing') : undefined}
         >
           {t('debugGps.useLiveGps')}
         </button>
@@ -153,6 +154,7 @@ export function DebugLocationPanel({
           className="btn-ghost small"
           onClick={() => applyPreset(mapCenter)}
           disabled={!mapCenter}
+          title={!mapCenter ? t('debugGps.disabledReason.mapCenterMissing') : undefined}
         >
           {t('debugGps.useMapCenter')}
         </button>
@@ -164,6 +166,7 @@ export function DebugLocationPanel({
           className="btn-secondary"
           onClick={onDisable}
           disabled={!enabled}
+          title={!enabled ? t('debugGps.disabledReason.alreadyLive') : undefined}
         >
           {t('debugGps.disable')}
         </button>
@@ -182,6 +185,7 @@ export function DebugLocationPanel({
             className="btn-ghost small"
             onClick={() => stepByHex(HEX_STEP_DIRECTIONS[0].dq, HEX_STEP_DIRECTIONS[0].dr)}
             disabled={!canStepByHex}
+            title={!canStepByHex ? t('debugGps.disabledReason.stepUnavailable') : undefined}
           >
             {t('debugGps.stepNorth')}
           </button>
@@ -191,6 +195,7 @@ export function DebugLocationPanel({
             className="btn-ghost small"
             onClick={() => stepByHex(HEX_STEP_DIRECTIONS[1].dq, HEX_STEP_DIRECTIONS[1].dr)}
             disabled={!canStepByHex}
+            title={!canStepByHex ? t('debugGps.disabledReason.stepUnavailable') : undefined}
           >
             {t('debugGps.stepWest')}
           </button>
@@ -200,6 +205,7 @@ export function DebugLocationPanel({
             className="btn-ghost small"
             onClick={() => stepByHex(HEX_STEP_DIRECTIONS[2].dq, HEX_STEP_DIRECTIONS[2].dr)}
             disabled={!canStepByHex}
+            title={!canStepByHex ? t('debugGps.disabledReason.stepUnavailable') : undefined}
           >
             {t('debugGps.stepEast')}
           </button>
@@ -209,11 +215,13 @@ export function DebugLocationPanel({
             className="btn-ghost small"
             onClick={() => stepByHex(HEX_STEP_DIRECTIONS[3].dq, HEX_STEP_DIRECTIONS[3].dr)}
             disabled={!canStepByHex}
+            title={!canStepByHex ? t('debugGps.disabledReason.stepUnavailable') : undefined}
           >
             {t('debugGps.stepSouth')}
           </button>
           <span className="debug-gps-step-spacer" />
         </div>
+        {!canStepByHex && <p className="section-note">{t('debugGps.disabledReason.stepUnavailable')}</p>}
       </div>
     </aside>
   );

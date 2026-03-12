@@ -1,6 +1,21 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import i18n from '../i18n';
 import type { AuthState } from '../types/game';
+
+export interface AuthApiErrorShape {
+  message: string;
+  fieldErrors?: Record<string, string>;
+}
+
+export class AuthApiError extends Error {
+  readonly fieldErrors?: Record<string, string>;
+
+  constructor({ message, fieldErrors }: AuthApiErrorShape) {
+    super(message);
+    this.name = 'AuthApiError';
+    this.fieldErrors = fieldErrors;
+  }
+}
 
 const STORAGE_KEY = 'landgrab_auth';
 
@@ -29,8 +44,7 @@ export function useAuth() {
       body: JSON.stringify({ usernameOrEmail, password })
     });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || i18n.t('auth.loginFailed'));
+      throw await parseAuthApiError(res, i18n.t('auth.loginFailed'));
     }
     const data: AuthState & { token: string; username: string; userId: string } = await res.json();
     setAuth({ token: data.token, username: data.username, userId: data.userId });
@@ -44,8 +58,7 @@ export function useAuth() {
       body: JSON.stringify({ username, email, password })
     });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || i18n.t('auth.registrationFailed'));
+      throw await parseAuthApiError(res, i18n.t('auth.registrationFailed'));
     }
     const data: AuthState & { token: string; username: string; userId: string } = await res.json();
     setAuth({ token: data.token, username: data.username, userId: data.userId });
@@ -54,5 +67,79 @@ export function useAuth() {
 
   const logout = useCallback(() => setAuth(null), [setAuth]);
 
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) {
+        return;
+      }
+
+      setAuthState(loadAuth());
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   return { auth, login, register, logout };
+}
+
+async function parseAuthApiError(response: Response, fallbackMessage: string): Promise<AuthApiError> {
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+  const message = getFirstString(data.error)
+    ?? getFirstString(data.message)
+    ?? fallbackMessage;
+  const fieldErrors = normalizeFieldErrors(data.errors);
+
+  return new AuthApiError({
+    message,
+    fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined
+  });
+}
+
+function normalizeFieldErrors(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+
+  const fieldErrors: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const normalizedKey = normalizeFieldKey(String(key));
+    const message = getFirstString(value);
+    if (message) {
+      fieldErrors[normalizedKey] = message;
+    }
+  }
+
+  return fieldErrors;
+}
+
+function getFirstString(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item === 'string' && item.trim().length > 0) {
+        return item;
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeFieldKey(rawKey: string): string {
+  const compact = rawKey.toLowerCase().replace(/[^a-z]/g, '');
+  if (compact.includes('username') || compact.includes('user')) {
+    return 'username';
+  }
+  if (compact.includes('email')) {
+    return 'email';
+  }
+  if (compact.includes('password')) {
+    return 'password';
+  }
+
+  return rawKey.toLowerCase();
 }

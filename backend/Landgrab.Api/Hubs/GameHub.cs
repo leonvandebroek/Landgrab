@@ -46,7 +46,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var (room, error) = gameService.JoinRoom(roomCode, UserId, Username, Context.ConnectionId);
         if (error != null)
         {
-            await SendError(error);
+            await SendError(MapErrorCode(error), error);
             return;
         }
 
@@ -62,7 +62,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         if (existingRoom == null)
         {
             const string message = "No active room found for the current user.";
-            await SendError(message);
+            await SendError("ROOM_NO_ACTIVE", message);
             throw new HubException(message);
         }
 
@@ -70,7 +70,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         if (error != null || room == null)
         {
             var message = error ?? "Unable to rejoin the active room.";
-            await SendError(message);
+            await SendError(MapErrorCode(message), message);
             throw new HubException(message);
         }
 
@@ -79,7 +79,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         if (state == null)
         {
             const string message = "Unable to load the current room state.";
-            await SendError(message);
+            await SendError("ROOM_STATE_UNAVAILABLE", message);
             throw new HubException(message);
         }
 
@@ -107,7 +107,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -126,7 +126,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -145,11 +145,68 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
         var (state, error) = gameService.SetTileSize(room.Code, UserId, meters);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task UseCenteredGameArea()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.UseCenteredGameArea(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetPatternGameArea(string pattern)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetPatternGameArea(room.Code, UserId, pattern);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetCustomGameArea(IReadOnlyList<HexCoordinateDto> coordinates)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetCustomGameArea(room.Code, UserId, coordinates);
         if (error != null)
         {
             await SendError(error);
@@ -164,7 +221,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -183,7 +240,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -202,7 +259,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -221,7 +278,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -240,7 +297,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -259,7 +316,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -278,7 +335,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
@@ -297,14 +354,14 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
-            await SendError("Not in a room.");
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
         }
 
         var (state, error) = gameService.PickUpTroops(room.Code, UserId, q, r, count, playerLat, playerLng);
         if (error != null)
         {
-            await SendError(error);
+            await SendError(MapErrorCode(error), error);
             return;
         }
 
@@ -390,5 +447,43 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         ?? "Unknown";
 
     private Task SendError(string message) =>
-        Clients.Caller.SendAsync("Error", message);
+        SendError("GENERAL", message);
+
+    private Task SendError(string code, string message) =>
+        Clients.Caller.SendAsync("Error", new HubErrorDto
+        {
+            Code = code,
+            Message = message
+        });
+
+    private static string MapErrorCode(string message)
+    {
+        var normalized = message.ToLowerInvariant();
+        if (normalized.Contains("room not found"))
+        {
+            return "ROOM_NOT_FOUND";
+        }
+
+        if (normalized.Contains("room is full"))
+        {
+            return "ROOM_FULL";
+        }
+
+        if (normalized.Contains("not in a room"))
+        {
+            return "ROOM_NOT_JOINED";
+        }
+
+        if (normalized.Contains("already"))
+        {
+            return "ROOM_ALREADY_JOINED";
+        }
+
+        if (normalized.Contains("host"))
+        {
+            return "HOST_REQUIRED";
+        }
+
+        return "GENERAL";
+    }
 }

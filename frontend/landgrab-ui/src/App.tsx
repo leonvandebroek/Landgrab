@@ -13,7 +13,7 @@ import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus } from './components/game/tileInteraction';
 import type { MapInteractionFeedback } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
-import type { ClaimMode, GameState, HexCell, RoomSummary, WinConditionType } from './types/game';
+import type { ClaimMode, GameAreaPattern, GameState, HexCell, HexCoordinate, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
@@ -63,6 +63,7 @@ export default function App() {
   const [autoResuming, setAutoResuming] = useState(false);
   const [savedSession, setSavedSession] = useState<SavedSession | null>(loadSavedSession);
   const [myRooms, setMyRooms] = useState<RoomSummary[]>([]);
+  const [showDebugTools, setShowDebugTools] = useState(false);
   const [debugLocationEnabled, setDebugLocationEnabled] = useState(false);
   const [debugLocation, setDebugLocation] = useState<LocationPoint | null>(null);
   const location = useGeolocation(Boolean(auth));
@@ -249,7 +250,7 @@ export default function App() {
       if (resolveResumeFromError(message)) {
         return;
       }
-      setError(message);
+      setError(localizeLobbyError(message, t));
     },
     onReconnected: () => {
       clearError();
@@ -412,7 +413,7 @@ export default function App() {
           setView('lobby');
           setError(t('errors.roomNoLongerAvailable'));
         } else if (joinOutcome.status === 'error') {
-          setError(joinOutcome.message);
+          setError(localizeLobbyError(joinOutcome.message, t));
         } else {
           setError(t('errors.timedOut'));
         }
@@ -424,7 +425,7 @@ export default function App() {
         setView('lobby');
         setError(t('errors.roomNoLongerAvailable'));
       } else if (rejoinOutcome.status === 'error') {
-        setError(rejoinOutcome.message);
+        setError(localizeLobbyError(rejoinOutcome.message, t));
       } else {
         setError(t('errors.timedOut'));
       }
@@ -453,14 +454,14 @@ export default function App() {
       })
       .catch(cause => {
         if (!cancelled) {
-          setError(String(cause));
+          setError(localizeLobbyError(getErrorMessage(cause), t));
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [auth, autoResuming, connected, gameState, invoke]);
+  }, [auth, autoResuming, connected, gameState, invoke, t]);
 
   const handleCreateRoom = useCallback(() => {
     if (autoResuming || pendingResumeRef.current) {
@@ -468,7 +469,7 @@ export default function App() {
       return;
     }
 
-    invoke('CreateRoom').catch(cause => setError(String(cause)));
+    invoke('CreateRoom').catch(cause => setError(localizeLobbyError(getErrorMessage(cause), t)));
   }, [autoResuming, invoke, t]);
 
   const handleJoinRoom = useCallback((code: string) => {
@@ -477,7 +478,7 @@ export default function App() {
       return;
     }
 
-    invoke('JoinRoom', code).catch(cause => setError(String(cause)));
+    invoke('JoinRoom', code).catch(cause => setError(localizeLobbyError(getErrorMessage(cause), t)));
   }, [autoResuming, invoke, t]);
 
   const handleSetAlliance = useCallback((name: string) => {
@@ -489,7 +490,41 @@ export default function App() {
   }, [invoke]);
 
   const handleSetTileSize = useCallback((meters: number) => {
-    invoke('SetTileSize', meters).catch(cause => setError(String(cause)));
+    const previousTileSizeMeters = gameState?.tileSizeMeters ?? meters;
+    const roomCode = gameState?.roomCode ?? '';
+
+    setGameState(previousState => previousState
+      ? {
+        ...previousState,
+        tileSizeMeters: meters
+      }
+      : previousState);
+
+    invoke('SetTileSize', meters).catch(cause => {
+      setGameState(previousState => {
+        if (!previousState || previousState.roomCode !== roomCode) {
+          return previousState;
+        }
+
+        return {
+          ...previousState,
+          tileSizeMeters: previousTileSizeMeters
+        };
+      });
+      setError(String(cause));
+    });
+  }, [gameState?.roomCode, gameState?.tileSizeMeters, invoke]);
+
+  const handleUseCenteredGameArea = useCallback(() => {
+    invoke('UseCenteredGameArea').catch(cause => setError(String(cause)));
+  }, [invoke]);
+
+  const handleSetPatternGameArea = useCallback((pattern: GameAreaPattern) => {
+    invoke('SetPatternGameArea', pattern).catch(cause => setError(String(cause)));
+  }, [invoke]);
+
+  const handleSetCustomGameArea = useCallback((coordinates: HexCoordinate[]) => {
+    invoke('SetCustomGameArea', coordinates).catch(cause => setError(String(cause)));
   }, [invoke]);
 
   const handleSetClaimMode = useCallback((mode: ClaimMode) => {
@@ -505,8 +540,24 @@ export default function App() {
   }, [invoke]);
 
   const handleSetMasterTileByHex = useCallback((q: number, r: number) => {
-    invoke('SetMasterTileByHex', q, r).catch(cause => setError(String(cause)));
-  }, [invoke]);
+    invoke('SetMasterTileByHex', q, r).catch(cause => {
+      const message = getErrorMessage(cause);
+      if (!isMissingHubMethodFailure(message) || !gameState || gameState.mapLat == null || gameState.mapLng == null) {
+        setError(localizeLobbyError(message, t));
+        return;
+      }
+
+      const [fallbackLat, fallbackLng] = roomHexToLatLng(
+        q,
+        r,
+        gameState.mapLat,
+        gameState.mapLng,
+        gameState.tileSizeMeters
+      );
+      invoke('SetMasterTile', fallbackLat, fallbackLng)
+        .catch(fallbackCause => setError(localizeLobbyError(getErrorMessage(fallbackCause), t)));
+    });
+  }, [gameState, invoke, t]);
 
   const handleAssignStartingTile = useCallback((q: number, r: number, playerId: string) => {
     invoke('AssignStartingTile', q, r, playerId).catch(cause => setError(String(cause)));
@@ -636,7 +687,7 @@ export default function App() {
       : '';
 
   const visibleRecentRooms = auth && connected ? myRooms : [];
-  const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
+  const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && showDebugTools && view !== 'gameover' ? (
     <DebugLocationPanel
       enabled={usingDebugLocation}
       liveLocation={liveLocation}
@@ -648,6 +699,16 @@ export default function App() {
       onDisable={disableDebugLocation}
       onStepByHex={stepDebugLocationByHex}
     />
+  ) : null;
+  const debugToggleButton = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
+    <button
+      type="button"
+      className="debug-tools-toggle"
+      onClick={() => setShowDebugTools(value => !value)}
+      aria-pressed={showDebugTools}
+    >
+      {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
+    </button>
   ) : null;
 
   if (!auth) {
@@ -672,6 +733,7 @@ export default function App() {
             state={gameState}
             myUserId={auth.userId}
             currentLocation={currentLocation}
+            constrainViewportToGrid
             onHexClick={handleHexClick}
             selectedHex={selectedHex}
           />
@@ -693,6 +755,7 @@ export default function App() {
           />
         </div>
         {debugGpsPanel}
+        {debugToggleButton}
       </>
     );
   }
@@ -714,6 +777,9 @@ export default function App() {
         onSetAlliance={handleSetAlliance}
         onSetMapLocation={handleSetMapLocation}
         onSetTileSize={handleSetTileSize}
+        onUseCenteredGameArea={handleUseCenteredGameArea}
+        onSetPatternGameArea={handleSetPatternGameArea}
+        onSetCustomGameArea={handleSetCustomGameArea}
         onSetClaimMode={handleSetClaimMode}
         onSetWinCondition={handleSetWinCondition}
         onSetMasterTile={handleSetMasterTile}
@@ -724,6 +790,7 @@ export default function App() {
         onLogout={() => {
           clearSession();
           disableDebugLocation();
+          setShowDebugTools(false);
           setMyRooms([]);
           logout();
           setGameState(null);
@@ -734,6 +801,7 @@ export default function App() {
         error={error}
       />
       {debugGpsPanel}
+      {debugToggleButton}
     </>
   );
 }
@@ -794,6 +862,40 @@ function isMissingRejoinMethodFailure(message: string): boolean {
     || normalized.includes('unknown hub method')
     || normalized.includes('method not found')
     || normalized.includes('not implemented');
+}
+
+function isMissingHubMethodFailure(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('method does not exist')
+    || normalized.includes('unknown hub method')
+    || normalized.includes('method not found')
+    || normalized.includes('does not exist');
+}
+
+function localizeLobbyError(message: string, t: TFunction): string {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('room not found')) {
+    return t('lobby.joinErrors.roomNotFound');
+  }
+
+  if (normalized.includes('room is full') || normalized.includes('full')) {
+    return t('lobby.joinErrors.roomFull');
+  }
+
+  if (normalized.includes('already in')) {
+    return t('lobby.joinErrors.alreadyInRoom');
+  }
+
+  if (normalized.includes('unable to rejoin') || normalized.includes('no active room')) {
+    return t('lobby.joinErrors.roomUnavailable');
+  }
+
+  if (normalized.includes('not in a room')) {
+    return t('lobby.joinErrors.notInRoom');
+  }
+
+  return message;
 }
 
 function getPlaceSuccessMessage(

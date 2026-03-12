@@ -30,6 +30,27 @@ public enum WinConditionType
     TimedGame
 }
 
+public enum GameAreaMode
+{
+    Centered,
+    Drawn,
+    Pattern
+}
+
+public enum GameAreaPattern
+{
+    WideFront,
+    TallFront,
+    Crossroads,
+    Starburst
+}
+
+public class HexCoordinateDto
+{
+    public int Q { get; set; }
+    public int R { get; set; }
+}
+
 public class PlayerDto
 {
     public string Id { get; set; } = "";
@@ -88,7 +109,9 @@ public class GameState
     public double? MapLng { get; set; }
     public bool HasMapLocation => MapLat.HasValue && MapLng.HasValue;
     public int GridRadius { get; set; } = 8;
-    public int TileSizeMeters { get; set; } = 100;
+    public GameAreaMode GameAreaMode { get; set; } = GameAreaMode.Centered;
+    public GameAreaPattern? GameAreaPattern { get; set; }
+    public int TileSizeMeters { get; set; } = 25;
     public ClaimMode ClaimMode { get; set; } = ClaimMode.AdjacencyRequired;
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;

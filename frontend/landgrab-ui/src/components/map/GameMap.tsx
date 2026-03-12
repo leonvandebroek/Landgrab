@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
+import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 
 interface LocationPoint {
   lat: number;
@@ -17,16 +18,46 @@ interface Props {
   currentLocation: LocationPoint | null;
   onHexClick?: (q: number, r: number, cell: HexCell | undefined) => void;
   selectedHex?: [number, number] | null;
+  constrainViewportToGrid?: boolean;
+  gridOverride?: Record<string, HexCell>;
+  inactiveHexKeys?: string[];
+}
+
+interface MapControlButtonProps {
+  active?: boolean;
+  icon: string;
+  label: string;
+  status?: string;
+  onClick: () => void;
+  title: string;
+  ariaLabel: string;
+  ariaPressed?: boolean;
 }
 
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
+const GRID_FIT_PADDING = L.point(24, 24);
 
-export function GameMap({ state, myUserId, currentLocation, onHexClick, selectedHex = null }: Props) {
+export function GameMap({
+  state,
+  myUserId,
+  currentLocation,
+  onHexClick,
+  selectedHex = null,
+  constrainViewportToGrid = false,
+  gridOverride,
+  inactiveHexKeys = [],
+}: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const followedLocationKeyRef = useRef('');
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
+  const geometryKeyRef = useRef('');
+  const initialCenterRef = useRef<[number, number]>(
+    state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER
+  );
 
   function handleZoomToLocation() {
     const map = mapRef.current;
@@ -34,11 +65,6 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       map.setView([currentLocation.lat, currentLocation.lng], Math.max(map.getZoom(), 17));
     }
   }
-  const layerGroupRef = useRef<L.LayerGroup | null>(null);
-  const geometryKeyRef = useRef('');
-  const initialCenterRef = useRef<[number, number]>(
-    state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER
-  );
 
   const currentHex = useMemo(() => {
     if (!currentLocation || state.mapLat == null || state.mapLng == null) {
@@ -54,6 +80,9 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
     );
   }, [currentLocation, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
+  const renderedGrid = gridOverride ?? state.grid;
+  const inactiveHexKeySet = useMemo(() => new Set(inactiveHexKeys), [inactiveHexKeys]);
+
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
       return;
@@ -61,19 +90,26 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
 
     const map = L.map(containerRef.current, {
       center: initialCenterRef.current,
+      maxZoom: MAP_MAX_ZOOM,
+      maxBoundsViscosity: constrainViewportToGrid ? 1 : undefined,
       zoom: 16,
       zoomControl: true
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
+    const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
+    top25.addTo(map);
+    baseLayerControlRef.current = L.control.layers({
+      [t('map.layerTopo')]: top25,
+      [t('map.layerStandard')]: brtStandard,
+      [t('map.layerGray')]: brtGray,
     }).addTo(map);
 
     layerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
     return () => {
+      baseLayerControlRef.current?.remove();
+      baseLayerControlRef.current = null;
       map.stop();
       map.off();
       map.remove();
@@ -81,7 +117,7 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       layerGroupRef.current = null;
       geometryKeyRef.current = '';
     };
-  }, []);
+  }, [constrainViewportToGrid, t]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -126,14 +162,14 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       return;
     }
 
-    const geometryKey = `${state.mapLat}:${state.mapLng}:${state.tileSizeMeters}:${state.gridRadius}`;
+    const geometryKey = `${state.mapLat}:${state.mapLng}:${state.tileSizeMeters}:${Object.keys(renderedGrid).join('|')}`;
     if (geometryKeyRef.current === geometryKey) {
       return;
     }
 
     geometryKeyRef.current = geometryKey;
 
-    const points = Object.values(state.grid)
+    const points = Object.values(renderedGrid)
       .flatMap(cell => roomHexCornerLatLngs(cell.q, cell.r, state.mapLat!, state.mapLng!, state.tileSizeMeters))
       .map(([lat, lng]) => L.latLng(lat, lng));
 
@@ -142,8 +178,16 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       return;
     }
 
-    map.fitBounds(L.latLngBounds(points), { padding: [24, 24], animate: false });
-  }, [state.grid, state.gridRadius, state.mapLat, state.mapLng, state.tileSizeMeters]);
+    const bounds = L.latLngBounds(points);
+    map.fitBounds(bounds, { padding: GRID_FIT_PADDING, animate: false });
+
+    if (!constrainViewportToGrid) {
+      return;
+    }
+
+    map.setMinZoom(map.getZoom());
+    map.setMaxBounds(bounds.pad(0.05));
+  }, [constrainViewportToGrid, renderedGrid, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -157,7 +201,8 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
     const hostPlayer = state.players.find(player => player.isHost);
     const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
 
-    for (const cell of Object.values(state.grid)) {
+    for (const cell of Object.values(renderedGrid)) {
+      const cellKey = `${cell.q},${cell.r}`;
       const corners = roomHexCornerLatLngs(
         cell.q,
         cell.r,
@@ -176,16 +221,24 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       const isMine = cell.ownerId === myUserId;
       const isCurrentHex = currentHex?.[0] === cell.q && currentHex?.[1] === cell.r;
       const isSelected = selectedHex?.[0] === cell.q && selectedHex?.[1] === cell.r;
+      const isInactive = inactiveHexKeySet.has(cellKey);
       const fillColor = cell.isMasterTile
         ? hostColor
-        : cell.ownerColor ?? '#9fb3c8';
-      const fillOpacity = cell.isMasterTile ? 0.45 : cell.ownerId ? (isMine ? 0.72 : 0.5) : 0.30;
-      let borderColor = cell.ownerId ? '#dfe6e9' : '#7f8c8d';
-      let borderWeight = cell.ownerId ? 1 : 1.5;
+        : cell.ownerColor ?? (isInactive ? '#e5edf6' : '#9fc4e8');
+      const fillOpacity = isInactive
+        ? 0.08
+        : cell.isMasterTile
+          ? 0.58
+          : cell.ownerId
+            ? (isMine ? 0.82 : 0.62)
+            : 0.22;
+      let borderColor = cell.ownerId ? '#f7fbff' : (isInactive ? 'rgba(214, 228, 244, 0.75)' : '#d7e7f6');
+      let borderWeight = cell.ownerId ? 2.25 : (isInactive ? 1.25 : 1.8);
+      let dashArray: string | undefined;
 
       if (cell.isMasterTile) {
         borderColor = '#f1c40f';
-        borderWeight = 3;
+        borderWeight = 3.25;
       }
       if (isCurrentHex) {
         borderColor = '#2ecc71';
@@ -195,9 +248,24 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
         borderColor = '#ffffff';
         borderWeight = Math.max(borderWeight, 4);
       }
+      if (isInactive) {
+        dashArray = '6 6';
+      }
+
+      const classNames = [
+        'hex-polygon',
+        cell.isMasterTile ? 'is-master' : '',
+        cell.ownerId ? 'is-owned' : 'is-neutral',
+        isMine ? 'is-mine' : '',
+        isCurrentHex ? 'is-current' : '',
+        isSelected ? 'is-selected' : '',
+        isInactive ? 'is-inactive' : '',
+      ].filter(Boolean).join(' ');
 
       const polygon = L.polygon(corners, {
+        className: classNames,
         color: borderColor,
+        dashArray,
         weight: borderWeight,
         opacity: cell.ownerId || cell.isMasterTile ? 0.95 : 0.80,
         fillColor,
@@ -210,7 +278,7 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
       }
       polygon.addTo(layerGroup);
 
-      if (cell.troops > 0 || cell.isMasterTile) {
+      if (!isInactive && (cell.troops > 0 || cell.isMasterTile)) {
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: 'hex-label-wrapper',
@@ -241,35 +309,62 @@ export function GameMap({ state, myUserId, currentLocation, onHexClick, selected
         className: 'player-location-label'
       });
     }
-  }, [currentHex, currentLocation, myUserId, onHexClick, selectedHex, state]);
+  }, [currentHex, currentLocation, inactiveHexKeySet, myUserId, onHexClick, renderedGrid, selectedHex, state]);
 
   return (
     <div className="game-map-container">
       <div ref={containerRef} className="leaflet-map" />
       {currentLocation && (
-        <div className="game-map-controls">
-          <button
-            type="button"
-            className={`map-control-btn${isFollowingMe ? ' is-active' : ''}`}
+        <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
+          <MapControlButton
+            active={isFollowingMe}
+            icon="🧭"
+            label={t('game.followMe')}
+            status={isFollowingMe ? t('game.followMeOn') : t('game.followMeOff')}
             onClick={() => setIsFollowingMe(enabled => !enabled)}
             title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-            aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-            aria-pressed={isFollowingMe}
-          >
-            🧭
-          </button>
-          <button
-            type="button"
-            className="map-control-btn"
+            ariaLabel={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+            ariaPressed={isFollowingMe}
+          />
+          <MapControlButton
+            icon="📍"
+            label={t('game.zoomToLocation')}
+            status={t('game.centerOnMe')}
             onClick={handleZoomToLocation}
             title={t('game.zoomToLocation')}
-            aria-label={t('game.zoomToLocation')}
-          >
-            📍
-          </button>
+            ariaLabel={t('game.zoomToLocation')}
+          />
         </div>
       )}
     </div>
+  );
+}
+
+function MapControlButton({
+  active = false,
+  icon,
+  label,
+  status,
+  onClick,
+  title,
+  ariaLabel,
+  ariaPressed
+}: MapControlButtonProps) {
+  return (
+    <button
+      type="button"
+      className={`map-control-btn map-control-btn--wide${active ? ' is-active' : ''}`}
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel}
+      aria-pressed={ariaPressed}
+    >
+      <span className="map-control-icon" aria-hidden="true">{icon}</span>
+      <span className="map-control-copy">
+        <strong>{label}</strong>
+        {status && <span>{status}</span>}
+      </span>
+    </button>
   );
 }
 

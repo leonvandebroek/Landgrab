@@ -18,6 +18,11 @@ interface PickupPrompt {
   max: number;
 }
 
+interface GuidanceCard {
+  message: string;
+  tone: 'info' | 'success';
+}
+
 interface Props {
   state: GameState;
   myUserId: string;
@@ -90,6 +95,10 @@ export function PlayerPanel({
       ? interactionFeedback
       : null;
   }, [focusedHex, interactionFeedback, tileInteractionStatus.message]);
+  const fieldGuidance = useMemo(
+    () => getFieldGuidance({ currentLocation, currentHex, currentCell, player: me, t }),
+    [currentCell, currentHex, currentLocation, me, t]
+  );
 
   useEffect(() => {
     if (state.phase !== 'Playing' || state.winConditionType !== 'TimedGame' || !state.gameStartedAt || !state.gameDurationMinutes) {
@@ -172,6 +181,13 @@ export function PlayerPanel({
             {visibleInteractionFeedback.message}
           </p>
         )}
+      </div>
+
+      <div className={`selected-hex-card gameplay-card guidance-card is-${fieldGuidance.tone}`}>
+        <div className="gameplay-card-header">
+          <small>{t('game.fieldGuidance')}</small>
+        </div>
+        <p className="hint gameplay-hint">{fieldGuidance.message}</p>
       </div>
 
       {pickupPrompt && (
@@ -274,6 +290,42 @@ function describeCurrentHex(cell: GameState['grid'][string], me: Player | null, 
   }
 
   return t('game.enemyHexDesc', { name: cell.ownerName ?? 'Enemy', count: cell.troops });
+}
+
+function getFieldGuidance({
+  currentLocation,
+  currentHex,
+  currentCell,
+  player,
+  t
+}: {
+  currentLocation: LocationPoint | null;
+  currentHex: [number, number] | null;
+  currentCell: GameState['grid'][string] | undefined;
+  player: Player | null;
+  t: TFunction;
+}): GuidanceCard {
+  if (!currentLocation) {
+    return { message: t('game.guidance.noGps'), tone: 'info' };
+  }
+
+  if (!currentHex) {
+    return { message: t('game.guidance.notOnGrid'), tone: 'info' };
+  }
+
+  if ((player?.carriedTroops ?? 0) > 0) {
+    return { message: t('game.guidance.expandNow'), tone: 'success' };
+  }
+
+  if (currentCell?.ownerId === player?.id && (currentCell?.troops ?? 0) > 0) {
+    return { message: t('game.guidance.pickupHere'), tone: 'success' };
+  }
+
+  if (currentCell?.ownerId === player?.id) {
+    return { message: t('game.guidance.findTroops'), tone: 'info' };
+  }
+
+  return { message: t('game.guidance.moveToOwnedTile'), tone: 'info' };
 }
 
 function formatDuration(milliseconds: number): string {
