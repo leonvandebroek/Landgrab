@@ -404,6 +404,9 @@ const nl = {
     layerTopo: 'Topografisch',
     layerStandard: 'Standaard',
     layerGray: 'Grijs',
+    layerBrtStandard: 'BRT Standaard',
+    layerBrtGray: 'BRT Grijs',
+    layerOsm: 'OpenStreetMap',
   },
   guidance: {
     enableLocation: 'Schakel locatie in om te spelen',
@@ -901,6 +904,10 @@ const nl = {
     // Kaart-gebaseerde editor
     searchLocation: 'Zoek locatie',
     searchPlaceholder: 'Zoek een plaats...',
+    drawHintDraw: 'Teken-modus: klik/tik om hexen toe te voegen of te verwijderen, sleep om te schilderen',
+    drawHintNavigate: 'Navigeer-modus: verschuif en zoom de kaart vrij',
+    modeNavigate: 'Navigeren',
+    modeDraw: 'Tekenen',
 
     // Review stap integratie
     areaTemplate: 'Sjabloon',

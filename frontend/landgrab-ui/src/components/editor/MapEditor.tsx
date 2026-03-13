@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { HexCoordinate } from '../../types/game';
@@ -18,6 +19,11 @@ const HEX_HOVER_COLOR = '#5dade2';
 const HEX_HOVER_OPACITY = 0.35;
 
 type EditorMode = 'draw' | 'navigate';
+
+// ── Handle (imperative API) ──────────────────────────────────────────
+export interface MapEditorHandle {
+  flyTo(lat: number, lng: number): void;
+}
 
 // ── Props ────────────────────────────────────────────────────────────
 interface MapEditorProps {
@@ -55,18 +61,20 @@ function getHexPolygonLatLngs(
 }
 
 // ── Component ────────────────────────────────────────────────────────
-export function MapEditor({
+export const MapEditor = forwardRef<MapEditorHandle, MapEditorProps>(function MapEditor({
   coordinates,
   onCoordinatesChange,
   tileSizeMeters,
   centerLat,
   centerLng,
   onCenterChange,
-}: MapEditorProps) {
+}: MapEditorProps, ref) {
+  const { t, i18n } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const hexLayerRef = useRef<L.LayerGroup>(L.layerGroup());
   const hoverLayerRef = useRef<L.LayerGroup>(L.layerGroup());
+  const lastHoverKeyRef = useRef<string>('');
 
   // Mode: draw vs navigate
   const [mode, setMode] = useState<EditorMode>('navigate');
@@ -94,6 +102,8 @@ export function MapEditor({
   const tileSizeRef = useRef(tileSizeMeters);
   useEffect(() => {
     tileSizeRef.current = tileSizeMeters;
+    // Polygon corners change when tile size changes, so reset the hover cache
+    lastHoverKeyRef.current = '';
   }, [tileSizeMeters]);
 
   // Keep mode ref in sync
@@ -180,11 +190,17 @@ export function MapEditor({
 
   // ── Show hover hex preview ──
   const showHoverHex = useCallback((lat: number, lng: number) => {
-    const hover = hoverLayerRef.current;
-    hover.clearLayers();
     const center = mapCenter.current;
     const tileSize = tileSizeRef.current;
     const [q, r] = latLngToRoomHex(lat, lng, center.lat, center.lng, tileSize);
+    const key = hexKey(q, r);
+
+    // Skip re-render if the pointer is still within the same hex
+    if (key === lastHoverKeyRef.current) return;
+    lastHoverKeyRef.current = key;
+
+    const hover = hoverLayerRef.current;
+    hover.clearLayers();
     const corners = getHexPolygonLatLngs(q, r, center.lat, center.lng, tileSize);
     L.polygon(corners, {
       color: HEX_HOVER_COLOR,
@@ -226,10 +242,10 @@ export function MapEditor({
 
     const layerControl = L.control.layers(
       {
-        'BRT Standaard': baseLayers.brtStandard,
-        'BRT Grijs': baseLayers.brtGray,
-        'TOP25 Raster': baseLayers.top25,
-        'OpenStreetMap': osmLayer,
+        [i18n.t('map.layerBrtStandard')]: baseLayers.brtStandard,
+        [i18n.t('map.layerBrtGray')]: baseLayers.brtGray,
+        [i18n.t('map.layerTopo')]: baseLayers.top25,
+        [i18n.t('map.layerOsm')]: osmLayer,
       },
       {},
       { position: 'topright' }
@@ -319,6 +335,7 @@ export function MapEditor({
 
     const onPointerLeave = () => {
       hoverLayerRef.current.clearLayers();
+      lastHoverKeyRef.current = '';
     };
 
     const onContextMenu = (e: Event) => {
@@ -359,18 +376,15 @@ export function MapEditor({
     onCenterChange(lat, lng);
     mapRef.current?.flyTo([lat, lng], DEFAULT_ZOOM, { duration: 1.2 });
 
-    // Clear existing hexes since the center changed
+    // Clear existing hexes and hover cache since the center (origin) changed
     setSelected(new Set());
     selectedRef.current = new Set();
+    hoverLayerRef.current.clearLayers();
+    lastHoverKeyRef.current = '';
   }, [onCenterChange]);
 
-  // Expose flyTo via a ref attached to the container div
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el) {
-      (el as any).__flyTo = flyTo;
-    }
-  }, [flyTo]);
+  // Expose flyTo imperatively via a typed ref
+  useImperativeHandle(ref, () => ({ flyTo }), [flyTo]);
 
   // ── Mode toggle handler ──
   const handleModeToggle = useCallback((newMode: EditorMode) => {
@@ -378,6 +392,7 @@ export function MapEditor({
     // Clear hover when switching to navigate
     if (newMode === 'navigate') {
       hoverLayerRef.current.clearLayers();
+      lastHoverKeyRef.current = '';
     }
   }, []);
 
@@ -399,8 +414,8 @@ export function MapEditor({
   }, [handleModeToggle]);
 
   const drawHint = mode === 'draw'
-    ? 'Draw mode: click/tap to toggle hexes, drag to paint'
-    : 'Navigate mode: pan & zoom the map freely';
+    ? t('mapEditor.drawHintDraw')
+    : t('mapEditor.drawHintNavigate');
 
   return (
     <div className="map-editor-canvas map-editor-canvas--leaflet">
@@ -415,16 +430,16 @@ export function MapEditor({
           className={`map-editor-mode-btn ${mode === 'navigate' ? 'map-editor-mode-btn--active' : ''}`}
           onClick={() => handleModeToggle('navigate')}
         >
-          <span className="map-editor-mode-icon">&#9995;</span> Navigate
+          <span className="map-editor-mode-icon">&#9995;</span> {t('mapEditor.modeNavigate')}
         </button>
         <button
           type="button"
           className={`map-editor-mode-btn ${mode === 'draw' ? 'map-editor-mode-btn--active' : ''}`}
           onClick={() => handleModeToggle('draw')}
         >
-          <span className="map-editor-mode-icon">&#9998;</span> Draw
+          <span className="map-editor-mode-icon">&#9998;</span> {t('mapEditor.modeDraw')}
         </button>
       </div>
     </div>
   );
-}
+});

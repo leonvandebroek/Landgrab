@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface EditorToolbarProps {
@@ -54,7 +54,7 @@ export function EditorToolbar({
   saving,
   isNew,
 }: EditorToolbarProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const trimmedName = name.trim();
   const canSave =
     trimmedName.length > 0 &&
@@ -79,33 +79,54 @@ export function EditorToolbar({
   >([]);
   const [searching, setSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
-  const handleSearch = async (query: string) => {
+  // Abort any pending fetch + timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      searchAbortRef.current?.abort();
+    };
+  }, []);
+
+  const handleSearch = (query: string) => {
     setSearchQuery(query);
+
+    // Cancel previous timer + in-flight request
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchAbortRef.current?.abort();
 
     if (query.trim().length < 3) {
       setSearchResults([]);
       setShowResults(false);
+      setSearching(false);
       return;
     }
 
     searchTimeoutRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+
       setSearching(true);
       try {
         const encoded = encodeURIComponent(query.trim());
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=0`,
-          { headers: { 'Accept-Language': 'en' } }
+          {
+            signal: controller.signal,
+            headers: { 'Accept-Language': i18n.language },
+          }
         );
         if (res.ok) {
-          const data = await res.json();
+          const data = await res.json() as Array<{ display_name: string; lat: string; lon: string }>;
           setSearchResults(data);
           setShowResults(data.length > 0);
         }
-      } catch {
-        // silently fail
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          // silently fail for genuine network errors
+        }
       } finally {
         setSearching(false);
       }
@@ -278,6 +299,7 @@ export function EditorToolbar({
         </button>
         {hexCount > 0 && (
           <button
+            type="button"
             className="map-editor-toolbar__btn map-editor-toolbar__btn--danger"
             onClick={onClearAll}
           >

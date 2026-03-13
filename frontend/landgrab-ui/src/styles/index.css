@@ -4481,10 +4481,6 @@ input:checked + .display-settings-slider:before {
   cursor: crosshair;
 }
 
-.map-editor-leaflet-container.draw-mode .leaflet-container {
-  cursor: crosshair;
-}
-
 /* ── Mode toggle floating button ──────────────────────────── */
 
 .map-editor-mode-toggle {
@@ -4742,10 +4738,10 @@ input:checked + .display-settings-slider:before {
   border: 2px solid var(--muted);
   border-top-color: transparent;
   border-radius: 50%;
-  animation: spin 0.6s linear infinite;
+  animation: map-editor-spin 0.6s linear infinite;
 }
 
-@keyframes spin {
+@keyframes map-editor-spin {
   to { transform: translateY(-50%) rotate(360deg); }
 }
 

@@ -15,6 +15,7 @@ import {
 } from '../../api/mapTemplateApi';
 import { MapTemplateManager } from './MapTemplateManager';
 import { MapEditor } from './MapEditor';
+import type { MapEditorHandle } from './MapEditor';
 import { EditorToolbar } from './EditorToolbar';
 
 interface MapEditorPageProps {
@@ -39,8 +40,8 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
   const [centerLat, setCenterLat] = useState<number | null>(null);
   const [centerLng, setCenterLng] = useState<number | null>(null);
 
-  // Ref to the MapEditor container for flyTo
-  const editorCanvasRef = useRef<HTMLDivElement>(null);
+  // Ref to the MapEditor for flyTo
+  const mapEditorRef = useRef<MapEditorHandle>(null);
 
   // Derived stats
   const hexCount = selectedCoords.length;
@@ -182,14 +183,7 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
   }, []);
 
   const handleFlyTo = useCallback((lat: number, lng: number) => {
-    // Find the MapEditor container and call its flyTo
-    const canvas = editorCanvasRef.current;
-    if (canvas) {
-      const leafletContainer = canvas.querySelector('.map-editor-leaflet-container');
-      if (leafletContainer && (leafletContainer as any).__flyTo) {
-        (leafletContainer as any).__flyTo(lat, lng);
-      }
-    }
+    mapEditorRef.current?.flyTo(lat, lng);
   }, []);
 
   // ── Render: Editor view ──────────────────────────────────────
@@ -217,8 +211,9 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
               isNew={editingTemplate === null}
             />
           </div>
-          <div ref={editorCanvasRef} className="map-editor-layout__canvas">
+          <div className="map-editor-layout__canvas">
             <MapEditor
+              ref={mapEditorRef}
               coordinates={selectedCoords}
               onCoordinatesChange={handleCoordinatesChange}
               tileSizeMeters={tileSizeMeters}
