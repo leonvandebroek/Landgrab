@@ -312,7 +312,7 @@ export function ReviewStep({
                                 className={`wizard-area-mode-tab${areaMode === 'Template' ? ' is-active' : ''}`}
                                 onClick={() => setAreaModeDraft('Template')}
                             >
-                                {t('wizard.areaModeTemplate' as never)}
+                                {t('mapEditor.areaTemplate')}
                             </button>
                         </div>
 
@@ -413,14 +413,14 @@ export function ReviewStep({
 
                         {areaMode === 'Template' && (
                             <div className="wizard-area-mode-panel">
-                                <p className="wizard-hint">{t('wizard.areaTemplateHint' as never)}</p>
+                                <p className="wizard-hint">{t('mapEditor.areaTemplateHint')}</p>
 
                                 {templateLoading && (
-                                    <p className="wizard-hint">{t('wizard.areaTemplateLoading' as never)}</p>
+                                    <p className="wizard-hint">{t('mapEditor.loading')}</p>
                                 )}
 
                                 {!templateLoading && templates.length === 0 && (
-                                    <p className="wizard-hint">{t('wizard.areaTemplateNone' as never)}</p>
+                                    <p className="wizard-hint">{t('mapEditor.noTemplates')}</p>
                                 )}
 
                                 {!templateLoading && templates.length > 0 && (
@@ -431,7 +431,7 @@ export function ReviewStep({
                                             className="wizard-template-select"
                                         >
                                             <option value="" disabled>
-                                                {t('wizard.areaTemplateSelectPlaceholder' as never)}
+                                                {t('mapEditor.selectTemplate')}
                                             </option>
                                             {templates.map(tpl => (
                                                 <option key={tpl.id} value={tpl.id}>
@@ -445,7 +445,7 @@ export function ReviewStep({
                                             onClick={() => void handleLoadTemplate()}
                                             disabled={!selectedTemplateId || !invoke}
                                         >
-                                            {t('wizard.areaTemplateLoad' as never)}
+                                            {t('mapEditor.loadTemplate')}
                                         </button>
                                     </div>
                                 )}
@@ -455,7 +455,7 @@ export function ReviewStep({
                                     className="btn-ghost small"
                                     onClick={() => void fetchTemplates()}
                                 >
-                                    {t('wizard.areaTemplateRefresh' as never)}
+                                    {t('mapEditor.refreshTemplates')}
                                 </button>
 
                                 {/* Save current area as template */}
@@ -468,7 +468,7 @@ export function ReviewStep({
                                                 onClick={() => setShowSaveForm(true)}
                                                 disabled={!invoke}
                                             >
-                                                {t('wizard.areaTemplateSave' as never)}
+                                                {t('mapEditor.saveAsTemplate')}
                                             </button>
                                         ) : (
                                             <div className="wizard-area-save-form">
@@ -476,13 +476,13 @@ export function ReviewStep({
                                                     type="text"
                                                     value={saveTemplateName}
                                                     onChange={e => setSaveTemplateName(e.target.value)}
-                                                    placeholder={t('wizard.areaTemplateNamePlaceholder' as never)}
+                                                    placeholder={t('mapEditor.templateName')}
                                                 />
                                                 <input
                                                     type="text"
                                                     value={saveTemplateDesc}
                                                     onChange={e => setSaveTemplateDesc(e.target.value)}
-                                                    placeholder={t('wizard.areaTemplateDescPlaceholder' as never)}
+                                                    placeholder={t('mapEditor.templateDescription')}
                                                 />
                                                 <div className="wizard-area-actions">
                                                     <button
@@ -492,8 +492,8 @@ export function ReviewStep({
                                                         disabled={!saveTemplateName.trim() || savingTemplate}
                                                     >
                                                         {savingTemplate
-                                                            ? t('wizard.areaTemplateSaving' as never)
-                                                            : t('wizard.areaTemplateSaveConfirm' as never)}
+                                                            ? t('mapEditor.saving')
+                                                            : t('mapEditor.saveCurrentArea')}
                                                     </button>
                                                     <button
                                                         type="button"
@@ -504,7 +504,7 @@ export function ReviewStep({
                                                             setSaveTemplateDesc('');
                                                         }}
                                                     >
-                                                        {t('wizard.cancel' as never)}
+                                                        {t('mapEditor.cancel')}
                                                     </button>
                                                 </div>
                                             </div>

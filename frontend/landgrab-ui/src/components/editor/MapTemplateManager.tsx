@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { MapTemplate } from '../../types/game';
 
 interface MapTemplateManagerProps {
@@ -17,8 +18,10 @@ export function MapTemplateManager({
   onDelete,
   onDuplicate,
 }: MapTemplateManagerProps) {
+  const { t } = useTranslation();
+
   const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`Delete template "${name}"? This cannot be undone.`)) {
+    if (window.confirm(t('mapEditor.deleteConfirm', { name }))) {
       onDelete(id);
     }
   };
@@ -27,9 +30,9 @@ export function MapTemplateManager({
     return (
       <div className="map-editor-templates">
         <div className="map-editor-templates__header">
-          <h2>Map Templates</h2>
+          <h2>{t('mapEditor.title')}</h2>
         </div>
-        <div className="map-editor-templates__loading">Loading templates…</div>
+        <div className="map-editor-templates__loading">{t('mapEditor.loading')}</div>
       </div>
     );
   }
@@ -37,67 +40,71 @@ export function MapTemplateManager({
   return (
     <div className="map-editor-templates">
       <div className="map-editor-templates__header">
-        <h2>Map Templates</h2>
+        <h2>{t('mapEditor.title')}</h2>
         <button className="btn-primary" onClick={onCreateNew}>
-          + Create New Template
+          + {t('mapEditor.createNew')}
         </button>
       </div>
 
       {templates.length === 0 ? (
         <div className="map-editor-empty">
           <div className="map-editor-empty__icon">🗺️</div>
-          <h3>No templates yet</h3>
-          <p>Create your first map template to get started designing custom game boards.</p>
+          <h3>{t('mapEditor.noTemplatesYet')}</h3>
+          <p>{t('mapEditor.emptyMessage')}</p>
           <button className="btn-primary big" onClick={onCreateNew}>
-            Create Your First Template
+            {t('mapEditor.createFirst')}
           </button>
         </div>
       ) : (
         <div className="map-editor-templates__grid">
-          {templates.map((t) => (
-            <div key={t.id} className="map-editor-card">
+          {templates.map((tpl) => (
+            <div key={tpl.id} className="map-editor-card">
               <div
                 className="map-editor-card__body"
-                onClick={() => onEdit(t)}
+                onClick={() => onEdit(tpl)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') onEdit(t);
+                  if (e.key === 'Enter') onEdit(tpl);
                 }}
               >
-                <h3 className="map-editor-card__name">{t.name}</h3>
-                {t.description && (
-                  <p className="map-editor-card__desc">{t.description}</p>
+                <h3 className="map-editor-card__name">{tpl.name}</h3>
+                {tpl.description && (
+                  <p className="map-editor-card__desc">{tpl.description}</p>
                 )}
                 <div className="map-editor-card__meta">
-                  <span className="map-editor-card__badge">{t.hexCount} hexes</span>
-                  <span className="map-editor-card__badge">{t.tileSizeMeters}m tiles</span>
+                  <span className="map-editor-card__badge">
+                    {t('mapEditor.hexCount', { count: tpl.hexCount })}
+                  </span>
+                  <span className="map-editor-card__badge">
+                    {t('mapEditor.tileBadge', { size: tpl.tileSizeMeters })}
+                  </span>
                 </div>
                 <div className="map-editor-card__date">
-                  Updated {new Date(t.updatedAt).toLocaleDateString()}
+                  {t('mapEditor.updated', { date: new Date(tpl.updatedAt).toLocaleDateString() })}
                 </div>
               </div>
               <div className="map-editor-card__actions">
                 <button
                   className="btn-secondary"
-                  onClick={() => onEdit(t)}
-                  title="Edit"
+                  onClick={() => onEdit(tpl)}
+                  title={t('mapEditor.edit')}
                 >
-                  ✏️ Edit
+                  ✏️ {t('mapEditor.edit')}
                 </button>
                 <button
                   className="btn-secondary"
-                  onClick={() => onDuplicate(t.id)}
-                  title="Duplicate"
+                  onClick={() => onDuplicate(tpl.id)}
+                  title={t('mapEditor.duplicate')}
                 >
-                  📋 Duplicate
+                  📋 {t('mapEditor.duplicate')}
                 </button>
                 <button
                   className="btn-secondary map-editor-card__delete"
-                  onClick={() => handleDelete(t.id, t.name)}
-                  title="Delete"
+                  onClick={() => handleDelete(tpl.id, tpl.name)}
+                  title={t('mapEditor.delete')}
                 >
-                  🗑️ Delete
+                  🗑️ {t('mapEditor.delete')}
                 </button>
               </div>
             </div>

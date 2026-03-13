@@ -133,8 +133,8 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                 {/* Allow self-claiming (Alliances only) */}
                 {gameState.gameMode === 'Alliances' && (
                     <div className="wizard-rule-card">
-                        <h3>{t('wizard.rulesAllowSelfClaim' as never)}</h3>
-                        <p className="wizard-hint">{t('wizard.rulesAllowSelfClaimDesc' as never)}</p>
+                        <h3>{t('wizard.rulesAllowSelfClaim')}</h3>
+                        <p className="wizard-hint">{t('wizard.rulesAllowSelfClaimDesc')}</p>
                         <label className="toggle-row">
                             <input
                                 type="checkbox"
@@ -142,7 +142,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                                 onChange={e => isHost && onSetAllowSelfClaim(e.target.checked)}
                                 disabled={!isHost}
                             />
-                            <span>{t('wizard.rulesAllowSelfClaim' as never)}</span>
+                            <span>{t('wizard.rulesAllowSelfClaim')}</span>
                         </label>
                     </div>
                 )}
@@ -183,8 +183,8 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                 {/* Advanced host settings */}
                 {isHost && (
                     <div className="wizard-rule-card">
-                        <h3>{t('wizard.rulesAdvancedTitle' as never)}</h3>
-                        <p className="wizard-hint">{t('wizard.rulesAdvancedDesc' as never)}</p>
+                        <h3>{t('mapEditor.advancedSettings')}</h3>
+                        <p className="wizard-hint">{t('mapEditor.advancedSettingsHint')}</p>
 
                         {/* Host GPS bypass */}
                         <label className="toggle-row">
@@ -195,14 +195,14 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                                     invoke?.('SetHostBypassGps', gameState.roomCode, e.target.checked);
                                 }}
                             />
-                            <span>{t('wizard.rulesHostBypassGps' as never)}</span>
+                            <span>{t('mapEditor.hostBypassGps')}</span>
                         </label>
-                        <p className="wizard-hint">{t('wizard.rulesHostBypassGpsDesc' as never)}</p>
+                        <p className="wizard-hint">{t('mapEditor.hostBypassGpsHint')}</p>
 
                         {/* Max footprint override */}
                         <div className="settings-row">
                             <label>
-                                <span>{t('wizard.rulesMaxFootprint' as never)}</span>
+                                <span>{t('mapEditor.maxFootprint')}</span>
                                 <input
                                     type="number"
                                     min={100}
@@ -222,7 +222,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                                 {t('lobby.apply')}
                             </button>
                         </div>
-                        <p className="wizard-hint">{t('wizard.rulesMaxFootprintDesc' as never)}</p>
+                        <p className="wizard-hint">{t('mapEditor.maxFootprintHint')}</p>
                     </div>
                 )}
             </div>

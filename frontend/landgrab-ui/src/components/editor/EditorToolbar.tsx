@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface EditorToolbarProps {
   name: string;
@@ -35,6 +36,7 @@ export function EditorToolbar({
   saving,
   isNew,
 }: EditorToolbarProps) {
+  const { t } = useTranslation();
   const trimmedName = name.trim();
   const canSave =
     trimmedName.length > 0 &&
@@ -44,13 +46,13 @@ export function EditorToolbar({
 
   const hints = useMemo(() => {
     const list: string[] = [];
-    if (!trimmedName) list.push('Name is required');
+    if (!trimmedName) list.push(t('mapEditor.needName'));
     if (hexCount < MIN_HEXES)
-      list.push(`Need at least ${MIN_HEXES} hexes (${hexCount}/${MIN_HEXES})`);
+      list.push(t('mapEditor.needMoreHexesDetailed', { min: MIN_HEXES, count: hexCount }));
     if (hexCount > 0 && !isConnected)
-      list.push('All hexes must be connected');
+      list.push(t('mapEditor.needConnected'));
     return list;
-  }, [trimmedName, hexCount, isConnected]);
+  }, [trimmedName, hexCount, isConnected, t]);
 
   const handleTileSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = parseInt(e.target.value, 10);
@@ -61,13 +63,13 @@ export function EditorToolbar({
   return (
     <aside className="map-editor-toolbar">
       <h2 className="map-editor-toolbar__title">
-        {isNew ? 'New Template' : 'Edit Template'}
+        {isNew ? t('mapEditor.newTemplate') : t('mapEditor.editTemplate')}
       </h2>
 
       {/* Name */}
       <div className="map-editor-toolbar__section">
         <label className="map-editor-toolbar__label" htmlFor="tpl-name">
-          Template Name *
+          {t('mapEditor.templateName')} *
         </label>
         <input
           id="tpl-name"
@@ -76,14 +78,14 @@ export function EditorToolbar({
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           maxLength={MAX_NAME}
-          placeholder="My Map Template"
+          placeholder={t('mapEditor.templateNamePlaceholder')}
         />
       </div>
 
       {/* Description */}
       <div className="map-editor-toolbar__section">
         <label className="map-editor-toolbar__label" htmlFor="tpl-desc">
-          Description
+          {t('mapEditor.templateDescription')}
         </label>
         <textarea
           id="tpl-desc"
@@ -91,7 +93,7 @@ export function EditorToolbar({
           value={description}
           onChange={(e) => onDescriptionChange(e.target.value)}
           maxLength={MAX_DESC}
-          placeholder="Optional description…"
+          placeholder={t('mapEditor.descriptionPlaceholder')}
           rows={3}
         />
       </div>
@@ -99,7 +101,7 @@ export function EditorToolbar({
       {/* Tile size */}
       <div className="map-editor-toolbar__section">
         <label className="map-editor-toolbar__label" htmlFor="tpl-tile-size">
-          Tile Size (meters)
+          {t('mapEditor.tileSizeMeters')}
         </label>
         <input
           id="tpl-tile-size"
@@ -116,11 +118,11 @@ export function EditorToolbar({
       {/* Stats */}
       <div className="map-editor-toolbar__stats">
         <div className="map-editor-toolbar__stat">
-          <span className="map-editor-toolbar__stat-label">Hexes</span>
+          <span className="map-editor-toolbar__stat-label">{t('mapEditor.hexes')}</span>
           <span className="map-editor-toolbar__stat-value">{hexCount}</span>
         </div>
         <div className="map-editor-toolbar__stat">
-          <span className="map-editor-toolbar__stat-label">Connected</span>
+          <span className="map-editor-toolbar__stat-label">{t('mapEditor.connected')}</span>
           <span
             className={`map-editor-toolbar__stat-value ${
               hexCount === 0
@@ -130,7 +132,7 @@ export function EditorToolbar({
                   : 'map-editor-toolbar__stat-value--warn'
             }`}
           >
-            {hexCount === 0 ? '—' : isConnected ? '✓ Yes' : '✗ No'}
+            {hexCount === 0 ? '—' : isConnected ? t('mapEditor.connectedYes') : t('mapEditor.connectedNo')}
           </span>
         </div>
       </div>
@@ -151,13 +153,13 @@ export function EditorToolbar({
           disabled={!canSave}
           onClick={onSave}
         >
-          {saving ? 'Saving…' : isNew ? 'Create Template' : 'Save Changes'}
+          {saving ? t('mapEditor.saving') : isNew ? t('mapEditor.create') : t('mapEditor.update')}
         </button>
         <button
           className="map-editor-toolbar__btn map-editor-toolbar__btn--ghost"
           onClick={onBack}
         >
-          ← Back
+          {t('mapEditor.back')}
         </button>
       </div>
     </aside>

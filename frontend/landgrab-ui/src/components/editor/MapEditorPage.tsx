@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   MapTemplate,
   MapTemplateDetail,
@@ -22,6 +23,7 @@ interface MapEditorPageProps {
 }
 
 export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
+  const { t } = useTranslation();
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [templates, setTemplates] = useState<MapTemplate[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<MapTemplateDetail | null>(null);
@@ -48,11 +50,11 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
       const data = await listMapTemplates(token);
       setTemplates(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load templates');
+      setError(err instanceof Error ? err.message : t('mapEditor.errorLoadTemplates'));
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   useEffect(() => {
     fetchTemplates();
@@ -82,7 +84,7 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
       setTileSizeMeters(detail.tileSizeMeters);
       setView('editor');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load template');
+      setError(err instanceof Error ? err.message : t('mapEditor.errorLoadTemplate'));
     } finally {
       setLoading(false);
     }
@@ -92,9 +94,9 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
     setError('');
     try {
       await deleteMapTemplate(token, id);
-      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      setTemplates((prev) => prev.filter((tpl) => tpl.id !== id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete template');
+      setError(err instanceof Error ? err.message : t('mapEditor.errorDeleteTemplate'));
     }
   };
 
@@ -104,7 +106,7 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
       const duplicated = await duplicateMapTemplate(token, id);
       setTemplates((prev) => [...prev, duplicated]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to duplicate template');
+      setError(err instanceof Error ? err.message : t('mapEditor.errorDuplicateTemplate'));
     }
   };
 
@@ -133,7 +135,7 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
       setEditingTemplate(null);
       await fetchTemplates();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save template');
+      setError(err instanceof Error ? err.message : t('mapEditor.errorSaveTemplate'));
     } finally {
       setSaving(false);
     }
@@ -197,7 +199,7 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
   return (
     <div className="map-editor-page">
       <div className="map-editor-page__nav">
-        <button className="btn-ghost" onClick={onBack}>← Back</button>
+        <button className="btn-ghost" onClick={onBack}>{t('mapEditor.back')}</button>
       </div>
       {error && <div className="map-editor-page__error">{error}</div>}
       <MapTemplateManager

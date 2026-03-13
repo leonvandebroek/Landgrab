@@ -1282,7 +1282,7 @@ export default function App() {
           className="btn-secondary map-editor-toggle"
           onClick={() => setView('mapEditor')}
         >
-          🗺️ Map Editor
+          🗺️ {t('mapEditor.title')}
         </button>
       )}
       {debugGpsPanel}
