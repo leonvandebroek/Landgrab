@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
 import { hexKey, hexNeighbors } from '../map/HexMath';
+import { terrainDefendBonus } from '../../utils/terrainColors';
 
 export type MapInteractionTone = 'info' | 'success' | 'error';
 
@@ -118,7 +119,11 @@ export function getTileActions({
 
   /* ── Enemy tile ── */
   if (isEnemy) {
-    const canAttack = carriedTroops > targetCell.troops;
+    const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
+    const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
+    const effectiveAttack = carriedTroops + attackerBonus;
+    const effectiveDefence = targetCell.troops + defenderBonusVal;
+    const canAttack = effectiveAttack > effectiveDefence;
     actions.push({
       type: 'attack',
       label: 'game.tileAction.attackBtn',
@@ -313,7 +318,12 @@ export function getTileInteractionStatus({
     };
   }
 
-  if (carriedTroops <= targetCell.troops) {
+  const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
+  const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
+  const effectiveAttack = carriedTroops + attackerBonus;
+  const effectiveDefence = targetCell.troops + defenderBonusVal;
+
+  if (effectiveAttack <= effectiveDefence) {
     return {
       action: 'none',
       tone: 'error',

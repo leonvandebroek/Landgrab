@@ -142,6 +142,9 @@ export interface CombatResult {
   q: number;
   r: number;
   previousOwnerName?: string;
+  attackerBonus?: number;
+  defenderBonus?: number;
+  defenderTerrainType?: TerrainType;
 }
 
 export interface AuthState {

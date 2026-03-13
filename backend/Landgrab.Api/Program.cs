@@ -23,6 +23,7 @@ builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
+builder.Services.AddHttpClient<TerrainFetchService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
+import { terrainFillColors, terrainFillOpacity } from '../../utils/terrainColors';
 
 interface LocationPoint {
   lat: number;
@@ -198,6 +199,7 @@ export function GameMap({
 
     const hostPlayer = state.players.find(player => player.isHost);
     const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
+    const myPlayer = state.players.find(p => p.id === myUserId);
 
     for (const cell of Object.values(renderedGrid)) {
       const cellKey = `${cell.q},${cell.r}`;
@@ -220,6 +222,18 @@ export function GameMap({
       const isCurrentHex = currentHex?.[0] === cell.q && currentHex?.[1] === cell.r;
       const isSelected = selectedHex?.[0] === cell.q && selectedHex?.[1] === cell.r;
       const isInactive = inactiveHexKeySet.has(cellKey);
+
+      // Terrain underlay
+      if (state.dynamics?.terrainEnabled && cell.terrainType && cell.terrainType !== 'None') {
+        L.polygon(corners, {
+          color: 'transparent',
+          weight: 0,
+          fillColor: terrainFillColors[cell.terrainType],
+          fillOpacity: isInactive ? 0 : terrainFillOpacity[cell.terrainType],
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+
       const fillColor = cell.isMasterTile
         ? hostColor
         : cell.ownerColor ?? (isInactive ? '#e5edf6' : '#9fc4e8');
@@ -286,10 +300,19 @@ export function GameMap({
       polygon.addTo(layerGroup);
 
       if (!isInactive && (cell.troops > 0 || cell.isMasterTile)) {
+        // Forest blind: hide enemy troop counts in forest hexes
+        const isForestBlind = state.dynamics?.terrainEnabled
+          && cell.terrainType === 'Forest'
+          && cell.ownerId
+          && cell.ownerId !== myUserId
+          && !(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
+
+        const troopLabel = isForestBlind ? '?' : String(cell.troops);
+
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: 'hex-label-wrapper',
-            html: `<div class="hex-label${cell.isMasterTile ? ' master' : ''}">${cell.isMasterTile ? '👑 ' : ''}${cell.troops}</div>`
+            html: `<div class="hex-label${cell.isMasterTile ? ' master' : ''}${isForestBlind ? ' forest-blind' : ''}">${cell.isMasterTile ? '👑 ' : ''}${troopLabel}</div>`
           }),
           interactive: false
         }).addTo(layerGroup);
@@ -350,8 +373,11 @@ export function GameMap({
 
 function buildHexTooltip(cell: HexCell): string {
   const owner = cell.ownerName ?? i18n.t('map.unclaimed');
+  const terrainSuffix = cell.terrainType && cell.terrainType !== 'None'
+    ? ` · ${i18n.t(`terrain.${cell.terrainType}` as never)}`
+    : '';
   if (cell.isMasterTile) {
-    return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops });
+    return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops }) + terrainSuffix;
   }
-  return i18n.t('map.hexTooltip', { owner, count: cell.troops });
+  return i18n.t('map.hexTooltip', { owner, count: cell.troops }) + terrainSuffix;
 }

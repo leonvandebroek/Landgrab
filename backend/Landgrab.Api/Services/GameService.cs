@@ -920,7 +920,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
         {
             var centerCell = room.State.Grid.Values
-                .Where(cell => cell.OwnerId == null)
+                .Where(cell => cell.OwnerId == null && cell.TerrainType != TerrainType.Water)
                 .OrderBy(cell => HexService.HexDistance(cell.Q, cell.R))
                 .ThenBy(cell => cell.Q)
                 .ThenBy(cell => cell.R)
@@ -968,14 +968,15 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                     var key = HexService.Key(pos.q, pos.r);
                     return room.State.Grid.TryGetValue(key, out var cell)
                            && cell.OwnerId == null
-                           && !cell.IsMasterTile;
+                           && !cell.IsMasterTile
+                           && cell.TerrainType != TerrainType.Water;
                 })
                 .ToList();
 
             if (available.Count < alliancesNeedingTile.Count)
             {
                 available = room.State.Grid.Values
-                    .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
+                    .Where(cell => cell.OwnerId == null && !cell.IsMasterTile && cell.TerrainType != TerrainType.Water)
                     .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
                     .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
                     .Select(cell => (cell.Q, cell.R))
@@ -1035,7 +1036,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 var key = HexService.Key(pos.q, pos.r);
                 return room.State.Grid.TryGetValue(key, out var cell)
                        && cell.OwnerId == null
-                       && !cell.IsMasterTile;
+                       && !cell.IsMasterTile
+                       && cell.TerrainType != TerrainType.Water;
             })
             .ToList();
 
@@ -1043,7 +1045,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (available2.Count < playersNeedingTile.Count)
         {
             available2 = room.State.Grid.Values
-                .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
+                .Where(cell => cell.OwnerId == null && !cell.IsMasterTile && cell.TerrainType != TerrainType.Water)
                 .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
                 .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
                 .Select(cell => (cell.Q, cell.R))
@@ -1223,6 +1225,24 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 claimForSelf = false;
 
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
+
+            // ── Dynamics: Standoff + Water blocking (non-own/non-allied hexes only) ──
+            if (cell.OwnerId != userId && !sameAllianceHex)
+            {
+                // Standoff: hostile physical copresence blocks tile actions
+                if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Standoff))
+                {
+                    var playersInHex = GetPlayersInHex(room.State, q, r);
+                    if (playersInHex.Any(p => p.Id != userId
+                        && (player.AllianceId == null || p.AllianceId != player.AllianceId)))
+                        return (null, "Standoff! A hostile player is blocking this tile.", null, null);
+                }
+
+                // Water terrain is impassable
+                if (room.State.Dynamics.TerrainEnabled && cell.TerrainType == TerrainType.Water)
+                    return (null, "Water terrain is impassable.", null, null);
+            }
+
             if (cell.OwnerId == userId || sameAllianceHex)
             {
                 if (player.CarriedTroops <= 0)
@@ -1255,8 +1275,30 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             var deployedTroops = troopCount ?? player.CarriedTroops;
             if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
                 return (null, "Troop count must be between 1 and your carried troops.", null, null);
-            if (deployedTroops <= cell.Troops)
-                return (null, "You need to carry more troops than the target hex currently has.", null, null);
+            // Calculate combat bonuses
+            var attackerBonus = 0;
+            var defenderBonus = 0;
+
+            // PresenceBonus: attacker physically present gets +1 effective strength
+            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.PresenceBonus))
+                attackerBonus += 1;
+
+            // Terrain defence bonus
+            if (room.State.Dynamics.TerrainEnabled)
+            {
+                defenderBonus += cell.TerrainType switch
+                {
+                    TerrainType.Building or TerrainType.Hills => 1,
+                    TerrainType.Steep => 2,
+                    _ => 0
+                };
+            }
+
+            var effectiveAttack = deployedTroops + attackerBonus;
+            var effectiveDefence = cell.Troops + defenderBonus;
+
+            if (effectiveAttack <= effectiveDefence)
+                return (null, "You need more effective strength to overcome the defenders.", null, null);
 
             var previousOwnerId = cell.OwnerId;
             var previousOwnerName = cell.OwnerName;
@@ -1295,7 +1337,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 Q = q,
                 R = r,
                 PreviousOwnerName = previousOwnerName,
-                NewState = attackSnapshot
+                NewState = attackSnapshot,
+                AttackerBonus = attackerBonus,
+                DefenderBonus = defenderBonus,
+                DefenderTerrainType = cell.TerrainType.ToString()
             };
             return (attackSnapshot, null, previousOwnerId, combatResult);
         }
@@ -1364,8 +1409,27 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             if (room.State.Phase != GamePhase.Playing)
                 return (null, "Reinforcements only apply while the game is playing.");
 
+            var drainEnabled = room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Drain);
+            var terrainEnabled = room.State.Dynamics.TerrainEnabled;
+
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
+            {
+                // Drain: skip regen if hostile player physically present
+                if (drainEnabled && cell.OwnerId != null && !cell.IsMasterTile)
+                {
+                    var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
+                    var hostilePresent = playersInHex.Any(p => p.Id != cell.OwnerId
+                        && (cell.OwnerAllianceId == null || p.AllianceId != cell.OwnerAllianceId));
+                    if (hostilePresent)
+                        continue;
+                }
+
                 cell.Troops++;
+
+                // Building terrain bonus: +1 extra regen
+                if (terrainEnabled && cell.TerrainType == TerrainType.Building)
+                    cell.Troops++;
+            }
 
             ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);

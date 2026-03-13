@@ -33,6 +33,23 @@ export function CombatModal({ result, gameMode, allowSelfClaim, onReClaim, onClo
           </div>
         </div>
 
+        {(result.attackerBonus || result.defenderBonus) ? (
+          <div style={{
+            display: 'flex', gap: '0.75rem', justifyContent: 'center',
+            fontSize: '0.85rem', opacity: 0.85, margin: '0.25rem 0',
+          }}>
+            {result.attackerBonus ? (
+              <span>⚔️ {t('terrain.presenceBonus')}</span>
+            ) : null}
+            {result.defenderBonus ? (
+              <span>🛡️ {t('terrain.defendBonus', { bonus: result.defenderBonus })}</span>
+            ) : null}
+            {result.defenderTerrainType && result.defenderTerrainType !== 'None' ? (
+              <span style={{ opacity: 0.7 }}>({t(`terrain.${result.defenderTerrainType}` as never)})</span>
+            ) : null}
+          </div>
+        ) : null}
+
         {result.hexCaptured ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
             <h4 style={{ margin: 0, textAlign: 'center' }}>{t('combat.postCombatTitle')}</h4>

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { HexCell, Player } from '../../types/game';
 import type { TileAction, TileActionType } from './tileInteraction';
+import { terrainDefendBonus } from '../../utils/terrainColors';
 
 interface TileActionPanelProps {
   actions: TileAction[];
@@ -61,6 +62,14 @@ export function TileActionPanel({
           {targetCell && (
             <span style={{ fontSize: '0.8rem' }}>
               {t('game.tileAction.tileTroops')}: <strong>{targetCell.troops}</strong>
+            </span>
+          )}
+          {targetCell?.terrainType && targetCell.terrainType !== 'None' && (
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+              🏔️ {t(`terrain.${targetCell.terrainType}` as never)}
+              {terrainDefendBonus(targetCell.terrainType, true) > 0 && (
+                <> ({t('terrain.defendBonus', { bonus: terrainDefendBonus(targetCell.terrainType, true) })})</>
+              )}
             </span>
           )}
         </div>

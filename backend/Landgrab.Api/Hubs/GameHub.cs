@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 namespace Landgrab.Api.Hubs;
 
 [Authorize]
-public class GameHub(GameService gameService, GlobalMapService globalMap, ILogger<GameHub> logger)
+public class GameHub(GameService gameService, GlobalMapService globalMap, TerrainFetchService terrainFetchService, ILogger<GameHub> logger)
     : Hub
 {
     public override async Task OnConnectedAsync()
@@ -451,6 +451,16 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, ILogge
         {
             await SendError("ROOM_NOT_JOINED", "Not in a room.");
             return;
+        }
+
+        // Fetch terrain data before starting (outside the game lock)
+        if (room.State.Dynamics.TerrainEnabled && room.State.HasMapLocation)
+        {
+            await terrainFetchService.AssignTerrainToGrid(
+                room.State.Grid,
+                room.State.MapLat!.Value,
+                room.State.MapLng!.Value,
+                room.State.TileSizeMeters);
         }
 
         var (state, error) = gameService.StartGame(room.Code, UserId);
