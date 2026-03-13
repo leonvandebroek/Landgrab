@@ -596,7 +596,7 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
             return;
         }
 
-        var (state, error) = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng);
+        var (state, error, newDuel) = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng);
         if (error != null)
         {
             await SendError(error);
@@ -604,6 +604,19 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
         }
 
         await BroadcastState(room.Code, state!);
+
+        // Phase 10: Duel — notify challenged player
+        if (newDuel != null)
+        {
+            var challengedId = newDuel.PlayerIds.FirstOrDefault(id => id != UserId);
+            if (challengedId != null)
+            {
+                var challengedConnectionId = room.ConnectionMap
+                    .FirstOrDefault(kv => kv.Value == challengedId).Key;
+                if (challengedConnectionId != null)
+                    await Clients.Client(challengedConnectionId).SendAsync("DuelChallenge", newDuel);
+            }
+        }
     }
 
     public async Task PickUpTroops(int q, int r, int count, double playerLat, double playerLng)

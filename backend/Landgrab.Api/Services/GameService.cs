@@ -1316,7 +1316,18 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 return (null, "The master tile must be set before starting the game.");
 
             RefreshTerritoryCount(room.State);
-            if (room.State.Players.Any(player => player.TerritoryCount == 0))
+            // A player with 0 personal territory is still fine if their alliance has territory
+            // (supports co-op alliances where multiple players share one starting area).
+            if (room.State.Players.Any(player =>
+            {
+                if (player.TerritoryCount > 0) return false;
+                if (player.AllianceId != null)
+                {
+                    var alliance = room.State.Alliances.FirstOrDefault(a => a.Id == player.AllianceId);
+                    if (alliance != null && alliance.TerritoryCount > 0) return false;
+                }
+                return true;
+            }))
                 return (null, "Every player needs at least one starting tile before the game can start.");
 
             room.State.Phase = GamePhase.Playing;
@@ -1328,6 +1339,24 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 foreach (var cell in room.State.Grid.Values)
                 {
                     if (cell.TerrainType == TerrainType.Building && !cell.IsMasterTile && cell.OwnerId == null)
+                    {
+                        cell.OwnerId = "NPC";
+                        cell.OwnerName = "NPC";
+                        cell.OwnerColor = "#7f8c8d";
+                        cell.Troops = 3;
+                    }
+                }
+
+                // Fallback: if no Building terrain hexes exist (e.g., terrain not enabled or no OSM data),
+                // assign a small number of random unowned non-master hexes as NPC territory.
+                if (!room.State.Grid.Values.Any(c => c.OwnerId == "NPC"))
+                {
+                    var candidates = room.State.Grid.Values
+                        .Where(c => !c.IsMasterTile && c.OwnerId == null)
+                        .OrderBy(_ => Random.Shared.Next())
+                        .Take(Math.Max(1, room.State.Grid.Count / 10))
+                        .ToList();
+                    foreach (var cell in candidates)
                     {
                         cell.OwnerId = "NPC";
                         cell.OwnerName = "NPC";
@@ -1351,25 +1380,25 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         }
     }
 
-    public (GameState? state, string? error) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, PendingDuel? newDuel) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
-            return (null, error);
+            return (null, error, null);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.");
+            return (null, "Room not found.", null);
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Player locations are only tracked while the game is playing.");
+                return (null, "Player locations are only tracked while the game is playing.", null);
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
-                return (null, "Player not in room.");
+                return (null, "Player not in room.", null);
 
             var previousPhase = room.State.Phase;
             player.CurrentLat = lat;
@@ -1403,16 +1432,17 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 }
             }
 
-            // ── Phase 3: Scout — first hex visit grants +2 troops to nearest owned tile ──
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Scout)
-                && room.State.HasMapLocation)
+            // ── Phase 3: Scout / VisitedHexes tracking — always record visited hexes for mission progress ──
+            if (room.State.HasMapLocation)
             {
                 var currentHex = HexService.LatLngToHexForRoom(lat, lng,
                     room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
                 var hexKey = HexService.Key(currentHex.q, currentHex.r);
-                if (player.VisitedHexes.Add(hexKey))
+                var firstVisit = player.VisitedHexes.Add(hexKey);
+
+                // Scout bonus: first visit grants +2 troops to nearest owned tile (Scout mode only)
+                if (firstVisit && room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Scout))
                 {
-                    // First visit — find nearest owned tile and add +2 troops
                     var nearestOwned = HexService.SpiralSearch(currentHex.q, currentHex.r, room.State.GridRadius)
                         .Select(pos => room.State.Grid.TryGetValue(HexService.Key(pos.q, pos.r), out var c) ? c : null)
                         .FirstOrDefault(c => c != null && (c.OwnerId == userId
@@ -1678,10 +1708,35 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 }
             }
 
+            // Phase 10: Duel — if hostile player just entered same hex, initiate a duel
+            PendingDuel? newDuel = null;
+            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Duel)
+                && room.State.HasMapLocation)
+            {
+                var duelHex = HexService.LatLngToHexForRoom(lat, lng,
+                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
+                var playersInDuelHex = GetPlayersInHex(room.State, duelHex.q, duelHex.r);
+                var hostileInHex = playersInDuelHex.FirstOrDefault(p => p.Id != userId
+                    && (player.AllianceId == null || p.AllianceId != player.AllianceId));
+                if (hostileInHex != null
+                    && !room.PendingDuels.Values.Any(d =>
+                        d.PlayerIds.Contains(userId) || d.PlayerIds.Contains(hostileInHex.Id)))
+                {
+                    newDuel = new PendingDuel
+                    {
+                        PlayerIds = [userId, hostileInHex.Id],
+                        TileQ = duelHex.q,
+                        TileR = duelHex.r,
+                        ExpiresAt = DateTime.UtcNow.AddSeconds(30)
+                    };
+                    room.PendingDuels[newDuel.Id] = newDuel;
+                }
+            }
+
             ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
-            return (snapshot, null);
+            return (snapshot, null, newDuel);
         }
     }
 
