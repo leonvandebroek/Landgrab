@@ -3,9 +3,9 @@
     "tasks": [
         // ── Database ─────────────────────────────────────────────────────────
         {
-            "label": "db: start postgres",
+            "label": "db: start sqlserver",
             "type": "shell",
-            // In a devcontainer, Postgres is already running as a service — this is a safe no-op.
+            // In a devcontainer, SQL Server is already running as a service — this is a safe no-op.
             "command": "docker info >/dev/null 2>&1 && docker compose up db -d || echo 'Docker unavailable — assuming DB is already running'",
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -16,7 +16,7 @@
             }
         },
         {
-            "label": "db: stop postgres",
+            "label": "db: stop sqlserver",
             "type": "shell",
             "command": "docker compose stop db",
             "options": {
@@ -119,9 +119,9 @@
         // ── Compound ──────────────────────────────────────────────────────────
         {
             "label": "dev: start all",
-            "detail": "Start Postgres, backend (watch), and Vite dev server",
+            "detail": "Start SQL Server, backend (watch), and Vite dev server",
             "dependsOn": [
-                "db: start postgres",
+                "db: start sqlserver",
                 "backend: watch",
                 "frontend: dev"
             ],
@@ -130,9 +130,9 @@
         },
         {
             "label": "start-dev-services",
-            "detail": "Start Postgres + Vite dev server (used by Full Stack compound launch)",
+            "detail": "Start SQL Server + Vite dev server (used by Full Stack compound launch)",
             "dependsOn": [
-                "db: start postgres",
+                "db: start sqlserver",
                 "frontend: dev"
             ],
             "dependsOrder": "parallel",
