@@ -13,6 +13,7 @@ import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMat
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { terrainFillColors, terrainFillOpacity } from '../../utils/terrainColors';
 import { terrainIcons } from '../../utils/terrainIcons';
+import { getTimeOverlayStyle, getTimePeriod } from '../../utils/timeOfDay';
 
 interface LocationPoint {
   lat: number;
@@ -36,6 +37,7 @@ const GRID_FIT_PADDING = L.point(24, 24);
 const DEFAULT_MAP_ZOOM = 16;
 const TERRAIN_ICON_MIN_ZOOM = 15;
 const DEFAULT_PLAYER_MARKER_COLOR = '#4f8cff';
+const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
 export function GameMap({
   state,
@@ -50,14 +52,17 @@ export function GameMap({
 }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
+  const [timePeriod, setTimePeriod] = useState(getTimePeriod);
   const followedLocationKeyRef = useRef('');
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const geometryKeyRef = useRef('');
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+  const prevGridRef = useRef<Record<string, HexCell>>({});
   const onHexClickRef = useRef(onHexClick);
   useEffect(() => { onHexClickRef.current = onHexClick; });
 
@@ -149,6 +154,24 @@ export function GameMap({
   }, []);
 
   useEffect(() => {
+    const id = window.setInterval(() => setTimePeriod(getTimePeriod()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) {
+      return;
+    }
+
+    const overlayStyle = getTimeOverlayStyle(timePeriod);
+    overlay.style.background = typeof overlayStyle.background === 'string' ? overlayStyle.background : '';
+    overlay.style.mixBlendMode = typeof overlayStyle.mixBlendMode === 'string' ? overlayStyle.mixBlendMode : '';
+    overlay.style.opacity = overlayStyle.opacity != null ? String(overlayStyle.opacity) : '';
+    overlay.style.pointerEvents = typeof overlayStyle.pointerEvents === 'string' ? overlayStyle.pointerEvents : 'none';
+  }, [timePeriod]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) {
       return;
@@ -227,9 +250,49 @@ export function GameMap({
 
     layerGroup.clearLayers();
 
+    // Dim the real-world map; each hex tile punches a hole to reveal the bright map beneath
+    const hexCells = Object.values(renderedGrid);
+    if (hexCells.length > 0) {
+      const worldOuter: L.LatLngExpression[] = [
+        [-90, -180], [-90, 180], [90, 180], [90, -180],
+      ];
+      const rings: L.LatLngExpression[][] = [worldOuter];
+      for (const cell of hexCells) {
+        const corners = roomHexCornerLatLngs(cell.q, cell.r, state.mapLat!, state.mapLng!, state.tileSizeMeters);
+        rings.push(corners.map(([lat, lng]) => [lat, lng] as L.LatLngExpression));
+      }
+      L.polygon(rings, {
+        color: 'transparent',
+        weight: 0,
+        fillColor: '#0a1220',
+        fillOpacity: 0.55,
+        interactive: false,
+        className: 'grid-dim-mask',
+      }).addTo(layerGroup);
+    }
+
+    const prevGrid = prevGridRef.current;
+    const isFirstRender = Object.keys(prevGrid).length === 0;
+    const newlyRevealedKeys = new Set<string>();
+    const newlyClaimedKeys = new Set<string>();
+
+    if (!isFirstRender) {
+      for (const cell of Object.values(renderedGrid)) {
+        const key = `${cell.q},${cell.r}`;
+        const prev = prevGrid[key];
+        if (prev && !prev.ownerId && prev.troops === 0 && (cell.ownerId || cell.troops > 0)) {
+          newlyRevealedKeys.add(key);
+        }
+        if (prev && prev.ownerId !== cell.ownerId && cell.ownerId) {
+          newlyClaimedKeys.add(key);
+        }
+      }
+    }
+
     const hostPlayer = state.players.find(player => player.isHost);
     const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
     const myPlayer = state.players.find(p => p.id === myUserId);
+    const playersById = new Map(state.players.map(player => [player.id, player]));
     const effectivePlayerDisplayPrefs = playerDisplayPrefs ?? DEFAULT_PLAYER_PREFS;
     const playerMarkerSizeMultiplier = MARKER_SIZE_MULTIPLIER[effectivePlayerDisplayPrefs.markerSize] ?? 1;
     const markerZoomScale = getMarkerZoomScale(currentZoom);
@@ -258,6 +321,44 @@ export function GameMap({
       const isInactive = inactiveHexKeySet.has(cellKey);
       const terrainType = cell.terrainType ?? 'None';
       const terrainIcon = terrainIcons[terrainType];
+      const isHQHex = state.alliances.some(alliance => alliance.hqHexQ === cell.q && alliance.hqHexR === cell.r);
+      const ownerColor = playersById.get(cell.ownerId ?? '')?.allianceColor
+        ?? playersById.get(cell.ownerId ?? '')?.color
+        ?? cell.ownerColor
+        ?? DEFAULT_PLAYER_MARKER_COLOR;
+      const isFriendlyAllianceCell = Boolean(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
+
+      let isFrontier = false;
+      let isContested = false;
+
+      if (cell.ownerId) {
+        for (const [dq, dr] of HEX_NEIGHBOR_OFFSETS) {
+          const neighbor = renderedGrid[`${cell.q + dq},${cell.r + dr}`];
+          const isSameTeamNeighbor = Boolean(
+            neighbor?.ownerId
+            && (
+              neighbor.ownerId === cell.ownerId
+              || (
+                isFriendlyAllianceCell
+                && neighbor.ownerAllianceId != null
+                && neighbor.ownerAllianceId === cell.ownerAllianceId
+              )
+            )
+          );
+
+          if (!neighbor?.ownerId || !isSameTeamNeighbor) {
+            isFrontier = true;
+          }
+
+          if (neighbor?.ownerId && !isSameTeamNeighbor) {
+            isContested = true;
+          }
+
+          if (isFrontier && isContested) {
+            break;
+          }
+        }
+      }
 
       // Phase 7: Fog of War — hidden hexes appear as dark/unknown
       const isFogHidden = state.dynamics?.fogOfWarEnabled
@@ -303,15 +404,15 @@ export function GameMap({
           : cell.isMasterTile
             ? 0.58
             : cell.ownerId
-              ? (isMine ? 0.82 : 0.62)
-              : 0.22;
+              ? (isMine ? 0.88 : 0.72)
+              : 0.28;
       let borderColor = cell.ownerId
         ? '#f7fbff'
         : (isInactive
           ? 'rgba(100, 130, 170, 0.6)'
           : (isFogHidden ? '#d7e7f6' : 'rgba(30, 60, 100, 0.8)'));
       let borderWeight = cell.ownerId ? 3 : (isInactive ? 1.25 : 2.5);
-      let borderOpacity = cell.ownerId || cell.isMasterTile ? 0.95 : ((isInactive || isFogHidden) ? 0.8 : 0.92);
+      const borderOpacity = cell.ownerId || cell.isMasterTile ? 0.95 : ((isInactive || isFogHidden) ? 0.8 : 0.92);
       let dashArray: string | undefined;
 
       if (cell.isMasterTile) {
@@ -347,6 +448,10 @@ export function GameMap({
         isSelected ? 'is-selected' : '',
         isInactive ? 'is-inactive' : '',
         cell.isFortified ? 'is-fortified' : '',
+        newlyRevealedKeys.has(cellKey) ? 'is-revealing' : '',
+        newlyClaimedKeys.has(cellKey) ? 'is-just-claimed' : '',
+        isFrontier ? 'is-frontier' : '',
+        isContested ? 'is-contested' : '',
       ].filter(Boolean).join(' ');
 
       const polygon = L.polygon(corners, {
@@ -360,8 +465,8 @@ export function GameMap({
       });
 
       polygon.bindTooltip(
-        isFogHidden ? i18n.t('phase7.hiddenHex') : buildHexTooltip(cell),
-        { sticky: true }
+        isFogHidden ? i18n.t('phase7.hiddenHex') : buildHexTooltipHtml(cell, currentHex),
+        { sticky: true, className: isFogHidden ? '' : 'hex-tooltip-card' }
       );
 
       // Only fire hex click on genuine taps (not after pan/zoom drag)
@@ -376,6 +481,11 @@ export function GameMap({
       });
 
       polygon.addTo(layerGroup);
+
+      const el = polygon.getElement();
+      if (el) {
+        (el as HTMLElement | SVGElement).style.setProperty('--hex-owner-color', ownerColor);
+      }
 
       // Phase 10: PresenceBattle — contest progress ring
       if (cell.contestProgress != null && cell.contestProgress > 0 && !isInactive && !isFogHidden) {
@@ -399,15 +509,56 @@ export function GameMap({
           && !(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
 
         const troopLabel = isForestBlind ? '?' : String(cell.troops);
-        const isHQ = state.alliances.some(a => a.hqHexQ === cell.q && a.hqHexR === cell.r);
-        const hqPrefix = isHQ ? '🏛️ ' : '';
+        const isHQ = isHQHex;
+        const hqPrefix = isHQ ? '🏛️' : '';
+        const troopTier = cell.troops >= 20 ? 'high' : cell.troops >= 8 ? 'mid' : 'low';
+        const badgeSize = Math.round(Math.min(38, Math.max(20, 22 + Math.log2(Math.max(1, cell.troops)) * 3)));
+        const ringPct = Math.min(100, cell.troops * 2);
+        const prefix = cell.isMasterTile ? '👑' : hqPrefix;
+        const badgeHtml = `<div class="hex-troop-badge tier-${troopTier}${isForestBlind ? ' forest-blind' : ''}" style="width:${badgeSize}px;height:${badgeSize}px">
+  <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true">
+    <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.5" />
+  </svg>
+  ${prefix ? `<span class="troop-badge-prefix">${prefix}</span>` : ''}
+  <span class="troop-count">${escapeHtml(troopLabel)}</span>
+</div>`;
 
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: 'hex-label-wrapper',
-            html: `<div class="hex-label${cell.isMasterTile ? ' master' : ''}${isForestBlind ? ' forest-blind' : ''}">${cell.isMasterTile ? '👑 ' : ''}${hqPrefix}${troopLabel}</div>`
+            html: badgeHtml,
+            iconSize: [badgeSize, badgeSize],
+            iconAnchor: [badgeSize / 2, badgeSize / 2],
           }),
           interactive: false
+        }).addTo(layerGroup);
+      }
+
+      // Building elevation markers
+      if (cell.isFort && !isInactive && !isFogHidden) {
+        L.marker([centerLat, centerLng], {
+          icon: L.divIcon({
+            className: 'hex-building-icon',
+            html: '<div class="building fort">🏰</div>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 28],
+          }),
+          interactive: false,
+          zIndexOffset: -10,
+        }).addTo(layerGroup);
+      }
+
+      if (isHQHex && !cell.isMasterTile && !isInactive && !isFogHidden) {
+        L.marker([centerLat, centerLng], {
+          icon: L.divIcon({
+            className: 'hex-building-icon',
+            html: '<div class="building hq">🏛️</div>',
+            iconSize: [28, 28],
+            iconAnchor: [14, 28],
+          }),
+          interactive: false,
+          zIndexOffset: -10,
         }).addTo(layerGroup);
       }
     }
@@ -430,6 +581,32 @@ export function GameMap({
       });
 
       marker.addTo(layerGroup);
+
+      // Pulse ring for current player
+      if (player.id === myUserId) {
+        L.circleMarker([player.currentLat, player.currentLng], {
+          radius: 20 * markerZoomScale,
+          color: markerColor,
+          weight: 2,
+          fillColor: markerColor,
+          fillOpacity: 0.1,
+          interactive: false,
+          className: 'player-pulse-ring',
+        }).addTo(layerGroup);
+
+        if (currentLocation) {
+          L.circle([currentLocation.lat, currentLocation.lng], {
+            radius: state.tileSizeMeters * 1.2,
+            color: markerColor,
+            weight: 1.5,
+            dashArray: '6 4',
+            fillColor: markerColor,
+            fillOpacity: 0.04,
+            interactive: false,
+            className: 'claim-radius-ring',
+          }).addTo(layerGroup);
+        }
+      }
 
       marker.bindTooltip(player.id === myUserId ? `${player.name}${i18n.t('map.youSuffix')}` : player.name, {
         permanent: effectivePlayerDisplayPrefs.showNameLabel,
@@ -493,11 +670,14 @@ export function GameMap({
         interactive: false,
       }).addTo(layerGroup);
     }
+
+    prevGridRef.current = { ...renderedGrid };
   }, [currentHex, currentLocation, currentZoom, inactiveHexKeySet, myUserId, playerDisplayPrefs, renderedGrid, selectedHex, state]);
 
   return (
-    <div className="game-map-container">
+    <div className={`game-map-container time-${timePeriod}`}>
       <div ref={containerRef} className="leaflet-map" />
+      <div ref={overlayRef} className="time-overlay" />
       <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
         <button
           type="button"
@@ -524,17 +704,37 @@ export function GameMap({
   );
 }
 
-function buildHexTooltip(cell: HexCell): string {
-  const owner = cell.ownerName ?? i18n.t('map.unclaimed');
-  const terrainSuffix = cell.terrainType && cell.terrainType !== 'None'
-    ? ` · ${i18n.t(`terrain.${cell.terrainType}` as never)}`
-    : '';
-  const fortSuffix = cell.isFort ? ` · 🏰 ${i18n.t('map.fort')}` : '';
-  const npcSuffix = cell.ownerId === 'NPC' ? ` · 🤖 ${i18n.t('map.npcLabel')}` : '';
-  if (cell.isMasterTile) {
-    return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
+function buildHexTooltipHtml(cell: HexCell, currentHex: [number, number] | null): string {
+  const owner = escapeHtml(cell.ownerName ?? i18n.t('map.unclaimed'));
+  const terrainType = cell.terrainType ?? 'None';
+  const terrainIcon = terrainType !== 'None' ? escapeHtml(terrainIcons[terrainType] ?? '') : '';
+  const terrainName = terrainType !== 'None' ? escapeHtml(i18n.t(`terrain.${terrainType}` as never)) : '';
+  const ownerColor = escapeHtml(cell.ownerColor ?? 'transparent');
+  const fortInfo = cell.isFort ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">🏰</span>${escapeHtml(i18n.t('map.fort'))}</div>` : '';
+  const npcInfo = cell.ownerId === 'NPC' ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">🤖</span>${escapeHtml(i18n.t('map.npcLabel'))}</div>` : '';
+
+  let distHtml = '';
+  if (currentHex) {
+    const dist = Math.max(
+      Math.abs(cell.q - currentHex[0]),
+      Math.abs(cell.r - currentHex[1]),
+      Math.abs((cell.q + cell.r) - (currentHex[0] + currentHex[1]))
+    );
+    distHtml = `<div class="tooltip-distance">${dist} hex${dist !== 1 ? 'es' : ''}</div>`;
   }
-  return i18n.t('map.hexTooltip', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
+
+  return `<div class="tooltip-card">
+    <div class="tooltip-header">
+      <span class="tooltip-terrain-icon">${terrainIcon}${terrainName ? ` ${terrainName}` : ''}</span>
+      <span class="tooltip-coords">${cell.q},${cell.r}</span>
+    </div>
+    <div class="tooltip-owner">
+      <span class="tooltip-owner-swatch" style="background:${ownerColor}"></span>
+      ${owner}${cell.isMasterTile ? ' 👑' : ''}
+    </div>
+    <div class="tooltip-stat"><span class="tooltip-stat-icon">⚔️</span>${cell.troops}</div>
+    ${fortInfo}${npcInfo}${distHtml}
+  </div>`;
 }
 
 interface PlayerMarkerLayerOptions {

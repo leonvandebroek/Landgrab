@@ -6,6 +6,7 @@ import { useSignalR } from './hooks/useSignalR';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
+import { vibrate, HAPTIC } from './utils/haptics';
 import { AuthPage } from './components/auth/AuthPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameRulesPage } from './components/game/GameRulesPage';
@@ -282,15 +283,18 @@ export default function App() {
     },
     onGameOver: () => {
       playSound('victory');
+      vibrate(HAPTIC.victory);
       clearGameplayUi();
       setCombatResult(null);
       setView('gameover');
     },
     onCombatResult: (result) => {
+      vibrate(HAPTIC.attack);
       setCombatResult(result);
     },
     onTileLost: (data) => {
       playSound('notification');
+      vibrate(HAPTIC.loss);
       setMapFeedback({
         tone: 'error',
         message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
@@ -931,6 +935,9 @@ export default function App() {
           .then(() => {
             setPickupPrompt(null);
             playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
+            if (actionType !== 'reinforce') {
+              vibrate(HAPTIC.claim);
+            }
             setMapFeedback({
               tone: 'success',
               message: getPlaceSuccessMessage(actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),

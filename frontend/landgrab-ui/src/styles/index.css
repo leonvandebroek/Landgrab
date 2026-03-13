@@ -1535,6 +1535,10 @@ input:focus {
   user-select: none;
 }
 
+.grid-dim-mask {
+  pointer-events: none;
+}
+
 .hex-polygon {
   filter: drop-shadow(0 1px 4px rgba(5, 10, 18, 0.35));
   stroke-linejoin: round;
@@ -4045,4 +4049,218 @@ input:checked + .display-settings-slider:before {
   padding: 1rem;
   overflow-y: auto;
   flex: 1;
+}
+
+/* ── UI Game Enhancements ──────────────────────────────────────────────────────── */
+
+/* 1. Map desaturation — tactical overlay feel */
+.game-layout .leaflet-tile-pane {
+  filter: saturate(0.15) brightness(0.85) contrast(1.1);
+}
+
+/* 2. Fog of War Reveal Animation */
+@keyframes hex-reveal {
+  0%   { fill-opacity: 0.05; filter: drop-shadow(0 0 12px rgba(100, 200, 255, 0.6)); }
+  100% { fill-opacity: 1; filter: none; }
+}
+/* Leaflet places the className on the <path> element itself — no descendant needed */
+.hex-polygon.is-revealing {
+  animation: hex-reveal 0.8s ease-out forwards;
+}
+
+/* 3. Hex Claim Pulse Animation */
+@keyframes hex-claim-pulse {
+  0%   { stroke-width: 7; stroke-opacity: 1; filter: drop-shadow(0 0 14px var(--hex-owner-color, rgba(255,255,255,0.5))); }
+  50%  { stroke-width: 5; stroke-opacity: 0.9; }
+  100% { stroke-width: 3; stroke-opacity: 1; filter: drop-shadow(0 1px 4px rgba(5, 10, 18, 0.35)); }
+}
+.hex-polygon.is-just-claimed {
+  animation: hex-claim-pulse 0.6s ease-out forwards;
+}
+
+/* 4. Territory Border Effects — Frontier Glow & Contested Pulse */
+.hex-polygon.is-frontier {
+  filter: drop-shadow(0 0 5px var(--hex-owner-color, rgba(255,255,255,0.4)));
+}
+
+@keyframes border-pulse {
+  0%, 100% { stroke-opacity: 1; filter: drop-shadow(0 0 6px var(--hex-owner-color, rgba(255,80,80,0.5))); }
+  50%      { stroke-opacity: 0.55; filter: drop-shadow(0 0 2px var(--hex-owner-color, rgba(255,80,80,0.2))); }
+}
+.hex-polygon.is-contested {
+  animation: border-pulse 2s ease-in-out infinite;
+}
+
+/* 5. Troop Badge Styles */
+.hex-troop-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(10, 18, 30, 0.88);
+  border: 1.5px solid rgba(255,255,255,0.18);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  transition: transform 0.2s ease;
+}
+.hex-troop-badge.tier-high {
+  background: rgba(180, 40, 30, 0.88);
+  border-color: rgba(255,100,80,0.45);
+  box-shadow: 0 0 10px rgba(231, 76, 60, 0.35), 0 2px 6px rgba(0,0,0,0.3);
+}
+.hex-troop-badge.tier-mid {
+  background: rgba(180, 140, 10, 0.82);
+  border-color: rgba(241,196,15,0.35);
+  box-shadow: 0 0 6px rgba(241, 196, 15, 0.2), 0 2px 6px rgba(0,0,0,0.3);
+}
+.troop-ring {
+  position: absolute;
+  inset: -3px;
+  opacity: 0.6;
+}
+.troop-ring circle {
+  transition: stroke-dasharray 0.4s ease;
+}
+.troop-count {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: white;
+  z-index: 1;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Monaco', monospace;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  line-height: 1;
+}
+.troop-badge-prefix {
+  font-size: 0.6rem;
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 6. Player Pulse Ring & Claim Radius */
+@keyframes player-pulse {
+  0%   { transform: scale(1); opacity: 0.45; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.player-pulse-ring {
+  transform-origin: center;
+}
+.player-pulse-ring path {
+  animation: player-pulse 2s ease-out infinite;
+}
+.claim-radius-ring path {
+  opacity: 0.35;
+}
+
+/* 7. Hex Tooltip Card Redesign */
+.hex-tooltip-card {
+  background: rgba(10, 18, 32, 0.95) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(100, 160, 220, 0.25) !important;
+  border-radius: 10px !important;
+  padding: 0 !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(100,160,220,0.1) !important;
+  color: #e8edf3;
+  font-size: 0.78rem;
+}
+.hex-tooltip-card::before {
+  border-top-color: rgba(10, 18, 32, 0.95) !important;
+}
+.tooltip-card {
+  padding: 0.45rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 130px;
+}
+.tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  color: rgba(180, 200, 220, 0.7);
+  border-bottom: 1px solid rgba(100,160,220,0.12);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.1rem;
+}
+.tooltip-terrain-icon {
+  font-size: 0.85rem;
+}
+.tooltip-coords {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+.tooltip-owner {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.tooltip-owner-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+.tooltip-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: rgba(200, 215, 230, 0.85);
+}
+.tooltip-stat-icon {
+  font-size: 0.8rem;
+  width: 1.1rem;
+  text-align: center;
+}
+.tooltip-distance {
+  font-size: 0.65rem;
+  color: rgba(150, 170, 190, 0.6);
+  text-align: right;
+  margin-top: 0.1rem;
+}
+
+/* 8. Building Visual Hierarchy */
+.hex-building-icon {
+  pointer-events: none;
+}
+.hex-building-icon .building {
+  font-size: 1.1rem;
+  filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));
+  transform: translateY(-3px);
+  text-align: center;
+  line-height: 1;
+}
+.hex-building-icon .building.fort {
+  filter: drop-shadow(0 3px 6px rgba(142, 68, 173, 0.45));
+}
+.hex-building-icon .building.hq {
+  filter: drop-shadow(0 3px 6px rgba(241, 196, 15, 0.45));
+  font-size: 1.25rem;
+}
+
+/* 9. Time-of-Day Overlay */
+.time-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 450;
+  transition: background 3s ease, opacity 3s ease;
+  border-radius: inherit;
+}
+
+/* 10. Night mode hex border boost */
+.time-night .hex-polygon path {
+  filter: drop-shadow(0 0 3px rgba(150, 200, 255, 0.2));
+}
+.time-night .hex-polygon.is-frontier path {
+  filter: drop-shadow(0 0 8px var(--hex-owner-color, rgba(150,200,255,0.4)));
 }
