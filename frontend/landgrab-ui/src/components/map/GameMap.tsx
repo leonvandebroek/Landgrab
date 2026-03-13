@@ -524,8 +524,8 @@ function buildHexTooltip(cell: HexCell): string {
   const terrainSuffix = cell.terrainType && cell.terrainType !== 'None'
     ? ` · ${i18n.t(`terrain.${cell.terrainType}` as never)}`
     : '';
-  const fortSuffix = cell.isFort ? ' · 🏰 Fort' : '';
-  const npcSuffix = cell.ownerId === 'NPC' ? ' · 🤖 NPC' : '';
+  const fortSuffix = cell.isFort ? ` · 🏰 ${i18n.t('map.fort')}` : '';
+  const npcSuffix = cell.ownerId === 'NPC' ? ` · 🤖 ${i18n.t('map.npcLabel')}` : '';
   if (cell.isMasterTile) {
     return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
   }

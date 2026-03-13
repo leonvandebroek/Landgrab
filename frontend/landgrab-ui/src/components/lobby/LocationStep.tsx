@@ -71,7 +71,7 @@ export function LocationStep({
 
                 {isLocationSet && (
                     <div className="wizard-success-chip">
-                        {t('wizard.locationSet', { lat: mapLat.toFixed(5), lng: mapLng.toFixed(5) })}
+                        {t('wizard.locationSet', { lat: mapLat.toFixed(5), lon: mapLng.toFixed(5) })}
                     </div>
                 )}
 

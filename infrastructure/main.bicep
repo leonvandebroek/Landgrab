@@ -4,12 +4,12 @@ param appName string = 'landgrab-prod'
 @description('Azure region')
 param location string = resourceGroup().location
 
-@description('PostgreSQL admin username')
-param postgresAdminUser string = 'pgadmin'
+@description('SQL Server admin username')
+param sqlAdminUser string = 'sqladmin'
 
 @secure()
-@description('PostgreSQL admin password')
-param postgresAdminPassword string
+@description('SQL Server admin password')
+param sqlAdminPassword string
 
 @secure()
 @description('JWT signing secret (min 32 chars)')
@@ -46,50 +46,42 @@ resource appService 'Microsoft.Web/sites@2023-12-01' = {
         { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
         { name: 'App__BaseUrl', value: 'https://app-${appName}.azurewebsites.net' }
         { name: 'Jwt__Secret', value: jwtSecret }
-        { name: 'ConnectionStrings__DefaultConnection', value: 'Host=${postgresServer.properties.fullyQualifiedDomainName};Database=landgrab;Username=${postgresAdminUser};Password=${postgresAdminPassword};SslMode=Require' }
+        { name: 'ConnectionStrings__DefaultConnection', value: 'Server=tcp:sql-${appName}.database.windows.net,1433;Initial Catalog=landgrab;User Id=${sqlAdminUser};Password=${sqlAdminPassword};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;' }
       ]
     }
   }
 }
 
-// ── PostgreSQL Flexible Server ──
-resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-12-01-preview' = {
-  name: 'psql-${appName}'
+// ── Azure SQL Logical Server ──
+resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
+  name: 'sql-${appName}'
   location: location
-  sku: {
-    name: 'Standard_B1ms'
-    tier: 'Burstable'
-  }
   properties: {
-    version: '16'
-    administratorLogin: postgresAdminUser
-    administratorLoginPassword: postgresAdminPassword
-    storage: {
-      storageSizeGB: 32
-    }
-    backup: {
-      backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
-    }
-    highAvailability: {
-      mode: 'Disabled'
-    }
+    administratorLogin: sqlAdminUser
+    administratorLoginPassword: sqlAdminPassword
+    version: '12.0'
   }
 }
 
-// ── PostgreSQL Database ──
-resource postgresDb 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-12-01-preview' = {
-  parent: postgresServer
+// ── Azure SQL Database (Serverless) ──
+resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
+  parent: sqlServer
   name: 'landgrab'
+  location: location
+  sku: {
+    name: 'GP_S_Gen5_1'
+    tier: 'GeneralPurpose'
+  }
   properties: {
-    charset: 'UTF8'
-    collation: 'en_US.utf8'
+    autoPauseDelay: 60
+    minCapacity: '0.5'
+    collation: 'SQL_Latin1_General_CP1_CI_AS'
   }
 }
 
 // ── Firewall: Allow Azure Services ──
-resource postgresFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2023-12-01-preview' = {
-  parent: postgresServer
+resource sqlFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
+  parent: sqlServer
   name: 'AllowAzureServices'
   properties: {
     startIpAddress: '0.0.0.0'
@@ -100,4 +92,4 @@ resource postgresFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRul
 // ── Outputs ──
 output appServiceName string = appService.name
 output appServiceDefaultHostname string = 'https://${appService.properties.defaultHostName}'
-output postgresServerFqdn string = postgresServer.properties.fullyQualifiedDomainName
+output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName

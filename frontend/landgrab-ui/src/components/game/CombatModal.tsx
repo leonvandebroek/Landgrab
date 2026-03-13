@@ -24,7 +24,7 @@ export function CombatModal({ result, gameMode, allowSelfClaim, onReClaim, onClo
               <p className="loss">{t('combat.troopLost', { count: result.attackerLost })}</p>
             )}
           </div>
-          <div className="vs">VS</div>
+          <div className="vs">{t('combat.vs')}</div>
           <div>
             <DiceRoller dice={result.defendDice} label={t('combat.defender')} />
             {result.defenderLost > 0 && (

@@ -62,7 +62,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(room => room.Code);
             e.Property(room => room.Code).HasMaxLength(6).IsRequired();
-            e.Property(room => room.StateJson).HasColumnType("jsonb").IsRequired();
+            e.Property(room => room.StateJson).IsRequired();
             e.Property(room => room.Phase).HasMaxLength(30).IsRequired();
             e.Property(room => room.IsActive).HasDefaultValue(true);
             e.HasIndex(room => room.IsActive);

@@ -24,25 +24,24 @@ export function GuidanceBanner({
   );
   const computedHint = useMemo(() => {
     if (!hasLocation) {
-      return t('guidance.noLocation' as never, { defaultValue: 'Enable location to play' });
+      return t('guidance.enableLocation');
     }
 
     if (carriedTroops > 0) {
-      return t('guidance.deployTroops' as never, {
-        defaultValue: 'You are carrying {{count}} troops — tap an enemy or neutral hex to deploy',
+      return t('guidance.carryingTroops', {
         count: carriedTroops,
       });
     }
 
     if (isInOwnHex) {
-      return t('guidance.pickupHere' as never, { defaultValue: 'Tap your hex to pick up troops' });
+      return t('guidance.pickupTroops');
     }
 
     if (!selectedHexExists) {
-      return t('guidance.selectHex' as never, { defaultValue: 'Tap a hex to see what you can do' });
+      return t('guidance.tapHex');
     }
 
-    return t('guidance.explore' as never, { defaultValue: 'Walk to a hex to claim it' });
+    return t('guidance.walkToClaim');
   }, [carriedTroops, hasLocation, isInOwnHex, selectedHexExists, t]);
   const [hint, setHint] = useState<string>(computedHint);
   const [isVisible, setIsVisible] = useState<boolean>(true);

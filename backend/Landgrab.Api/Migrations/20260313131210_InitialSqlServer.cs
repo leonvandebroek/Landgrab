@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Landgrab.Api.Migrations
 {
     /// <inheritdoc />
-    public partial class initial : Migration
+    public partial class InitialSqlServer : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -15,11 +15,11 @@ namespace Landgrab.Api.Migrations
                 name: "Alliances",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    Tag = table.Column<string>(type: "character varying(6)", maxLength: 6, nullable: false),
-                    CreatedBy = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Tag = table.Column<string>(type: "nvarchar(6)", maxLength: 6, nullable: false),
+                    CreatedBy = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -30,14 +30,14 @@ namespace Landgrab.Api.Migrations
                 name: "GameEvents",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    RoomId = table.Column<Guid>(type: "uuid", nullable: true),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EventType = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Q = table.Column<int>(type: "integer", nullable: true),
-                    R = table.Column<int>(type: "integer", nullable: true),
-                    Payload = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RoomId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    EventType = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    Q = table.Column<int>(type: "int", nullable: true),
+                    R = table.Column<int>(type: "int", nullable: true),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -45,15 +45,32 @@ namespace Landgrab.Api.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PersistedRooms",
+                columns: table => new
+                {
+                    Code = table.Column<string>(type: "nvarchar(6)", maxLength: 6, nullable: false),
+                    HostUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    StateJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Phase = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false, defaultValue: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PersistedRooms", x => x.Code);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Username = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    Email = table.Column<string>(type: "character varying(254)", maxLength: 254, nullable: false),
-                    PasswordHash = table.Column<string>(type: "text", nullable: false),
-                    EmailVerified = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Username = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(254)", maxLength: 254, nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    EmailVerified = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -64,10 +81,10 @@ namespace Landgrab.Api.Migrations
                 name: "AllianceMembers",
                 columns: table => new
                 {
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AllianceId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Role = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    JoinedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AllianceId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Role = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    JoinedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -90,14 +107,14 @@ namespace Landgrab.Api.Migrations
                 name: "GlobalHexes",
                 columns: table => new
                 {
-                    Q = table.Column<int>(type: "integer", nullable: false),
-                    R = table.Column<int>(type: "integer", nullable: false),
-                    OwnerUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    OwnerAllianceId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Troops = table.Column<int>(type: "integer", nullable: false),
-                    LastCaptured = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    AttackCooldownUntil = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    OwnerId = table.Column<Guid>(type: "uuid", nullable: true)
+                    Q = table.Column<int>(type: "int", nullable: false),
+                    R = table.Column<int>(type: "int", nullable: false),
+                    OwnerUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    OwnerAllianceId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Troops = table.Column<int>(type: "int", nullable: false),
+                    LastCaptured = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    AttackCooldownUntil = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    OwnerId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -118,12 +135,12 @@ namespace Landgrab.Api.Migrations
                 name: "PasswordResetTokens",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    TokenHash = table.Column<string>(type: "text", nullable: false),
-                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Used = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TokenHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ExpiresAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Used = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -167,6 +184,16 @@ namespace Landgrab.Api.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PersistedRooms_IsActive",
+                table: "PersistedRooms",
+                column: "IsActive");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PersistedRooms_UpdatedAt",
+                table: "PersistedRooms",
+                column: "UpdatedAt");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
                 table: "Users",
                 column: "Email",
@@ -193,6 +220,9 @@ namespace Landgrab.Api.Migrations
 
             migrationBuilder.DropTable(
                 name: "PasswordResetTokens");
+
+            migrationBuilder.DropTable(
+                name: "PersistedRooms");
 
             migrationBuilder.DropTable(
                 name: "Alliances");
