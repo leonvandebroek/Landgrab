@@ -404,6 +404,9 @@ const en = {
     layerTopo: 'Topographic',
     layerStandard: 'Standard',
     layerGray: 'Gray',
+    layerBrtStandard: 'BRT Standard',
+    layerBrtGray: 'BRT Gray',
+    layerOsm: 'OpenStreetMap',
   },
   guidance: {
     enableLocation: 'Enable location to play',
@@ -897,6 +900,14 @@ const en = {
     errorDeleteTemplate: 'Failed to delete template',
     errorDuplicateTemplate: 'Failed to duplicate template',
     errorSaveTemplate: 'Failed to save template',
+
+    // Map-based editor
+    searchLocation: 'Find Location',
+    searchPlaceholder: 'Search for a place...',
+    drawHintDraw: 'Draw mode: click/tap to toggle hexes, drag to paint',
+    drawHintNavigate: 'Navigate mode: pan & zoom the map freely',
+    modeNavigate: 'Navigate',
+    modeDraw: 'Draw',
 
     // Review step integration
     areaTemplate: 'Template',
