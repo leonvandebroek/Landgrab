@@ -68,19 +68,21 @@ var signalRBuilder = builder.Services.AddSignalR()
         options.PayloadSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
-// In production, add NuGet package Microsoft.Azure.SignalR and uncomment:
-// var azureSignalR = builder.Configuration["Azure:SignalR:ConnectionString"];
-// if (!string.IsNullOrEmpty(azureSignalR))
-//     signalRBuilder.AddAzureSignalR(azureSignalR);
+var azureSignalRConn = builder.Configuration["Azure:SignalR:ConnectionString"];
+if (!string.IsNullOrEmpty(azureSignalRConn))
+{
+    signalRBuilder.AddAzureSignalR(azureSignalRConn);
+}
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 
-var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:7173", "http://localhost:3000"];
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
+var defaultOrigins = new[] { "http://localhost:5173", "http://localhost:3000" };
+var allOrigins = defaultOrigins.Concat(allowedOrigins).ToArray();
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins(allowedOrigins)
+        policy.WithOrigins(allOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()));
@@ -107,6 +109,8 @@ var app = builder.Build();
 
 app.UseCors();
 app.UseRateLimiter();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -122,6 +126,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", time = DateTime
 // ── SignalR Hub ───────────────────────────────────────────────────────────
 
 app.MapHub<GameHub>("/hub/game");
+
+// SPA fallback — non-API/hub routes serve index.html for client-side routing
+app.MapFallbackToFile("index.html");
 
 // ── DB migrations on startup ──────────────────────────────────────────────
 
