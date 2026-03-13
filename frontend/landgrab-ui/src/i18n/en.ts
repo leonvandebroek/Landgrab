@@ -898,6 +898,10 @@ const en = {
     errorDuplicateTemplate: 'Failed to duplicate template',
     errorSaveTemplate: 'Failed to save template',
 
+    // Map-based editor
+    searchLocation: 'Find Location',
+    searchPlaceholder: 'Search for a place...',
+
     // Review step integration
     areaTemplate: 'Template',
     areaTemplateHint: 'Choose a saved template to use as the game area.',

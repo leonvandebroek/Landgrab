@@ -898,6 +898,10 @@ const nl = {
     errorDuplicateTemplate: 'Kan sjabloon niet dupliceren',
     errorSaveTemplate: 'Kan sjabloon niet opslaan',
 
+    // Kaart-gebaseerde editor
+    searchLocation: 'Zoek locatie',
+    searchPlaceholder: 'Zoek een plaats...',
+
     // Review stap integratie
     areaTemplate: 'Sjabloon',
     areaTemplateHint: 'Kies een opgeslagen sjabloon om als spelgebied te gebruiken.',

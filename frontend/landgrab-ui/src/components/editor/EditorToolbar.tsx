@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface EditorToolbarProps {
@@ -12,15 +12,31 @@ interface EditorToolbarProps {
   onTileSizeChange: (size: number) => void;
   onSave: () => void;
   onBack: () => void;
+  onClearAll: () => void;
+  onFlyTo: (lat: number, lng: number) => void;
   saving: boolean;
   isNew: boolean;
 }
 
 const MIN_HEXES = 7;
-const MIN_TILE = 15;
-const MAX_TILE = 1000;
+const MIN_TILE = 10;
+const MAX_TILE = 500;
 const MAX_NAME = 100;
 const MAX_DESC = 500;
+
+// Logarithmic slider for better control at small sizes
+const SLIDER_MIN = Math.log(MIN_TILE);
+const SLIDER_MAX = Math.log(MAX_TILE);
+const SLIDER_STEPS = 200;
+
+function sizeToSlider(size: number): number {
+  return ((Math.log(size) - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * SLIDER_STEPS;
+}
+
+function sliderToSize(val: number): number {
+  const logVal = SLIDER_MIN + (val / SLIDER_STEPS) * (SLIDER_MAX - SLIDER_MIN);
+  return Math.round(Math.exp(logVal));
+}
 
 export function EditorToolbar({
   name,
@@ -33,6 +49,8 @@ export function EditorToolbar({
   onTileSizeChange,
   onSave,
   onBack,
+  onClearAll,
+  onFlyTo,
   saving,
   isNew,
 }: EditorToolbarProps) {
@@ -54,7 +72,58 @@ export function EditorToolbar({
     return list;
   }, [trimmedName, hexCount, isConnected, t]);
 
-  const handleTileSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Location search ──
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<
+    Array<{ display_name: string; lat: string; lon: string }>
+  >([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (query.trim().length < 3) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const encoded = encodeURIComponent(query.trim());
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=0`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+          setShowResults(data.length > 0);
+        }
+      } catch {
+        // silently fail
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+  };
+
+  const handleSelectLocation = (lat: string, lon: string) => {
+    onFlyTo(parseFloat(lat), parseFloat(lon));
+    setShowResults(false);
+    setSearchQuery('');
+  };
+
+  const handleTileSizeSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newSize = sliderToSize(parseInt(e.target.value, 10));
+    onTileSizeChange(Math.max(MIN_TILE, Math.min(MAX_TILE, newSize)));
+  };
+
+  const handleTileSizeInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = parseInt(e.target.value, 10);
     if (Number.isNaN(raw)) return;
     onTileSizeChange(Math.max(MIN_TILE, Math.min(MAX_TILE, raw)));
@@ -65,6 +134,75 @@ export function EditorToolbar({
       <h2 className="map-editor-toolbar__title">
         {isNew ? t('mapEditor.newTemplate') : t('mapEditor.editTemplate')}
       </h2>
+
+      {/* Location search */}
+      <div className="map-editor-toolbar__section">
+        <label className="map-editor-toolbar__label" htmlFor="tpl-search">
+          {t('mapEditor.searchLocation')}
+        </label>
+        <div className="map-editor-toolbar__search-wrap">
+          <input
+            id="tpl-search"
+            type="text"
+            className="map-editor-toolbar__input"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder={t('mapEditor.searchPlaceholder')}
+            autoComplete="off"
+          />
+          {searching && <span className="map-editor-toolbar__search-spinner" />}
+        </div>
+        {showResults && (
+          <ul className="map-editor-toolbar__search-results">
+            {searchResults.map((r, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  className="map-editor-toolbar__search-result"
+                  onClick={() => handleSelectLocation(r.lat, r.lon)}
+                >
+                  {r.display_name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Hex tile size slider */}
+      <div className="map-editor-toolbar__section">
+        <label className="map-editor-toolbar__label" htmlFor="tpl-tile-slider">
+          {t('mapEditor.tileSizeMeters')}
+        </label>
+        <div className="map-editor-toolbar__slider-wrap">
+          <input
+            id="tpl-tile-slider"
+            type="range"
+            className="map-editor-toolbar__slider"
+            min={0}
+            max={SLIDER_STEPS}
+            step={1}
+            value={sizeToSlider(tileSizeMeters)}
+            onChange={handleTileSizeSlider}
+          />
+          <div className="map-editor-toolbar__slider-value">
+            <input
+              type="number"
+              className="map-editor-toolbar__input map-editor-toolbar__input--small"
+              value={tileSizeMeters}
+              onChange={handleTileSizeInput}
+              min={MIN_TILE}
+              max={MAX_TILE}
+              step={5}
+            />
+            <span className="map-editor-toolbar__slider-unit">m</span>
+          </div>
+        </div>
+        <div className="map-editor-toolbar__slider-labels">
+          <span>{MIN_TILE}m</span>
+          <span>{MAX_TILE}m</span>
+        </div>
+      </div>
 
       {/* Name */}
       <div className="map-editor-toolbar__section">
@@ -94,24 +232,7 @@ export function EditorToolbar({
           onChange={(e) => onDescriptionChange(e.target.value)}
           maxLength={MAX_DESC}
           placeholder={t('mapEditor.descriptionPlaceholder')}
-          rows={3}
-        />
-      </div>
-
-      {/* Tile size */}
-      <div className="map-editor-toolbar__section">
-        <label className="map-editor-toolbar__label" htmlFor="tpl-tile-size">
-          {t('mapEditor.tileSizeMeters')}
-        </label>
-        <input
-          id="tpl-tile-size"
-          type="number"
-          className="map-editor-toolbar__input"
-          value={tileSizeMeters}
-          onChange={handleTileSizeChange}
-          min={MIN_TILE}
-          max={MAX_TILE}
-          step={5}
+          rows={2}
         />
       </div>
 
@@ -155,6 +276,14 @@ export function EditorToolbar({
         >
           {saving ? t('mapEditor.saving') : isNew ? t('mapEditor.create') : t('mapEditor.update')}
         </button>
+        {hexCount > 0 && (
+          <button
+            className="map-editor-toolbar__btn map-editor-toolbar__btn--danger"
+            onClick={onClearAll}
+          >
+            {t('mapEditor.clear')}
+          </button>
+        )}
         <button
           className="map-editor-toolbar__btn map-editor-toolbar__btn--ghost"
           onClick={onBack}

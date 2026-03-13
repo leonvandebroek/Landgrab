@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   MapTemplate,
@@ -36,6 +36,11 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [tileSizeMeters, setTileSizeMeters] = useState(50);
+  const [centerLat, setCenterLat] = useState<number | null>(null);
+  const [centerLng, setCenterLng] = useState<number | null>(null);
+
+  // Ref to the MapEditor container for flyTo
+  const editorCanvasRef = useRef<HTMLDivElement>(null);
 
   // Derived stats
   const hexCount = selectedCoords.length;
@@ -68,6 +73,8 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
     setName('');
     setDescription('');
     setTileSizeMeters(50);
+    setCenterLat(null);
+    setCenterLng(null);
     setError('');
     setView('editor');
   };
@@ -82,6 +89,8 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
       setName(detail.name);
       setDescription(detail.description ?? '');
       setTileSizeMeters(detail.tileSizeMeters);
+      setCenterLat(detail.centerLat);
+      setCenterLng(detail.centerLng);
       setView('editor');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('mapEditor.errorLoadTemplate'));
@@ -122,6 +131,8 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
           description,
           coordinates: selectedCoords,
           tileSizeMeters,
+          centerLat: centerLat ?? undefined,
+          centerLng: centerLng ?? undefined,
         });
       } else {
         await createMapTemplate(token, {
@@ -129,6 +140,8 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
           description,
           coordinates: selectedCoords,
           tileSizeMeters,
+          centerLat: centerLat ?? undefined,
+          centerLng: centerLng ?? undefined,
         });
       }
       setView('list');
@@ -159,6 +172,26 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
     setSelectedCoords(coords);
   }, []);
 
+  const handleCenterChange = useCallback((lat: number, lng: number) => {
+    setCenterLat(lat);
+    setCenterLng(lng);
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    setSelectedCoords([]);
+  }, []);
+
+  const handleFlyTo = useCallback((lat: number, lng: number) => {
+    // Find the MapEditor container and call its flyTo
+    const canvas = editorCanvasRef.current;
+    if (canvas) {
+      const leafletContainer = canvas.querySelector('.map-editor-leaflet-container');
+      if (leafletContainer && (leafletContainer as any).__flyTo) {
+        (leafletContainer as any).__flyTo(lat, lng);
+      }
+    }
+  }, []);
+
   // ── Render: Editor view ──────────────────────────────────────
 
   if (view === 'editor') {
@@ -178,15 +211,20 @@ export function MapEditorPage({ token, onBack }: MapEditorPageProps) {
               onTileSizeChange={setTileSizeMeters}
               onSave={handleSave}
               onBack={handleBack}
+              onClearAll={handleClearAll}
+              onFlyTo={handleFlyTo}
               saving={saving}
               isNew={editingTemplate === null}
             />
           </div>
-          <div className="map-editor-layout__canvas">
+          <div ref={editorCanvasRef} className="map-editor-layout__canvas">
             <MapEditor
               coordinates={selectedCoords}
               onCoordinatesChange={handleCoordinatesChange}
               tileSizeMeters={tileSizeMeters}
+              centerLat={centerLat}
+              centerLng={centerLng}
+              onCenterChange={handleCenterChange}
             />
           </div>
         </div>
@@ -231,7 +269,6 @@ function checkConnected(coords: HexCoordinate[]): boolean {
     if (visited.has(k)) continue;
     visited.add(k);
 
-    // Six axial hex neighbors
     const neighbors = [
       { q: cur.q + 1, r: cur.r },
       { q: cur.q - 1, r: cur.r },
