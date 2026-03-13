@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import i18n from '../../i18n';
 import type { GlobalHex } from '../../types/game';
 import { hexToLatLng } from '../map/HexMath';
+import { createPdokBaseLayers, MAP_MAX_ZOOM } from '../map/pdokLayers';
 
 interface Props {
   hexes: GlobalHex[];
@@ -17,16 +19,32 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
   const mapRef = useRef<L.Map | null>(null);
   const selectedRef = useRef<[number, number] | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, { zoom: ZOOM });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '\u00a9 OpenStreetMap contributors'
+    const map = L.map(containerRef.current, { maxZoom: MAP_MAX_ZOOM, zoom: ZOOM });
+    const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
+    top25.addTo(map);
+    baseLayerControlRef.current = L.control.layers({
+      [i18n.t('map.layerTopo')]: top25,
+      [i18n.t('map.layerStandard')]: brtStandard,
+      [i18n.t('map.layerGray')]: brtGray,
     }).addTo(map);
     const layerGroup = L.layerGroup().addTo(map);
     mapRef.current = map;
     layerGroupRef.current = layerGroup;
+
+    return () => {
+      baseLayerControlRef.current?.remove();
+      baseLayerControlRef.current = null;
+      map.stop();
+      map.off();
+      map.remove();
+      mapRef.current = null;
+      layerGroupRef.current = null;
+      selectedRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -62,7 +80,7 @@ export function GlobalMap({ hexes, myUserId, onAttack }: Props) {
         fillOpacity: 0.8,
         weight: 1
       })
-        .bindTooltip(`${h.owner?.username ?? 'Unclaimed'} | \u2694\ufe0f ${h.troops}`)
+        .bindTooltip(`${h.owner?.username ?? i18n.t('map.unclaimed')} | \u2694\ufe0f ${h.troops}`)
         .on('click', () => {
           if (!isMine && selectedRef.current) {
             const [fq, fr] = selectedRef.current;

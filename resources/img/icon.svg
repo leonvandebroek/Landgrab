@@ -1,0 +1,54 @@
+<svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+<linearGradient id="flag-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+<stop offset="0%" style="stop-color:#FF4500;stop-opacity:1" />
+<stop offset="100%" style="stop-color:#DC143C;stop-opacity:1" />
+</linearGradient>
+<radialGradient id="highlight-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+<stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.3" />
+<stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+</radialGradient>
+</defs>
+
+<path d="M 128,64 L 384,64 L 512,256 L 384,448 L 128,448 L 0,256 Z" fill="#2F4F4F" /> <path d="M 64,160 L 192,160 L 256,256 L 192,352 L 64,352 L 0,256 Z" fill="#556B2F" /> <path d="M 320,160 L 448,160 L 512,256 L 448,352 L 320,352 L 256,256 Z" fill="#556B2F" /> <path d="M 128,64 L 384,64 L 512,256 L 384,448 L 128,448 L 0,256 Z" fill="#2F4F4F" stroke="#FFFFFF" stroke-width="4" />
+<path d="M 64,160 L 192,160 L 256,256 L 192,352 L 64,352 L 0,256 Z" fill="#556B2F" stroke="#FFFFFF" stroke-width="4" />
+<path d="M 320,160 L 448,160 L 512,256 L 448,352 L 320,352 L 256,256 Z" fill="#556B2F" stroke="#FFFFFF" stroke-width="4" />
+
+<g transform="translate(256, 128)">
+<path d="M 0,0 L -32,96 L 32,96 Z" fill="url(#flag-gradient)" />
+<path d="M 0,0 L -32,96 L 32,96 Z" fill="url(#flag-gradient)" stroke="#FFFFFF" stroke-width="6" />
+
+```
+<path d="M -24,48 C -24,32 -8,16 16,16 C 40,16 56,32 56,48 L 56,80 C 56,96 40,112 16,112 C -8,112 -24,96 -24,80 Z" fill="url(#flag-gradient)" stroke="#FFFFFF" stroke-width="6" />
+<circle cx="16" cy="64" r="24" fill="#FFFFFF" />
+<path d="M 0,0 M -32,96 L 32,96" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+
+```
+
+</g>
+
+<circle cx="256" cy="384" r="16" fill="#FFD700" />
+<circle cx="256" cy="384" r="10" fill="#FFFFFF" />
+
+<g transform="translate(192, 320)">
+<path d="M -32,-32 L 32,-32" stroke="#FF4500" stroke-width="6" marker-end="url(#arrowhead)"/>
+<path d="M 32,32 L -32,32" stroke="#4169E1" stroke-width="6" marker-end="url(#arrowhead)"/>
+
+```
+<defs>
+  <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+    <polygon points="0 0, 10 3.5, 0 7" fill="#FF4500"/>
+  </marker>
+</defs>
+
+```
+
+</g>
+
+<path d="M 0,0 L 512,0 L 512,512 L 0,512 Z" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-dasharray="10 10" />
+
+<text x="256" y="490" font-family="Verdana, sans-serif" font-size="40" fill="#FFFFFF" text-anchor="middle" font-weight="bold">LANDGRAB</text>
+
+<circle cx="256" cy="256" r="256" fill="url(#highlight-gradient)" />
+
+</svg>

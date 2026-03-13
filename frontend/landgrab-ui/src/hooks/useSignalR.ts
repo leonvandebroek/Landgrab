@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import type { GameState, CombatResult } from '../types/game';
+import type { GameState, CombatResult, AmbushResult, Mission, PendingDuel, RandomEvent } from '../types/game';
+
+const AUTO_RECONNECT_DELAYS = [0, 1000, 2000, 5000, 10000, 15000, 30000, 30000, 30000, 30000, 60000, 60000, 60000];
+const MANUAL_RECONNECT_DELAY_MS = 15000;
+const MANUAL_RECONNECT_MAX_ATTEMPTS = 40;
 
 export interface GameEvents {
   onRoomCreated?: (code: string, state: GameState) => void;
@@ -9,26 +13,121 @@ export interface GameEvents {
   onStateUpdated?: (state: GameState) => void;
   onCombatResult?: (result: CombatResult) => void;
   onGameOver?: (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => void;
+  onTileLost?: (data: { Q: number; R: number; AttackerName: string }) => void;
   onGlobalHexUpdated?: (hex: unknown) => void;
   onGlobalMapLoaded?: (hexes: unknown[]) => void;
   onError?: (message: string) => void;
+  onReconnected?: () => void;
+  // Phase 5: Ambush
+  onAmbushResult?: (result: AmbushResult) => void;
+  // Phase 5: Toll
+  onTollPaid?: (data: { payerId: string; amount: number; hexQ: number; hexR: number }) => void;
+  // Phase 6: JagerProoi
+  onPreyCaught?: (data: { hunterId: string; preyId: string; reward: number }) => void;
+  onPreyEscaped?: (data: { preyId: string; reward: number }) => void;
+  // Phase 8: Random Events
+  onEventWarning?: (event: RandomEvent) => void;
+  onRandomEvent?: (event: RandomEvent) => void;
+  // Phase 9: Missions
+  onMissionAssigned?: (mission: Mission) => void;
+  onMissionCompleted?: (mission: Mission) => void;
+  onMissionFailed?: (mission: Mission) => void;
+  // Phase 10: Duel
+  onDuelChallenge?: (duel: PendingDuel) => void;
+  onDuelResult?: (data: { duelId: string; winnerId: string; loserId: string }) => void;
 }
 
 export function useSignalR(token: string | null, events: GameEvents) {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const eventsRef = useRef(events);
+  const manualReconnectTimerRef = useRef<number | null>(null);
+  const manualReconnectAttemptsRef = useRef(0);
+
   useLayoutEffect(() => { eventsRef.current = events; });
 
+  const clearManualReconnect = useCallback(() => {
+    if (manualReconnectTimerRef.current !== null) {
+      window.clearTimeout(manualReconnectTimerRef.current);
+      manualReconnectTimerRef.current = null;
+    }
+    manualReconnectAttemptsRef.current = 0;
+  }, []);
+
+  const scheduleManualReconnect = useCallback((conn: signalR.HubConnection, isDisposed: () => boolean) => {
+    if (manualReconnectTimerRef.current !== null || connectionRef.current !== conn) {
+      return;
+    }
+
+    const attemptReconnect = () => {
+      if (isDisposed() || connectionRef.current !== conn) {
+        clearManualReconnect();
+        return;
+      }
+
+      if (conn.state !== signalR.HubConnectionState.Disconnected) {
+        clearManualReconnect();
+        return;
+      }
+
+      if (manualReconnectAttemptsRef.current >= MANUAL_RECONNECT_MAX_ATTEMPTS) {
+        clearManualReconnect();
+        setConnected(false);
+        setReconnecting(false);
+        return;
+      }
+
+      manualReconnectTimerRef.current = null;
+      manualReconnectAttemptsRef.current += 1;
+      setReconnecting(true);
+
+      void Promise.resolve().then(async () => {
+        if (isDisposed() || connectionRef.current !== conn || conn.state !== signalR.HubConnectionState.Disconnected) {
+          return;
+        }
+
+        try {
+          await conn.start();
+          if (!isDisposed() && connectionRef.current === conn) {
+            clearManualReconnect();
+            setConnected(true);
+            setReconnecting(false);
+            eventsRef.current.onReconnected?.();
+          }
+        } catch (err) {
+          if (!isDisposed() && !isExpectedStartAbort(err)) {
+            console.warn('SignalR manual reconnect failed:', err);
+          }
+          if (!isDisposed() && connectionRef.current === conn && manualReconnectAttemptsRef.current < MANUAL_RECONNECT_MAX_ATTEMPTS) {
+            manualReconnectTimerRef.current = window.setTimeout(attemptReconnect, MANUAL_RECONNECT_DELAY_MS);
+          } else if (!isDisposed()) {
+            setReconnecting(false);
+          }
+        }
+      });
+    };
+
+    manualReconnectTimerRef.current = window.setTimeout(attemptReconnect, MANUAL_RECONNECT_DELAY_MS);
+  }, [clearManualReconnect]);
+
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      clearManualReconnect();
+      return;
+    }
+
+    let disposed = false;
+    const isDisposed = () => disposed;
 
     const conn = new signalR.HubConnectionBuilder()
       .withUrl('/hub/game', {
         accessTokenFactory: () => token,
         transport: signalR.HttpTransportType.WebSockets
       })
-      .withAutomaticReconnect()
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: ({ previousRetryCount }) => AUTO_RECONNECT_DELAYS[previousRetryCount] ?? null
+      })
       .configureLogging(signalR.LogLevel.Warning)
       .build();
 
@@ -38,25 +137,97 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('StateUpdated', (state: GameState) => eventsRef.current.onStateUpdated?.(state));
     conn.on('CombatResult', (result: CombatResult) => eventsRef.current.onCombatResult?.(result));
     conn.on('GameOver', (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => eventsRef.current.onGameOver?.(data));
+    conn.on('TileLost', (data: { Q: number; R: number; AttackerName: string }) => eventsRef.current.onTileLost?.(data));
     conn.on('GlobalHexUpdated', (hex: unknown) => eventsRef.current.onGlobalHexUpdated?.(hex));
     conn.on('GlobalMapLoaded', (hexes: unknown[]) => eventsRef.current.onGlobalMapLoaded?.(hexes));
     conn.on('Error', (msg: string) => eventsRef.current.onError?.(msg));
+    conn.on('AmbushResult', (result: AmbushResult) => eventsRef.current.onAmbushResult?.(result));
+    conn.on('TollPaid', (data: { payerId: string; amount: number; hexQ: number; hexR: number }) => eventsRef.current.onTollPaid?.(data));
+    conn.on('PreyCaught', (data: { hunterId: string; preyId: string; reward: number }) => eventsRef.current.onPreyCaught?.(data));
+    conn.on('PreyEscaped', (data: { preyId: string; reward: number }) => eventsRef.current.onPreyEscaped?.(data));
+    conn.on('EventWarning', (event: RandomEvent) => eventsRef.current.onEventWarning?.(event));
+    conn.on('RandomEvent', (event: RandomEvent) => eventsRef.current.onRandomEvent?.(event));
+    conn.on('MissionAssigned', (mission: Mission) => eventsRef.current.onMissionAssigned?.(mission));
+    conn.on('MissionCompleted', (mission: Mission) => eventsRef.current.onMissionCompleted?.(mission));
+    conn.on('MissionFailed', (mission: Mission) => eventsRef.current.onMissionFailed?.(mission));
+    conn.on('DuelChallenge', (duel: PendingDuel) => eventsRef.current.onDuelChallenge?.(duel));
+    conn.on('DuelResult', (data: { duelId: string; winnerId: string; loserId: string }) => eventsRef.current.onDuelResult?.(data));
 
-    conn.start()
-      .then(() => setConnected(true))
-      .catch(err => console.error('SignalR connect error:', err));
+    conn.onreconnecting(() => {
+      if (!disposed) {
+        clearManualReconnect();
+        setConnected(false);
+        setReconnecting(true);
+      }
+    });
 
-    conn.onreconnected(() => setConnected(true));
-    conn.onclose(() => setConnected(false));
+    conn.onreconnected(() => {
+      if (!disposed) {
+        clearManualReconnect();
+        setConnected(true);
+        setReconnecting(false);
+        eventsRef.current.onReconnected?.();
+      }
+    });
+
+    conn.onclose((err) => {
+      if (!disposed) {
+        setConnected(false);
+        setReconnecting(true);
+        if (err && !isExpectedStartAbort(err)) {
+          console.warn('SignalR connection closed:', err);
+        }
+        scheduleManualReconnect(conn, isDisposed);
+      }
+    });
+
+    void Promise.resolve().then(async () => {
+      if (disposed) {
+        return;
+      }
+
+      try {
+        await conn.start();
+        if (!disposed) {
+          clearManualReconnect();
+          setConnected(true);
+          setReconnecting(false);
+        }
+      } catch (err) {
+        if (!disposed && !isExpectedStartAbort(err)) {
+          console.error('SignalR connect error:', err);
+          setConnected(false);
+          setReconnecting(true);
+          scheduleManualReconnect(conn, isDisposed);
+        }
+      }
+    });
 
     connectionRef.current = conn;
-    return () => { conn.stop(); };
-  }, [token]);
+    return () => {
+      disposed = true;
+      clearManualReconnect();
+      if (connectionRef.current === conn) {
+        connectionRef.current = null;
+      }
+      setConnected(false);
+      setReconnecting(false);
+      void conn.stop();
+    };
+  }, [clearManualReconnect, scheduleManualReconnect, token]);
 
   const invoke = useCallback(<T = void>(method: string, ...args: unknown[]): Promise<T> => {
     if (!connectionRef.current) return Promise.reject(new Error('Not connected'));
     return connectionRef.current.invoke<T>(method, ...args);
   }, []);
 
-  return { connected, invoke };
+  return { connected, reconnecting, invoke };
+}
+
+function isExpectedStartAbort(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.name === 'AbortError' || error.message.includes('stopped during negotiation');
 }

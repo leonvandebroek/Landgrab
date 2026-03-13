@@ -5,6 +5,7 @@ namespace Landgrab.Api.Services;
 public static class HexService
 {
     private const double MetersPerDegreeLat = 111_320d;
+    private const double Sqrt3 = 1.7320508075688772d;
     private static readonly (int q, int r)[] Directions =
         [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
 
@@ -33,6 +34,93 @@ public static class HexService
         foreach (var (q, r) in Spiral(radius))
             grid[Key(q, r)] = new HexCell { Q = q, R = r };
         return grid;
+    }
+
+    public static Dictionary<string, HexCell> BuildGrid(IEnumerable<(int q, int r)> coordinates)
+    {
+        var grid = new Dictionary<string, HexCell>();
+        foreach (var (q, r) in coordinates.Distinct())
+            grid[Key(q, r)] = new HexCell { Q = q, R = r };
+
+        return grid;
+    }
+
+    public static int HexDistance(int q, int r)
+    {
+        var s = -q - r;
+        return Math.Max(Math.Abs(q), Math.Max(Math.Abs(r), Math.Abs(s)));
+    }
+
+    public static int InferRadius(IEnumerable<(int q, int r)> coordinates)
+    {
+        return coordinates.Select(coord => HexDistance(coord.q, coord.r)).DefaultIfEmpty(0).Max();
+    }
+
+    public static (double widthMeters, double heightMeters, double maxDimensionMeters)
+        GetFootprintMetrics(IEnumerable<(int q, int r)> coordinates, double tileSizeMeters)
+    {
+        var cells = coordinates.Distinct().ToList();
+        if (cells.Count == 0 || tileSizeMeters <= 0)
+            return (0d, 0d, 0d);
+
+        double minX = double.PositiveInfinity;
+        double maxX = double.NegativeInfinity;
+        double minY = double.PositiveInfinity;
+        double maxY = double.NegativeInfinity;
+
+        foreach (var (q, r) in cells)
+        {
+            var centerX = tileSizeMeters * 1.5d * q;
+            var centerY = tileSizeMeters * Sqrt3 * (r + q / 2d);
+
+            minX = Math.Min(minX, centerX - tileSizeMeters);
+            maxX = Math.Max(maxX, centerX + tileSizeMeters);
+            minY = Math.Min(minY, centerY - tileSizeMeters);
+            maxY = Math.Max(maxY, centerY + tileSizeMeters);
+        }
+
+        var width = maxX - minX;
+        var height = maxY - minY;
+        return (width, height, Math.Max(width, height));
+    }
+
+    public static int GetMaxTileSizeForFootprint(IEnumerable<(int q, int r)> coordinates, int maxFootprintMeters)
+    {
+        if (maxFootprintMeters <= 0)
+            return 0;
+
+        var unitMetrics = GetFootprintMetrics(coordinates, 1d);
+        if (unitMetrics.maxDimensionMeters <= 0)
+            return maxFootprintMeters;
+
+        return (int)Math.Floor(maxFootprintMeters / unitMetrics.maxDimensionMeters);
+    }
+
+    public static bool IsConnected(IEnumerable<(int q, int r)> coordinates)
+    {
+        var cells = coordinates.Distinct().ToHashSet();
+        if (cells.Count <= 1)
+            return true;
+
+        var visited = new HashSet<(int q, int r)>();
+        var queue = new Queue<(int q, int r)>();
+        var start = cells.First();
+        visited.Add(start);
+        queue.Enqueue(start);
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            foreach (var neighbor in Neighbors(current.q, current.r))
+            {
+                if (!cells.Contains(neighbor) || !visited.Add(neighbor))
+                    continue;
+
+                queue.Enqueue(neighbor);
+            }
+        }
+
+        return visited.Count == cells.Count;
     }
 
     public static bool IsAdjacentToOwned(Dictionary<string, HexCell> grid, int q, int r,
@@ -97,6 +185,59 @@ public static class HexService
         return playerHex.q == q && playerHex.r == r;
     }
 
+    /// <summary>
+    /// Returns <paramref name="count"/> hex coordinates distributed evenly around a ring
+    /// at the given <paramref name="ringRadius"/> from center (0,0).
+    /// Coordinates are guaranteed to exist within a grid of the given <paramref name="gridRadius"/>.
+    /// </summary>
+    public static List<(int q, int r)> GetEvenlySpacedRing(int count, int ringRadius, int gridRadius)
+    {
+        if (count <= 0)
+            return [];
+
+        var ring = HexRing(ringRadius)
+            .Where(hex => Math.Abs(hex.q) <= gridRadius &&
+                          Math.Abs(hex.r) <= gridRadius &&
+                          Math.Abs(-hex.q - hex.r) <= gridRadius)
+            .ToList();
+
+        if (ring.Count == 0)
+            return [];
+
+        if (count >= ring.Count)
+            return ring;
+
+        var result = new List<(int q, int r)>(count);
+        var step = (double)ring.Count / count;
+        for (var i = 0; i < count; i++)
+            result.Add(ring[(int)Math.Round(i * step) % ring.Count]);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns all hex coordinates on the ring at exactly <paramref name="radius"/> distance from (0,0).
+    /// </summary>
+    private static List<(int q, int r)> HexRing(int radius)
+    {
+        if (radius <= 0)
+            return [(0, 0)];
+
+        var results = new List<(int q, int r)>();
+        var (q, r) = (-radius, radius); // start at direction 4 (top-left)
+        foreach (var (dq, dr) in Directions)
+        {
+            for (var step = 0; step < radius; step++)
+            {
+                results.Add((q, r));
+                q += dq;
+                r += dr;
+            }
+        }
+
+        return results;
+    }
+
     private static (int q, int r) HexRound(double q, double r)
     {
         var s = -q - r;
@@ -113,5 +254,30 @@ public static class HexService
             roundedR = -roundedQ - roundedS;
 
         return ((int)roundedQ, (int)roundedR);
+    }
+
+    /// <summary>
+    /// Iterates hex coordinates in a spiral pattern outward from (startQ, startR)
+    /// up to maxRadius rings. Used by Scout to find nearest owned tile.
+    /// </summary>
+    public static IEnumerable<(int q, int r)> SpiralSearch(int startQ, int startR, int maxRadius)
+    {
+        yield return (startQ, startR);
+        for (var ring = 1; ring <= maxRadius; ring++)
+        {
+            var q = startQ + ring;
+            var r = startR - ring;
+            // Walk the 6 edges of the ring
+            int[][] directions = [[0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1], [1, 0]];
+            foreach (var dir in directions)
+            {
+                for (var step = 0; step < ring; step++)
+                {
+                    yield return (q, r);
+                    q += dir[0];
+                    r += dir[1];
+                }
+            }
+        }
     }
 }

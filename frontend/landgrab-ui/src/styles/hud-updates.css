@@ -1,0 +1,445 @@
+/* Structural Overrides */
+.game-layout.hud-active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+.top-status-bar {
+  background: rgba(0, 0, 0, 0.85); /* Darkened for outdoor sunlight readability */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-warning-bar {
+  background: var(--danger, #ef4444);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  text-align: center;
+  font-weight: 500;
+}
+
+.top-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+}
+
+.hud-stats-flat {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.hud-stats-flat .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hud-stats-flat .stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.hud-stats-flat .stat-value.primary { color: #3b82f6; } /* blue-500 */
+.hud-stats-flat .stat-value.secondary { color: #10b981; } /* emerald-500 */
+
+.hud-stats-flat .stat-label {
+  font-size: 0.75rem;
+  color: #cbd5e1; /* slate-300 */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hud-menu-btn-flat {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.hud-menu-btn-flat:active {
+  opacity: 1;
+}
+
+.map-area-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Make sure GameMap fills the remaining wrapper */
+.map-area-wrapper > .map-container {
+  flex: 1;
+  height: 100%;
+}
+
+.bottom-hud-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem 0.75rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+  z-index: 1000;
+  background: linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 100%);
+}
+
+.hud-toast {
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: white;
+  pointer-events: none;
+  animation: toastCycle 3.5s ease-out forwards;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  max-width: 85%;
+  text-align: center;
+}
+
+@keyframes toastCycle {
+  0%   { opacity: 0; transform: translateY(10px); }
+  8%   { opacity: 1; transform: translateY(0); }
+  80%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-5px); }
+}
+
+.toast-danger {
+  background: rgba(220, 38, 38, 0.9); /* red-600 */
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.toast-success {
+  background: rgba(5, 150, 105, 0.9); /* emerald-600 */
+  border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+.toast-info {
+  background: rgba(30, 64, 120, 0.9);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+
+/* ============================================================
+   OUTDOOR / HIGH-CONTRAST ENHANCEMENTS
+   For scouts (ages 10-16) playing in bright sunlight on phones.
+   ============================================================ */
+
+/* --- High Contrast for Sunlight Readability --- */
+.stat-value {
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.stat-value.danger { color: #ff4444; }
+.stat-value.warning { color: #ffaa00; }
+
+/* --- Large Touch Targets (WCAG 2.5.5 — 44×44 minimum) --- */
+.hud-btn {
+  min-height: 48px;
+  min-width: 48px;
+  font-size: 1rem;
+}
+.hud-action-bar .hud-btn {
+  padding: 0.75rem 1.25rem;
+}
+
+
+/* ============================================================
+   TILE ACTION PANEL
+   Bottom-sheet style panel for hex tile interactions.
+   ============================================================ */
+
+.tile-action-panel {
+  background: rgba(10, 15, 30, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px 16px 0 0;
+  padding: 1rem;
+  border-top: 2px solid rgba(255, 255, 255, 0.15);
+  animation: slideUpPanel 0.25s ease-out;
+}
+
+.tile-action-panel .tile-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tile-action-panel .tile-info .troop-count {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: white;
+}
+
+.tile-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.75rem 1rem;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-bottom: 0.5rem;
+  background: none;
+}
+
+.tile-action-btn .action-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+/* --- Tone variants --- */
+.tile-action-btn.tone-primary {
+  background: rgba(52, 152, 219, 0.25);
+  border-color: #3498db;
+  color: #5dade2;
+}
+.tile-action-btn.tone-primary:active {
+  background: rgba(52, 152, 219, 0.5);
+  transform: scale(0.97);
+}
+
+.tile-action-btn.tone-danger {
+  background: rgba(231, 76, 60, 0.25);
+  border-color: #e74c3c;
+  color: #ec7063;
+}
+.tile-action-btn.tone-danger:active {
+  background: rgba(231, 76, 60, 0.5);
+  transform: scale(0.97);
+}
+
+.tile-action-btn.tone-info {
+  background: rgba(46, 204, 113, 0.2);
+  border-color: #2ecc71;
+  color: #58d68d;
+}
+.tile-action-btn.tone-info:active {
+  background: rgba(46, 204, 113, 0.45);
+  transform: scale(0.97);
+}
+
+.tile-action-btn.tone-neutral {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  min-height: 44px;
+  font-size: 0.95rem;
+}
+.tile-action-btn.tone-neutral:active {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(0.97);
+}
+
+.tile-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tile-action-btn:disabled:active {
+  transform: none;
+}
+.tile-action-btn:disabled .disabled-reason {
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+
+/* ============================================================
+   GAME TIMER
+   ============================================================ */
+
+.game-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.game-timer .timer-icon { font-size: 1rem; }
+.game-timer.urgent .stat-value { animation: pulse 1s infinite; }
+
+
+/* ============================================================
+   PICKUP SLIDER — oversized thumb for outdoor use
+   ============================================================ */
+
+.pickup-controls input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+.pickup-controls input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #3498db;
+  border: 3px solid white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.pickup-controls input[type="range"]::-moz-range-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #3498db;
+  border: 3px solid white;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes slideUpPanel {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes pulseSuccess {
+  0%   { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4); }
+  70%  { box-shadow: 0 0 0 15px rgba(46, 204, 113, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+}
+
+@keyframes shakeCombat {
+  0%, 100% { transform: translateX(0); }
+  10%, 50%, 90% { transform: translateX(-3px); }
+  30%, 70% { transform: translateX(3px); }
+}
+
+@keyframes fadeSlideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes confettiBurst {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(-200px) rotate(720deg); opacity: 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+.hud-toast { animation: fadeSlideIn 0.3s ease-out; }
+.tile-claimed { animation: pulseSuccess 0.6s ease-out; }
+.combat-shake { animation: shakeCombat 0.4s ease-in-out; }
+
+
+/* ============================================================
+   CONFETTI — pure CSS celebration for GameOver
+   ============================================================ */
+
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  animation: confettiFall linear forwards;
+}
+
+@keyframes confettiFall {
+  0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg) scale(0.3); opacity: 0; }
+}
+
+
+/* ============================================================
+   GAMEOVER ENHANCEMENTS — dramatic victory celebration
+   ============================================================ */
+
+.gameover-card .trophy {
+  font-size: 4.5rem;
+  animation: trophyBounce 0.6s ease-out;
+  filter: drop-shadow(0 4px 12px rgba(243, 156, 18, 0.4));
+}
+
+@keyframes trophyBounce {
+  0%   { transform: scale(0) rotate(-15deg); }
+  50%  { transform: scale(1.25) rotate(5deg); }
+  70%  { transform: scale(0.95) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.winner-glow {
+  text-shadow:
+    0 0 20px var(--winner-color, #f39c12),
+    0 0 40px var(--winner-color, #f39c12),
+    0 0 60px var(--winner-color, #f39c12);
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.3); }
+}
+
+.gameover-card h1 {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.gameover-card .subtitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.5rem;
+}

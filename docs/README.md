@@ -1,6 +1,6 @@
 # Landgrab — Documentation
 
-> **Conquer Your Neighborhood.** A real-world hex-grid territory game overlaid on OpenStreetMap.
+> **Conquer Your Neighborhood.** A real-world hex-grid territory game overlaid on PDOK base maps.
 
 ---
 
@@ -77,6 +77,6 @@ JWT_SECRET=<your-secret-here> docker compose up --build
 | Database | PostgreSQL 16 |
 | Auth | Custom JWT HS256 (BCrypt w=12, 7-day expiry) |
 | Frontend | React 19 + TypeScript + Vite |
-| Map | Leaflet.js + OpenStreetMap tiles |
+| Map | Leaflet.js + PDOK TOP25raster WMS by default |
 | Email | Azure Communication Services (optional; logs in dev) |
 | Containerisation | Docker + Docker Compose |

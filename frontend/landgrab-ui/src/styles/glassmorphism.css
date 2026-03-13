@@ -1,0 +1,440 @@
+.game-hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 2000; /* Above Leaflet controls */
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom)) 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.glass-panel {
+  background: rgba(18, 25, 38, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  pointer-events: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.hud-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.hud-stats {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 30px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.stat-value.primary { color: #3498db; }
+.stat-value.secondary { color: #f1c40f; }
+
+.stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.hud-menu-btn {
+  background: rgba(18, 25, 38, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.hud-menu-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hud-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+}
+
+.hud-context-pill {
+  padding: 0.5rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 500;
+  font-size: 0.8rem;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.context-info {
+  border: 1px solid rgba(52, 152, 219, 0.4);
+  background: rgba(18, 25, 38, 0.85);
+  box-shadow: 0 0 20px rgba(52, 152, 219, 0.15);
+}
+
+.context-success {
+  border: 1px solid rgba(46, 204, 113, 0.4);
+  background: rgba(18, 25, 38, 0.85);
+  box-shadow: 0 0 20px rgba(46, 204, 113, 0.15);
+}
+
+.context-danger {
+  border: 1px solid rgba(231, 76, 60, 0.4);
+  background: rgba(18, 25, 38, 0.85);
+  box-shadow: 0 0 20px rgba(231, 76, 60, 0.15);
+}
+
+.hud-action-bar {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 320px;
+  padding-bottom: 0.25rem;
+}
+
+.hud-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: 14px;
+  background: rgba(18, 25, 38, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: all 0.2s;
+}
+
+.hud-btn.primary {
+  background: rgba(52, 152, 219, 0.85);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.hud-btn:active {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.1);
+}
+.hud-btn.primary:active {
+  background: #2980b9;
+}
+
+.hud-modal-sheet {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(18, 25, 38, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 1.5rem;
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  pointer-events: auto;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+  max-height: 85vh;
+  overflow-y: auto;
+  z-index: 3000;
+  color: white;
+}
+
+.hud-modal-sheet.open {
+  transform: translateY(0);
+}
+
+.hud-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.hud-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.hud-modal-close {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.hud-modal-close:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.pickup-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+  width: 100%;
+}
+.pickup-controls input[type="range"] {
+  flex: 1;
+  accent-color: #3498db;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Ensure map takes full height */
+.game-layout.hud-active {
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.game-layout.hud-active .game-map-container {
+  height: 100% !important;
+  width: 100% !important;
+  flex: none;
+}
+
+/* Remove default Leaflet background tint if it clashes */
+.leaflet-container {
+  background: #1a1a1a;
+}
+
+/* Compact/hide Leaflet attribution on mobile */
+.game-layout.hud-active .leaflet-control-attribution {
+  font-size: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  max-width: 20px;
+  max-height: 14px;
+  overflow: hidden;
+  opacity: 0.3;
+  transition: all 0.2s;
+  pointer-events: auto;
+}
+
+.game-layout.hud-active .leaflet-control-attribution::before {
+  content: '\00a9';
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+}
+
+.game-layout.hud-active .leaflet-control-attribution:hover,
+.game-layout.hud-active .leaflet-control-attribution:focus-within {
+  font-size: 10px !important;
+  max-width: 100%;
+  max-height: none;
+  background: rgba(255,255,255,0.85) !important;
+  padding: 0 4px !important;
+  opacity: 1;
+}
+
+.game-layout.hud-active .leaflet-control-attribution:hover::before,
+.game-layout.hud-active .leaflet-control-attribution:focus-within::before {
+  display: none;
+}
+
+/* Hide layer control in game view - can add to menu later */
+.game-layout.hud-active .leaflet-control-layers {
+  display: none;
+}
+
+/* Structural Overrides */
+.game-layout.hud-active {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+}
+
+.top-status-bar {
+  background: rgba(15, 23, 42, 0.85); /* Tailwind slate-900 */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-warning-bar {
+  background: var(--danger, #ef4444);
+  color: white;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  text-align: center;
+  font-weight: 500;
+}
+
+.top-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+}
+
+.hud-stats-flat {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.hud-stats-flat .stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hud-stats-flat .stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.hud-stats-flat .stat-value.primary { color: #3b82f6; } /* blue-500 */
+.hud-stats-flat .stat-value.secondary { color: #10b981; } /* emerald-500 */
+
+.hud-stats-flat .stat-label {
+  font-size: 0.875rem;
+  color: #cbd5e1; /* slate-300 */
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hud-menu-btn-flat {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.hud-menu-btn-flat:active {
+  opacity: 1;
+}
+
+.map-area-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Make sure GameMap fills the remaining wrapper */
+.map-area-wrapper > .map-container {
+  flex: 1;
+  height: 100%;
+}
+
+.bottom-hud-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  pointer-events: none; /* Let clicks pass through to map */
+  z-index: 1000;
+  background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
+}
+
+.hud-toast {
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  pointer-events: none;
+  animation: slideUp 0.2s ease-out;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.toast-danger {
+  background: rgba(220, 38, 38, 0.9); /* red-600 */
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.toast-success {
+  background: rgba(5, 150, 105, 0.9); /* emerald-600 */
+  border: 1px solid rgba(16, 185, 129, 0.5);
+}
