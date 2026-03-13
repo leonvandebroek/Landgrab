@@ -23,6 +23,7 @@ import './styles/index.css';
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
 const SESSION_STORAGE_KEY = 'landgrab_session';
 const RESUME_TIMEOUT_MS = 5000;
+const LOCATION_BROADCAST_THROTTLE_MS = 3000;
 
 type ResumeSource = 'join' | 'rejoin';
 
@@ -82,6 +83,9 @@ export default function App() {
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
+  const locationThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingLocationRef = useRef<{ lat: number; lon: number } | null>(null);
+  const lastSendTimeRef = useRef<number>(0);
   const previousConnectedRef = useRef(false);
   const pendingResumeRef = useRef<PendingResume | null>(null);
   const savedSessionRef = useRef<SavedSession | null>(savedSession);
@@ -332,6 +336,35 @@ export default function App() {
     }
   });
 
+  const clearLocationThrottle = useCallback(() => {
+    if (locationThrottleRef.current !== null) {
+      clearTimeout(locationThrottleRef.current);
+      locationThrottleRef.current = null;
+    }
+  }, []);
+
+  const sendPendingLocation = useCallback(() => {
+    clearLocationThrottle();
+
+    const pendingLocation = pendingLocationRef.current;
+    if (!pendingLocation) {
+      return;
+    }
+
+    const locationKey = `${pendingLocation.lat.toFixed(6)},${pendingLocation.lon.toFixed(6)}`;
+    if (lastLocationRef.current === locationKey) {
+      pendingLocationRef.current = null;
+      return;
+    }
+
+    pendingLocationRef.current = null;
+    lastLocationRef.current = locationKey;
+    lastSendTimeRef.current = Date.now();
+
+    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lon)
+      .catch(cause => setError(String(cause)));
+  }, [clearLocationThrottle, invoke]);
+
   const refreshMyRooms = useCallback(async () => {
     if (!auth || !connected) {
       setMyRooms([]);
@@ -464,19 +497,45 @@ export default function App() {
 
   useEffect(() => {
     if (!connected || gameState?.phase !== 'Playing' || !currentLocation) {
+      clearLocationThrottle();
+      pendingLocationRef.current = null;
+      lastSendTimeRef.current = 0;
       lastLocationRef.current = '';
       return;
     }
 
+    pendingLocationRef.current = { lat: currentLocation.lat, lon: currentLocation.lng };
+
     const locationKey = `${currentLocation.lat.toFixed(6)},${currentLocation.lng.toFixed(6)}`;
     if (lastLocationRef.current === locationKey) {
+      pendingLocationRef.current = null;
       return;
     }
 
-    lastLocationRef.current = locationKey;
-    invoke('UpdatePlayerLocation', currentLocation.lat, currentLocation.lng)
-      .catch(cause => setError(String(cause)));
-  }, [connected, currentLocation, gameState?.phase, invoke]);
+    const elapsedSinceLastSend = Date.now() - lastSendTimeRef.current;
+    if (elapsedSinceLastSend >= LOCATION_BROADCAST_THROTTLE_MS) {
+      sendPendingLocation();
+      return;
+    }
+
+    clearLocationThrottle();
+    locationThrottleRef.current = setTimeout(() => {
+      sendPendingLocation();
+    }, LOCATION_BROADCAST_THROTTLE_MS - elapsedSinceLastSend);
+  }, [clearLocationThrottle, connected, currentLocation, gameState?.phase, sendPendingLocation]);
+
+  useEffect(() => {
+    const shouldFlushPendingLocation = connected && gameState?.phase === 'Playing';
+
+    return () => {
+      if (shouldFlushPendingLocation) {
+        sendPendingLocation();
+        return;
+      }
+
+      clearLocationThrottle();
+    };
+  }, [clearLocationThrottle, connected, gameState?.phase, sendPendingLocation]);
 
   useEffect(() => {
     const justConnected = connected && !previousConnectedRef.current;

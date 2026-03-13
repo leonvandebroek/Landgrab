@@ -305,8 +305,13 @@ export function GameMap({
             : cell.ownerId
               ? (isMine ? 0.82 : 0.62)
               : 0.22;
-      let borderColor = cell.ownerId ? '#f7fbff' : (isInactive ? 'rgba(214, 228, 244, 0.75)' : '#d7e7f6');
-      let borderWeight = cell.ownerId ? 2.25 : (isInactive ? 1.25 : 1.8);
+      let borderColor = cell.ownerId
+        ? '#f7fbff'
+        : (isInactive
+          ? 'rgba(100, 130, 170, 0.6)'
+          : (isFogHidden ? '#d7e7f6' : 'rgba(30, 60, 100, 0.8)'));
+      let borderWeight = cell.ownerId ? 3 : (isInactive ? 1.25 : 2.5);
+      let borderOpacity = cell.ownerId || cell.isMasterTile ? 0.95 : ((isInactive || isFogHidden) ? 0.8 : 0.92);
       let dashArray: string | undefined;
 
       if (cell.isMasterTile) {
@@ -349,7 +354,7 @@ export function GameMap({
         color: borderColor,
         dashArray,
         weight: borderWeight,
-        opacity: cell.ownerId || cell.isMasterTile ? 0.95 : 0.80,
+        opacity: borderOpacity,
         fillColor,
         fillOpacity
       });

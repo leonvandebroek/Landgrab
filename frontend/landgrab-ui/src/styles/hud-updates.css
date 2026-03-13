@@ -9,23 +9,26 @@
 }
 
 .top-status-bar {
-  background: rgba(0, 0, 0, 0.85); /* Darkened for outdoor sunlight readability */
-  backdrop-filter: blur(12px);
+  background: rgba(10, 18, 32, 0.95);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   color: white;
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .top-warning-bar {
-  background: var(--danger, #ef4444);
+  background: rgba(220, 38, 38, 0.95);
   color: white;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
   text-align: center;
-  font-weight: 500;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .top-stats-row {
@@ -108,14 +111,15 @@
 }
 
 .hud-toast {
-  padding: 0.35rem 0.75rem;
+  padding: 0.5rem 1rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: white;
   pointer-events: none;
   animation: toastCycle 3.5s ease-out forwards;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   max-width: 85%;
   text-align: center;
 }
@@ -128,18 +132,18 @@
 }
 
 .toast-danger {
-  background: rgba(220, 38, 38, 0.9); /* red-600 */
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(220, 38, 38, 0.95); /* red-600 */
+  border: 1px solid rgba(239, 68, 68, 0.8);
 }
 
 .toast-success {
-  background: rgba(5, 150, 105, 0.9); /* emerald-600 */
-  border: 1px solid rgba(16, 185, 129, 0.5);
+  background: rgba(5, 150, 105, 0.95); /* emerald-600 */
+  border: 1px solid rgba(16, 185, 129, 0.8);
 }
 
 .toast-info {
-  background: rgba(30, 64, 120, 0.9);
-  border: 1px solid rgba(59, 130, 246, 0.5);
+  background: rgba(30, 64, 120, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.8);
 }
 
 
@@ -173,9 +177,9 @@
    ============================================================ */
 
 .tile-action-panel {
-  background: rgba(10, 15, 30, 0.92);
-  backdrop-filter: blur(12px);
+  background: rgba(10, 15, 30, 0.96);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-radius: 16px 16px 0 0;
   padding: 1rem;
   border-top: 2px solid rgba(255, 255, 255, 0.15);
