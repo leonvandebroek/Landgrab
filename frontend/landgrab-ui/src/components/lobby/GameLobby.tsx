@@ -43,6 +43,7 @@ interface Props {
   onReturnToLobby: () => void;
   onLogout: () => void;
   error: string;
+  invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
 export function GameLobby({
@@ -76,6 +77,7 @@ export function GameLobby({
   onReturnToLobby,
   onLogout,
   error,
+  invoke,
 }: Props) {
   const { t } = useTranslation();
   const [joinCode, setJoinCode] = useState('');
@@ -245,6 +247,7 @@ export function GameLobby({
         onReturnToLobby={onReturnToLobby}
         onLogout={onLogout}
         error={error}
+        invoke={invoke}
       />
     );
   }

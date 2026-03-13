@@ -4,11 +4,12 @@ using Landgrab.Api.Models;
 using Landgrab.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Landgrab.Api.Hubs;
 
 [Authorize]
-public class GameHub(GameService gameService, GlobalMapService globalMap, TerrainFetchService terrainFetchService, ILogger<GameHub> logger)
+public class GameHub(GameService gameService, GlobalMapService globalMap, TerrainFetchService terrainFetchService, IServiceScopeFactory scopeFactory, ILogger<GameHub> logger)
     : Hub
 {
     public override async Task OnConnectedAsync()
@@ -749,6 +750,61 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
         if (error != null) { await SendError(error); return; }
 
         await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetHostBypassGps(string roomCode, bool bypass)
+    {
+        var (success, error) = gameService.SetHostBypassGps(roomCode, UserId, bypass);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        var state = gameService.GetStateSnapshot(roomCode);
+        if (state != null)
+            await BroadcastState(roomCode, state);
+    }
+
+    public async Task SetMaxFootprint(string roomCode, int meters)
+    {
+        var (success, error) = gameService.SetMaxFootprint(roomCode, UserId, meters);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        var state = gameService.GetStateSnapshot(roomCode);
+        if (state != null)
+            await BroadcastState(roomCode, state);
+    }
+
+    public async Task LoadMapTemplate(string roomCode, Guid templateId)
+    {
+        var (success, error) = await gameService.LoadMapTemplate(roomCode, UserId, templateId, scopeFactory);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        var state = gameService.GetStateSnapshot(roomCode);
+        if (state != null)
+            await BroadcastState(roomCode, state);
+    }
+
+    public async Task SaveCurrentAreaAsTemplate(string roomCode, string name, string? description)
+    {
+        var (success, error, templateId) = await gameService.SaveCurrentAreaAsTemplate(
+            roomCode, UserId, name, description, scopeFactory);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await Clients.Caller.SendAsync("TemplateSaved", templateId);
     }
 
     private async Task BroadcastState(string roomCode, GameState state, string? aliasEvent = null)

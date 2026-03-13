@@ -162,6 +162,9 @@ export interface GameState {
   isRushHour?: boolean;
   // Phase 9: Missions
   missions?: Mission[];
+  // Host overrides
+  hostBypassGps?: boolean;
+  maxFootprintMetersOverride?: number | null;
 }
 
 export interface Achievement {
@@ -260,4 +263,42 @@ export interface GlobalHex {
   attackCooldownUntil?: string;
   owner?: { username: string };
   ownerAlliance?: { name: string; tag: string };
+}
+
+// ── Map Templates ──────────────────────────────────────────────
+
+export interface MapTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  hexCount: number;
+  tileSizeMeters: number;
+  centerLat: number | null;
+  centerLng: number | null;
+  isPublic: boolean;
+  createdAt: string;
+  updatedAt: string;
+  creatorUsername?: string;
+}
+
+export interface MapTemplateDetail extends MapTemplate {
+  coordinates: HexCoordinate[];
+}
+
+export interface CreateMapTemplateRequest {
+  name: string;
+  description?: string;
+  coordinates: HexCoordinate[];
+  tileSizeMeters?: number;
+  centerLat?: number;
+  centerLng?: number;
+}
+
+export interface UpdateMapTemplateRequest {
+  name?: string;
+  description?: string;
+  coordinates?: HexCoordinate[];
+  tileSizeMeters?: number;
+  centerLat?: number;
+  centerLng?: number;
 }

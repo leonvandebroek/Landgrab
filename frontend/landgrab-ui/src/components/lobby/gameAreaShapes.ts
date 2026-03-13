@@ -6,6 +6,11 @@ export const DEFAULT_GAME_AREA_RADIUS = 8;
 export const MAX_GAME_AREA_FOOTPRINT_METERS = 1000;
 const SQRT_3 = 1.7320508075688772;
 
+/** Returns the effective max footprint, using the override if provided. */
+export function getMaxFootprintMeters(override?: number | null): number {
+    return override ?? MAX_GAME_AREA_FOOTPRINT_METERS;
+}
+
 export const GAME_AREA_PATTERNS: GameAreaPattern[] = [
     'WideFront',
     'TallFront',
@@ -113,13 +118,14 @@ export function getAreaFootprintMetrics(cells: HexCoordinate[], tileSizeMeters: 
     };
 }
 
-export function getMaxTileSizeForArea(cells: HexCoordinate[]): number {
+export function getMaxTileSizeForArea(cells: HexCoordinate[], footprintOverride?: number | null): number {
+    const maxFootprint = getMaxFootprintMeters(footprintOverride);
     const unitMetrics = getAreaFootprintMetrics(cells, 1);
     if (unitMetrics.maxDimensionMeters <= 0) {
-        return MAX_GAME_AREA_FOOTPRINT_METERS;
+        return maxFootprint;
     }
 
-    return Math.max(15, Math.floor(MAX_GAME_AREA_FOOTPRINT_METERS / unitMetrics.maxDimensionMeters));
+    return Math.max(15, Math.floor(maxFootprint / unitMetrics.maxDimensionMeters));
 }
 
 function hexDistance(q: number, r: number): number {

@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameAreaMode, GameAreaPattern, GameState, HexCell, HexCoordinate } from '../../types/game';
+import type { GameAreaMode, GameAreaPattern, GameState, HexCell, HexCoordinate, MapTemplate } from '../../types/game';
+import { listMapTemplates } from '../../api/mapTemplateApi';
+import { useAuth } from '../../hooks/useAuth';
 import { GameMap } from '../map/GameMap';
 import { hexKey } from '../map/HexMath';
 import { CustomSelect } from './CustomSelect';
@@ -10,10 +12,12 @@ import {
     buildPatternGameArea,
     GAME_AREA_PATTERNS,
     getAreaFootprintMetrics,
+    getMaxFootprintMeters,
     getMaxTileSizeForArea,
     isConnectedArea,
-    MAX_GAME_AREA_FOOTPRINT_METERS,
 } from './gameAreaShapes';
+
+type AreaModeOption = GameAreaMode | 'Template';
 
 const MIN_DRAWN_HEX_COUNT = 7;
 
@@ -34,6 +38,7 @@ interface Props {
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
     onStartGame: () => void;
+    invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
 export function ReviewStep({
@@ -48,14 +53,25 @@ export function ReviewStep({
     onSetMasterTileByHex,
     onAssignStartingTile,
     onStartGame,
+    invoke,
 }: Props) {
     const { t } = useTranslation();
+    const { auth } = useAuth();
     const [showCustomize, setShowCustomize] = useState(false);
     const [selectedHex, setSelectedHex] = useState<[number, number] | null>(null);
     const [selectedPlayerId, setSelectedPlayerId] = useState('');
-    const [areaModeDraft, setAreaModeDraft] = useState<GameAreaMode | null>(null);
+    const [areaModeDraft, setAreaModeDraft] = useState<AreaModeOption | null>(null);
     const [selectedPatternDraft, setSelectedPatternDraft] = useState<GameAreaPattern | null>(null);
     const [drawnCellsDraft, setDrawnCellsDraft] = useState<HexCoordinate[] | null>(null);
+
+    // Template state
+    const [templates, setTemplates] = useState<MapTemplate[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [templateLoading, setTemplateLoading] = useState(false);
+    const [showSaveForm, setShowSaveForm] = useState(false);
+    const [saveTemplateName, setSaveTemplateName] = useState('');
+    const [saveTemplateDesc, setSaveTemplateDesc] = useState('');
+    const [savingTemplate, setSavingTemplate] = useState(false);
 
     const mapIsReady = gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null;
     const masterTileReady = gameState.masterTileQ != null && gameState.masterTileR != null;
@@ -83,11 +99,13 @@ export function ReviewStep({
                 return drawingCanvas;
             case 'Pattern':
                 return buildPatternGameArea(selectedPattern);
+            case 'Template':
+                return savedDrawnCells.length > 0 ? savedDrawnCells : buildCenteredGameArea();
             case 'Centered':
             default:
                 return buildCenteredGameArea();
         }
-    }, [areaMode, drawingCanvas, selectedPattern]);
+    }, [areaMode, drawingCanvas, selectedPattern, savedDrawnCells]);
 
     const previewGrid = useMemo(() => buildPreviewGrid(previewCells, gameState.grid), [gameState.grid, previewCells]);
     const inactiveHexKeys = useMemo(() => {
@@ -117,16 +135,66 @@ export function ReviewStep({
         () => getAreaFootprintMetrics(activeAreaCells, gameState.tileSizeMeters),
         [activeAreaCells, gameState.tileSizeMeters]
     );
-    const previewMaxTileSize = useMemo(() => getMaxTileSizeForArea(activeAreaCells), [activeAreaCells]);
+    const previewMaxTileSize = useMemo(
+        () => getMaxTileSizeForArea(activeAreaCells, gameState.maxFootprintMetersOverride),
+        [activeAreaCells, gameState.maxFootprintMetersOverride]
+    );
     const drawIsConnected = useMemo(() => isConnectedArea(drawnCells), [drawnCells]);
     const drawIsLargeEnough = drawnCells.length >= MIN_DRAWN_HEX_COUNT;
-    const drawFitsFootprint = previewMetrics.maxDimensionMeters <= MAX_GAME_AREA_FOOTPRINT_METERS;
+    const maxFootprint = getMaxFootprintMeters(gameState.maxFootprintMetersOverride);
+    const drawFitsFootprint = previewMetrics.maxDimensionMeters <= maxFootprint;
     const canApplyDrawn = drawIsConnected && drawIsLargeEnough && drawFitsFootprint;
-    const patternFitsFootprint = previewMetrics.maxDimensionMeters <= MAX_GAME_AREA_FOOTPRINT_METERS;
+    const patternFitsFootprint = previewMetrics.maxDimensionMeters <= maxFootprint;
     const areaStatsText = t('wizard.areaStats', {
         count: activeAreaCells.length,
         footprint: formatDistance(Math.round(previewMetrics.maxDimensionMeters)),
     });
+
+    // Template fetching
+    const fetchTemplates = useCallback(async () => {
+        if (!auth?.token) return;
+        setTemplateLoading(true);
+        try {
+            const list = await listMapTemplates(auth.token);
+            setTemplates(list);
+        } catch {
+            // Template fetch errors are non-critical
+        } finally {
+            setTemplateLoading(false);
+        }
+    }, [auth?.token]);
+
+    useEffect(() => {
+        if (areaMode === 'Template') {
+            void fetchTemplates();
+        }
+    }, [areaMode, fetchTemplates]);
+
+    const handleLoadTemplate = useCallback(async () => {
+        if (!invoke || !selectedTemplateId) return;
+        try {
+            await invoke('LoadMapTemplate', gameState.roomCode, selectedTemplateId);
+        } catch {
+            // Error handled by server broadcast
+        }
+    }, [invoke, selectedTemplateId, gameState.roomCode]);
+
+    const handleSaveAsTemplate = useCallback(async () => {
+        if (!invoke || !saveTemplateName.trim()) return;
+        setSavingTemplate(true);
+        try {
+            const desc = saveTemplateDesc.trim() || undefined;
+            await invoke('SaveCurrentAreaAsTemplate', gameState.roomCode, saveTemplateName.trim(), desc);
+            setSaveTemplateName('');
+            setSaveTemplateDesc('');
+            setShowSaveForm(false);
+            void fetchTemplates();
+        } catch {
+            // Error handled by server broadcast
+        } finally {
+            setSavingTemplate(false);
+        }
+    }, [invoke, saveTemplateName, saveTemplateDesc, gameState.roomCode, fetchTemplates]);
 
     const handleAreaHexClick = (q: number, r: number, cell: HexCell | undefined) => {
         if (areaMode === 'Drawn') {
@@ -239,6 +307,13 @@ export function ReviewStep({
                             >
                                 {t('wizard.areaModePattern')}
                             </button>
+                            <button
+                                type="button"
+                                className={`wizard-area-mode-tab${areaMode === 'Template' ? ' is-active' : ''}`}
+                                onClick={() => setAreaModeDraft('Template')}
+                            >
+                                {t('wizard.areaModeTemplate' as never)}
+                            </button>
                         </div>
 
                         {areaMode === 'Drawn' && (
@@ -332,6 +407,109 @@ export function ReviewStep({
                                 </div>
                                 {!patternFitsFootprint && (
                                     <p className="error-msg wizard-area-validation">{t('wizard.areaTooLarge')}</p>
+                                )}
+                            </div>
+                        )}
+
+                        {areaMode === 'Template' && (
+                            <div className="wizard-area-mode-panel">
+                                <p className="wizard-hint">{t('wizard.areaTemplateHint' as never)}</p>
+
+                                {templateLoading && (
+                                    <p className="wizard-hint">{t('wizard.areaTemplateLoading' as never)}</p>
+                                )}
+
+                                {!templateLoading && templates.length === 0 && (
+                                    <p className="wizard-hint">{t('wizard.areaTemplateNone' as never)}</p>
+                                )}
+
+                                {!templateLoading && templates.length > 0 && (
+                                    <div className="wizard-area-actions">
+                                        <select
+                                            value={selectedTemplateId}
+                                            onChange={e => setSelectedTemplateId(e.target.value)}
+                                            className="wizard-template-select"
+                                        >
+                                            <option value="" disabled>
+                                                {t('wizard.areaTemplateSelectPlaceholder' as never)}
+                                            </option>
+                                            {templates.map(tpl => (
+                                                <option key={tpl.id} value={tpl.id}>
+                                                    {tpl.name} ({tpl.hexCount} hexes)
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            className="btn-secondary"
+                                            onClick={() => void handleLoadTemplate()}
+                                            disabled={!selectedTemplateId || !invoke}
+                                        >
+                                            {t('wizard.areaTemplateLoad' as never)}
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button
+                                    type="button"
+                                    className="btn-ghost small"
+                                    onClick={() => void fetchTemplates()}
+                                >
+                                    {t('wizard.areaTemplateRefresh' as never)}
+                                </button>
+
+                                {/* Save current area as template */}
+                                {Object.keys(gameState.grid).length > 0 && (
+                                    <div className="wizard-area-save-template">
+                                        {!showSaveForm ? (
+                                            <button
+                                                type="button"
+                                                className="btn-ghost small"
+                                                onClick={() => setShowSaveForm(true)}
+                                                disabled={!invoke}
+                                            >
+                                                {t('wizard.areaTemplateSave' as never)}
+                                            </button>
+                                        ) : (
+                                            <div className="wizard-area-save-form">
+                                                <input
+                                                    type="text"
+                                                    value={saveTemplateName}
+                                                    onChange={e => setSaveTemplateName(e.target.value)}
+                                                    placeholder={t('wizard.areaTemplateNamePlaceholder' as never)}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={saveTemplateDesc}
+                                                    onChange={e => setSaveTemplateDesc(e.target.value)}
+                                                    placeholder={t('wizard.areaTemplateDescPlaceholder' as never)}
+                                                />
+                                                <div className="wizard-area-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-secondary"
+                                                        onClick={() => void handleSaveAsTemplate()}
+                                                        disabled={!saveTemplateName.trim() || savingTemplate}
+                                                    >
+                                                        {savingTemplate
+                                                            ? t('wizard.areaTemplateSaving' as never)
+                                                            : t('wizard.areaTemplateSaveConfirm' as never)}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-ghost small"
+                                                        onClick={() => {
+                                                            setShowSaveForm(false);
+                                                            setSaveTemplateName('');
+                                                            setSaveTemplateDesc('');
+                                                        }}
+                                                    >
+                                                        {t('wizard.cancel' as never)}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         )}

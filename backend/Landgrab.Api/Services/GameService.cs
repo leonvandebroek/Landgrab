@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using Landgrab.Api.Data;
 using Landgrab.Api.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Landgrab.Api.Services;
 
@@ -43,7 +46,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         room.State.GridRadius = DefaultGridRadius;
         room.State.GameAreaMode = GameAreaMode.Centered;
         room.State.Grid = BuildGridForState(room.State);
-        room.State.TileSizeMeters = GetAllowedTileSizeMeters(room.State.Grid.Values.Select(cell => (cell.Q, cell.R)), DefaultTileSizeMeters);
+        room.State.TileSizeMeters = GetAllowedTileSizeMeters(room.State.Grid.Values.Select(cell => (cell.Q, cell.R)), DefaultTileSizeMeters,
+            room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters);
         room.State.Players.Add(new PlayerDto
         {
             Id = hostUserId,
@@ -176,7 +180,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 room.ConnectionMap.Clear();
                 room.State.TileSizeMeters = GetAllowedTileSizeMeters(
                     room.State.Grid.Values.Select(cell => (cell.Q, cell.R)),
-                    room.State.TileSizeMeters);
+                    room.State.TileSizeMeters,
+                    room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters);
 
                 foreach (var player in room.State.Players)
                     player.IsConnected = false;
@@ -549,15 +554,186 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 return (null, "Tile size can only be changed in the lobby.");
 
             var targetMeters = Math.Clamp(meters, 15, 1000);
-            var maxAllowedMeters = GetAllowedTileSizeMeters(room.State.Grid.Values.Select(cell => (cell.Q, cell.R)), 1000);
+            var effectiveFootprint = room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters;
+            var maxAllowedMeters = GetAllowedTileSizeMeters(room.State.Grid.Values.Select(cell => (cell.Q, cell.R)), 1000,
+                effectiveFootprint);
             if (targetMeters > maxAllowedMeters)
-                return (null, $"This game area can use at most {maxAllowedMeters} meters per tile to stay within 1 kilometer.");
+                return (null, $"This game area can use at most {maxAllowedMeters} meters per tile to stay within {effectiveFootprint:N0} meters.");
 
             room.State.TileSizeMeters = targetMeters;
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
         }
+    }
+
+    public (bool success, string? error) SetHostBypassGps(string roomCode, string userId, bool bypass)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (false, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (false, "Only the host can change GPS bypass.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (false, "GPS bypass can only be changed in the lobby.");
+
+            room.State.HostBypassGps = bypass;
+            QueuePersistence(room, SnapshotState(room.State));
+            return (true, null);
+        }
+    }
+
+    public (bool success, string? error) SetMaxFootprint(string roomCode, string userId, int meters)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (false, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (false, "Only the host can change the max footprint.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (false, "Max footprint can only be changed in the lobby.");
+            if (meters < 100 || meters > 50_000)
+                return (false, "Max footprint must be between 100 and 50,000 meters.");
+
+            room.State.MaxFootprintMetersOverride = meters;
+            QueuePersistence(room, SnapshotState(room.State));
+            return (true, null);
+        }
+    }
+
+    public async Task<(bool success, string? error)> LoadMapTemplate(string roomCode, string userId,
+        Guid templateId, IServiceScopeFactory scopeFactory)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (false, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (false, "Only the host can load a map template.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (false, "Templates can only be loaded in the lobby.");
+        }
+
+        // Fetch template outside lock — DB access is async
+        MapTemplate? template;
+        using (var scope = scopeFactory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            template = await db.MapTemplates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == templateId);
+        }
+
+        if (template == null)
+            return (false, "Template not found.");
+        if (!template.IsPublic && template.CreatorUserId.ToString() != userId)
+            return (false, "You do not have access to this template.");
+
+        var coordinates = JsonSerializer.Deserialize<List<HexCoordinateDto>>(template.HexCoordinatesJson)
+            ?? [];
+        var selectedCoordinates = coordinates
+            .Select(c => (c.Q, c.R))
+            .Distinct()
+            .ToList();
+
+        if (selectedCoordinates.Count < MinimumDrawnHexCount)
+            return (false, $"Template must contain at least {MinimumDrawnHexCount} tiles.");
+        if (!HexService.IsConnected(selectedCoordinates))
+            return (false, "Template coordinates must form a connected shape.");
+
+        lock (room.SyncRoot)
+        {
+            // Re-validate after re-acquiring lock
+            if (room.State.Phase != GamePhase.Lobby)
+                return (false, "Templates can only be loaded in the lobby.");
+
+            var normalizedCoordinates = selectedCoordinates;
+            room.State.GameAreaMode = GameAreaMode.Drawn;
+            room.State.GameAreaPattern = null;
+            room.State.Grid = HexService.BuildGrid(normalizedCoordinates);
+            room.State.GridRadius = Math.Max(1, HexService.InferRadius(normalizedCoordinates));
+
+            if (template.TileSizeMeters > 0)
+                room.State.TileSizeMeters = template.TileSizeMeters;
+
+            room.State.TileSizeMeters = GetAllowedTileSizeMeters(normalizedCoordinates, room.State.TileSizeMeters,
+                room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters);
+            ResetBoardStateForAreaChange(room.State);
+
+            var host = room.State.Players.FirstOrDefault(p => p.IsHost);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "GameAreaUpdated",
+                Message = $"The host loaded map template \"{template.Name}\".",
+                PlayerId = host?.Id,
+                PlayerName = host?.Name
+            });
+
+            QueuePersistence(room, SnapshotState(room.State));
+            return (true, null);
+        }
+    }
+
+    public async Task<(bool success, string? error, Guid? templateId)> SaveCurrentAreaAsTemplate(
+        string roomCode, string userId, string name, string? description,
+        IServiceScopeFactory scopeFactory)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (false, "Room not found.", null);
+
+        List<HexCoordinateDto> coordinates;
+        int tileSizeMeters;
+        double? centerLat;
+        double? centerLng;
+
+        lock (room.SyncRoot)
+        {
+            if (!IsHost(room, userId))
+                return (false, "Only the host can save map templates.", null);
+            if (room.State.Grid.Count == 0)
+                return (false, "No game area to save.", null);
+
+            coordinates = room.State.Grid.Values
+                .Select(cell => new HexCoordinateDto { Q = cell.Q, R = cell.R })
+                .ToList();
+            tileSizeMeters = room.State.TileSizeMeters;
+            centerLat = room.State.MapLat;
+            centerLng = room.State.MapLng;
+        }
+
+        var template = new MapTemplate
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = description,
+            CreatorUserId = Guid.Parse(userId),
+            HexCoordinatesJson = JsonSerializer.Serialize(coordinates),
+            HexCount = coordinates.Count,
+            TileSizeMeters = tileSizeMeters,
+            CenterLat = centerLat,
+            CenterLng = centerLng,
+            IsPublic = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        using (var scope = scopeFactory.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.MapTemplates.Add(template);
+            await db.SaveChangesAsync();
+        }
+
+        return (true, null, template.Id);
     }
 
     public (GameState? state, string? error) UseCenteredGameArea(string roomCode, string userId)
@@ -2350,7 +2526,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         room.State.GameAreaPattern = pattern;
         room.State.Grid = HexService.BuildGrid(normalizedCoordinates);
         room.State.GridRadius = Math.Max(1, HexService.InferRadius(normalizedCoordinates));
-        room.State.TileSizeMeters = GetAllowedTileSizeMeters(normalizedCoordinates, room.State.TileSizeMeters);
+        room.State.TileSizeMeters = GetAllowedTileSizeMeters(normalizedCoordinates, room.State.TileSizeMeters,
+            room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters);
         ResetBoardStateForAreaChange(room.State);
 
         var host = room.State.Players.FirstOrDefault(player => player.IsHost);
@@ -2504,7 +2681,15 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (player.HeldByPlayerId != null)
             return "You are detained and cannot take actions.";
 
-        if (!HexService.IsPlayerInHex(playerLat, playerLng, q, r,
+        // Host GPS bypass — treat host as being at hex center
+        if (player.IsHost && state.HostBypassGps)
+        {
+            var (hexLat, hexLng) = HexService.HexToLatLng(q, r,
+                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters);
+            player.CurrentLat = hexLat;
+            player.CurrentLng = hexLng;
+        }
+        else if (!HexService.IsPlayerInHex(playerLat, playerLng, q, r,
                 state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters))
             return "You must be physically inside that hex to interact with it.";
 
@@ -2532,10 +2717,11 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         };
     }
 
-    private static int GetAllowedTileSizeMeters(IEnumerable<(int q, int r)> coordinates, int requestedMeters)
+    private static int GetAllowedTileSizeMeters(IEnumerable<(int q, int r)> coordinates, int requestedMeters,
+        int maxFootprintMeters)
     {
         var maxAllowedMeters = Math.Max(15,
-            HexService.GetMaxTileSizeForFootprint(coordinates, MaxFootprintMeters));
+            HexService.GetMaxTileSizeForFootprint(coordinates, maxFootprintMeters));
         return Math.Clamp(requestedMeters, 15, maxAllowedMeters);
     }
 

@@ -35,17 +35,19 @@ export function getTileActions({
   targetHex,
   targetCell,
   currentHex,
+  isHostBypass,
 }: {
   state: GameState;
   player: Player | null;
   targetHex: [number, number] | null;
   targetCell?: GameState['grid'][string];
   currentHex: [number, number] | null;
+  isHostBypass?: boolean;
 }): TileAction[] {
   if (!targetHex || !targetCell || !player || !currentHex) return [];
 
-  // Player must be standing on the target hex
-  if (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1]) return [];
+  // Player must be standing on the target hex (unless host GPS bypass is active)
+  if (!isHostBypass && (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1])) return [];
 
   // No actions on the master tile
   if (targetCell.isMasterTile) return [];
@@ -193,7 +195,8 @@ export function getTileInteractionStatus({
   targetHex,
   targetCell,
   currentHex,
-  t
+  t,
+  isHostBypass,
 }: {
   state: GameState;
   player: Player | null;
@@ -201,6 +204,7 @@ export function getTileInteractionStatus({
   targetCell?: GameState['grid'][string];
   currentHex: [number, number] | null;
   t: TFunction;
+  isHostBypass?: boolean;
 }): TileInteractionStatus {
   if (!targetHex || !targetCell) {
     return {
@@ -218,7 +222,8 @@ export function getTileInteractionStatus({
     };
   }
 
-  if (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1]) {
+  // Skip position check when host GPS bypass is active
+  if (!isHostBypass && (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1])) {
     return {
       action: 'none',
       tone: 'info',

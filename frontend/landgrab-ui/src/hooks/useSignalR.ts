@@ -35,6 +35,8 @@ export interface GameEvents {
   // Phase 10: Duel
   onDuelChallenge?: (duel: PendingDuel) => void;
   onDuelResult?: (data: { duelId: string; winnerId: string; loserId: string }) => void;
+  // Map Editor
+  onTemplateSaved?: (data: { templateId: string; name: string }) => void;
 }
 
 export function useSignalR(token: string | null, events: GameEvents) {
@@ -152,6 +154,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('MissionFailed', (mission: Mission) => eventsRef.current.onMissionFailed?.(mission));
     conn.on('DuelChallenge', (duel: PendingDuel) => eventsRef.current.onDuelChallenge?.(duel));
     conn.on('DuelResult', (data: { duelId: string; winnerId: string; loserId: string }) => eventsRef.current.onDuelResult?.(data));
+    conn.on('TemplateSaved', (data: { templateId: string; name: string }) => eventsRef.current.onTemplateSaved?.(data));
 
     conn.onreconnecting(() => {
       if (!disposed) {

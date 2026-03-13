@@ -8,6 +8,7 @@ import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { vibrate, HAPTIC } from './utils/haptics';
 import { AuthPage } from './components/auth/AuthPage';
+import { MapEditorPage } from './components/editor/MapEditorPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameRulesPage } from './components/game/GameRulesPage';
 import { GameLobby } from './components/lobby/GameLobby';
@@ -61,7 +62,7 @@ export default function App() {
   const { auth, login, register, logout } = useAuth();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [error, setError] = useState('');
-  const [view, setView] = useState<'lobby' | 'game' | 'gameover'>('lobby');
+  const [view, setView] = useState<'lobby' | 'game' | 'gameover' | 'mapEditor'>('lobby');
   const [selectedHex, setSelectedHex] = useState<[number, number] | null>(null);
   const [mapFeedback, setMapFeedback] = useState<MapInteractionFeedback | null>(null);
   const [pickupPrompt, setPickupPrompt] = useState<PickupPrompt | null>(null);
@@ -243,7 +244,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [mapFeedback]);
 
-  const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover') => {
+  const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover' | 'mapEditor') => {
     const normalizedState = normalizeGameState(state, gameState);
     resolveResumeFromState(normalizedState);
     if (normalizedState.roomCode) {
@@ -335,6 +336,9 @@ export default function App() {
     onDuelResult: () => {
       setPendingDuel(null);
     },
+    onTemplateSaved: (data) => {
+      console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
+    },
     onReconnected: () => {
       clearError();
     }
@@ -386,6 +390,8 @@ export default function App() {
 
     return gameState.players.find(player => player.id === auth.userId) ?? null;
   }, [auth, gameState]);
+
+  const isHostBypass = Boolean(gameState?.hostBypassGps && myPlayer?.isHost);
 
   const selectedHexKey = useMemo(() => {
     if (!selectedHex) {
@@ -886,15 +892,16 @@ export default function App() {
     setPickupPrompt(null);
     clearError();
 
-    // Check if player is NOT on this hex - show info message
-    if (!currentHex || currentHex[0] !== q || currentHex[1] !== r) {
+    // Check if player is NOT on this hex - show info message (skip when host GPS bypass is active)
+    if (!isHostBypass && (!currentHex || currentHex[0] !== q || currentHex[1] !== r)) {
       const interactionStatus = getTileInteractionStatus({
         state: gameState,
         player: myPlayer,
         targetHex,
         targetCell: cell,
         currentHex,
-        t
+        t,
+        isHostBypass,
       });
       setMapFeedback({
         tone: interactionStatus.action === 'none' ? interactionStatus.tone : 'info',
@@ -904,10 +911,10 @@ export default function App() {
       return;
     }
 
-    // Player IS on this hex - TileActionPanel will show via tileActions memo
+    // Player IS on this hex (or host bypass is active) - TileActionPanel will show via tileActions memo
     // Clear any old feedback
     setMapFeedback(null);
-  }, [auth, currentHex, gameState, myPlayer, t]);
+  }, [auth, currentHex, gameState, isHostBypass, myPlayer, t]);
 
   const tileActions = useMemo<TileAction[]>(() => {
     if (!gameState || gameState.phase !== 'Playing' || !selectedHex) return [];
@@ -918,12 +925,27 @@ export default function App() {
       targetHex: selectedHex,
       targetCell,
       currentHex,
+      isHostBypass,
     });
-  }, [gameState, selectedHex, myPlayer, currentHex]);
+  }, [gameState, selectedHex, myPlayer, currentHex, isHostBypass]);
 
   const handleTileAction = useCallback((actionType: TileActionType) => {
-    if (!selectedHex || !currentLocation || !gameState) return;
+    if (!selectedHex || !gameState) return;
     const [q, r] = selectedHex;
+
+    // When host GPS bypass is active, send hex center coordinates instead of actual GPS
+    let actionLat: number;
+    let actionLng: number;
+    if (isHostBypass && gameState.mapLat != null && gameState.mapLng != null) {
+      const [hexLat, hexLng] = roomHexToLatLng(q, r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
+      actionLat = hexLat;
+      actionLng = hexLng;
+    } else if (currentLocation) {
+      actionLat = currentLocation.lat;
+      actionLng = currentLocation.lng;
+    } else {
+      return; // no location available
+    }
 
     switch (actionType) {
       case 'claim':
@@ -931,7 +953,7 @@ export default function App() {
       case 'claimAlliance':
       case 'claimSelf': {
         const claimForSelf = actionType === 'claimSelf';
-        invoke('PlaceTroops', q, r, currentLocation.lat, currentLocation.lng, null, claimForSelf)
+        invoke('PlaceTroops', q, r, actionLat, actionLng, null, claimForSelf)
           .then(() => {
             setPickupPrompt(null);
             playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
@@ -969,7 +991,7 @@ export default function App() {
         setMapFeedback(null);
         break;
     }
-  }, [selectedHex, currentLocation, gameState, myPlayer, invoke, playSound, t]);
+  }, [selectedHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
 
   const handleDismissTileActions = useCallback(() => {
     setSelectedHex(null);
@@ -977,14 +999,28 @@ export default function App() {
   }, []);
 
   const handleConfirmPickup = useCallback(() => {
-    if (!pickupPrompt || !currentLocation) {
+    if (!pickupPrompt) {
       return;
+    }
+
+    // When host GPS bypass is active, use hex center coordinates
+    let pickupLat: number;
+    let pickupLng: number;
+    if (isHostBypass && gameState && gameState.mapLat != null && gameState.mapLng != null) {
+      const [hexLat, hexLng] = roomHexToLatLng(pickupPrompt.q, pickupPrompt.r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
+      pickupLat = hexLat;
+      pickupLng = hexLng;
+    } else if (currentLocation) {
+      pickupLat = currentLocation.lat;
+      pickupLng = currentLocation.lng;
+    } else {
+      return; // no location available
     }
 
     const targetHex: [number, number] = [pickupPrompt.q, pickupPrompt.r];
     clearError();
     setSelectedHex(targetHex);
-    invoke('PickUpTroops', pickupPrompt.q, pickupPrompt.r, pickupCount, currentLocation.lat, currentLocation.lng)
+    invoke('PickUpTroops', pickupPrompt.q, pickupPrompt.r, pickupCount, pickupLat, pickupLng)
       .then(() => {
         setPickupPrompt(null);
         playSound('pickup');
@@ -1005,12 +1041,27 @@ export default function App() {
           targetHex
         });
       });
-  }, [currentLocation, invoke, pickupCount, pickupPrompt, playSound, t]);
+  }, [currentLocation, gameState, invoke, isHostBypass, pickupCount, pickupPrompt, playSound, t]);
 
   const handleConfirmAttack = useCallback(async () => {
-    if (!attackPrompt || !currentLocation) return;
+    if (!attackPrompt) return;
+
+    // When host GPS bypass is active, use hex center coordinates
+    let attackLat: number;
+    let attackLng: number;
+    if (isHostBypass && gameState && gameState.mapLat != null && gameState.mapLng != null) {
+      const [hexLat, hexLng] = roomHexToLatLng(attackPrompt.q, attackPrompt.r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
+      attackLat = hexLat;
+      attackLng = hexLng;
+    } else if (currentLocation) {
+      attackLat = currentLocation.lat;
+      attackLng = currentLocation.lng;
+    } else {
+      return; // no location available
+    }
+
     try {
-      await invoke('PlaceTroops', attackPrompt.q, attackPrompt.r, currentLocation.lat, currentLocation.lng, attackCount, false);
+      await invoke('PlaceTroops', attackPrompt.q, attackPrompt.r, attackLat, attackLng, attackCount, false);
       playSound('attack');
       // CombatResult will come via SignalR event
     } catch (err) {
@@ -1019,7 +1070,7 @@ export default function App() {
     } finally {
       setAttackPrompt(null);
     }
-  }, [attackPrompt, attackCount, currentLocation, invoke, playSound]);
+  }, [attackPrompt, attackCount, currentLocation, gameState, invoke, isHostBypass, playSound]);
 
   const handleCancelAttack = useCallback(() => {
     setAttackPrompt(null);
@@ -1082,6 +1133,10 @@ export default function App() {
 
   if (!auth) {
     return <AuthPage onLogin={login} onRegister={register} />;
+  }
+
+  if (view === 'mapEditor') {
+    return <MapEditorPage token={auth.token} onBack={() => setView('lobby')} />;
   }
 
   if (view === 'gameover' && gameState) {
@@ -1219,7 +1274,17 @@ export default function App() {
           setView('lobby');
         }}
         error={error}
+        invoke={invoke}
       />
+      {!gameState && (
+        <button
+          type="button"
+          className="btn-secondary map-editor-toggle"
+          onClick={() => setView('mapEditor')}
+        >
+          🗺️ Map Editor
+        </button>
+      )}
       {debugGpsPanel}
       {debugToggleButton}
     </>

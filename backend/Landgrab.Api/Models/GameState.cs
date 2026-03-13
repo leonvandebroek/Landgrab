@@ -226,6 +226,10 @@ public class GameState
     public bool IsAllianceVictory { get; set; }
     public List<Achievement> Achievements { get; set; } = [];
 
+    // Host settings
+    public bool HostBypassGps { get; set; } = false;
+    public int? MaxFootprintMetersOverride { get; set; }
+
     // Phase 6: JagerProoi — prey target tile
     public int? PreyTargetQ { get; set; }
     public int? PreyTargetR { get; set; }

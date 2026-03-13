@@ -17,4 +17,5 @@ public class User
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<AllianceMember> AllianceMemberships { get; set; } = [];
+    public ICollection<MapTemplate> MapTemplates { get; set; } = [];
 }

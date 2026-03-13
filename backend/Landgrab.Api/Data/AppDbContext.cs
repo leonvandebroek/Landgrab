@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<GameEvent> GameEvents => Set<GameEvent>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<PersistedRoom> PersistedRooms => Set<PersistedRoom>();
+    public DbSet<MapTemplate> MapTemplates => Set<MapTemplate>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -67,6 +68,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(room => room.IsActive).HasDefaultValue(true);
             e.HasIndex(room => room.IsActive);
             e.HasIndex(room => room.UpdatedAt);
+        });
+
+        model.Entity<MapTemplate>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Name).IsRequired().HasMaxLength(100);
+            e.Property(t => t.Description).HasMaxLength(500);
+            e.Property(t => t.HexCoordinatesJson).IsRequired();
+            e.HasIndex(t => t.CreatorUserId);
+            e.HasIndex(t => t.IsPublic);
+            e.HasOne(t => t.Creator)
+                .WithMany(u => u.MapTemplates)
+                .HasForeignKey(t => t.CreatorUserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

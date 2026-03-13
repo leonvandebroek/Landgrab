@@ -119,6 +119,7 @@ app.UseAuthorization();
 app.MapAuthEndpoints();
 app.MapGlobalMapEndpoints();
 app.MapAllianceEndpoints();
+app.MapMapTemplateEndpoints();
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));

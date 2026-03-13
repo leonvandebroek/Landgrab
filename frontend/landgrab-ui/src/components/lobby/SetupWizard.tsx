@@ -38,6 +38,7 @@ interface Props {
     onReturnToLobby: () => void;
     onLogout: () => void;
     error: string;
+    invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
 const TOTAL_STEPS = 5;
@@ -68,6 +69,7 @@ export function SetupWizard({
     onReturnToLobby,
     onLogout,
     error,
+    invoke,
 }: Props) {
     const { t } = useTranslation();
     const me = gameState.players.find(p => p.id === myUserId);
@@ -183,6 +185,7 @@ export function SetupWizard({
                             onSetClaimMode={onSetClaimMode}
                             onSetAllowSelfClaim={onSetAllowSelfClaim}
                             onSetWinCondition={onSetWinCondition}
+                            invoke={invoke}
                         />
                     )}
                     {step === 3 && (
@@ -207,6 +210,7 @@ export function SetupWizard({
                             onSetMasterTileByHex={onSetMasterTileByHex}
                             onAssignStartingTile={onAssignStartingTile}
                             onStartGame={onStartGame}
+                            invoke={invoke}
                         />
                     )}
                 </div>

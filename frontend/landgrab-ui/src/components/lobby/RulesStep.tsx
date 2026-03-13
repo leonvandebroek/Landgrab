@@ -14,13 +14,18 @@ interface Props {
     onSetClaimMode: (mode: ClaimMode) => void;
     onSetAllowSelfClaim: (allow: boolean) => void;
     onSetWinCondition: (type: WinConditionType, value: number) => void;
+    invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
-export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, onSetAllowSelfClaim, onSetWinCondition }: Props) {
+export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, onSetAllowSelfClaim, onSetWinCondition, invoke }: Props) {
     const { t } = useTranslation();
     const [winValueDraft, setWinValueDraft] = useState<string | null>(null);
     const [tileSizeDraft, setTileSizeDraft] = useState<number | null>(null);
-    const maxTileSizeMeters = getMaxTileSizeForArea(Object.values(gameState.grid).map(cell => ({ q: cell.q, r: cell.r })));
+    const [maxFootprintDraft, setMaxFootprintDraft] = useState<string>('');
+    const maxTileSizeMeters = getMaxTileSizeForArea(
+        Object.values(gameState.grid).map(cell => ({ q: cell.q, r: cell.r })),
+        gameState.maxFootprintMetersOverride,
+    );
     const effectiveTileSizeMeters = Math.min(gameState.tileSizeMeters, maxTileSizeMeters);
     const tileSizeMatchesServer = tileSizeDraft != null && tileSizeDraft === effectiveTileSizeMeters;
     const displayedTileSizeMeters = tileSizeMatchesServer ? effectiveTileSizeMeters : (tileSizeDraft ?? effectiveTileSizeMeters);
@@ -62,6 +67,16 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
             onSetTileSize(boundedMeters);
         }
     };
+
+    const applyMaxFootprint = () => {
+        const parsed = Number(maxFootprintDraft);
+        if (Number.isFinite(parsed) && parsed >= 100 && parsed <= 50000) {
+            invoke?.('SetMaxFootprint', gameState.roomCode, parsed);
+            setMaxFootprintDraft('');
+        }
+    };
+
+    const effectiveMaxFootprint = maxFootprintDraft || String(gameState.maxFootprintMetersOverride ?? '');
 
     return (
         <div className="wizard-step wizard-step-rules">
@@ -164,6 +179,52 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         )}
                     </div>
                 </div>
+
+                {/* Advanced host settings */}
+                {isHost && (
+                    <div className="wizard-rule-card">
+                        <h3>{t('wizard.rulesAdvancedTitle' as never)}</h3>
+                        <p className="wizard-hint">{t('wizard.rulesAdvancedDesc' as never)}</p>
+
+                        {/* Host GPS bypass */}
+                        <label className="toggle-row">
+                            <input
+                                type="checkbox"
+                                checked={gameState.hostBypassGps === true}
+                                onChange={e => {
+                                    invoke?.('SetHostBypassGps', gameState.roomCode, e.target.checked);
+                                }}
+                            />
+                            <span>{t('wizard.rulesHostBypassGps' as never)}</span>
+                        </label>
+                        <p className="wizard-hint">{t('wizard.rulesHostBypassGpsDesc' as never)}</p>
+
+                        {/* Max footprint override */}
+                        <div className="settings-row">
+                            <label>
+                                <span>{t('wizard.rulesMaxFootprint' as never)}</span>
+                                <input
+                                    type="number"
+                                    min={100}
+                                    max={50000}
+                                    step={100}
+                                    value={effectiveMaxFootprint}
+                                    onChange={e => setMaxFootprintDraft(e.target.value)}
+                                    placeholder="Default (1km)"
+                                />
+                            </label>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={applyMaxFootprint}
+                                disabled={!maxFootprintDraft}
+                            >
+                                {t('lobby.apply')}
+                            </button>
+                        </div>
+                        <p className="wizard-hint">{t('wizard.rulesMaxFootprintDesc' as never)}</p>
+                    </div>
+                )}
             </div>
         </div>
     );

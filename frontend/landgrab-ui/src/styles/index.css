@@ -4264,3 +4264,410 @@ input:checked + .display-settings-slider:before {
 .time-night .hex-polygon.is-frontier path {
   filter: drop-shadow(0 0 8px var(--hex-owner-color, rgba(150,200,255,0.4)));
 }
+
+/* ================================================================
+   11. Map Editor — Page, Templates, Cards, Layout
+   ================================================================ */
+
+/* ── Page container ─────────────────────────────────────────── */
+
+.map-editor-page {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.map-editor-page__nav {
+  padding: 16px 24px;
+}
+
+.map-editor-page__error {
+  margin: 0 24px 16px;
+  padding: 12px 16px;
+  background: rgba(231, 76, 60, 0.15);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+/* ── Template list / grid ───────────────────────────────────── */
+
+.map-editor-templates {
+  padding: 0 24px 32px;
+}
+
+.map-editor-templates__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.map-editor-templates__header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.map-editor-templates__loading {
+  text-align: center;
+  padding: 64px 0;
+  color: var(--muted);
+  font-size: 1.1rem;
+}
+
+.map-editor-templates__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* ── Template card ──────────────────────────────────────────── */
+
+.map-editor-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.map-editor-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 20px rgba(52, 152, 219, 0.12);
+}
+
+.map-editor-card__body {
+  padding: 20px;
+  cursor: pointer;
+}
+
+.map-editor-card__body:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.map-editor-card__name {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.map-editor-card__desc {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.map-editor-card__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.map-editor-card__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  background: var(--surface2);
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.map-editor-card__date {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.map-editor-card__actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--surface2);
+}
+
+.map-editor-card__actions .btn-secondary {
+  flex: 1;
+  font-size: 0.82rem;
+  padding: 6px 8px;
+}
+
+.map-editor-card__delete:hover {
+  background: rgba(231, 76, 60, 0.2) !important;
+  color: var(--danger) !important;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+
+.map-editor-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 80px 24px;
+  color: var(--muted);
+}
+
+.map-editor-empty__icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
+
+.map-editor-empty h3 {
+  margin: 0 0 8px;
+  font-size: 1.3rem;
+  color: var(--text);
+}
+
+.map-editor-empty p {
+  margin: 0 0 24px;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* ── Editor layout (toolbar + canvas) ───────────────────────── */
+
+.map-editor-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.map-editor-layout__toolbar {
+  width: 300px;
+  min-width: 300px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--surface2);
+}
+
+.map-editor-layout__canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+/* ================================================================
+   12. Map Editor — Canvas, Hex Grid, Toolbar
+   ================================================================ */
+
+/* ── SVG canvas container ──────────────────────────────────── */
+
+.map-editor-canvas {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.map-editor-canvas:active {
+  cursor: grabbing;
+}
+
+.map-editor-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Hex polygons ──────────────────────────────────────────── */
+
+.map-editor-hex {
+  cursor: pointer;
+  transition: fill 0.12s, stroke 0.12s;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.map-editor-hex--empty {
+  fill: rgba(26, 39, 64, 0.45);
+  stroke: rgba(52, 152, 219, 0.12);
+}
+
+.map-editor-hex--selected {
+  fill: var(--accent);
+  stroke: rgba(52, 152, 219, 0.55);
+  filter: drop-shadow(0 0 4px rgba(52, 152, 219, 0.3));
+}
+
+.map-editor-hex--empty:hover {
+  fill: rgba(52, 152, 219, 0.25);
+  stroke: rgba(52, 152, 219, 0.4);
+}
+
+.map-editor-hex--selected:hover {
+  fill: #2980b9;
+  stroke: rgba(52, 152, 219, 0.75);
+}
+
+/* ── Toolbar sidebar ───────────────────────────────────────── */
+
+.map-editor-toolbar {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+}
+
+.map-editor-toolbar__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.map-editor-toolbar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.map-editor-toolbar__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.map-editor-toolbar__input {
+  background: var(--surface2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: calc(var(--radius) / 2);
+  padding: 0.55rem 0.75rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.map-editor-toolbar__input:focus {
+  border-color: var(--accent);
+}
+
+.map-editor-toolbar__textarea {
+  resize: vertical;
+  min-height: 3.5rem;
+}
+
+/* ── Stats panel ───────────────────────────────────────────── */
+
+.map-editor-toolbar__stats {
+  background: var(--surface2);
+  border-radius: calc(var(--radius) / 2);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.map-editor-toolbar__stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.map-editor-toolbar__stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.map-editor-toolbar__stat-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.map-editor-toolbar__stat-value--ok {
+  color: var(--accent2);
+}
+
+.map-editor-toolbar__stat-value--warn {
+  color: var(--danger);
+}
+
+/* ── Validation hints ──────────────────────────────────────── */
+
+.map-editor-toolbar__hints {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.map-editor-toolbar__hints li {
+  font-size: 0.78rem;
+  color: var(--danger);
+  padding-left: 0.85rem;
+  position: relative;
+}
+
+.map-editor-toolbar__hints li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+}
+
+/* ── Action buttons ────────────────────────────────────────── */
+
+.map-editor-toolbar__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: auto;
+}
+
+.map-editor-toolbar__btn {
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s, transform 0.1s;
+  text-align: center;
+  font-family: inherit;
+}
+
+.map-editor-toolbar__btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.map-editor-toolbar__btn--primary {
+  background: var(--accent);
+  color: white;
+}
+
+.map-editor-toolbar__btn--primary:hover:not(:disabled) {
+  background: #2980b9;
+}
+
+.map-editor-toolbar__btn--primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.map-editor-toolbar__btn--ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+.map-editor-toolbar__btn--ghost:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}

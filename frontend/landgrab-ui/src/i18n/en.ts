@@ -852,6 +852,53 @@ const en = {
     npc: 'NPC',
     presenceBattle: 'Contested',
   },
+  mapEditor: {
+    title: 'Map Editor',
+    backToLobby: 'Back to Lobby',
+    createNew: 'Create New Template',
+    createFirst: 'Create Your First Template',
+    emptyMessage: 'Design custom hex layouts and save them for your games.',
+    loading: 'Loading templates...',
+    templateName: 'Template Name',
+    templateDescription: 'Description (optional)',
+    tileSizeMeters: 'Tile Size (meters)',
+    hexCount: '{{count}} hexes',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    save: 'Save Template',
+    saving: 'Saving...',
+    create: 'Create Template',
+    update: 'Save Changes',
+    clear: 'Clear All',
+    cancel: 'Cancel',
+    edit: 'Edit',
+    delete: 'Delete',
+    duplicate: 'Duplicate',
+    deleteConfirm: 'Delete template "{{name}}"? This cannot be undone.',
+    updated: 'Updated {{date}}',
+
+    // Validation
+    needName: 'Enter a template name',
+    needMoreHexes: 'Select at least 7 hexes',
+    needConnected: 'All hexes must be connected',
+
+    // Review step integration
+    areaTemplate: 'Template',
+    loadTemplate: 'Load Template',
+    selectTemplate: 'Select a template...',
+    noTemplates: 'No templates yet. Create one in the Map Editor.',
+    refreshTemplates: 'Refresh',
+    saveAsTemplate: 'Save as Template',
+    saveCurrentArea: 'Save Current Area',
+
+    // Rules step integration
+    advancedSettings: 'Advanced Settings',
+    hostBypassGps: 'Allow host to interact with any tile',
+    hostBypassGpsHint: 'Host can claim, attack, and reinforce tiles without being physically present',
+    maxFootprint: 'Maximum map size (meters)',
+    maxFootprintHint: 'Default is 1,000m. Increase for larger play areas.',
+    applyFootprint: 'Apply',
+  },
 } as const;
 
 export default en;
