@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import i18n from '../i18n';
 import type { AuthState } from '../types/game';
 
@@ -66,19 +66,6 @@ export function useAuth() {
   }, [setAuth]);
 
   const logout = useCallback(() => setAuth(null), [setAuth]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY) {
-        return;
-      }
-
-      setAuthState(loadAuth());
-    };
-
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
 
   return { auth, login, register, logout };
 }
