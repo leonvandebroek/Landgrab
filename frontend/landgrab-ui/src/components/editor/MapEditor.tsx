@@ -102,6 +102,8 @@ export const MapEditor = forwardRef<MapEditorHandle, MapEditorProps>(function Ma
   const tileSizeRef = useRef(tileSizeMeters);
   useEffect(() => {
     tileSizeRef.current = tileSizeMeters;
+    // Polygon corners change when tile size changes, so reset the hover cache
+    lastHoverKeyRef.current = '';
   }, [tileSizeMeters]);
 
   // Keep mode ref in sync
@@ -374,9 +376,11 @@ export const MapEditor = forwardRef<MapEditorHandle, MapEditorProps>(function Ma
     onCenterChange(lat, lng);
     mapRef.current?.flyTo([lat, lng], DEFAULT_ZOOM, { duration: 1.2 });
 
-    // Clear existing hexes since the center changed
+    // Clear existing hexes and hover cache since the center (origin) changed
     setSelected(new Set());
     selectedRef.current = new Set();
+    hoverLayerRef.current.clearLayers();
+    lastHoverKeyRef.current = '';
   }, [onCenterChange]);
 
   // Expose flyTo imperatively via a typed ref
@@ -388,6 +392,7 @@ export const MapEditor = forwardRef<MapEditorHandle, MapEditorProps>(function Ma
     // Clear hover when switching to navigate
     if (newMode === 'navigate') {
       hoverLayerRef.current.clearLayers();
+      lastHoverKeyRef.current = '';
     }
   }, []);
 

@@ -100,6 +100,7 @@ export function EditorToolbar({
     if (query.trim().length < 3) {
       setSearchResults([]);
       setShowResults(false);
+      setSearching(false);
       return;
     }
 
@@ -127,9 +128,7 @@ export function EditorToolbar({
           // silently fail for genuine network errors
         }
       } finally {
-        if (!controller.signal.aborted) {
-          setSearching(false);
-        }
+        setSearching(false);
       }
     }, 400);
   };
