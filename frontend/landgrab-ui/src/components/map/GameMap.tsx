@@ -4,9 +4,15 @@ import i18n from '../../i18n';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
+import {
+  DEFAULT_PLAYER_PREFS,
+  MARKER_SIZE_MULTIPLIER,
+  type PlayerDisplayPreferences,
+} from '../../types/playerPreferences';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { terrainFillColors, terrainFillOpacity } from '../../utils/terrainColors';
+import { terrainIcons } from '../../utils/terrainIcons';
 
 interface LocationPoint {
   lat: number;
@@ -22,10 +28,14 @@ interface Props {
   constrainViewportToGrid?: boolean;
   gridOverride?: Record<string, HexCell>;
   inactiveHexKeys?: string[];
+  playerDisplayPrefs?: PlayerDisplayPreferences;
 }
 
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const GRID_FIT_PADDING = L.point(24, 24);
+const DEFAULT_MAP_ZOOM = 16;
+const TERRAIN_ICON_MIN_ZOOM = 15;
+const DEFAULT_PLAYER_MARKER_COLOR = '#4f8cff';
 
 export function GameMap({
   state,
@@ -36,11 +46,13 @@ export function GameMap({
   constrainViewportToGrid = false,
   gridOverride,
   inactiveHexKeys = [],
+  playerDisplayPrefs,
 }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [isFollowingMe, setIsFollowingMe] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const followedLocationKeyRef = useRef('');
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
@@ -86,7 +98,7 @@ export function GameMap({
       center: initialCenterRef.current,
       maxZoom: MAP_MAX_ZOOM,
       maxBoundsViscosity: constrainViewportToGrid ? 1 : undefined,
-      zoom: 16,
+      zoom: DEFAULT_MAP_ZOOM,
       zoomControl: false
     });
 
@@ -117,6 +129,24 @@ export function GameMap({
       geometryKeyRef.current = '';
     };
   }, [constrainViewportToGrid, t]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const handleZoomEnd = () => {
+      setCurrentZoom(map.getZoom());
+    };
+
+    handleZoomEnd();
+    map.on('zoomend', handleZoomEnd);
+
+    return () => {
+      map.off('zoomend', handleZoomEnd);
+    };
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -200,6 +230,10 @@ export function GameMap({
     const hostPlayer = state.players.find(player => player.isHost);
     const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
     const myPlayer = state.players.find(p => p.id === myUserId);
+    const effectivePlayerDisplayPrefs = playerDisplayPrefs ?? DEFAULT_PLAYER_PREFS;
+    const playerMarkerSizeMultiplier = MARKER_SIZE_MULTIPLIER[effectivePlayerDisplayPrefs.markerSize] ?? 1;
+    const markerZoomScale = getMarkerZoomScale(currentZoom);
+    const showTerrainIcons = currentZoom >= TERRAIN_ICON_MIN_ZOOM;
 
     for (const cell of Object.values(renderedGrid)) {
       const cellKey = `${cell.q},${cell.r}`;
@@ -222,6 +256,8 @@ export function GameMap({
       const isCurrentHex = currentHex?.[0] === cell.q && currentHex?.[1] === cell.r;
       const isSelected = selectedHex?.[0] === cell.q && selectedHex?.[1] === cell.r;
       const isInactive = inactiveHexKeySet.has(cellKey);
+      const terrainType = cell.terrainType ?? 'None';
+      const terrainIcon = terrainIcons[terrainType];
 
       // Phase 7: Fog of War — hidden hexes appear as dark/unknown
       const isFogHidden = state.dynamics?.fogOfWarEnabled
@@ -231,14 +267,28 @@ export function GameMap({
         && !isInactive;
 
       // Terrain underlay
-      if (state.dynamics?.terrainEnabled && cell.terrainType && cell.terrainType !== 'None') {
+      if (state.dynamics?.terrainEnabled && terrainType !== 'None') {
         L.polygon(corners, {
           color: 'transparent',
           weight: 0,
-          fillColor: terrainFillColors[cell.terrainType],
-          fillOpacity: isInactive ? 0 : terrainFillOpacity[cell.terrainType],
+          fillColor: terrainFillColors[terrainType],
+          fillOpacity: isInactive ? 0 : terrainFillOpacity[terrainType],
           interactive: false,
         }).addTo(layerGroup);
+
+        if (showTerrainIcons && terrainIcon && !isFogHidden && !isInactive) {
+          L.marker([centerLat, centerLng], {
+            icon: L.divIcon({
+              className: 'hex-terrain-icon',
+              html: `<span aria-hidden="true">${terrainIcon}</span>`,
+              iconSize: [22, 22],
+              iconAnchor: [11, 7],
+            }),
+            interactive: false,
+            keyboard: false,
+            zIndexOffset: -30,
+          }).addTo(layerGroup);
+        }
       }
 
       const fillColor = isFogHidden
@@ -362,18 +412,24 @@ export function GameMap({
         continue;
       }
 
-      const marker = L.circleMarker([player.currentLat, player.currentLng], {
-        radius: player.id === myUserId ? 7 : 5,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: player.allianceColor ?? player.color,
-        fillOpacity: 0.95
-      }).addTo(layerGroup);
+      const markerColor = player.allianceColor ?? player.color ?? DEFAULT_PLAYER_MARKER_COLOR;
+      const { layer: marker, tooltipOffset } = createPlayerMarkerLayer({
+        color: markerColor,
+        lat: player.currentLat,
+        lng: player.currentLng,
+        markerSizeMultiplier: playerMarkerSizeMultiplier,
+        markerStyle: effectivePlayerDisplayPrefs.markerStyle,
+        myUserId,
+        player,
+        zoomScale: markerZoomScale,
+      });
+
+      marker.addTo(layerGroup);
 
       marker.bindTooltip(player.id === myUserId ? `${player.name}${i18n.t('map.youSuffix')}` : player.name, {
-        permanent: true,
+        permanent: effectivePlayerDisplayPrefs.showNameLabel,
         direction: 'top',
-        offset: [0, -6],
+        offset: tooltipOffset,
         className: 'player-location-label'
       });
 
@@ -432,7 +488,7 @@ export function GameMap({
         interactive: false,
       }).addTo(layerGroup);
     }
-  }, [currentHex, currentLocation, inactiveHexKeySet, myUserId, renderedGrid, selectedHex, state]);
+  }, [currentHex, currentLocation, currentZoom, inactiveHexKeySet, myUserId, playerDisplayPrefs, renderedGrid, selectedHex, state]);
 
   return (
     <div className="game-map-container">
@@ -444,7 +500,6 @@ export function GameMap({
           onClick={() => setIsFollowingMe(enabled => !enabled)}
           title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
           aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-          aria-pressed={isFollowingMe ? 'true' : 'false'}
           disabled={!currentLocation}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
@@ -475,4 +530,138 @@ function buildHexTooltip(cell: HexCell): string {
     return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
   }
   return i18n.t('map.hexTooltip', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
+}
+
+interface PlayerMarkerLayerOptions {
+  player: GameState['players'][number];
+  myUserId: string;
+  markerStyle: PlayerDisplayPreferences['markerStyle'];
+  markerSizeMultiplier: number;
+  zoomScale: number;
+  color: string;
+  lat: number;
+  lng: number;
+}
+
+interface PlayerMarkerLayerResult {
+  layer: L.CircleMarker | L.Marker;
+  tooltipOffset: L.PointExpression;
+}
+
+function createPlayerMarkerLayer({
+  player,
+  myUserId,
+  markerStyle,
+  markerSizeMultiplier,
+  zoomScale,
+  color,
+  lat,
+  lng,
+}: PlayerMarkerLayerOptions): PlayerMarkerLayerResult {
+  const isCurrentPlayer = player.id === myUserId;
+  const selfBoost = isCurrentPlayer ? 1.15 : 1;
+  const scale = markerSizeMultiplier * zoomScale * selfBoost;
+
+  if (markerStyle === 'pin') {
+    const width = Math.round(24 * scale);
+    const height = Math.round(36 * scale);
+    return {
+      layer: L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'player-marker-icon player-marker-pin-wrapper',
+          html: buildPinMarkerHtml(color, width, height),
+          iconSize: [width, height],
+          iconAnchor: [Math.round(width / 2), Math.max(1, height - 2)],
+          tooltipAnchor: [0, -Math.round(height * 0.72)],
+        }),
+        keyboard: false,
+        zIndexOffset: isCurrentPlayer ? 220 : 140,
+      }),
+      tooltipOffset: [0, -Math.max(12, Math.round(height * 0.72))],
+    };
+  }
+
+  if (markerStyle === 'avatar') {
+    const size = Math.round(24 * scale);
+    return {
+      layer: L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'player-marker-icon player-marker-avatar-wrapper',
+          html: buildAvatarMarkerHtml(color, getPlayerInitial(player.name), size),
+          iconSize: [size, size],
+          iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
+          tooltipAnchor: [0, -Math.round(size * 0.7)],
+        }),
+        keyboard: false,
+        zIndexOffset: isCurrentPlayer ? 220 : 140,
+      }),
+      tooltipOffset: [0, -Math.max(10, Math.round(size * 0.7))],
+    };
+  }
+
+  if (markerStyle === 'flag') {
+    const width = Math.round(20 * scale);
+    const height = Math.round(28 * scale);
+    return {
+      layer: L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'player-marker-icon player-marker-flag-wrapper',
+          html: buildFlagMarkerHtml(color, width, height),
+          iconSize: [width, height],
+          iconAnchor: [3, Math.max(1, height - 2)],
+          tooltipAnchor: [Math.round(width * 0.35), -Math.round(height * 0.8)],
+        }),
+        keyboard: false,
+        zIndexOffset: isCurrentPlayer ? 220 : 140,
+      }),
+      tooltipOffset: [Math.round(width * 0.2), -Math.max(12, Math.round(height * 0.78))],
+    };
+  }
+
+  const radius = Math.max(4, Math.round((isCurrentPlayer ? 7 : 5) * markerSizeMultiplier * zoomScale));
+  return {
+    layer: L.circleMarker([lat, lng], {
+      radius,
+      color: '#ffffff',
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.95
+    }),
+    tooltipOffset: [0, -Math.max(6, radius + 2)],
+  };
+}
+
+function buildPinMarkerHtml(color: string, width: number, height: number): string {
+  const safeColor = escapeHtml(color);
+  return `<div class="player-marker-pin"><svg width="${width}" height="${height}" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" fill="${safeColor}"/><circle cx="12" cy="12" r="5" fill="white" opacity="0.5"/></svg></div>`;
+}
+
+function buildAvatarMarkerHtml(color: string, letter: string, size: number): string {
+  const safeColor = escapeHtml(color);
+  const safeLetter = escapeHtml(letter);
+  const fontSize = Math.round(size * 0.5);
+  return `<div class="player-marker-avatar" style="width:${size}px;height:${size}px;border-radius:50%;background:${safeColor};display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:${fontSize}px;border:2px solid white">${safeLetter}</div>`;
+}
+
+function buildFlagMarkerHtml(color: string, width: number, height: number): string {
+  const safeColor = escapeHtml(color);
+  return `<div class="player-marker-flag"><svg width="${width}" height="${height}" viewBox="0 0 20 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="3" y1="2" x2="3" y2="26" stroke="white" stroke-width="2"/><polygon points="5,2 20,7 5,14" fill="${safeColor}"/></svg></div>`;
+}
+
+function getPlayerInitial(name: string): string {
+  const trimmed = name.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() : '?';
+}
+
+function getMarkerZoomScale(zoom: number): number {
+  return Math.max(0.85, Math.min(1.2, 0.85 + (zoom - 14) * 0.08));
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }

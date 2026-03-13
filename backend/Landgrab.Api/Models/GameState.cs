@@ -286,7 +286,9 @@ public class Mission
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
     public string Type { get; set; } = "";
     public string Title { get; set; } = "";
+    public string? TitleKey { get; set; }
     public string Description { get; set; } = "";
+    public string? DescriptionKey { get; set; }
     public string Scope { get; set; } = "Main"; // Main, Interim, Team, Personal
     public string? TargetTeamId { get; set; }
     public string? TargetPlayerId { get; set; }
@@ -295,6 +297,7 @@ public class Mission
     public string Status { get; set; } = "Active"; // Active, Completed, Failed, Expired
     public DateTime? ExpiresAt { get; set; }
     public string Reward { get; set; } = "";
+    public string? RewardKey { get; set; }
 }
 
 // Phase 10: Duel system

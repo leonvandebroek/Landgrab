@@ -3372,7 +3372,9 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 Id = m.Id,
                 Type = m.Type,
                 Title = m.Title,
+                TitleKey = m.TitleKey,
                 Description = m.Description,
+                DescriptionKey = m.DescriptionKey,
                 Scope = m.Scope,
                 TargetTeamId = m.TargetTeamId,
                 TargetPlayerId = m.TargetPlayerId,
@@ -3380,7 +3382,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                 Progress = m.Progress,
                 Status = m.Status,
                 ExpiresAt = m.ExpiresAt,
-                Reward = m.Reward
+                Reward = m.Reward,
+                RewardKey = m.RewardKey
             }).ToList()
         };
     }

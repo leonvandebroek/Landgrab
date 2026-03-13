@@ -194,7 +194,9 @@ export interface Mission {
   id: string;
   type: string;
   title: string;
+  titleKey?: string;
   description: string;
+  descriptionKey?: string;
   scope: 'Main' | 'Interim' | 'Team' | 'Personal';
   targetTeamId?: string;
   targetPlayerId?: string;
@@ -203,6 +205,7 @@ export interface Mission {
   status: 'Active' | 'Completed' | 'Failed' | 'Expired';
   expiresAt?: string;
   reward: string;
+  rewardKey?: string;
 }
 
 export interface AmbushResult {

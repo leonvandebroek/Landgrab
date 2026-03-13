@@ -9,29 +9,46 @@ public sealed class MissionService(
     IHubContext<GameHub> hubContext,
     ILogger<MissionService> logger) : BackgroundService
 {
+    private readonly record struct MissionTemplate(
+        string Type,
+        string Title,
+        string TitleKey,
+        string Description,
+        string Objective,
+        string Reward);
+
+    private readonly record struct InterimMissionTemplate(
+        string Type,
+        string Title,
+        string TitleKey,
+        string Description,
+        string Objective,
+        TimeSpan Duration,
+        string Reward);
+
     // Track when interim missions were last generated per room
     private readonly Dictionary<string, DateTime> _lastMissionGeneration = new();
 
     // ── Mission template pools ────────────────────────────────────────────
 
-    private static readonly (string Type, string Title, string Description, string Objective, string Reward)[] TeamMissionPool =
+    private static readonly MissionTemplate[] TeamMissionPool =
     [
-        ("Territorial", "Divide and Conquer", "Own hexes in 3 different quadrants of the grid.", "OwnQuadrants", "+3 troops to random hex"),
-        ("Territorial", "Encirclement", "Surround an enemy hex on all 6 sides.", "SurroundEnemy", "+5 troops to random hex"),
-        ("Territorial", "Territory Rush", "Claim 5 hexes within the time limit.", "ClaimCount:5", "+3 troops to random hex"),
+        new("Territorial", "Divide and Conquer", "DivideAndConquer", "Own hexes in 3 different quadrants of the grid.", "OwnQuadrants", "+3 troops to random hex"),
+        new("Territorial", "Encirclement", "Encirclement", "Surround an enemy hex on all 6 sides.", "SurroundEnemy", "+5 troops to random hex"),
+        new("Territorial", "Territory Rush", "TerritoryRush", "Claim 5 hexes within the time limit.", "ClaimCount:5", "+3 troops to random hex"),
     ];
 
-    private static readonly (string Type, string Title, string Description, string Objective, string Reward)[] PersonalMissionPool =
+    private static readonly MissionTemplate[] PersonalMissionPool =
     [
-        ("Recon", "Scout Patrol", "Visit 8 different hexes.", "VisitHexes:8", "+2 troops to all hexes"),
-        ("Territorial", "Frontline Fighter", "Win 2 attacks.", "WinAttacks:2", "+3 troops to random hex"),
-        ("Role", "Fortifier", "Reinforce 3 of your hexes to 5+ troops.", "FortifyHexes:3", "+3 troops to random hex"),
+        new("Recon", "Scout Patrol", "ScoutPatrol", "Visit 8 different hexes.", "VisitHexes:8", "+2 troops to all hexes"),
+        new("Territorial", "Frontline Fighter", "FrontlineFighter", "Win 2 attacks.", "WinAttacks:2", "+3 troops to random hex"),
+        new("Role", "Fortifier", "Fortifier", "Reinforce 3 of your hexes to 5+ troops.", "FortifyHexes:3", "+3 troops to random hex"),
     ];
 
-    private static readonly (string Type, string Title, string Description, string Objective, TimeSpan Duration, string Reward)[] InterimMissionPool =
+    private static readonly InterimMissionTemplate[] InterimMissionPool =
     [
-        ("TimeBound", "Flag Planting", "Claim 3 neutral hexes before time runs out.", "ClaimNeutral:3", TimeSpan.FromMinutes(10), "+3 troops to random hex"),
-        ("TimeBound", "Last Defender", "Don't lose any hexes for 5 minutes.", "NoLosses", TimeSpan.FromMinutes(5), "+5 troops to random hex"),
+        new("TimeBound", "Flag Planting", "FlagPlanting", "Claim 3 neutral hexes before time runs out.", "ClaimNeutral:3", TimeSpan.FromMinutes(10), "+3 troops to random hex"),
+        new("TimeBound", "Last Defender", "LastDefender", "Don't lose any hexes for 5 minutes.", "NoLosses", TimeSpan.FromMinutes(5), "+5 troops to random hex"),
     ];
 
     // ── Background loop ──────────────────────────────────────────────────
@@ -152,15 +169,15 @@ public sealed class MissionService(
         var missions = new List<Mission>();
 
         // 1 Main mission for the game
-        missions.Add(new Mission
-        {
-            Type = "Territorial",
-            Title = "Hold the Hill",
-            Description = "Control the center hex for 10 minutes total.",
-            Scope = "Main",
-            Objective = "HoldCenter",
-            Reward = "+5 troops to random hex",
-        });
+        missions.Add(CreateMission(
+            new MissionTemplate(
+                "Territorial",
+                "Hold the Hill",
+                "HoldTheHill",
+                "Control the center hex for 10 minutes total.",
+                "HoldCenter",
+                "+5 troops to random hex"),
+            scope: "Main"));
 
         // 1 Team mission per alliance
         foreach (var alliance in state.Alliances)
@@ -180,31 +197,13 @@ public sealed class MissionService(
     private static Mission GenerateTeamMission(AllianceDto alliance)
     {
         var template = TeamMissionPool[Random.Shared.Next(TeamMissionPool.Length)];
-        return new Mission
-        {
-            Type = template.Type,
-            Title = template.Title,
-            Description = template.Description,
-            Scope = "Team",
-            TargetTeamId = alliance.Id,
-            Objective = template.Objective,
-            Reward = template.Reward,
-        };
+        return CreateMission(template, scope: "Team", targetTeamId: alliance.Id);
     }
 
     private static Mission GeneratePersonalMission(PlayerDto player)
     {
         var template = PersonalMissionPool[Random.Shared.Next(PersonalMissionPool.Length)];
-        return new Mission
-        {
-            Type = template.Type,
-            Title = template.Title,
-            Description = template.Description,
-            Scope = "Personal",
-            TargetPlayerId = player.Id,
-            Objective = template.Objective,
-            Reward = template.Reward,
-        };
+        return CreateMission(template, scope: "Personal", targetPlayerId: player.Id);
     }
 
     private static List<Mission> GenerateInterimMissions(GameState state, DateTime now)
@@ -213,16 +212,7 @@ public sealed class MissionService(
 
         // Pick one random interim mission type for the whole room
         var template = InterimMissionPool[Random.Shared.Next(InterimMissionPool.Length)];
-        missions.Add(new Mission
-        {
-            Type = template.Type,
-            Title = template.Title,
-            Description = template.Description,
-            Scope = "Interim",
-            Objective = template.Objective,
-            ExpiresAt = now + template.Duration,
-            Reward = template.Reward,
-        });
+        missions.Add(CreateMission(template, scope: "Interim", expiresAt: now + template.Duration));
 
         // Also refresh one personal mission per player (if they have no active personal mission)
         foreach (var player in state.Players)
@@ -237,6 +227,62 @@ public sealed class MissionService(
         }
 
         return missions;
+    }
+
+    private static Mission CreateMission(
+        MissionTemplate template,
+        string scope,
+        string? targetTeamId = null,
+        string? targetPlayerId = null,
+        DateTime? expiresAt = null)
+    {
+        return new Mission
+        {
+            Type = template.Type,
+            Title = template.Title,
+            TitleKey = template.TitleKey,
+            Description = template.Description,
+            DescriptionKey = template.TitleKey,
+            Scope = scope,
+            TargetTeamId = targetTeamId,
+            TargetPlayerId = targetPlayerId,
+            Objective = template.Objective,
+            ExpiresAt = expiresAt,
+            Reward = template.Reward,
+            RewardKey = GetRewardKey(template.Reward),
+        };
+    }
+
+    private static Mission CreateMission(
+        InterimMissionTemplate template,
+        string scope,
+        string? targetTeamId = null,
+        string? targetPlayerId = null,
+        DateTime? expiresAt = null)
+    {
+        return CreateMission(
+            new MissionTemplate(
+                template.Type,
+                template.Title,
+                template.TitleKey,
+                template.Description,
+                template.Objective,
+                template.Reward),
+            scope,
+            targetTeamId,
+            targetPlayerId,
+            expiresAt);
+    }
+
+    private static string? GetRewardKey(string reward)
+    {
+        return reward switch
+        {
+            var value when value.Contains("troops to all hexes", StringComparison.OrdinalIgnoreCase) => "TroopsToAllHexes",
+            var value when value.Contains("troops to random hex", StringComparison.OrdinalIgnoreCase) => "TroopsToRandomHex",
+            var value when value.Contains("troops", StringComparison.OrdinalIgnoreCase) => "Troops",
+            _ => null,
+        };
     }
 
     // ── Progress evaluation ──────────────────────────────────────────────

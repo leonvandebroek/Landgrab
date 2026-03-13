@@ -4,9 +4,11 @@ import type { TFunction } from 'i18next';
 import { useAuth } from './hooks/useAuth';
 import { useSignalR } from './hooks/useSignalR';
 import { useGeolocation } from './hooks/useGeolocation';
+import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { AuthPage } from './components/auth/AuthPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
+import { GameRulesPage } from './components/game/GameRulesPage';
 import { GameLobby } from './components/lobby/GameLobby';
 import { GameMap } from './components/map/GameMap';
 import { PlayingHud } from './components/game/PlayingHud';
@@ -75,6 +77,8 @@ export default function App() {
   const [eventWarning, setEventWarning] = useState<RandomEvent | null>(null);
   const [missionNotification, setMissionNotification] = useState<{ mission: Mission; type: 'assigned' | 'completed' | 'failed' } | null>(null);
   const [pendingDuel, setPendingDuel] = useState<PendingDuel | null>(null);
+  const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
+  const [hasAcknowledgedRules, setHasAcknowledgedRules] = useState(false);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
@@ -83,6 +87,17 @@ export default function App() {
   const savedSessionRef = useRef<SavedSession | null>(savedSession);
   const resumeSequenceRef = useRef(0);
   const savedRoomCode = savedSession?.roomCode ?? '';
+  const activeRoomCode = gameState?.roomCode ?? '';
+  const rulesKey = activeRoomCode ? `lg-rules-ack-${activeRoomCode}` : '';
+
+  useEffect(() => {
+    if (!rulesKey) {
+      setHasAcknowledgedRules(false);
+      return;
+    }
+
+    setHasAcknowledgedRules(sessionStorage.getItem(rulesKey) === 'true');
+  }, [rulesKey]);
 
   useEffect(() => {
     savedSessionRef.current = savedSession;
@@ -335,6 +350,14 @@ export default function App() {
     return gameState.players.find(player => player.id === auth.userId) ?? null;
   }, [auth, gameState]);
 
+  const selectedHexKey = useMemo(() => {
+    if (!selectedHex) {
+      return null;
+    }
+
+    return `${selectedHex[0]},${selectedHex[1]}`;
+  }, [selectedHex]);
+
   const currentHex = useMemo(() => {
     if (!gameState || !currentLocation || gameState.mapLat == null || gameState.mapLng == null) {
       return null;
@@ -348,6 +371,33 @@ export default function App() {
       gameState.tileSizeMeters
     );
   }, [currentLocation, gameState]);
+
+  const currentHexKey = useMemo(() => {
+    if (!currentHex) {
+      return null;
+    }
+
+    return `${currentHex[0]},${currentHex[1]}`;
+  }, [currentHex]);
+
+  const isInOwnHex = useMemo(() => {
+    if (!auth || !gameState || !currentHexKey) {
+      return false;
+    }
+
+    return gameState.grid[currentHexKey]?.ownerId === auth.userId;
+  }, [auth, currentHexKey, gameState]);
+
+  const playerColor = myPlayer?.allianceColor ?? myPlayer?.color ?? '#4f8cff';
+  const currentPlayerName = myPlayer?.name ?? auth?.username ?? '';
+
+  const handleAcknowledgeRules = useCallback(() => {
+    if (rulesKey) {
+      sessionStorage.setItem(rulesKey, 'true');
+    }
+
+    setHasAcknowledgedRules(true);
+  }, [rulesKey]);
 
   // Auto-show tile actions when the player physically moves to a new hex
   const prevCurrentHexRef = useRef<string | null>(null);
@@ -958,7 +1008,7 @@ export default function App() {
       type="button"
       className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
       onClick={() => setShowDebugTools(value => !value)}
-      aria-pressed={showDebugTools ? 'true' : 'false'}
+      aria-pressed={showDebugTools}
     >
       {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
     </button>
@@ -978,6 +1028,18 @@ export default function App() {
   }
 
   if (view === 'game' && gameState) {
+    if (!hasAcknowledgedRules) {
+      return (
+        <>
+          {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+          <GameRulesPage
+            gameState={gameState}
+            onContinue={handleAcknowledgeRules}
+          />
+        </>
+      );
+    }
+
     return (
       <>
         {connectionBanner && <ConnectionBanner message={connectionBanner} />}
@@ -1011,6 +1073,14 @@ export default function App() {
           onAcceptDuel={handleAcceptDuel}
           onDeclineDuel={handleDeclineDuel}
           onDetainPlayer={handleDetainPlayer}
+          playerDisplayPrefs={playerDisplayPrefs}
+          onPlayerDisplayPrefsChange={setPlayerDisplayPrefs}
+          playerColor={playerColor}
+          currentPlayerName={currentPlayerName}
+          selectedHexKey={selectedHexKey}
+          carriedTroops={myPlayer?.carriedTroops ?? 0}
+          isInOwnHex={isInOwnHex}
+          hasLocation={Boolean(currentLocation)}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
         >
@@ -1021,6 +1091,7 @@ export default function App() {
             constrainViewportToGrid
             onHexClick={handleHexClick}
             selectedHex={selectedHex}
+            playerDisplayPrefs={playerDisplayPrefs}
           />
         </PlayingHud>
         {combatResult && (
