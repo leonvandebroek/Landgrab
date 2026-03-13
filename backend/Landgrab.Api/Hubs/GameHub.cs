@@ -387,6 +387,120 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task SetPlayerRole(string role)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetPlayerRole(room.Code, UserId, role);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task SetAllianceHQ(int q, int r, string allianceId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetAllianceHQ(room.Code, UserId, q, r, allianceId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task ActivateBeacon()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ActivateBeacon(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task DeactivateBeacon()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.DeactivateBeacon(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task ActivateStealth()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ActivateStealth(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task ActivateCommandoRaid(int targetQ, int targetR)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ActivateCommandoRaid(room.Code, UserId, targetQ, targetR);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     public async Task SetMasterTile(double lat, double lng)
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
@@ -589,10 +703,61 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
         await Clients.Caller.SendAsync("GlobalMapLoaded", hexes);
     }
 
+    // Phase 10: Duel
+    public async Task AcceptDuel(string duelId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null) { await SendError("ROOM_NOT_JOINED", "Not in a room."); return; }
+
+        var (success, winnerId, loserId) = gameService.ResolveDuel(room.Code, duelId, true);
+        if (!success) { await SendError("Duel could not be resolved."); return; }
+
+        var state = gameService.GetStateSnapshot(room.Code);
+        if (state != null) await BroadcastState(room.Code, state);
+
+        await Clients.Group(room.Code).SendAsync("DuelResult", new { duelId, winnerId, loserId });
+    }
+
+    public async Task DeclineDuel(string duelId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null) { await SendError("ROOM_NOT_JOINED", "Not in a room."); return; }
+
+        gameService.ResolveDuel(room.Code, duelId, false);
+    }
+
+    // Phase 10: Hostage
+    public async Task DetainPlayer(string targetPlayerId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null) { await SendError("ROOM_NOT_JOINED", "Not in a room."); return; }
+
+        var (state, error) = gameService.DetainPlayer(room.Code, UserId, targetPlayerId);
+        if (error != null) { await SendError(error); return; }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     private async Task BroadcastState(string roomCode, GameState state, string? aliasEvent = null)
     {
         if (!string.IsNullOrWhiteSpace(aliasEvent))
             await Clients.Group(roomCode).SendAsync(aliasEvent, state);
+
+        // Phase 7: Fog of War — per-player filtered broadcasts during gameplay
+        if (state.Dynamics.FogOfWarEnabled && state.Phase == GamePhase.Playing)
+        {
+            var room = gameService.GetRoom(roomCode);
+            if (room != null)
+            {
+                foreach (var (connectionId, userId) in room.ConnectionMap)
+                {
+                    var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
+                    await Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot);
+                }
+
+                return;
+            }
+        }
 
         await Clients.Group(roomCode).SendAsync("StateUpdated", state);
         if (state.Phase == GamePhase.GameOver)

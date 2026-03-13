@@ -26,7 +26,31 @@ public sealed class TroopRegenerationService(
                     if (error != null || state == null)
                         continue;
 
-                    await hubContext.Clients.Group(roomCode).SendAsync("StateUpdated", state, stoppingToken);
+                    // Phase 10: Process duel expiry
+                    var room = gameService.GetRoom(roomCode);
+                    if (room != null)
+                    {
+                        gameService.ProcessDuelExpiry(room);
+                    }
+
+                    // Phase 7: Fog of War — per-player broadcasts
+                    if (state.Dynamics.FogOfWarEnabled)
+                    {
+                        room ??= gameService.GetRoom(roomCode);
+                        if (room != null)
+                        {
+                            foreach (var (connectionId, userId) in room.ConnectionMap)
+                            {
+                                var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
+                                await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        await hubContext.Clients.Group(roomCode).SendAsync("StateUpdated", state, stoppingToken);
+                    }
+
                     if (state.Phase == GamePhase.GameOver)
                     {
                         await hubContext.Clients.Group(roomCode).SendAsync("GameOver", new

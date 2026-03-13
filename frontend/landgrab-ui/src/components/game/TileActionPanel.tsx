@@ -72,6 +72,16 @@ export function TileActionPanel({
               )}
             </span>
           )}
+          {targetCell?.isFortified && (
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+              🛡️ {t('phase3.fortified')}
+            </span>
+          )}
+          {targetCell?.isFort && (
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+              🏰 {t('phase4.fort')}
+            </span>
+          )}
         </div>
 
         <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>

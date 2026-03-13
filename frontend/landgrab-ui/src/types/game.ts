@@ -45,6 +45,16 @@ export interface HexCell {
   troops: number;
   isMasterTile: boolean;
   terrainType?: TerrainType;
+  // Phase 3: Rally
+  isFortified?: boolean;
+  // Phase 3: Shepherd
+  lastVisitedAt?: string;
+  // Phase 4: Engineer
+  engineerBuiltAt?: string;
+  isFort?: boolean;
+  // Phase 10: PresenceBattle
+  contestProgress?: number;
+  contestingPlayerId?: string;
 }
 
 export interface Player {
@@ -64,6 +74,26 @@ export interface Player {
   isWinner?: boolean;
   territoryCount: number;
   role?: PlayerRole;
+  // Phase 3: Scout
+  visitedHexes?: string[];
+  // Phase 5: Beacon
+  isBeacon?: boolean;
+  beaconLat?: number;
+  beaconLng?: number;
+  // Phase 6: Stealth
+  stealthUntil?: string;
+  stealthCooldownUntil?: string;
+  // Phase 6: CommandoRaid
+  isCommandoActive?: boolean;
+  commandoTargetQ?: number;
+  commandoTargetR?: number;
+  commandoDeadline?: string;
+  commandoCooldownUntil?: string;
+  // Phase 6: JagerProoi
+  isPrey?: boolean;
+  // Phase 10: Hostage
+  heldByPlayerId?: string;
+  heldUntil?: string;
 }
 
 export interface AllianceDto {
@@ -72,6 +102,12 @@ export interface AllianceDto {
   color: string;
   memberIds: string[];
   territoryCount: number;
+  // Phase 4: HQ
+  hqHexQ?: number;
+  hqHexR?: number;
+  claimFrozenUntil?: string;
+  // Phase 8: Underdog
+  underdogBoostUntil?: string;
 }
 
 export interface GameEventLogEntry {
@@ -119,6 +155,13 @@ export interface GameState {
   winnerName?: string;
   isAllianceVictory: boolean;
   achievements?: Achievement[];
+  // Phase 6: JagerProoi
+  preyTargetQ?: number;
+  preyTargetR?: number;
+  // Phase 8: Rush Hour
+  isRushHour?: boolean;
+  // Phase 9: Missions
+  missions?: Mission[];
 }
 
 export interface Achievement {
@@ -145,6 +188,48 @@ export interface CombatResult {
   attackerBonus?: number;
   defenderBonus?: number;
   defenderTerrainType?: TerrainType;
+}
+
+export interface Mission {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  scope: 'Main' | 'Interim' | 'Team' | 'Personal';
+  targetTeamId?: string;
+  targetPlayerId?: string;
+  objective: string;
+  progress: number;
+  status: 'Active' | 'Completed' | 'Failed' | 'Expired';
+  expiresAt?: string;
+  reward: string;
+}
+
+export interface AmbushResult {
+  attackerId: string;
+  defenderId: string;
+  q: number;
+  r: number;
+  attackerWon: boolean;
+  troopsLost: number;
+  newState: GameState;
+}
+
+export interface PendingDuel {
+  id: string;
+  playerIds: string[];
+  tileQ: number;
+  tileR: number;
+  expiresAt: string;
+  accepted: boolean;
+}
+
+export interface RandomEvent {
+  id: string;
+  type: 'Calamity' | 'Epidemic' | 'DiplomaticOpening' | 'BonusTroops' | 'RushHour';
+  title: string;
+  description: string;
+  affectedHexes?: { q: number; r: number }[];
 }
 
 export interface AuthState {

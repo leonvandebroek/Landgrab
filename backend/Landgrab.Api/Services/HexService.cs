@@ -255,4 +255,29 @@ public static class HexService
 
         return ((int)roundedQ, (int)roundedR);
     }
+
+    /// <summary>
+    /// Iterates hex coordinates in a spiral pattern outward from (startQ, startR)
+    /// up to maxRadius rings. Used by Scout to find nearest owned tile.
+    /// </summary>
+    public static IEnumerable<(int q, int r)> SpiralSearch(int startQ, int startR, int maxRadius)
+    {
+        yield return (startQ, startR);
+        for (var ring = 1; ring <= maxRadius; ring++)
+        {
+            var q = startQ + ring;
+            var r = startR - ring;
+            // Walk the 6 edges of the ring
+            int[][] directions = [[0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1], [1, 0]];
+            foreach (var dir in directions)
+            {
+                for (var step = 0; step < ring; step++)
+                {
+                    yield return (q, r);
+                    q += dir[0];
+                    r += dir[1];
+                }
+            }
+        }
+    }
 }

@@ -121,8 +121,10 @@ export function getTileActions({
   if (isEnemy) {
     const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
     const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
+    const rallyBonus = state.dynamics?.activeCopresenceModes?.includes('Rally') && targetCell.isFortified ? 1 : 0;
+    const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
     const effectiveAttack = carriedTroops + attackerBonus;
-    const effectiveDefence = targetCell.troops + defenderBonusVal;
+    const effectiveDefence = targetCell.troops + defenderBonusVal + rallyBonus + fortBonus;
     const canAttack = effectiveAttack > effectiveDefence;
     actions.push({
       type: 'attack',
@@ -320,8 +322,10 @@ export function getTileInteractionStatus({
 
   const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
   const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
+  const rallyBonus = state.dynamics?.activeCopresenceModes?.includes('Rally') && targetCell.isFortified ? 1 : 0;
+  const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
   const effectiveAttack = carriedTroops + attackerBonus;
-  const effectiveDefence = targetCell.troops + defenderBonusVal;
+  const effectiveDefence = targetCell.troops + defenderBonusVal + rallyBonus + fortBonus;
 
   if (effectiveAttack <= effectiveDefence) {
     return {

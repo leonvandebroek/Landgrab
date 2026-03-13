@@ -15,7 +15,7 @@ import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
-import type { ClaimMode, CombatResult, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
+import type { ClaimMode, CombatResult, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, Mission, PendingDuel, RandomEvent, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
@@ -71,6 +71,10 @@ export default function App() {
   const [attackPrompt, setAttackPrompt] = useState<{ q: number; r: number; max: number; defenderTroops: number } | null>(null);
   const [attackCount, setAttackCount] = useState(1);
   const [combatResult, setCombatResult] = useState<CombatResult | null>(null);
+  const [randomEvent, setRandomEvent] = useState<RandomEvent | null>(null);
+  const [eventWarning, setEventWarning] = useState<RandomEvent | null>(null);
+  const [missionNotification, setMissionNotification] = useState<{ mission: Mission; type: 'assigned' | 'completed' | 'failed' } | null>(null);
+  const [pendingDuel, setPendingDuel] = useState<PendingDuel | null>(null);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
@@ -279,6 +283,34 @@ export default function App() {
         return;
       }
       setError(localizeLobbyError(message, t));
+    },
+    onRandomEvent: (event) => {
+      setRandomEvent(event);
+      setTimeout(() => setRandomEvent(null), 8000);
+    },
+    onEventWarning: (event) => {
+      setEventWarning(event);
+      setTimeout(() => setEventWarning(null), 120000);
+    },
+    onMissionAssigned: (mission) => {
+      setMissionNotification({ mission, type: 'assigned' });
+      setTimeout(() => setMissionNotification(null), 6000);
+    },
+    onMissionCompleted: (mission) => {
+      setMissionNotification({ mission, type: 'completed' });
+      setTimeout(() => setMissionNotification(null), 6000);
+    },
+    onMissionFailed: (mission) => {
+      setMissionNotification({ mission, type: 'failed' });
+      setTimeout(() => setMissionNotification(null), 6000);
+    },
+    onDuelChallenge: (duel) => {
+      setPendingDuel(duel);
+      // Auto-expire after 30s
+      setTimeout(() => setPendingDuel((current) => current?.id === duel.id ? null : current), 30000);
+    },
+    onDuelResult: () => {
+      setPendingDuel(null);
     },
     onReconnected: () => {
       clearError();
@@ -594,6 +626,86 @@ export default function App() {
     invoke('SetGameDynamics', dynamics).catch(cause => setError(String(cause)));
   }, [invoke]);
 
+  // @ts-expect-error Phase 4: will be wired to role selector UI in future pass
+  const _handleSetPlayerRole = useCallback(async (role: string) => {
+    try {
+      await invoke('SetPlayerRole', role);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  // @ts-expect-error Phase 4: will be wired to HQ placement UI in future pass
+  const _handleSetAllianceHQ = useCallback(async (q: number, r: number, allianceId: string) => {
+    try {
+      await invoke('SetAllianceHQ', q, r, allianceId);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  // @ts-expect-error Phase 5: will be wired to beacon UI in future pass
+  const _handleActivateBeacon = useCallback(async () => {
+    try {
+      await invoke('ActivateBeacon');
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  // @ts-expect-error Phase 5: will be wired to beacon UI in future pass
+  const _handleDeactivateBeacon = useCallback(async () => {
+    try {
+      await invoke('DeactivateBeacon');
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  // @ts-expect-error Phase 6: will be wired to stealth UI in future pass
+  const _handleActivateStealth = useCallback(async () => {
+    try {
+      await invoke('ActivateStealth');
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  // @ts-expect-error Phase 6: will be wired to commando UI in future pass
+  const _handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number) => {
+    try {
+      await invoke('ActivateCommandoRaid', targetQ, targetR);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  const handleAcceptDuel = useCallback(async (duelId: string) => {
+    try {
+      await invoke('AcceptDuel', duelId);
+      setPendingDuel(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  const handleDeclineDuel = useCallback(async (duelId: string) => {
+    try {
+      await invoke('DeclineDuel', duelId);
+      setPendingDuel(null);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
+  const handleDetainPlayer = useCallback(async (targetPlayerId: string) => {
+    try {
+      await invoke('DetainPlayer', targetPlayerId);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [invoke]);
+
   const handleSetMasterTile = useCallback((lat: number, lng: number) => {
     invoke('SetMasterTile', lat, lng).catch(cause => setError(String(cause)));
   }, [invoke]);
@@ -891,6 +1003,14 @@ export default function App() {
           onAttackCountChange={setAttackCount}
           onConfirmAttack={handleConfirmAttack}
           onCancelAttack={handleCancelAttack}
+          randomEvent={randomEvent}
+          eventWarning={eventWarning}
+          isRushHour={gameState?.isRushHour}
+          missionNotification={missionNotification}
+          pendingDuel={pendingDuel}
+          onAcceptDuel={handleAcceptDuel}
+          onDeclineDuel={handleDeclineDuel}
+          onDetainPlayer={handleDetainPlayer}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
         >

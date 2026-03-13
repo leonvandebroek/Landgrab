@@ -223,6 +223,13 @@ export function GameMap({
       const isSelected = selectedHex?.[0] === cell.q && selectedHex?.[1] === cell.r;
       const isInactive = inactiveHexKeySet.has(cellKey);
 
+      // Phase 7: Fog of War — hidden hexes appear as dark/unknown
+      const isFogHidden = state.dynamics?.fogOfWarEnabled
+        && !cell.ownerId
+        && !cell.isMasterTile
+        && cell.troops === 0
+        && !isInactive;
+
       // Terrain underlay
       if (state.dynamics?.terrainEnabled && cell.terrainType && cell.terrainType !== 'None') {
         L.polygon(corners, {
@@ -234,16 +241,20 @@ export function GameMap({
         }).addTo(layerGroup);
       }
 
-      const fillColor = cell.isMasterTile
-        ? hostColor
-        : cell.ownerColor ?? (isInactive ? '#e5edf6' : '#9fc4e8');
-      const fillOpacity = isInactive
-        ? 0.08
+      const fillColor = isFogHidden
+        ? '#1a1a2e'
         : cell.isMasterTile
-          ? 0.58
-          : cell.ownerId
-            ? (isMine ? 0.82 : 0.62)
-            : 0.22;
+          ? hostColor
+          : cell.ownerColor ?? (isInactive ? '#e5edf6' : '#9fc4e8');
+      const fillOpacity = isFogHidden
+        ? 0.7
+        : isInactive
+          ? 0.08
+          : cell.isMasterTile
+            ? 0.58
+            : cell.ownerId
+              ? (isMine ? 0.82 : 0.62)
+              : 0.22;
       let borderColor = cell.ownerId ? '#f7fbff' : (isInactive ? 'rgba(214, 228, 244, 0.75)' : '#d7e7f6');
       let borderWeight = cell.ownerId ? 2.25 : (isInactive ? 1.25 : 1.8);
       let dashArray: string | undefined;
@@ -260,6 +271,14 @@ export function GameMap({
         borderColor = '#ffffff';
         borderWeight = Math.max(borderWeight, 4);
       }
+      if (cell.isFortified && !isInactive) {
+        borderColor = '#f39c12';
+        borderWeight = Math.max(borderWeight, 3);
+      }
+      if (cell.isFort && !isInactive) {
+        borderColor = '#8e44ad';
+        borderWeight = Math.max(borderWeight, 3.5);
+      }
       if (isInactive) {
         dashArray = '6 6';
       }
@@ -272,6 +291,7 @@ export function GameMap({
         isCurrentHex ? 'is-current' : '',
         isSelected ? 'is-selected' : '',
         isInactive ? 'is-inactive' : '',
+        cell.isFortified ? 'is-fortified' : '',
       ].filter(Boolean).join(' ');
 
       const polygon = L.polygon(corners, {
@@ -284,7 +304,10 @@ export function GameMap({
         fillOpacity
       });
 
-      polygon.bindTooltip(buildHexTooltip(cell), { sticky: true });
+      polygon.bindTooltip(
+        isFogHidden ? i18n.t('phase7.hiddenHex') : buildHexTooltip(cell),
+        { sticky: true }
+      );
 
       // Only fire hex click on genuine taps (not after pan/zoom drag)
       polygon.on('click', (e: L.LeafletMouseEvent) => {
@@ -299,7 +322,20 @@ export function GameMap({
 
       polygon.addTo(layerGroup);
 
-      if (!isInactive && (cell.troops > 0 || cell.isMasterTile)) {
+      // Phase 10: PresenceBattle — contest progress ring
+      if (cell.contestProgress != null && cell.contestProgress > 0 && !isInactive && !isFogHidden) {
+        const progressRadius = state.tileSizeMeters * 0.3;
+        L.circle([centerLat, centerLng], {
+          radius: progressRadius,
+          color: '#e74c3c',
+          weight: 3,
+          fillColor: '#e74c3c',
+          fillOpacity: cell.contestProgress * 0.4,
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+
+      if (!isInactive && !isFogHidden && (cell.troops > 0 || cell.isMasterTile)) {
         // Forest blind: hide enemy troop counts in forest hexes
         const isForestBlind = state.dynamics?.terrainEnabled
           && cell.terrainType === 'Forest'
@@ -308,11 +344,13 @@ export function GameMap({
           && !(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
 
         const troopLabel = isForestBlind ? '?' : String(cell.troops);
+        const isHQ = state.alliances.some(a => a.hqHexQ === cell.q && a.hqHexR === cell.r);
+        const hqPrefix = isHQ ? '🏛️ ' : '';
 
         L.marker([centerLat, centerLng], {
           icon: L.divIcon({
             className: 'hex-label-wrapper',
-            html: `<div class="hex-label${cell.isMasterTile ? ' master' : ''}${isForestBlind ? ' forest-blind' : ''}">${cell.isMasterTile ? '👑 ' : ''}${troopLabel}</div>`
+            html: `<div class="hex-label${cell.isMasterTile ? ' master' : ''}${isForestBlind ? ' forest-blind' : ''}">${cell.isMasterTile ? '👑 ' : ''}${hqPrefix}${troopLabel}</div>`
           }),
           interactive: false
         }).addTo(layerGroup);
@@ -338,6 +376,61 @@ export function GameMap({
         offset: [0, -6],
         className: 'player-location-label'
       });
+
+      // Phase 6: Prey indicator
+      if (player.isPrey) {
+        L.circleMarker([player.currentLat, player.currentLng], {
+          radius: 12,
+          color: '#e74c3c',
+          weight: 2,
+          dashArray: '4 4',
+          fillColor: 'transparent',
+          fillOpacity: 0,
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+
+      // Phase 5: Beacon indicator
+      if (player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
+        L.circle([player.beaconLat, player.beaconLng], {
+          radius: state.tileSizeMeters * 2.5,
+          color: player.allianceColor ?? player.color,
+          weight: 2,
+          dashArray: '8 4',
+          fillColor: player.allianceColor ?? player.color,
+          fillOpacity: 0.08,
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+
+      // Phase 10: Detained (hostage) indicator
+      if (player.heldByPlayerId) {
+        L.circleMarker([player.currentLat, player.currentLng], {
+          radius: 14,
+          color: '#95a5a6',
+          weight: 3,
+          dashArray: '2 4',
+          fillColor: 'transparent',
+          fillOpacity: 0,
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+    }
+
+    // Phase 6: CommandoRaid target indicator
+    if (myPlayer?.isCommandoActive && myPlayer.commandoTargetQ != null && myPlayer.commandoTargetR != null) {
+      const [targetLat, targetLng] = roomHexToLatLng(
+        myPlayer.commandoTargetQ, myPlayer.commandoTargetR,
+        state.mapLat!, state.mapLng!, state.tileSizeMeters
+      );
+      L.circleMarker([targetLat, targetLng], {
+        radius: 10,
+        color: '#e74c3c',
+        weight: 3,
+        fillColor: '#e74c3c',
+        fillOpacity: 0.2,
+        interactive: false,
+      }).addTo(layerGroup);
     }
   }, [currentHex, currentLocation, inactiveHexKeySet, myUserId, renderedGrid, selectedHex, state]);
 
@@ -376,8 +469,10 @@ function buildHexTooltip(cell: HexCell): string {
   const terrainSuffix = cell.terrainType && cell.terrainType !== 'None'
     ? ` · ${i18n.t(`terrain.${cell.terrainType}` as never)}`
     : '';
+  const fortSuffix = cell.isFort ? ' · 🏰 Fort' : '';
+  const npcSuffix = cell.ownerId === 'NPC' ? ' · 🤖 NPC' : '';
   if (cell.isMasterTile) {
-    return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops }) + terrainSuffix;
+    return i18n.t('map.hexTooltipMaster', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
   }
-  return i18n.t('map.hexTooltip', { owner, count: cell.troops }) + terrainSuffix;
+  return i18n.t('map.hexTooltip', { owner, count: cell.troops }) + terrainSuffix + fortSuffix + npcSuffix;
 }
