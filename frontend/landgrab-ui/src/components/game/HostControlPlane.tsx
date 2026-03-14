@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
 import { DYNAMICS_PRESETS as PRESETS, PRESET_MODES, COPRESENCE_MODES, FEATURE_KEYS, EVENT_TYPES, featureField } from '../../utils/dynamics';
-import type { FeatureKey } from '../../utils/dynamics';
+import type { DynamicsPreset, FeatureKey } from '../../utils/dynamics';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
 
@@ -62,12 +62,11 @@ export function HostControlPlane({
     onUpdateDynamics({ ...dynamics, [featureField(key)]: checked });
   }, [dynamics, onUpdateDynamics]);
 
-  const handlePresetChange = useCallback((preset: string) => {
-    // For 'Aangepast', preserve the current modes; for named presets use PRESET_MODES
-    // (PRESET_MODES covers all entries in DYNAMICS_PRESETS, so the fallback is a safety guard)
+  const handlePresetChange = useCallback((preset: DynamicsPreset) => {
+    // For 'Aangepast', preserve the current modes; for named presets derive modes from PRESET_MODES
     const modes = preset === 'Aangepast'
       ? dynamics.activeCopresenceModes
-      : (PRESET_MODES[preset] ?? []) as CopresenceMode[];
+      : PRESET_MODES[preset];
     onUpdateDynamics({ ...dynamics, copresencePreset: preset, activeCopresenceModes: modes });
   }, [dynamics, onUpdateDynamics]);
 

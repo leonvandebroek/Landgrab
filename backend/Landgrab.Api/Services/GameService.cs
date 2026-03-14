@@ -3634,8 +3634,24 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             room.State.Dynamics.NeutralNPCEnabled = dynamics.NeutralNPCEnabled;
             room.State.Dynamics.RandomEventsEnabled = dynamics.RandomEventsEnabled;
             room.State.Dynamics.MissionSystemEnabled = dynamics.MissionSystemEnabled;
-            room.State.Dynamics.ActiveCopresenceModes = [.. (dynamics.ActiveCopresenceModes ?? [])];
-            room.State.Dynamics.CopresencePreset = dynamics.CopresencePreset;
+
+            var preset = dynamics.CopresencePreset;
+            var isNamedPreset = preset != null && preset != "Aangepast";
+            if (isNamedPreset && !CopresencePresets.ContainsKey(preset!))
+                return (null, $"Unknown copresence preset: {preset}");
+
+            room.State.Dynamics.CopresencePreset = preset;
+            if (isNamedPreset && CopresencePresets.TryGetValue(preset!, out var presetModes))
+            {
+                // For named presets, derive modes from the authoritative server-side mapping
+                room.State.Dynamics.ActiveCopresenceModes = [.. presetModes];
+            }
+            else
+            {
+                // For 'Aangepast' or unset, accept the client-provided list but reject CopresenceMode.None
+                room.State.Dynamics.ActiveCopresenceModes = [.. (dynamics.ActiveCopresenceModes ?? [])
+                    .Where(m => m != CopresenceMode.None)];
+            }
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
