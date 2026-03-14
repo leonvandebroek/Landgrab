@@ -305,6 +305,35 @@ const en = {
       pickedUp_one: 'Picked up {{count}} troop from {{q}}, {{r}}.',
       pickedUp_other: 'Picked up {{count}} troops from {{q}}, {{r}}.',
     },
+
+    // Supply lines (F3)
+    supplyLine: {
+      connected: 'Connected to HQ',
+      disconnected: 'Disconnected from supply network',
+      supplyLines: 'Supply lines',
+    },
+
+    // Mini-map (F4)
+    miniMap: {
+      title: 'Strategic overview',
+      toggle: 'Toggle mini-map',
+    },
+
+    // Radial menu (F6)
+    radial: {
+      dismiss: 'Dismiss',
+      tileInfo: '({{q}}, {{r}})',
+    },
+
+    // Toast notifications (F8)
+    toast: {
+      tileLost: '⚔️ {{attacker}} captured your tile at ({{q}}, {{r}})!',
+      combatWon: '🎉 You won the battle at ({{q}}, {{r}})!',
+      combatLost: '💀 You lost the battle at ({{q}}, {{r}})',
+      eventWarning: '⚠️ Event incoming: {{event}}',
+      achievementUnlocked: '🏆 Achievement: {{name}}',
+      territoryMilestone: '🚩 {{count}} territories held!',
+    },
   },
   gameLog: {
     title: 'Match log',

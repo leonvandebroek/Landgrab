@@ -7,6 +7,7 @@ import { useGeolocation } from './hooks/useGeolocation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { vibrate, HAPTIC } from './utils/haptics';
+import { useToastQueue } from './hooks/useToastQueue';
 import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
@@ -85,6 +86,9 @@ export default function App() {
   const [hostMessage, setHostMessage] = useState<{ message: string; fromHost: boolean } | null>(null);
   const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
   const [hasAcknowledgedRules, setHasAcknowledgedRules] = useState(false);
+  const [mainMapBounds, setMainMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
+  const [selectedHexScreenPos, setSelectedHexScreenPos] = useState<{ x: number; y: number } | null>(null);
+  const { toasts, pushToast, dismissToast } = useToastQueue();
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
@@ -126,8 +130,8 @@ export default function App() {
   const scheduleAutoClear = useCallback(<T,>(
     key: string,
     setter: React.Dispatch<React.SetStateAction<T>>,
-    value: T,
-    clearValue: T,
+    value: NoInfer<T>,
+    clearValue: NoInfer<T>,
     ms: number,
   ) => {
     if (notificationTimersRef.current[key]) {
@@ -324,6 +328,12 @@ export default function App() {
     onCombatResult: (result) => {
       vibrate(HAPTIC.attack);
       setCombatResult(result);
+      pushToast({
+        type: 'combat',
+        message: result.attackerWon
+          ? `Combat won at (${result.q}, ${result.r})!`
+          : `Combat lost at (${result.q}, ${result.r})!`,
+      });
     },
     onTileLost: (data) => {
       playSound('notification');
@@ -332,6 +342,11 @@ export default function App() {
         tone: 'error',
         message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
         targetHex: [data.Q, data.R]
+      });
+      pushToast({
+        type: 'combat',
+        message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
+        teamColor: undefined,
       });
     },
     onError: (message) => {
@@ -342,6 +357,10 @@ export default function App() {
     },
     onRandomEvent: (event) => {
       scheduleAutoClear('randomEvent', setRandomEvent, event, null, 8000);
+      pushToast({
+        type: 'event',
+        message: event.title,
+      });
     },
     onEventWarning: (event) => {
       scheduleAutoClear('eventWarning', setEventWarning, event, null, 120000);
@@ -351,6 +370,11 @@ export default function App() {
     },
     onMissionCompleted: (mission) => {
       scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'completed' as const }, null, 6000);
+      pushToast({
+        type: 'mission',
+        message: mission.title,
+        icon: '✅',
+      });
     },
     onMissionFailed: (mission) => {
       scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'failed' as const }, null, 6000);
@@ -1303,6 +1327,10 @@ export default function App() {
           onSetObserverMode={handleSetObserverMode}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
+          toasts={toasts}
+          onDismissToast={dismissToast}
+          mainMapBounds={mainMapBounds}
+          selectedHexScreenPos={selectedHexScreenPos}
         >
           <GameMap
             state={gameState}
@@ -1312,6 +1340,8 @@ export default function App() {
             onHexClick={handleHexClick}
             selectedHex={selectedHex}
             playerDisplayPrefs={playerDisplayPrefs}
+            onBoundsChange={setMainMapBounds}
+            onHexScreenPosition={setSelectedHexScreenPos}
           />
         </PlayingHud>
         {combatResult && (

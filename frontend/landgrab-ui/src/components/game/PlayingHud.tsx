@@ -12,6 +12,10 @@ import { AbilityBar } from './AbilityBar';
 import { PlayerDisplaySettings } from './PlayerDisplaySettings';
 import { ScoreRow } from './PlayerPanel';
 import { TileActionPanel } from './TileActionPanel';
+import { ToastManager } from './ToastManager';
+import type { GameToast } from '../../hooks/useToastQueue';
+import { RadialActionMenu } from './RadialActionMenu';
+import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './tileInteraction';
 
@@ -79,6 +83,10 @@ interface Props {
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
+  toasts?: GameToast[];
+  onDismissToast?: (id: string) => void;
+  mainMapBounds?: { north: number; south: number; east: number; west: number } | null;
+  selectedHexScreenPos?: { x: number; y: number } | null;
 }
 
 export function PlayingHud({
@@ -130,7 +138,11 @@ export function PlayingHud({
   onSetObserverMode,
   debugToggle,
   debugPanel,
-  children
+  children,
+  toasts,
+  onDismissToast,
+  mainMapBounds,
+  selectedHexScreenPos
 }: Props) {
   const { t } = useTranslation();
   const { soundEnabled, toggleSound } = useSound();
@@ -359,7 +371,17 @@ export function PlayingHud({
             </div>
           )}
 
-          {showTileActions && selectedHex && (
+          {showTileActions && selectedHex && selectedHexScreenPos && (
+            <RadialActionMenu
+              actions={tileActions!}
+              onAction={onTileAction!}
+              onDismiss={onDismissTileActions!}
+              position={selectedHexScreenPos}
+              targetCell={selectedCell}
+              player={me ?? null}
+            />
+          )}
+          {showTileActions && selectedHex && !selectedHexScreenPos && (
             <TileActionPanel
               actions={tileActions!}
               targetCell={selectedCell}
@@ -389,6 +411,10 @@ export function PlayingHud({
               {missionNotification.type === 'completed' && `✅ ${t('phase9.missionCompleted' as never)}: ${getMissionTitle(missionNotification.mission)}`}
               {missionNotification.type === 'failed' && `❌ ${t('phase9.missionFailed' as never)}: ${getMissionTitle(missionNotification.mission)}`}
             </div>
+          )}
+
+          {toasts && onDismissToast && (
+            <ToastManager toasts={toasts} onDismiss={onDismissToast} />
           )}
 
           {me && state.dynamics && (
@@ -566,6 +592,17 @@ export function PlayingHud({
         </div>
       )}
       {debugPanel}
+      {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (
+        <MiniMap
+          grid={state.grid}
+          myUserId={myUserId}
+          alliances={state.alliances}
+          mapLat={state.mapLat}
+          mapLng={state.mapLng}
+          tileSizeMeters={state.tileSizeMeters}
+          mainMapBounds={mainMapBounds ?? null}
+        />
+      )}
     </div>
   );
 }

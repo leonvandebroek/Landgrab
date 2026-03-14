@@ -305,6 +305,35 @@ const nl = {
       pickedUp_one: '{{count}} troep opgehaald van {{q}}, {{r}}.',
       pickedUp_other: '{{count}} troepen opgehaald van {{q}}, {{r}}.',
     },
+
+    // Bevoorradingslijnen (F3)
+    supplyLine: {
+      connected: 'Verbonden met HQ',
+      disconnected: 'Afgesneden van bevoorradingsnetwerk',
+      supplyLines: 'Bevoorradingslijnen',
+    },
+
+    // Mini-kaart (F4)
+    miniMap: {
+      title: 'Strategisch overzicht',
+      toggle: 'Mini-kaart aan/uit',
+    },
+
+    // Radiaal menu (F6)
+    radial: {
+      dismiss: 'Sluiten',
+      tileInfo: '({{q}}, {{r}})',
+    },
+
+    // Meldingen (F8)
+    toast: {
+      tileLost: '⚔️ {{attacker}} heeft je tegel op ({{q}}, {{r}}) veroverd!',
+      combatWon: '🎉 Je hebt het gevecht op ({{q}}, {{r}}) gewonnen!',
+      combatLost: '💀 Je hebt het gevecht op ({{q}}, {{r}}) verloren',
+      eventWarning: '⚠️ Event onderweg: {{event}}',
+      achievementUnlocked: '🏆 Prestatie: {{name}}',
+      territoryMilestone: '🚩 {{count}} territoria bezet!',
+    },
   },
   gameLog: {
     title: 'Spelverloop',
