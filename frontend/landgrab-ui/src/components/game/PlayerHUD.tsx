@@ -180,125 +180,125 @@ export function PlayerHUD({
         </div>
       )}
 
-      {/* ── Actions + Abilities row ── */}
-      {(hasActions || hasAbilities) && (
-        <div className="player-hud__actions-row">
-        {/* Tile actions */}
-        {hasActions && actions.map((action, i) => (
-          <button
-            key={action.type}
-            className={`player-hud__btn player-hud__btn--${action.tone}`}
-            disabled={!action.enabled}
-            onClick={() => onAction(action.type)}
-            style={{ animationDelay: `${i * 40}ms` } as React.CSSProperties}
-            aria-label={t(action.label as never)}
-          >
-            <span className="player-hud__btn-icon" aria-hidden>
-              {action.icon}
-            </span>
-            <span className="player-hud__btn-label">
-              {t(action.label as never)}
-            </span>
-            {!action.enabled && <span className="player-hud__btn-locked" aria-hidden>🔒</span>}
-          </button>
-        ))}
-
-        {/* Divider between tile actions and abilities */}
-        {hasActions && hasAbilities && (
-          <span className="player-hud__divider" />
-        )}
-
-        {/* Ability pills */}
-        {showBeacon && player && (
-          <button
-            type="button"
-            className={`player-hud__ability ${player.isBeacon ? 'player-hud__ability--active' : ''}`}
-            onClick={player.isBeacon ? onDeactivateBeacon : onActivateBeacon}
-          >
-            <span>📡</span>
-            <span>{player.isBeacon ? t('phase5.beaconDeactivate' as never) : t('phase5.beaconActivate' as never)}</span>
-          </button>
-        )}
-
-        {showStealth && player && (() => {
-          const activeTime = formatCountdown(player.stealthUntil);
-          const cooldownTime = formatCountdown(player.stealthCooldownUntil);
-          const isActive = activeTime !== null;
-          const isOnCooldown = !isActive && cooldownTime !== null;
-
-          return (
+      {/* ── Tile actions (big buttons — primary interaction) ── */}
+      {hasActions && (
+        <div className="player-hud__tile-actions">
+          {actions.map((action, i) => (
             <button
-              type="button"
-              className={`player-hud__ability ${isActive ? 'player-hud__ability--active' : ''} ${isOnCooldown ? 'player-hud__ability--cooldown' : ''}`}
-              onClick={!isActive && !isOnCooldown ? onActivateStealth : undefined}
-              disabled={isActive || isOnCooldown}
+              key={action.type}
+              className={`player-hud__btn player-hud__btn--${action.tone}`}
+              disabled={!action.enabled}
+              onClick={() => onAction(action.type)}
+              style={{ animationDelay: `${i * 40}ms` } as React.CSSProperties}
+              aria-label={t(action.label as never)}
             >
-              <span>👻</span>
-              <span>
-                {isActive
-                  ? t('phase6.stealthActive' as never, { time: activeTime })
-                  : isOnCooldown
-                    ? t('phase6.stealthCooldown' as never)
-                    : t('phase6.stealthActivate' as never)}
+              <span className="player-hud__btn-icon" aria-hidden>
+                {action.icon}
               </span>
-              {isOnCooldown && cooldownTime && (
-                <span className="player-hud__countdown">{cooldownTime}</span>
-              )}
-            </button>
-          );
-        })()}
-
-        {showCommando && player && (() => {
-          const deadlineTime = formatCountdown(player.commandoDeadline);
-          const cooldownTime = formatCountdown(player.commandoCooldownUntil);
-          const isActive = player.isCommandoActive && deadlineTime !== null;
-          const isOnCooldown = !isActive && cooldownTime !== null;
-
-          if (commandoTargetingMode) {
-            return (
-              <button
-                type="button"
-                className="player-hud__ability player-hud__ability--targeting"
-                onClick={onCancelCommandoTargeting}
-              >
-                <span>🎯</span>
-                <span>{t('phase6.commandoSelectTarget' as never)}</span>
-              </button>
-            );
-          }
-
-          return (
-            <button
-              type="button"
-              className={`player-hud__ability ${isActive ? 'player-hud__ability--active' : ''} ${isOnCooldown ? 'player-hud__ability--cooldown' : ''}`}
-              onClick={!isActive && !isOnCooldown ? onStartCommandoTargeting : undefined}
-              disabled={isActive || isOnCooldown}
-            >
-              <span>⚔️</span>
-              <span>
-                {isActive
-                  ? t('phase6.commandoActive' as never, { time: deadlineTime })
-                  : isOnCooldown
-                    ? t('phase6.commandoCooldown' as never)
-                    : t('phase6.commandoActivate' as never)}
+              <span className="player-hud__btn-label">
+                {t(action.label as never)}
               </span>
-              {isOnCooldown && cooldownTime && (
-                <span className="player-hud__countdown">{cooldownTime}</span>
-              )}
+              {!action.enabled && <span className="player-hud__btn-locked" aria-hidden>🔒</span>}
             </button>
-          );
-        })()}
-      </div>
+          ))}
+        </div>
       )}
 
-      {/* ── Disabled reason for first disabled action ── */}
+      {/* ── Disabled reason ── */}
       {hasActions && actions.some((a) => !a.enabled && a.disabledReason) && (
         <div className="player-hud__disabled-reason">
           {t(actions.find((a) => !a.enabled && a.disabledReason)!.disabledReason! as never)}
         </div>
       )}
 
-      {/* ── Empty state (no hex actions, no abilities shown above) ── */}
+      {/* ── Ability bar (secondary row) ── */}
+      {hasAbilities && (
+        <div className="player-hud__abilities">
+          {showBeacon && player && (
+            <button
+              type="button"
+              className={`player-hud__ability ${player.isBeacon ? 'player-hud__ability--active' : ''}`}
+              onClick={player.isBeacon ? onDeactivateBeacon : onActivateBeacon}
+            >
+              <span className="player-hud__ability-icon">📡</span>
+              <span className="player-hud__ability-label">
+                {player.isBeacon ? t('phase5.beaconDeactivate' as never) : t('phase5.beaconActivate' as never)}
+              </span>
+            </button>
+          )}
+
+          {showStealth && player && (() => {
+            const activeTime = formatCountdown(player.stealthUntil);
+            const cooldownTime = formatCountdown(player.stealthCooldownUntil);
+            const isActive = activeTime !== null;
+            const isOnCooldown = !isActive && cooldownTime !== null;
+
+            return (
+              <button
+                type="button"
+                className={`player-hud__ability ${isActive ? 'player-hud__ability--active' : ''} ${isOnCooldown ? 'player-hud__ability--cooldown' : ''}`}
+                onClick={!isActive && !isOnCooldown ? onActivateStealth : undefined}
+                disabled={isActive || isOnCooldown}
+              >
+                <span className="player-hud__ability-icon">👻</span>
+                <span className="player-hud__ability-label">
+                  {isActive
+                    ? t('phase6.stealthActive' as never, { time: activeTime })
+                    : isOnCooldown
+                      ? t('phase6.stealthCooldown' as never)
+                      : t('phase6.stealthActivate' as never)}
+                </span>
+                {isOnCooldown && cooldownTime && (
+                  <span className="player-hud__countdown">{cooldownTime}</span>
+                )}
+              </button>
+            );
+          })()}
+
+          {showCommando && player && (() => {
+            const deadlineTime = formatCountdown(player.commandoDeadline);
+            const cooldownTime = formatCountdown(player.commandoCooldownUntil);
+            const isActive = player.isCommandoActive && deadlineTime !== null;
+            const isOnCooldown = !isActive && cooldownTime !== null;
+
+            if (commandoTargetingMode) {
+              return (
+                <button
+                  type="button"
+                  className="player-hud__ability player-hud__ability--targeting"
+                  onClick={onCancelCommandoTargeting}
+                >
+                  <span className="player-hud__ability-icon">🎯</span>
+                  <span className="player-hud__ability-label">{t('phase6.commandoSelectTarget' as never)}</span>
+                </button>
+              );
+            }
+
+            return (
+              <button
+                type="button"
+                className={`player-hud__ability ${isActive ? 'player-hud__ability--active' : ''} ${isOnCooldown ? 'player-hud__ability--cooldown' : ''}`}
+                onClick={!isActive && !isOnCooldown ? onStartCommandoTargeting : undefined}
+                disabled={isActive || isOnCooldown}
+              >
+                <span className="player-hud__ability-icon">⚔️</span>
+                <span className="player-hud__ability-label">
+                  {isActive
+                    ? t('phase6.commandoActive' as never, { time: deadlineTime })
+                    : isOnCooldown
+                      ? t('phase6.commandoCooldown' as never)
+                      : t('phase6.commandoActivate' as never)}
+                </span>
+                {isOnCooldown && cooldownTime && (
+                  <span className="player-hud__countdown">{cooldownTime}</span>
+                )}
+              </button>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Empty state ── */}
       {!hasActions && !hasAbilities && (
         <div className="player-hud__empty">
           {emptyReason === 'noLocation' && (
