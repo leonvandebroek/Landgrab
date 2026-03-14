@@ -359,6 +359,10 @@ export default function App() {
       scheduleAutoClear('pendingDuel', setPendingDuel, duel, null, 30000);
     },
     onDuelResult: () => {
+      if (notificationTimersRef.current['pendingDuel']) {
+        clearTimeout(notificationTimersRef.current['pendingDuel']);
+        delete notificationTimersRef.current['pendingDuel'];
+      }
       setPendingDuel(null);
     },
     onHostMessage: (data: { message: string; fromHost: boolean }) => {

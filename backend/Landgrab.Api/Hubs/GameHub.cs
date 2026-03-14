@@ -855,8 +855,9 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
             foreach (var connId in connectionIds)
                 await Clients.Client(connId).SendAsync("HostMessage", payload);
 
-            // Also send to host so they see confirmation
-            await Clients.Caller.SendAsync("HostMessage", payload);
+            // Also send to host so they see confirmation, unless already included above
+            if (!connectionIds.Contains(Context.ConnectionId))
+                await Clients.Caller.SendAsync("HostMessage", payload);
         }
         else
         {
