@@ -94,6 +94,7 @@ export default function App() {
   const pendingResumeRef = useRef<PendingResume | null>(null);
   const savedSessionRef = useRef<SavedSession | null>(savedSession);
   const resumeSequenceRef = useRef(0);
+  const notificationTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedRoomCode = savedSession?.roomCode ?? '';
   const activeRoomCode = gameState?.roomCode ?? '';
   const rulesKey = activeRoomCode ? `lg-rules-ack-${activeRoomCode}` : '';
@@ -110,6 +111,33 @@ export default function App() {
   useEffect(() => {
     savedSessionRef.current = savedSession;
   }, [savedSession]);
+
+  // Clean up all notification auto-dismiss timers on unmount
+  useEffect(() => {
+    return () => {
+      for (const id of Object.values(notificationTimersRef.current)) {
+        clearTimeout(id);
+      }
+    };
+  }, []);
+
+  /** Set state and schedule auto-clear after `ms`. Cancels any prior timer for the same key. */
+  const scheduleAutoClear = useCallback(<T,>(
+    key: string,
+    setter: React.Dispatch<React.SetStateAction<T>>,
+    value: T,
+    clearValue: T,
+    ms: number,
+  ) => {
+    if (notificationTimersRef.current[key]) {
+      clearTimeout(notificationTimersRef.current[key]);
+    }
+    setter(value);
+    notificationTimersRef.current[key] = setTimeout(() => {
+      setter(clearValue);
+      delete notificationTimersRef.current[key];
+    }, ms);
+  }, []);
 
   const saveSession = useCallback((roomCode: string) => {
     if (!auth?.userId) {
@@ -311,36 +339,28 @@ export default function App() {
       setError(localizeLobbyError(message, t));
     },
     onRandomEvent: (event) => {
-      setRandomEvent(event);
-      setTimeout(() => setRandomEvent(null), 8000);
+      scheduleAutoClear('randomEvent', setRandomEvent, event, null, 8000);
     },
     onEventWarning: (event) => {
-      setEventWarning(event);
-      setTimeout(() => setEventWarning(null), 120000);
+      scheduleAutoClear('eventWarning', setEventWarning, event, null, 120000);
     },
     onMissionAssigned: (mission) => {
-      setMissionNotification({ mission, type: 'assigned' });
-      setTimeout(() => setMissionNotification(null), 6000);
+      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'assigned' as const }, null, 6000);
     },
     onMissionCompleted: (mission) => {
-      setMissionNotification({ mission, type: 'completed' });
-      setTimeout(() => setMissionNotification(null), 6000);
+      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'completed' as const }, null, 6000);
     },
     onMissionFailed: (mission) => {
-      setMissionNotification({ mission, type: 'failed' });
-      setTimeout(() => setMissionNotification(null), 6000);
+      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'failed' as const }, null, 6000);
     },
     onDuelChallenge: (duel) => {
-      setPendingDuel(duel);
-      // Auto-expire after 30s
-      setTimeout(() => setPendingDuel((current) => current?.id === duel.id ? null : current), 30000);
+      scheduleAutoClear('pendingDuel', setPendingDuel, duel, null, 30000);
     },
     onDuelResult: () => {
       setPendingDuel(null);
     },
     onHostMessage: (data: { message: string; fromHost: boolean }) => {
-      setHostMessage(data);
-      setTimeout(() => setHostMessage(null), 10000);
+      scheduleAutoClear('hostMessage', setHostMessage, data, null, 10000);
     },
     onTemplateSaved: (data) => {
       console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
