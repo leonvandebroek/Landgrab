@@ -807,6 +807,73 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
         await Clients.Caller.SendAsync("TemplateSaved", templateId);
     }
 
+    // ── Host Observer Mode ────────────────────────────────────────────
+
+    public async Task SetHostObserverMode(string roomCode, bool enabled)
+    {
+        var (state, error) = gameService.SetHostObserverMode(roomCode, UserId, enabled);
+        if (error != null) { await SendError(error); return; }
+        await BroadcastState(roomCode, state!);
+    }
+
+    public async Task UpdateGameDynamicsLive(string roomCode, GameDynamics dynamics)
+    {
+        var (state, error) = gameService.UpdateGameDynamicsLive(roomCode, UserId, dynamics);
+        if (error != null) { await SendError(error); return; }
+        await BroadcastState(roomCode, state!);
+    }
+
+    public async Task TriggerGameEvent(string roomCode, string eventType,
+        int? targetQ, int? targetR, string? targetAllianceId)
+    {
+        var (state, error) = gameService.TriggerGameEvent(roomCode, UserId, eventType, targetQ, targetR, targetAllianceId);
+        if (error != null) { await SendError(error); return; }
+
+        await BroadcastState(roomCode, state!);
+        await Clients.Group(roomCode).SendAsync("RandomEvent", new
+        {
+            type = eventType,
+            title = eventType,
+            description = $"The host triggered a {eventType} event!"
+        });
+    }
+
+    public async Task SendHostMessage(string roomCode, string message, List<string>? targetAllianceIds)
+    {
+        var (state, error) = gameService.SendHostMessage(roomCode, UserId, message, targetAllianceIds);
+        if (error != null) { await SendError(error); return; }
+
+        var room = gameService.GetRoom(roomCode);
+        if (room == null) return;
+
+        var payload = new { message, fromHost = true, targetAllianceIds };
+
+        if (targetAllianceIds != null && targetAllianceIds.Count > 0)
+        {
+            // Send to targeted alliance members only
+            var connectionIds = gameService.GetAllianceConnectionIds(room, targetAllianceIds);
+            foreach (var connId in connectionIds)
+                await Clients.Client(connId).SendAsync("HostMessage", payload);
+
+            // Also send to host so they see confirmation
+            await Clients.Caller.SendAsync("HostMessage", payload);
+        }
+        else
+        {
+            // Broadcast to all players
+            await Clients.Group(roomCode).SendAsync("HostMessage", payload);
+        }
+
+        await BroadcastState(roomCode, state!);
+    }
+
+    public async Task PauseGame(string roomCode, bool paused)
+    {
+        var (state, error) = gameService.PauseGame(roomCode, UserId, paused);
+        if (error != null) { await SendError(error); return; }
+        await BroadcastState(roomCode, state!);
+    }
+
     private async Task BroadcastState(string roomCode, GameState state, string? aliasEvent = null)
     {
         if (!string.IsNullOrWhiteSpace(aliasEvent))
@@ -820,8 +887,16 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
             {
                 foreach (var (connectionId, userId) in room.ConnectionMap)
                 {
-                    var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
-                    await Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot);
+                    // Host in observer mode gets full unfiltered state
+                    if (room.HostUserId.ToString() == userId && state.HostObserverMode)
+                    {
+                        await Clients.Client(connectionId).SendAsync("StateUpdated", state);
+                    }
+                    else
+                    {
+                        var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
+                        await Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot);
+                    }
                 }
 
                 return;

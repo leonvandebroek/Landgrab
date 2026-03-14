@@ -19,6 +19,7 @@ import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
+import { HostControlPlane } from './components/game/HostControlPlane';
 import type { ClaimMode, CombatResult, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, Mission, PendingDuel, RandomEvent, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
@@ -80,6 +81,7 @@ export default function App() {
   const [eventWarning, setEventWarning] = useState<RandomEvent | null>(null);
   const [missionNotification, setMissionNotification] = useState<{ mission: Mission; type: 'assigned' | 'completed' | 'failed' } | null>(null);
   const [pendingDuel, setPendingDuel] = useState<PendingDuel | null>(null);
+  const [hostMessage, setHostMessage] = useState<{ message: string; fromHost: boolean } | null>(null);
   const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
   const [hasAcknowledgedRules, setHasAcknowledgedRules] = useState(false);
   const location = useGeolocation(Boolean(auth));
@@ -335,6 +337,10 @@ export default function App() {
     },
     onDuelResult: () => {
       setPendingDuel(null);
+    },
+    onHostMessage: (data: { message: string; fromHost: boolean }) => {
+      setHostMessage(data);
+      setTimeout(() => setHostMessage(null), 10000);
     },
     onTemplateSaved: (data) => {
       console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
@@ -882,6 +888,33 @@ export default function App() {
       });
   }, [clearGameplayUi, clearSession, invoke, refreshMyRooms]);
 
+  // ── Host Observer Mode handlers ──────────────────────────────────
+  const handleSetObserverMode = useCallback((enabled: boolean) => {
+    if (!activeRoomCode) return;
+    invoke('SetHostObserverMode', activeRoomCode, enabled).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handleUpdateDynamicsLive = useCallback((dynamics: GameDynamics) => {
+    if (!activeRoomCode) return;
+    invoke('UpdateGameDynamicsLive', activeRoomCode, dynamics).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handleTriggerEvent = useCallback((eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => {
+    if (!activeRoomCode) return;
+    invoke('TriggerGameEvent', activeRoomCode, eventType, targetQ ?? null, targetR ?? null, targetAllianceId ?? null)
+      .catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handleSendHostMessage = useCallback((message: string, allianceIds?: string[]) => {
+    if (!activeRoomCode) return;
+    invoke('SendHostMessage', activeRoomCode, message, allianceIds ?? null).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handlePauseGame = useCallback((paused: boolean) => {
+    if (!activeRoomCode) return;
+    invoke('PauseGame', activeRoomCode, paused).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
   const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined) => {
     if (!auth || !gameState || gameState.phase !== 'Playing') {
       return;
@@ -1161,6 +1194,36 @@ export default function App() {
       );
     }
 
+    const isObserverMode = myPlayer?.isHost && gameState.hostObserverMode;
+
+    if (isObserverMode) {
+      return (
+        <>
+          {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+          <HostControlPlane
+            state={gameState}
+            onSwitchToPlayer={() => handleSetObserverMode(false)}
+            onUpdateDynamics={handleUpdateDynamicsLive}
+            onTriggerEvent={handleTriggerEvent}
+            onSendMessage={handleSendHostMessage}
+            onPauseGame={handlePauseGame}
+            onReturnToLobby={handleReturnToLobby}
+            error={error}
+          >
+            <GameMap
+              state={gameState}
+              myUserId={auth.userId}
+              currentLocation={currentLocation}
+              constrainViewportToGrid
+              onHexClick={handleHexClick}
+              selectedHex={selectedHex}
+              playerDisplayPrefs={playerDisplayPrefs}
+            />
+          </HostControlPlane>
+        </>
+      );
+    }
+
     return (
       <>
         {connectionBanner && <ConnectionBanner message={connectionBanner} />}
@@ -1202,6 +1265,10 @@ export default function App() {
           carriedTroops={myPlayer?.carriedTroops ?? 0}
           isInOwnHex={isInOwnHex}
           hasLocation={Boolean(currentLocation)}
+          hostMessage={hostMessage}
+          isPaused={gameState.isPaused}
+          isHost={myPlayer?.isHost}
+          onSetObserverMode={handleSetObserverMode}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
         >
@@ -1273,6 +1340,7 @@ export default function App() {
           clearGameplayUi();
           setView('lobby');
         }}
+        onSetObserverMode={handleSetObserverMode}
         error={error}
         invoke={invoke}
       />

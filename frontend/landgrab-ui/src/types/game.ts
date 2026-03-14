@@ -165,6 +165,8 @@ export interface GameState {
   // Host overrides
   hostBypassGps?: boolean;
   maxFootprintMetersOverride?: number | null;
+  hostObserverMode?: boolean;
+  isPaused?: boolean;
 }
 
 export interface Achievement {
@@ -301,4 +303,10 @@ export interface UpdateMapTemplateRequest {
   tileSizeMeters?: number;
   centerLat?: number;
   centerLng?: number;
+}
+
+export interface HostMessage {
+  message: string;
+  fromHost: boolean;
+  targetAllianceIds?: string[];
 }
