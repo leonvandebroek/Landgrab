@@ -5,8 +5,10 @@ export const DYNAMICS_PRESETS = [
   'Infiltratie', 'Chaos', 'Tolweg', 'Aangepast',
 ] as const;
 
+export type DynamicsPreset = typeof DYNAMICS_PRESETS[number];
+
 /** Maps each named preset to its copresence modes (mirrors backend CopresencePresets). */
-export const PRESET_MODES: Record<string, CopresenceMode[]> = {
+export const PRESET_MODES = {
   Klassiek: [],
   Territorium: ['Shepherd', 'Drain'],
   Formatie: ['FrontLine', 'Rally'],
@@ -15,7 +17,7 @@ export const PRESET_MODES: Record<string, CopresenceMode[]> = {
   Chaos: ['JagerProoi', 'Duel', 'PresenceBonus'],
   Tolweg: ['Beacon', 'Toll', 'Drain'],
   Aangepast: [],
-};
+} satisfies Record<DynamicsPreset, CopresenceMode[]>;
 
 export const COPRESENCE_MODES = [
   'Standoff', 'PresenceBattle', 'PresenceBonus',
