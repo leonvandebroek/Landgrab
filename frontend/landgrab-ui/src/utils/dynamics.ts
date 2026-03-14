@@ -1,9 +1,21 @@
-import type { GameDynamics } from '../types/game';
+import type { CopresenceMode, GameDynamics } from '../types/game';
 
 export const DYNAMICS_PRESETS = [
   'Klassiek', 'Territorium', 'Formatie', 'Logistiek',
   'Infiltratie', 'Chaos', 'Tolweg', 'Aangepast',
 ] as const;
+
+/** Maps each named preset to its copresence modes (mirrors backend CopresencePresets). */
+export const PRESET_MODES: Record<string, CopresenceMode[]> = {
+  Klassiek: [],
+  Territorium: ['Shepherd', 'Drain'],
+  Formatie: ['FrontLine', 'Rally'],
+  Logistiek: ['Shepherd', 'Relay', 'FrontLine'],
+  Infiltratie: ['Stealth', 'CommandoRaid', 'Scout'],
+  Chaos: ['JagerProoi', 'Duel', 'PresenceBonus'],
+  Tolweg: ['Beacon', 'Toll', 'Drain'],
+  Aangepast: [],
+};
 
 export const COPRESENCE_MODES = [
   'Standoff', 'PresenceBattle', 'PresenceBonus',

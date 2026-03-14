@@ -3634,6 +3634,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             room.State.Dynamics.NeutralNPCEnabled = dynamics.NeutralNPCEnabled;
             room.State.Dynamics.RandomEventsEnabled = dynamics.RandomEventsEnabled;
             room.State.Dynamics.MissionSystemEnabled = dynamics.MissionSystemEnabled;
+            room.State.Dynamics.ActiveCopresenceModes = [.. (dynamics.ActiveCopresenceModes ?? [])];
+            room.State.Dynamics.CopresencePreset = dynamics.CopresencePreset;
 
             AppendEventLog(room.State, new GameEventLogEntry
             {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
-import { DYNAMICS_PRESETS as PRESETS, COPRESENCE_MODES, FEATURE_KEYS, EVENT_TYPES, featureField } from '../../utils/dynamics';
+import { DYNAMICS_PRESETS as PRESETS, PRESET_MODES, COPRESENCE_MODES, FEATURE_KEYS, EVENT_TYPES, featureField } from '../../utils/dynamics';
 import type { FeatureKey } from '../../utils/dynamics';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
@@ -60,6 +60,15 @@ export function HostControlPlane({
 
   const handleFeatureToggle = useCallback((key: FeatureKey, checked: boolean) => {
     onUpdateDynamics({ ...dynamics, [featureField(key)]: checked });
+  }, [dynamics, onUpdateDynamics]);
+
+  const handlePresetChange = useCallback((preset: string) => {
+    // For 'Aangepast', preserve the current modes; for named presets use PRESET_MODES
+    // (PRESET_MODES covers all entries in DYNAMICS_PRESETS, so the fallback is a safety guard)
+    const modes = preset === 'Aangepast'
+      ? dynamics.activeCopresenceModes
+      : (PRESET_MODES[preset] ?? []) as CopresenceMode[];
+    onUpdateDynamics({ ...dynamics, copresencePreset: preset, activeCopresenceModes: modes });
   }, [dynamics, onUpdateDynamics]);
 
   const handleModeToggle = useCallback((mode: CopresenceMode, checked: boolean) => {
@@ -204,7 +213,7 @@ export function HostControlPlane({
                     type="radio"
                     name="observer-preset"
                     checked={activePreset === preset}
-                    onChange={() => {/* copresence preset changes need separate handling */}}
+                    onChange={() => handlePresetChange(preset)}
                   />
                   <span className="claim-mode-copy">
                     <strong>{t(`dynamics.preset.${preset}.title`)}</strong>
