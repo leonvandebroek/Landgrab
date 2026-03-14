@@ -22,6 +22,9 @@ public sealed class TroopRegenerationService(
 
                 foreach (var roomCode in gameService.GetPlayingRoomCodes())
                 {
+                    var pauseRoom = gameService.GetRoom(roomCode);
+                    if (pauseRoom != null && pauseRoom.State.IsPaused) continue;
+
                     var (state, error) = gameService.AddReinforcementsToAllHexes(roomCode);
                     if (error != null || state == null)
                         continue;
@@ -41,8 +44,16 @@ public sealed class TroopRegenerationService(
                         {
                             foreach (var (connectionId, userId) in room.ConnectionMap)
                             {
-                                var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
-                                await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);
+                                // Host in observer mode gets full unfiltered state
+                                if (room.HostUserId.ToString() == userId && state.HostObserverMode)
+                                {
+                                    await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", state, stoppingToken);
+                                }
+                                else
+                                {
+                                    var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
+                                    await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);
+                                }
                             }
                         }
                     }

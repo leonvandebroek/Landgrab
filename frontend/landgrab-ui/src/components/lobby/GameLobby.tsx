@@ -44,6 +44,7 @@ interface Props {
   onStartGame: () => void;
   onReturnToLobby: () => void;
   onLogout: () => void;
+  onSetObserverMode?: (enabled: boolean) => void;
   error: string;
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
@@ -80,6 +81,7 @@ export function GameLobby({
   onStartGame,
   onReturnToLobby,
   onLogout,
+  onSetObserverMode,
   error,
   invoke,
 }: Props) {
@@ -252,6 +254,7 @@ export function GameLobby({
         onStartGame={onStartGame}
         onReturnToLobby={onReturnToLobby}
         onLogout={onLogout}
+        onSetObserverMode={onSetObserverMode}
         error={error}
         invoke={invoke}
       />

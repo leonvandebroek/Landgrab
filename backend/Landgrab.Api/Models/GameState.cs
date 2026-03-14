@@ -229,6 +229,8 @@ public class GameState
     // Host settings
     public bool HostBypassGps { get; set; } = false;
     public int? MaxFootprintMetersOverride { get; set; }
+    public bool HostObserverMode { get; set; } = false;
+    public bool IsPaused { get; set; } = false;
 
     // Phase 6: JagerProoi — prey target tile
     public int? PreyTargetQ { get; set; }

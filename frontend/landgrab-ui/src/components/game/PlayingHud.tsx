@@ -72,6 +72,10 @@ interface Props {
   carriedTroops: number;
   isInOwnHex: boolean;
   hasLocation: boolean;
+  hostMessage?: { message: string; fromHost: boolean } | null;
+  isPaused?: boolean;
+  isHost?: boolean;
+  onSetObserverMode?: (enabled: boolean) => void;
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
@@ -120,6 +124,10 @@ export function PlayingHud({
   carriedTroops,
   isInOwnHex,
   hasLocation,
+  hostMessage,
+  isPaused,
+  isHost,
+  onSetObserverMode,
   debugToggle,
   debugPanel,
   children
@@ -238,6 +246,16 @@ export function PlayingHud({
         {randomEvent && (
           <div className="top-warning-bar random-event">
             🎲 {t(`phase8.eventType.${randomEvent.type}` as never)} — {randomEvent.description}
+          </div>
+        )}
+        {isPaused && (
+          <div className="top-warning-bar event-warning">
+            ⏸ {t('observer.gamePaused' as never)}
+          </div>
+        )}
+        {hostMessage && (
+          <div className="top-warning-bar host-message-banner">
+            📢 {hostMessage.message}
           </div>
         )}
         {me?.heldByPlayerId && (
@@ -448,6 +466,11 @@ export function PlayingHud({
           <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('displaySettings')}>
             ⚙️ {t('settings.display.title')}
           </button>
+          {isHost && onSetObserverMode && (
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => onSetObserverMode(true)}>
+              🔭 {t('observer.switchToObserver' as never)}
+            </button>
+          )}
           {debugToggle}
           <button className="btn-secondary" style={{width: '100%', color: 'var(--danger, #e74c3c)'}} onClick={onReturnToLobby}>
             {t('game.returnToLobby')}

@@ -30,6 +30,7 @@ public sealed class RandomEventService(
 
                     // Only fire if random events are enabled
                     if (!room.State.Dynamics.RandomEventsEnabled) continue;
+                    if (room.State.IsPaused) continue;
 
                     // ~33% chance per tick (≈ every 30 min on average)
                     if (Random.Shared.NextDouble() > 0.33) continue;
