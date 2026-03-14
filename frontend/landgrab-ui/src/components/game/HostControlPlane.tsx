@@ -1,34 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
+import { DYNAMICS_PRESETS as PRESETS, COPRESENCE_MODES, FEATURE_KEYS, EVENT_TYPES, featureField } from '../../utils/dynamics';
+import type { FeatureKey } from '../../utils/dynamics';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
-
-/* ── Constants (mirrored from DynamicsStep) ────────────────────────── */
-
-const PRESETS = [
-  'Klassiek', 'Territorium', 'Formatie', 'Logistiek',
-  'Infiltratie', 'Chaos', 'Tolweg', 'Aangepast',
-] as const;
-
-const COPRESENCE_MODES = [
-  'Standoff', 'PresenceBattle', 'PresenceBonus',
-  'Ambush', 'Toll', 'Duel', 'Rally', 'Drain',
-  'Stealth', 'Hostage', 'Scout', 'Beacon',
-  'FrontLine', 'Relay', 'JagerProoi', 'Shepherd', 'CommandoRaid',
-] as const;
-
-const FEATURE_KEYS = [
-  'terrain', 'playerRoles', 'fogOfWar', 'supplyLines', 'hq',
-  'timedEscalation', 'underdogPact', 'neutralNPC', 'randomEvents', 'missionSystem',
-] as const;
-
-type FeatureKey = typeof FEATURE_KEYS[number];
-
-const featureField = (key: FeatureKey): keyof GameDynamics =>
-  `${key}Enabled` as keyof GameDynamics;
-
-const EVENT_TYPES = ['Calamity', 'Epidemic', 'BonusTroops', 'RushHour'] as const;
 
 /* ── Props ─────────────────────────────────────────────────────────── */
 
@@ -62,8 +38,16 @@ export function HostControlPlane({
   const [messageText, setMessageText] = useState('');
   const [selectedAlliances, setSelectedAlliances] = useState<string[]>([]);
   const [confirmEvent, setConfirmEvent] = useState<string | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { dynamics } = state;
+
+  // Clean up confirm timer on unmount
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
 
   const sortedPlayers = useMemo(() =>
     [...state.players].sort((a, b) => b.territoryCount - a.territoryCount),
@@ -74,46 +58,51 @@ export function HostControlPlane({
 
   /* ── Dynamics handlers ──────────────────────────────────────────── */
 
-  const handleFeatureToggle = (key: FeatureKey, checked: boolean) => {
+  const handleFeatureToggle = useCallback((key: FeatureKey, checked: boolean) => {
     onUpdateDynamics({ ...dynamics, [featureField(key)]: checked });
-  };
+  }, [dynamics, onUpdateDynamics]);
 
-  const handleModeToggle = (mode: CopresenceMode, checked: boolean) => {
+  const handleModeToggle = useCallback((mode: CopresenceMode, checked: boolean) => {
     const next = checked
       ? [...dynamics.activeCopresenceModes, mode]
       : dynamics.activeCopresenceModes.filter(m => m !== mode);
-    // We send the full dynamics with updated modes - the backend handles copresence separately
-    // but UpdateGameDynamicsLive only updates feature toggles. For copresence, we'd need a separate call.
-    // For now, embed it in the dynamics update.
     onUpdateDynamics({ ...dynamics, activeCopresenceModes: next });
-  };
+  }, [dynamics, onUpdateDynamics]);
 
   /* ── Event handlers ─────────────────────────────────────────────── */
 
-  const handleTriggerEvent = (eventType: string) => {
+  const handleTriggerEvent = useCallback((eventType: string) => {
     if (confirmEvent === eventType) {
       onTriggerEvent(eventType);
       setConfirmEvent(null);
+      if (confirmTimerRef.current) {
+        clearTimeout(confirmTimerRef.current);
+        confirmTimerRef.current = null;
+      }
     } else {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
       setConfirmEvent(eventType);
-      setTimeout(() => setConfirmEvent(null), 3000);
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirmEvent(null);
+        confirmTimerRef.current = null;
+      }, 3000);
     }
-  };
+  }, [confirmEvent, onTriggerEvent]);
 
   /* ── Messaging ──────────────────────────────────────────────────── */
 
-  const handleSendMessage = () => {
+  const handleSendMessage = useCallback(() => {
     if (!messageText.trim()) return;
     onSendMessage(messageText.trim(), selectedAlliances.length > 0 ? selectedAlliances : undefined);
     setMessageText('');
     setSelectedAlliances([]);
-  };
+  }, [messageText, selectedAlliances, onSendMessage]);
 
-  const toggleAllianceSelection = (id: string) => {
+  const toggleAllianceSelection = useCallback((id: string) => {
     setSelectedAlliances(prev =>
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
     );
-  };
+  }, []);
 
   /* ── Render ──────────────────────────────────────────────────────── */
 
