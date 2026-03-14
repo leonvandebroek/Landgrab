@@ -12,7 +12,6 @@
 html, body, #root {
   height: 100%;
   width: 100%;
-  overflow: hidden;
 }
 
 :root {
@@ -32,6 +31,7 @@ html, body, #root {
 
 body {
   background: var(--bg);
+  overscroll-behavior: none;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
