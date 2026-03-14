@@ -14,6 +14,7 @@ interface Props {
     myUserId: string;
     currentLocation: LocationPoint | null;
     onSetAlliance: (name: string) => void;
+    onSetPlayerRole?: (role: string) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
     onStartGame: () => void;
@@ -30,6 +31,7 @@ export function GuestWizardView({
     myUserId,
     currentLocation,
     onSetAlliance,
+    onSetPlayerRole,
     onSetMasterTileByHex,
     onAssignStartingTile,
     onStartGame,
@@ -105,6 +107,7 @@ export function GuestWizardView({
                             onSetAlliance={onSetAlliance}
                             onConfigureAlliances={() => { }}
                             onDistributePlayers={() => { }}
+                            onSetPlayerRole={onSetPlayerRole}
                         />
                     )}
                     {effectiveStep === 2 && (

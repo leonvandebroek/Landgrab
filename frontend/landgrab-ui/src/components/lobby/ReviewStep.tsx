@@ -37,6 +37,7 @@ interface Props {
     onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
+    onSetAllianceHQ?: (q: number, r: number, allianceId: string) => void;
     onStartGame: () => void;
     invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
@@ -52,6 +53,7 @@ export function ReviewStep({
     onSetCustomGameArea,
     onSetMasterTileByHex,
     onAssignStartingTile,
+    onSetAllianceHQ,
     onStartGame,
     invoke,
 }: Props) {
@@ -63,6 +65,8 @@ export function ReviewStep({
     const [areaModeDraft, setAreaModeDraft] = useState<AreaModeOption | null>(null);
     const [selectedPatternDraft, setSelectedPatternDraft] = useState<GameAreaPattern | null>(null);
     const [drawnCellsDraft, setDrawnCellsDraft] = useState<HexCoordinate[] | null>(null);
+    const [hqMode, setHqMode] = useState(false);
+    const [hqAllianceId, setHqAllianceId] = useState<string | null>(null);
 
     // Template state
     const [templates, setTemplates] = useState<MapTemplate[]>([]);
@@ -197,6 +201,14 @@ export function ReviewStep({
     }, [invoke, saveTemplateName, saveTemplateDesc, gameState.roomCode, fetchTemplates]);
 
     const handleAreaHexClick = (q: number, r: number, cell: HexCell | undefined) => {
+        if (hqMode && hqAllianceId && onSetAllianceHQ) {
+            onSetAllianceHQ(q, r, hqAllianceId);
+            setHqMode(false);
+            setHqAllianceId(null);
+            setSelectedHex(null);
+            return;
+        }
+
         if (areaMode === 'Drawn') {
             setSelectedHex([q, r]);
             setDrawnCellsDraft(previousDraft => {
@@ -429,6 +441,8 @@ export function ReviewStep({
                                             value={selectedTemplateId}
                                             onChange={e => setSelectedTemplateId(e.target.value)}
                                             className="wizard-template-select"
+                                            aria-label={t('mapEditor.selectTemplate')}
+                                            title={t('mapEditor.selectTemplate')}
                                         >
                                             <option value="" disabled>
                                                 {t('mapEditor.selectTemplate')}
@@ -585,6 +599,52 @@ export function ReviewStep({
                                                 {t('lobby.assignTile')}
                                             </button>
                                         </div>
+                                    </div>
+                                )}
+
+                                {gameState.dynamics?.hqEnabled && onSetAllianceHQ && (
+                                    <div className="wizard-hq-section">
+                                        <h4>{t('phase4.hq' as never)}</h4>
+                                        {gameState.alliances.map(alliance => (
+                                            <div key={alliance.id} className="wizard-hq-row">
+                                                <div>
+                                                    <svg className="wizard-hq-swatch" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+                                                        <circle cx="6" cy="6" r="6" fill={alliance.color} />
+                                                    </svg>
+                                                    <strong>{alliance.name}</strong>
+                                                    {alliance.hqHexQ != null && alliance.hqHexR != null && (
+                                                        <span className="wizard-hq-coords">
+                                                            🏛️ ({alliance.hqHexQ}, {alliance.hqHexR})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    className={`btn-secondary wizard-hq-button${hqMode && hqAllianceId === alliance.id ? ' is-active' : ''}`}
+                                                    onClick={() => {
+                                                        if (hqMode && hqAllianceId === alliance.id) {
+                                                            setHqMode(false);
+                                                            setHqAllianceId(null);
+                                                        } else {
+                                                            setHqMode(true);
+                                                            setHqAllianceId(alliance.id);
+                                                            setSelectedHex(null);
+                                                        }
+                                                    }}
+                                                >
+                                                    {hqMode && hqAllianceId === alliance.id
+                                                        ? t('game.cancel' as never)
+                                                        : alliance.hqHexQ != null
+                                                            ? t('phase4.hq' as never) + ' ✏️'
+                                                            : t('phase4.hq' as never) + ' 📍'}
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {hqMode && (
+                                            <div className="wizard-hq-hint">
+                                                📍 Click a hex on the map to place the HQ
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

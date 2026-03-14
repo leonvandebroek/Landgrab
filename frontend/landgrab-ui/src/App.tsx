@@ -75,6 +75,7 @@ export default function App() {
   const [debugLocation, setDebugLocation] = useState<LocationPoint | null>(null);
   const [attackPrompt, setAttackPrompt] = useState<{ q: number; r: number; max: number; defenderTroops: number } | null>(null);
   const [attackCount, setAttackCount] = useState(1);
+  const [commandoTargetingMode, setCommandoTargetingMode] = useState(false);
   const [combatResult, setCombatResult] = useState<CombatResult | null>(null);
   const [randomEvent, setRandomEvent] = useState<RandomEvent | null>(null);
   const [eventWarning, setEventWarning] = useState<RandomEvent | null>(null);
@@ -234,6 +235,7 @@ export default function App() {
     setSelectedHex(null);
     setMapFeedback(null);
     setAttackPrompt(null);
+    setCommandoTargetingMode(false);
     setCombatResult(null);
   }, []);
 
@@ -745,8 +747,7 @@ export default function App() {
     invoke('SetGameDynamics', dynamics).catch(cause => setError(String(cause)));
   }, [invoke]);
 
-  // @ts-expect-error Phase 4: will be wired to role selector UI in future pass
-  const _handleSetPlayerRole = useCallback(async (role: string) => {
+  const handleSetPlayerRole = useCallback(async (role: string) => {
     try {
       await invoke('SetPlayerRole', role);
     } catch (err) {
@@ -754,8 +755,7 @@ export default function App() {
     }
   }, [invoke]);
 
-  // @ts-expect-error Phase 4: will be wired to HQ placement UI in future pass
-  const _handleSetAllianceHQ = useCallback(async (q: number, r: number, allianceId: string) => {
+  const handleSetAllianceHQ = useCallback(async (q: number, r: number, allianceId: string) => {
     try {
       await invoke('SetAllianceHQ', q, r, allianceId);
     } catch (err) {
@@ -763,8 +763,7 @@ export default function App() {
     }
   }, [invoke]);
 
-  // @ts-expect-error Phase 5: will be wired to beacon UI in future pass
-  const _handleActivateBeacon = useCallback(async () => {
+  const handleActivateBeacon = useCallback(async () => {
     try {
       await invoke('ActivateBeacon');
     } catch (err) {
@@ -772,8 +771,7 @@ export default function App() {
     }
   }, [invoke]);
 
-  // @ts-expect-error Phase 5: will be wired to beacon UI in future pass
-  const _handleDeactivateBeacon = useCallback(async () => {
+  const handleDeactivateBeacon = useCallback(async () => {
     try {
       await invoke('DeactivateBeacon');
     } catch (err) {
@@ -781,8 +779,7 @@ export default function App() {
     }
   }, [invoke]);
 
-  // @ts-expect-error Phase 6: will be wired to stealth UI in future pass
-  const _handleActivateStealth = useCallback(async () => {
+  const handleActivateStealth = useCallback(async () => {
     try {
       await invoke('ActivateStealth');
     } catch (err) {
@@ -790,8 +787,7 @@ export default function App() {
     }
   }, [invoke]);
 
-  // @ts-expect-error Phase 6: will be wired to commando UI in future pass
-  const _handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number) => {
+  const handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number) => {
     try {
       await invoke('ActivateCommandoRaid', targetQ, targetR);
     } catch (err) {
@@ -883,6 +879,12 @@ export default function App() {
   }, [clearGameplayUi, clearSession, invoke, refreshMyRooms]);
 
   const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined) => {
+    if (commandoTargetingMode) {
+      handleActivateCommandoRaid(q, r);
+      setCommandoTargetingMode(false);
+      return;
+    }
+
     if (!auth || !gameState || gameState.phase !== 'Playing') {
       return;
     }
@@ -914,7 +916,7 @@ export default function App() {
     // Player IS on this hex (or host bypass is active) - TileActionPanel will show via tileActions memo
     // Clear any old feedback
     setMapFeedback(null);
-  }, [auth, currentHex, gameState, isHostBypass, myPlayer, t]);
+  }, [auth, commandoTargetingMode, currentHex, gameState, handleActivateCommandoRaid, isHostBypass, myPlayer, t]);
 
   const tileActions = useMemo<TileAction[]>(() => {
     if (!gameState || gameState.phase !== 'Playing' || !selectedHex) return [];
@@ -1194,6 +1196,12 @@ export default function App() {
           onAcceptDuel={handleAcceptDuel}
           onDeclineDuel={handleDeclineDuel}
           onDetainPlayer={handleDetainPlayer}
+          onActivateBeacon={handleActivateBeacon}
+          onDeactivateBeacon={handleDeactivateBeacon}
+          onActivateStealth={handleActivateStealth}
+          commandoTargetingMode={commandoTargetingMode}
+          onStartCommandoTargeting={() => setCommandoTargetingMode(true)}
+          onCancelCommandoTargeting={() => setCommandoTargetingMode(false)}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={setPlayerDisplayPrefs}
           playerColor={playerColor}
@@ -1254,6 +1262,8 @@ export default function App() {
         onSetCopresenceModes={handleSetCopresenceModes}
         onSetCopresencePreset={handleSetCopresencePreset}
         onSetGameDynamics={handleSetGameDynamics}
+        onSetPlayerRole={handleSetPlayerRole}
+        onSetAllianceHQ={handleSetAllianceHQ}
         onSetMasterTile={handleSetMasterTile}
         onSetMasterTileByHex={handleSetMasterTileByHex}
         onAssignStartingTile={handleAssignStartingTile}

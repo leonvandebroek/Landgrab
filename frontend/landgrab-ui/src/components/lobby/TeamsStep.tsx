@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, Player } from '../../types/game';
+import { RoleSelector } from './RoleSelector';
 
 // Matches backend AllianceColors for local preview before server response
 const ALLIANCE_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
@@ -13,9 +14,10 @@ interface Props {
     onSetAlliance: (name: string) => void;
     onConfigureAlliances: (names: string[]) => void;
     onDistributePlayers: () => void;
+    onSetPlayerRole?: (role: string) => void;
 }
 
-export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfigureAlliances, onDistributePlayers }: Props) {
+export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfigureAlliances, onDistributePlayers, onSetPlayerRole }: Props) {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
 
@@ -76,6 +78,13 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
                         <p className="wizard-hint">{t('wizard.teamsWaiting')}</p>
                     )}
                 </div>
+
+                {gameState.dynamics?.playerRolesEnabled && onSetPlayerRole && (
+                    <RoleSelector
+                        currentRole={me?.role ?? 'None'}
+                        onSelectRole={onSetPlayerRole}
+                    />
+                )}
             </div>
         </div>
     );

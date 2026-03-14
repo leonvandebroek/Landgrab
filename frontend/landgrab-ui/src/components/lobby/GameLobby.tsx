@@ -33,9 +33,11 @@ interface Props {
   onSetCopresenceModes: (modes: CopresenceMode[]) => void;
   onSetCopresencePreset: (preset: string) => void;
   onSetGameDynamics: (dynamics: GameDynamics) => void;
+  onSetPlayerRole?: (role: string) => void;
   onSetMasterTile: (lat: number, lng: number) => void;
   onSetMasterTileByHex: (q: number, r: number) => void;
   onAssignStartingTile: (q: number, r: number, playerId: string) => void;
+  onSetAllianceHQ?: (q: number, r: number, allianceId: string) => void;
   onConfigureAlliances: (names: string[]) => void;
   onDistributePlayers: () => void;
   onAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
@@ -71,8 +73,10 @@ export function GameLobby({
   onSetCopresenceModes,
   onSetCopresencePreset,
   onSetGameDynamics,
+  onSetPlayerRole,
   onSetMasterTileByHex,
   onAssignStartingTile,
+  onSetAllianceHQ,
   onStartGame,
   onReturnToLobby,
   onLogout,
@@ -241,8 +245,10 @@ export function GameLobby({
         onSetCopresenceModes={onSetCopresenceModes}
         onSetCopresencePreset={onSetCopresencePreset}
         onSetGameDynamics={onSetGameDynamics}
+        onSetPlayerRole={onSetPlayerRole}
         onSetMasterTileByHex={onSetMasterTileByHex}
         onAssignStartingTile={onAssignStartingTile}
+        onSetAllianceHQ={onSetAllianceHQ}
         onStartGame={onStartGame}
         onReturnToLobby={onReturnToLobby}
         onLogout={onLogout}
@@ -258,6 +264,7 @@ export function GameLobby({
       myUserId={myUserId}
       currentLocation={currentLocation}
       onSetAlliance={onSetAlliance}
+      onSetPlayerRole={onSetPlayerRole}
       onSetMasterTileByHex={onSetMasterTileByHex}
       onAssignStartingTile={onAssignStartingTile}
       onStartGame={onStartGame}

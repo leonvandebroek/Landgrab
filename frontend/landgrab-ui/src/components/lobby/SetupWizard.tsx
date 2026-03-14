@@ -32,8 +32,10 @@ interface Props {
     onSetCopresenceModes: (modes: CopresenceMode[]) => void;
     onSetCopresencePreset: (preset: string) => void;
     onSetGameDynamics: (dynamics: GameDynamics) => void;
+    onSetPlayerRole?: (role: string) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
+    onSetAllianceHQ?: (q: number, r: number, allianceId: string) => void;
     onStartGame: () => void;
     onReturnToLobby: () => void;
     onLogout: () => void;
@@ -63,8 +65,10 @@ export function SetupWizard({
     onSetCopresenceModes,
     onSetCopresencePreset,
     onSetGameDynamics,
+    onSetPlayerRole,
     onSetMasterTileByHex,
     onAssignStartingTile,
+    onSetAllianceHQ,
     onStartGame,
     onReturnToLobby,
     onLogout,
@@ -175,6 +179,7 @@ export function SetupWizard({
                             onSetAlliance={onSetAlliance}
                             onConfigureAlliances={onConfigureAlliances}
                             onDistributePlayers={onDistributePlayers}
+                            onSetPlayerRole={onSetPlayerRole}
                         />
                     )}
                     {step === 2 && (
@@ -209,6 +214,7 @@ export function SetupWizard({
                             onSetCustomGameArea={onSetCustomGameArea}
                             onSetMasterTileByHex={onSetMasterTileByHex}
                             onAssignStartingTile={onAssignStartingTile}
+                            onSetAllianceHQ={onSetAllianceHQ}
                             onStartGame={onStartGame}
                             invoke={invoke}
                         />

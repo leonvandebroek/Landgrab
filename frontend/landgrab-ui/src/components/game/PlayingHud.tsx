@@ -8,6 +8,7 @@ import { GameEventLog } from './GameEventLog';
 import { GameRulesPage } from './GameRulesPage';
 import { GuidanceBanner } from './GuidanceBanner';
 import { HelpOverlay } from './HelpOverlay';
+import { AbilityBar } from './AbilityBar';
 import { PlayerDisplaySettings } from './PlayerDisplaySettings';
 import { ScoreRow } from './PlayerPanel';
 import { TileActionPanel } from './TileActionPanel';
@@ -57,6 +58,12 @@ interface Props {
   onAcceptDuel?: (duelId: string) => void;
   onDeclineDuel?: (duelId: string) => void;
   onDetainPlayer?: (targetPlayerId: string) => void;
+  onActivateBeacon?: () => void;
+  onDeactivateBeacon?: () => void;
+  onActivateStealth?: () => void;
+  commandoTargetingMode?: boolean;
+  onStartCommandoTargeting?: () => void;
+  onCancelCommandoTargeting?: () => void;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   playerColor: string;
@@ -99,6 +106,12 @@ export function PlayingHud({
   pendingDuel,
   onAcceptDuel,
   onDeclineDuel,
+  onActivateBeacon,
+  onDeactivateBeacon,
+  onActivateStealth,
+  commandoTargetingMode,
+  onStartCommandoTargeting,
+  onCancelCommandoTargeting,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   playerColor,
@@ -358,6 +371,19 @@ export function PlayingHud({
               {missionNotification.type === 'completed' && `✅ ${t('phase9.missionCompleted' as never)}: ${getMissionTitle(missionNotification.mission)}`}
               {missionNotification.type === 'failed' && `❌ ${t('phase9.missionFailed' as never)}: ${getMissionTitle(missionNotification.mission)}`}
             </div>
+          )}
+
+          {me && state.dynamics && (
+            <AbilityBar
+              player={me}
+              dynamics={state.dynamics}
+              onActivateBeacon={onActivateBeacon ?? (() => {})}
+              onDeactivateBeacon={onDeactivateBeacon ?? (() => {})}
+              onActivateStealth={onActivateStealth ?? (() => {})}
+              commandoTargetingMode={commandoTargetingMode ?? false}
+              onStartCommandoTargeting={onStartCommandoTargeting ?? (() => {})}
+              onCancelCommandoTargeting={onCancelCommandoTargeting ?? (() => {})}
+            />
           )}
 
           <div className="hud-action-bar" style={{ pointerEvents: 'auto' }}>
