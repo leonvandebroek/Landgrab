@@ -9,6 +9,12 @@
   padding: 0;
 }
 
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
 :root {
   --bg: #0f1923;
   --surface: #1a2740;
@@ -26,7 +32,6 @@
 
 body {
   background: var(--bg);
-  min-height: 100vh;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -3654,7 +3659,7 @@ input:checked + .display-settings-slider:before {
 /* ── Guidance Banner ────────────────────────────────────────────────────── */
 .guidance-banner {
   position: absolute;
-  top: 75px; 
+  top: 75px;
   left: 50%;
   transform: translateX(-50%) translateY(-15px);
   background: rgba(10, 18, 32, 0.93);
