@@ -439,8 +439,11 @@ export function GameMap({
       const hasTerrain = state.dynamics?.terrainEnabled && terrainType !== 'None';
 
       // Terrain icons for unowned hexes (or owned hexes without troop badges)
+      // Common terrain (Building/Road/Path) only at detailed zoom to reduce visual noise
+      const isCommonTerrain = terrainType === 'Building' || terrainType === 'Road' || terrainType === 'Path';
+      const showThisTerrainIcon = isCommonTerrain ? shouldShowBuildingIcons : shouldShowTerrainIcons;
       if (hasTerrain && !isInactive) {
-        if (shouldShowTerrainIcons && terrainIcon && !isFogHidden
+        if (showThisTerrainIcon && terrainIcon && !isFogHidden
           && !(shouldShowTroopBadges && cell.ownerId && cell.troops > 0)) {
           L.marker([centerLat, centerLng], {
             icon: L.divIcon({

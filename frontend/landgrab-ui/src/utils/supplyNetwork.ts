@@ -68,10 +68,18 @@ export function computeSupplyNetwork(
     }
   }
 
-  // Find disconnected hexes
+  // Collect alliance IDs that actually have an HQ set
+  const alliancesWithHQ = new Set<string>();
+  for (const alliance of alliances) {
+    if (alliance.hqHexQ != null && alliance.hqHexR != null) {
+      alliancesWithHQ.add(alliance.id);
+    }
+  }
+
+  // Find disconnected hexes — only for alliances that HAVE an HQ
   const disconnectedHexes = new Set<string>();
   for (const [key, cell] of Object.entries(grid)) {
-    if (cell.ownerId && !connectedHexes.has(key)) {
+    if (cell.ownerId && !connectedHexes.has(key) && alliancesWithHQ.has(cell.ownerAllianceId ?? '')) {
       disconnectedHexes.add(key);
     }
   }

@@ -1,4 +1,5 @@
 @import './glassmorphism.css';
+@import './hud-updates.css';
 /* ── Reset & base ──────────────────────────────────────────────────────── */
 *,
 *::before,
@@ -709,10 +710,10 @@ input:focus {
   background: white;
   border: 2px solid rgba(0, 0, 0, 0.2);
   border-radius: 4px;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5089,14 +5090,14 @@ input:checked + .display-settings-slider:before {
    ═══════════════════════════════════════════════════════ */
 .mini-map-container {
   position: absolute;
-  bottom: 80px;
-  left: 12px;
-  width: 200px;
-  height: 150px;
+  bottom: 170px;
+  left: 10px;
+  width: 160px;
+  height: 120px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   overflow: hidden;
-  z-index: 800;
+  z-index: 850;
   pointer-events: auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   background: #0f1923;
@@ -5128,17 +5129,19 @@ input:checked + .display-settings-slider:before {
 
 .mini-map-toggle-collapsed {
   position: absolute;
-  bottom: 80px;
+  top: auto;
+  right: auto;
+  bottom: 170px;
   left: 12px;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: rgba(15, 25, 35, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   font-size: 18px;
   cursor: pointer;
-  z-index: 800;
+  z-index: 850;
   display: flex;
   align-items: center;
   justify-content: center;

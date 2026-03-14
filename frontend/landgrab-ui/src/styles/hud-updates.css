@@ -68,7 +68,9 @@
   background: transparent;
   border: none;
   color: white;
-  padding: 0.25rem;
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,14 +102,15 @@
   left: 0;
   right: 0;
   padding: 0.5rem 0.75rem;
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  /* Push content above the PlayerHUD bar (~5.5rem) + safe area */
+  padding-bottom: calc(5.5rem + max(0.5rem, env(safe-area-inset-bottom)));
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   align-items: center;
   pointer-events: none;
   z-index: 1000;
-  background: linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 100%);
+  background: none;
 }
 
 .hud-toast {
@@ -166,10 +169,6 @@
   min-width: 48px;
   font-size: 1rem;
 }
-.hud-action-bar .hud-btn {
-  padding: 0.75rem 1.25rem;
-}
-
 
 /* ============================================================
    TILE ACTION PANEL
@@ -923,4 +922,453 @@
 .action-dock__empty-icon {
   font-size: 1rem;
   opacity: 0.6;
+}
+
+
+/* ── Tile Info Card (read-only hex info popup) ── */
+.tile-info-card {
+  background: rgba(10, 15, 30, 0.94);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  padding: 0;
+  min-width: 220px;
+  max-width: 300px;
+  width: 100%;
+  animation: tile-info-slide-up 0.2s ease-out;
+  color: #ecf0f1;
+}
+
+@keyframes tile-info-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tile-info-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tile-info-card__coords {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.7;
+  letter-spacing: 0.03em;
+}
+
+.tile-info-card__close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.tile-info-card__close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tile-info-card__body {
+  padding: 0.5rem 0.8rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tile-info-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.tile-info-card__label {
+  opacity: 0.55;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tile-info-card__value {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 500;
+}
+
+.tile-info-card__color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tile-info-card__bonus {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.tile-info-card__master {
+  color: #f1c40f;
+  font-weight: 600;
+}
+
+.tile-info-card__neutral {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PlayerHUD — Unified bottom bar (replaces ActionDock + AbilityBar)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════
+   PlayerHUD — Compact unified bottom bar
+   ═══════════════════════════════════════════════════════ */
+
+.player-hud {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 800;
+  padding: 0.35rem 0.5rem calc(env(safe-area-inset-bottom, 0px) + 0.35rem);
+  background: linear-gradient(to top, rgba(10, 10, 16, 0.96), rgba(15, 18, 28, 0.92));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 2px solid var(--dock-accent, rgba(255, 255, 255, 0.06));
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  pointer-events: auto;
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+
+.player-hud--active {
+  border-top-color: var(--dock-accent, rgba(255, 255, 255, 0.15));
+}
+
+.player-hud--idle {
+  padding: 0.25rem 0.5rem calc(env(safe-area-inset-bottom, 0px) + 0.25rem);
+}
+
+/* ── Context strip ── */
+
+.player-hud__context {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.75);
+  min-height: 1.4rem;
+}
+
+.player-hud__context::-webkit-scrollbar {
+  display: none;
+}
+
+.player-hud__carried {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--player-color, rgba(255, 255, 255, 0.12));
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.player-hud__relation {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.4rem;
+  border-radius: 1rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+}
+
+.player-hud__relation--own {
+  background: rgba(46, 204, 113, 0.18);
+  color: #5ddb9e;
+  border: 1px solid rgba(46, 204, 113, 0.35);
+}
+
+.player-hud__relation--allied {
+  background: rgba(52, 152, 219, 0.18);
+  color: #6bb5e8;
+  border: 1px solid rgba(52, 152, 219, 0.35);
+}
+
+.player-hud__relation--enemy {
+  background: rgba(231, 76, 60, 0.18);
+  color: #ef8a7e;
+  border: 1px solid rgba(231, 76, 60, 0.35);
+}
+
+.player-hud__relation--neutral {
+  background: rgba(149, 165, 166, 0.12);
+  color: #a0aeb0;
+  border: 1px solid rgba(149, 165, 166, 0.2);
+}
+
+.player-hud__owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  font-size: 0.7rem;
+}
+
+.player-hud__owner-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.player-hud__troops {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.player-hud__terrain {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.06rem 0.35rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  font-size: 0.7rem;
+}
+
+.player-hud__defend-bonus {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  margin-left: 0.1rem;
+}
+
+.player-hud__badge {
+  font-size: 0.8rem;
+}
+
+/* ── Actions + Abilities row ── */
+
+.player-hud__actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.player-hud__actions-row:empty {
+  display: none;
+}
+
+.player-hud__actions-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tile action buttons — horizontal pill style */
+
+.player-hud__btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.6rem 0.5rem;
+  min-height: 44px;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  animation: hud-btn-enter 0.2s ease both;
+}
+
+@keyframes hud-btn-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.player-hud__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--dock-accent, rgba(255, 255, 255, 0.2));
+}
+
+.player-hud__btn:active:not(:disabled) {
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.player-hud__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.player-hud__btn-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.player-hud__btn-label {
+  font-size: 0.68rem;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.player-hud__btn--primary {
+  border-color: rgba(46, 204, 113, 0.45);
+  background: rgba(46, 204, 113, 0.12);
+}
+
+.player-hud__btn--primary:not(:disabled) {
+  box-shadow: 0 0 8px rgba(46, 204, 113, 0.15);
+}
+
+.player-hud__btn--danger {
+  border-color: rgba(231, 76, 60, 0.45);
+  background: rgba(231, 76, 60, 0.12);
+}
+
+.player-hud__btn--danger:not(:disabled) {
+  box-shadow: 0 0 8px rgba(231, 76, 60, 0.15);
+}
+
+.player-hud__btn--info {
+  border-color: rgba(52, 152, 219, 0.45);
+  background: rgba(52, 152, 219, 0.12);
+}
+
+.player-hud__btn--neutral {
+  border-color: rgba(149, 165, 166, 0.2);
+  background: rgba(149, 165, 166, 0.06);
+}
+
+.player-hud__btn-locked {
+  font-size: 0.55rem;
+  margin-left: 0.15rem;
+  opacity: 0.6;
+}
+
+/* Divider between tile actions and abilities */
+
+.player-hud__divider {
+  width: 1px;
+  height: 1.4rem;
+  background: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+/* Ability pills */
+
+.player-hud__ability {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 0.72rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.player-hud__ability:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.player-hud__ability--active {
+  border-color: rgba(46, 204, 113, 0.6);
+  background: rgba(46, 204, 113, 0.15);
+}
+
+.player-hud__ability--targeting {
+  border-color: rgba(231, 76, 60, 0.6);
+  background: rgba(231, 76, 60, 0.15);
+  animation: pulse-target 1s ease infinite;
+}
+
+@keyframes pulse-target {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(231, 76, 60, 0); }
+}
+
+.player-hud__ability--cooldown {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.player-hud__countdown {
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
+/* ── Disabled reason + Empty state ── */
+
+.player-hud__disabled-reason {
+  font-size: 0.6rem;
+  color: rgba(255, 200, 50, 0.65);
+  text-align: center;
+  padding: 0.05rem 0.3rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.player-hud__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.75rem;
+}
+
+.player-hud__empty-icon {
+  font-size: 0.9rem;
 }

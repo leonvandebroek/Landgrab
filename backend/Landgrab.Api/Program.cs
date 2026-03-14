@@ -63,7 +63,7 @@ builder.Services.AddAuthorization();
 
 // ── SignalR ───────────────────────────────────────────────────────────────
 
-var signalRBuilder = builder.Services.AddSignalR(o => o.EnableDetailedErrors = true)
+var signalRBuilder = builder.Services.AddSignalR()
     .AddJsonProtocol(options =>
         options.PayloadSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter()));

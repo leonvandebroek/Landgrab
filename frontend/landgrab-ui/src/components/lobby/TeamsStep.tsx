@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { GameState, Player } from '../../types/game';
 import { RoleSelector } from './RoleSelector';
 
-// Matches backend AllianceColors for local preview before server response
-const ALLIANCE_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+// Ordered for maximum perceptual contrast between sequential indices (matches backend)
+const ALLIANCE_COLORS = ['#ef4444', '#06b6d4', '#f59e0b', '#a855f7', '#10b981', '#ec4899', '#e67e22', '#34495e'];
 const MAX_ALLIANCES = 8;
 
 interface Props {

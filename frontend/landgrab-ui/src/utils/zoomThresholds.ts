@@ -38,9 +38,9 @@ export function showPlayerNames(zoom: number): boolean {
   return zoom >= 15;
 }
 
-/** Show building icons on hex tiles. */
+/** Show building/road/path icons on hex tiles. Only at detailed zoom to reduce noise. */
 export function showBuildingIcons(zoom: number): boolean {
-  return zoom >= 15;
+  return zoom >= 16;
 }
 
 /** Show hover/tap tooltips on hex tiles. */
