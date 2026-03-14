@@ -15,7 +15,7 @@ import { terrainFillColors, terrainFillOpacity } from '../../utils/terrainColors
 import { terrainIcons } from '../../utils/terrainIcons';
 import { getTimeOverlayStyle, getTimePeriod } from '../../utils/timeOfDay';
 import { showTroopBadges, showTerrainIcons as showTerrainIconsZoom, showBorderEffects, showBuildingIcons, showHexTooltips, showContestEffects, showSupplyLines, showTroopAnimations } from '../../utils/zoomThresholds';
-import { scaleTroopColor, scaleTroopOpacity } from '../../utils/hexColorUtils';
+import { hexToHSL, scaleTroopColor, scaleTroopOpacity } from '../../utils/hexColorUtils';
 import { findContestedEdges } from '../../utils/contestedEdges';
 import { computeSupplyNetwork } from '../../utils/supplyNetwork';
 import { injectTerrainPatternSVG } from './TerrainPatternDefs';
@@ -434,17 +434,14 @@ export function GameMap({
         && cell.troops === 0
         && !isInactive;
 
-      // Terrain underlay
-      if (state.dynamics?.terrainEnabled && terrainType !== 'None') {
-        L.polygon(corners, {
-          color: 'transparent',
-          weight: 0,
-          fillColor: terrainFillColors[terrainType],
-          fillOpacity: isInactive ? 0 : terrainFillOpacity[terrainType],
-          interactive: false,
-        }).addTo(layerGroup);
+      // Single-layer terrain: neutral hexes USE the terrain colour directly as fill.
+      // Owned hexes always use team colour — terrain shown via icon only.
+      const hasTerrain = state.dynamics?.terrainEnabled && terrainType !== 'None';
 
-        if (shouldShowTerrainIcons && terrainIcon && !isFogHidden && !isInactive) {
+      // Terrain icons for unowned hexes (or owned hexes without troop badges)
+      if (hasTerrain && !isInactive) {
+        if (shouldShowTerrainIcons && terrainIcon && !isFogHidden
+          && !(shouldShowTroopBadges && cell.ownerId && cell.troops > 0)) {
           L.marker([centerLat, centerLng], {
             icon: L.divIcon({
               className: 'hex-terrain-icon',
@@ -459,27 +456,37 @@ export function GameMap({
         }
       }
 
+      // Fill colour: dark tinted for neutral hexes, bold team colour for owned
+      const neutralFill = (hasTerrain && !isInactive)
+        ? terrainFillColors[terrainType]
+        : (isInactive ? '#2d3340' : '#3b4252');
+      const neutralOpacity = (hasTerrain && !isInactive)
+        ? terrainFillOpacity[terrainType]
+        : scaleTroopOpacity(0, false);
+
       const fillColor = isFogHidden
         ? '#1a1a2e'
         : cell.isMasterTile
           ? hostColor
           : cell.ownerId
             ? scaleTroopColor(ownerColor, cell.troops)
-            : (isInactive ? '#e5edf6' : '#9fc4e8');
+            : neutralFill;
       const fillOpacity = isFogHidden
         ? 0.7
         : isInactive
           ? 0.08
           : cell.isMasterTile
-            ? 0.58
-            : scaleTroopOpacity(cell.troops, Boolean(cell.ownerId));
+            ? 0.75
+            : cell.ownerId
+              ? scaleTroopOpacity(cell.troops, true)
+              : neutralOpacity;
       let borderColor = cell.ownerId
-        ? '#f7fbff'
+        ? 'rgba(255, 255, 255, 0.55)'
         : (isInactive
-          ? 'rgba(100, 130, 170, 0.6)'
-          : (isFogHidden ? '#d7e7f6' : 'rgba(30, 60, 100, 0.8)'));
-      let borderWeight = cell.ownerId ? 3 : (isInactive ? 1.25 : 2.5);
-      const borderOpacity = cell.ownerId || cell.isMasterTile ? 0.95 : ((isInactive || isFogHidden) ? 0.8 : 0.92);
+          ? 'rgba(80, 90, 105, 0.35)'
+          : (isFogHidden ? 'rgba(100, 115, 140, 0.4)' : 'rgba(90, 100, 120, 0.45)'));
+      let borderWeight = cell.ownerId ? 2.5 : (isInactive ? 1 : 1.5);
+      const borderOpacity = cell.ownerId || cell.isMasterTile ? 0.90 : ((isInactive || isFogHidden) ? 0.6 : 0.70);
       let dashArray: string | undefined;
 
       if (cell.isMasterTile) {
@@ -581,14 +588,22 @@ export function GameMap({
         const troopLabel = isForestBlind ? '?' : String(cell.troops);
         const isHQ = isHQHex;
         const hqPrefix = isHQ ? '🏛️' : '';
-        const troopTier = cell.troops >= 20 ? 'high' : cell.troops >= 8 ? 'mid' : 'low';
         const badgeSize = Math.round(Math.min(38, Math.max(20, 22 + Math.log2(Math.max(1, cell.troops)) * 3)));
         const ringPct = Math.min(100, cell.troops * 2);
         const prefix = cell.isMasterTile ? '👑' : hqPrefix;
-        const badgeHtml = `<div class="hex-troop-badge tier-${troopTier}${isForestBlind ? ' forest-blind' : ''}" style="width:${badgeSize}px;height:${badgeSize}px">
+
+        // Team-colored badge: saturated owner color with dark background
+        const { h: bH, s: bS } = hexToHSL(ownerColor);
+        const badgeBg = `hsla(${Math.round(bH)},${Math.round(bS * 0.80)}%,22%,0.94)`;
+        const badgeBorderC = `hsla(${Math.round(bH)},${Math.round(bS * 0.65)}%,48%,0.65)`;
+        const badgeGlow = cell.troops >= 20
+          ? `0 0 12px hsla(${Math.round(bH)},${Math.round(bS)}%,50%,0.50),0 2px 6px rgba(0,0,0,0.4)`
+          : `0 2px 8px rgba(0,0,0,0.45)`;
+
+        const badgeHtml = `<div class="hex-troop-badge${isForestBlind ? ' forest-blind' : ''}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border-color:${badgeBorderC};box-shadow:${badgeGlow}">
   <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true">
-    <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.5" />
+    <circle cx="18" cy="18" r="16" fill="none" stroke="${ownerColor}" stroke-width="2.5"
+            stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.6" />
   </svg>
   ${prefix ? `<span class="troop-badge-prefix">${prefix}</span>` : ''}
   <span class="troop-count">${escapeHtml(troopLabel)}</span>

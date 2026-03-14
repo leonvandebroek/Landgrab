@@ -333,9 +333,15 @@ const en = {
       troops: 'troops',
       owner: 'Owner',
       terrain: 'Terrain',
-      defendBonus: '+{{bonus}}% defense',
+      defendBonus: '+{{bonus}} defence',
       fortified: 'Fortified',
       fort: 'Fort',
+      relation: {
+        own: 'Your tile',
+        allied: 'Allied',
+        enemy: 'Enemy',
+        neutral: 'Neutral',
+      },
     },
 
     // Toast notifications (F8)

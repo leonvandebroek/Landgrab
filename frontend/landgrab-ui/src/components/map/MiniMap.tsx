@@ -104,7 +104,7 @@ export function MiniMap({
 
       // Reverse: canvas pixel → axial-pixel → hex q,r
       const hexPx = (clickX - offsetX) / scale + minPx;
-      const hexPy = (clickY - offsetY) / scale + minPy;
+      const hexPy = maxPy - (clickY - offsetY) / scale;
       const q = hexPx / 1.5;
       const r = hexPy / sqrt3 - q * 0.5;
       const roundedQ = Math.round(q);

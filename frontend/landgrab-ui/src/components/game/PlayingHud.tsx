@@ -596,6 +596,8 @@ export function PlayingHud({
           carriedTroops={carriedTroops}
           playerColor={playerColor}
           hasLocation={hasLocation}
+          myUserId={myUserId}
+          myAllianceId={me?.allianceId ?? undefined}
         />
       )}
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (

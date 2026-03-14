@@ -4152,16 +4152,6 @@ input:checked + .display-settings-slider:before {
   box-shadow: 0 2px 8px rgba(0,0,0,0.35);
   transition: transform 0.2s ease;
 }
-.hex-troop-badge.tier-high {
-  background: rgba(180, 40, 30, 0.88);
-  border-color: rgba(255,100,80,0.45);
-  box-shadow: 0 0 10px rgba(231, 76, 60, 0.35), 0 2px 6px rgba(0,0,0,0.3);
-}
-.hex-troop-badge.tier-mid {
-  background: rgba(180, 140, 10, 0.82);
-  border-color: rgba(241,196,15,0.35);
-  box-shadow: 0 0 6px rgba(241, 196, 15, 0.2), 0 2px 6px rgba(0,0,0,0.3);
-}
 .troop-ring {
   position: absolute;
   inset: -3px;

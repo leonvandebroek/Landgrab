@@ -11,6 +11,19 @@ export interface ContestedEdge {
 
 const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
 
+// For flat-top hexes (corners at 0°,60°,120°,180°,240°,300°), the shared
+// edge between a cell and its neighbor at NEIGHBOR_OFFSETS[i] uses these
+// corner indices.  Derived from matching each neighbor direction's angle
+// to the edge whose midpoint lies along the same bearing.
+const SHARED_EDGE_CORNERS: [number, number][] = [
+  [0, 1],  // neighbor 0 [+1, 0]  → 30° NE edge
+  [5, 0],  // neighbor 1 [+1,-1]  → 330° SE edge
+  [4, 5],  // neighbor 2 [ 0,-1]  → 270° S edge
+  [3, 4],  // neighbor 3 [-1, 0]  → 210° SW edge
+  [2, 3],  // neighbor 4 [-1,+1]  → 150° NW edge
+  [1, 2],  // neighbor 5 [ 0,+1]  → 90° N edge
+];
+
 export function findContestedEdges(
   grid: Record<string, HexCell>,
   mapLat: number,
@@ -42,9 +55,9 @@ export function findContestedEdges(
       if (seen.has(edgeKey)) continue;
       seen.add(edgeKey);
 
-      // Shared corners: for neighbor at offset index i, shared corners are at i and (i+1)%6
-      const c1 = corners[i];
-      const c2 = corners[(i + 1) % 6];
+      const [ci1, ci2] = SHARED_EDGE_CORNERS[i];
+      const c1 = corners[ci1];
+      const c2 = corners[ci2];
 
       const maxTroops = Math.max(cell.troops, neighbor.troops, 1);
       const minTroops = Math.min(cell.troops, neighbor.troops);

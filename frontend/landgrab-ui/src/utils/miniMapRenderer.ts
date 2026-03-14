@@ -69,7 +69,7 @@ export function renderMiniMap(
   // ── Draw hex dots ──
   for (const { px, py, cell } of positions) {
     const x = (px - minPx) * scale + offsetX;
-    const y = (py - minPy) * scale + offsetY;
+    const y = (maxPy - py) * scale + offsetY;
     const key = `${cell.q},${cell.r}`;
     const hqColor = hqColorMap.get(key);
     const r = hqColor ? dotRadius * 1.5 : dotRadius;
@@ -99,8 +99,8 @@ export function renderMiniMap(
     // map them using the same scale/offset.
     const vLeft   = (b.west - minPx)  * scale + offsetX;
     const vRight  = (b.east - minPx)  * scale + offsetX;
-    const vTop    = (b.north - minPy) * scale + offsetY;
-    const vBottom = (b.south - minPy) * scale + offsetY;
+    const vTop    = (maxPy - b.north) * scale + offsetY;
+    const vBottom = (maxPy - b.south) * scale + offsetY;
 
     ctx.strokeStyle = VIEWPORT_STROKE;
     ctx.lineWidth = 1.5;

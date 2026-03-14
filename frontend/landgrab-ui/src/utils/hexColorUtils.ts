@@ -37,12 +37,15 @@ export function hslToCSS(h: number, s: number, l: number): string {
 }
 
 /**
- * Scale a player's base colour by troop intensity.
+ * V4 "Clean Contrast" — Scale a player's base colour by troop intensity.
  *
- * - troops = 0  → very pale (low saturation, lightness pushed toward 75%)
- * - troops ≥ maxTroops → full saturation at the base colour's lightness
+ * Owned hexes are BOLD and saturated — they must clearly pop against
+ * the dark, near-transparent neutral hexes.
  *
- * Intensity curve: `min(1, 0.3 + 0.7 * (troops / maxTroops))`
+ * - troops ≈ 0  → clearly team-colored but lighter
+ * - troops ≥ maxTroops → deep, rich, fully saturated
+ *
+ * Intensity floor is 0.60 so even fresh claims are unmistakably team-colored.
  */
 export function scaleTroopColor(
   baseColor: string,
@@ -52,24 +55,25 @@ export function scaleTroopColor(
   const clampedTroops = Math.max(0, troops);
   const safeDivisor = Math.max(1, maxTroops);
 
-  const intensity = Math.min(1, 0.3 + 0.7 * (clampedTroops / safeDivisor));
+  const intensity = Math.min(1, 0.60 + 0.40 * (clampedTroops / safeDivisor));
   const { h, s, l } = hexToHSL(baseColor);
 
-  // Saturation scales linearly with intensity
-  const adjustedS = s * intensity;
-  // Lightness lerps from 75% (pale) at low intensity → base lightness at full
-  const adjustedL = l + (75 - l) * (1 - intensity);
+  // High saturation floor — team color always clearly visible
+  const adjustedS = Math.max(s * 0.70, s * intensity);
+  // Lightness: low troops are slightly lighter, high troops are at base darkness
+  const adjustedL = l + (48 - l) * (1 - intensity);
 
   return hslToCSS(h, adjustedS, adjustedL);
 }
 
 /**
- * Determine fill opacity for a hex tile based on troop count and ownership.
+ * V4 — Opacity for hex tiles.
  *
- * - Not owned → fixed neutral opacity (0.28)
- * - Owned → lerp from 0.45 (1 troop) to 0.92 (30+ troops)
+ * Neutral hexes are near-transparent (let satellite show).
+ * Owned hexes are OPAQUE (bold team color overlay).
  */
 export function scaleTroopOpacity(troops: number, isOwned: boolean): number {
-  if (!isOwned) return 0.28;
-  return Math.min(0.92, 0.45 + 0.47 * Math.min(1, troops / 30));
+  if (!isOwned) return 0.40;
+  // Owned: 0.72 (fresh claim) → 0.92 (heavy troops)
+  return Math.min(0.92, 0.72 + 0.20 * Math.min(1, troops / 30));
 }

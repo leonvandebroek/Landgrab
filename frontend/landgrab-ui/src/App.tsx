@@ -397,6 +397,14 @@ export default function App() {
     },
     onReconnected: () => {
       clearError();
+      // Immediately re-establish room mapping so hub calls don't fail
+      // before the justConnected useEffect fires (race condition fix).
+      const session = savedSessionRef.current;
+      if (session?.roomCode) {
+        invoke('RejoinRoom', session.roomCode).catch(() => {
+          // Silently ignore — the justConnected useEffect will also attempt rejoin.
+        });
+      }
     }
   });
 

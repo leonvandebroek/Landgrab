@@ -18,7 +18,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
          "#e91e63", "#00bcd4", "#8bc34a", "#ff5722", "#673ab7", "#009688", "#ffc107", "#795548"];
 
-    private static readonly string[] AllianceColors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e"];
+    private static readonly string[] AllianceColors = ["#ef4444", "#a855f7", "#10b981", "#f59e0b", "#ec4899", "#06b6d4", "#e67e22", "#34495e"];
     private const int MaxEventLogEntries = 100;
 
     private static readonly Dictionary<string, List<CopresenceMode>> CopresencePresets = new()
@@ -2690,8 +2690,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (player.HeldByPlayerId != null)
             return "You are detained and cannot take actions.";
 
-        // Host GPS bypass — treat host as being at hex center
-        if (player.IsHost && state.HostBypassGps)
+        // GPS bypass — treat player as being at hex center when enabled
+        if (state.HostBypassGps)
         {
             var (hexLat, hexLng) = HexService.HexToLatLng(q, r,
                 state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters);

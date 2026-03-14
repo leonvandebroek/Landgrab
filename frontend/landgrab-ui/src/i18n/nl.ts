@@ -333,9 +333,15 @@ const nl = {
       troops: 'troepen',
       owner: 'Eigenaar',
       terrain: 'Terrein',
-      defendBonus: '+{{bonus}}% verdediging',
+      defendBonus: '+{{bonus}} verdediging',
       fortified: 'Versterkt',
       fort: 'Fort',
+      relation: {
+        own: 'Jouw gebied',
+        allied: 'Geallieerd',
+        enemy: 'Vijand',
+        neutral: 'Neutraal',
+      },
     },
 
     // Meldingen (F8)
