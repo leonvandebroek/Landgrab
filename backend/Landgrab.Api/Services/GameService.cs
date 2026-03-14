@@ -3722,11 +3722,11 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
                 case "BonusTroops":
                 {
-                    var alliances = targetAllianceId != null
+                    var targetAlliances = targetAllianceId != null
                         ? room.State.Alliances.Where(a => a.Id == targetAllianceId).ToList()
-                        : room.State.Alliances;
+                        : room.State.Alliances.ToList();
 
-                    foreach (var alliance in alliances)
+                    foreach (var alliance in targetAlliances)
                     {
                         var hex = room.State.Grid.Values
                             .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id && !c.IsMasterTile);
@@ -3734,8 +3734,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                             hex.Troops += 2;
                     }
 
-                    var msg = targetAllianceId != null
-                        ? $"Bonus Troops! {room.State.Alliances.FirstOrDefault(a => a.Id == targetAllianceId)?.Name} received +2 troops."
+                    var msg = targetAllianceId != null && targetAlliances.Count > 0
+                        ? $"Bonus Troops! {targetAlliances[0].Name} received +2 troops."
                         : "Bonus Troops! Every team received +2 troops.";
                     AppendEventLog(room.State, new GameEventLogEntry
                     {
