@@ -14,7 +14,7 @@ import { ScoreRow } from './PlayerPanel';
 import { TileActionPanel } from './TileActionPanel';
 import { ToastManager } from './ToastManager';
 import type { GameToast } from '../../hooks/useToastQueue';
-import { RadialActionMenu } from './RadialActionMenu';
+import { ActionDock } from './ActionDock';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './tileInteraction';
@@ -47,6 +47,9 @@ interface Props {
   error: string;
   locationError: string | null;
   tileActions?: TileAction[];
+  currentHexActions?: TileAction[];
+  currentHexCell?: HexCell;
+  onCurrentHexAction?: (actionType: TileActionType) => void;
   onTileAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
   attackPrompt: AttackPrompt | null;
@@ -104,6 +107,9 @@ export function PlayingHud({
   error,
   locationError,
   tileActions,
+  currentHexActions,
+  currentHexCell,
+  onCurrentHexAction,
   onTileAction,
   onDismissTileActions,
   attackPrompt,
@@ -141,8 +147,7 @@ export function PlayingHud({
   children,
   toasts,
   onDismissToast,
-  mainMapBounds,
-  selectedHexScreenPos
+  mainMapBounds
 }: Props) {
   const { t } = useTranslation();
   const { soundEnabled, toggleSound } = useSound();
@@ -371,17 +376,7 @@ export function PlayingHud({
             </div>
           )}
 
-          {showTileActions && selectedHex && selectedHexScreenPos && (
-            <RadialActionMenu
-              actions={tileActions!}
-              onAction={onTileAction!}
-              onDismiss={onDismissTileActions!}
-              position={selectedHexScreenPos}
-              targetCell={selectedCell}
-              player={me ?? null}
-            />
-          )}
-          {showTileActions && selectedHex && !selectedHexScreenPos && (
+          {showTileActions && selectedHex && !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1]) && (
             <TileActionPanel
               actions={tileActions!}
               targetCell={selectedCell}
@@ -592,6 +587,17 @@ export function PlayingHud({
         </div>
       )}
       {debugPanel}
+      {onCurrentHexAction && (
+        <ActionDock
+          actions={currentHexActions ?? []}
+          onAction={onCurrentHexAction}
+          currentHex={currentHex}
+          targetCell={currentHexCell}
+          carriedTroops={carriedTroops}
+          playerColor={playerColor}
+          hasLocation={hasLocation}
+        />
+      )}
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (
         <MiniMap
           grid={state.grid}

@@ -325,6 +325,19 @@ const en = {
       tileInfo: '({{q}}, {{r}})',
     },
 
+    dock: {
+      noLocation: 'Waiting for GPS signal…',
+      outsideGrid: 'Move to the game area',
+      noActions: 'All clear — keep moving!',
+      carrying: 'Carrying',
+      troops: 'troops',
+      owner: 'Owner',
+      terrain: 'Terrain',
+      defendBonus: '+{{bonus}}% defense',
+      fortified: 'Fortified',
+      fort: 'Fort',
+    },
+
     // Toast notifications (F8)
     toast: {
       tileLost: '⚔️ {{attacker}} captured your tile at ({{q}}, {{r}})!',

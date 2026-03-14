@@ -1012,6 +1012,24 @@ export default function App() {
     });
   }, [gameState, selectedHex, myPlayer, currentHex, isHostBypass]);
 
+  const currentHexActions = useMemo<TileAction[]>(() => {
+    if (!gameState || gameState.phase !== 'Playing' || !currentHex) return [];
+    const targetCell = gameState.grid[`${currentHex[0]},${currentHex[1]}`];
+    return getTileActions({
+      state: gameState,
+      player: myPlayer,
+      targetHex: currentHex,
+      targetCell,
+      currentHex,
+      isHostBypass,
+    });
+  }, [gameState, currentHex, myPlayer, isHostBypass]);
+
+  const currentHexCell = useMemo(() => {
+    if (!gameState || !currentHex) return undefined;
+    return gameState.grid[`${currentHex[0]},${currentHex[1]}`];
+  }, [gameState, currentHex]);
+
   const handleTileAction = useCallback((actionType: TileActionType) => {
     if (!selectedHex || !gameState) return;
     const [q, r] = selectedHex;
@@ -1075,6 +1093,70 @@ export default function App() {
         break;
     }
   }, [selectedHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
+
+  const handleCurrentHexAction = useCallback((actionType: TileActionType) => {
+    if (!currentHex || !gameState) return;
+    const [q, r] = currentHex;
+
+    let actionLat: number;
+    let actionLng: number;
+    if (isHostBypass && gameState.mapLat != null && gameState.mapLng != null) {
+      const [hexLat, hexLng] = roomHexToLatLng(q, r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
+      actionLat = hexLat;
+      actionLng = hexLng;
+    } else if (currentLocation) {
+      actionLat = currentLocation.lat;
+      actionLng = currentLocation.lng;
+    } else {
+      return;
+    }
+
+    switch (actionType) {
+      case 'claim':
+      case 'reinforce':
+      case 'claimAlliance':
+      case 'claimSelf': {
+        const claimForSelf = actionType === 'claimSelf';
+        invoke('PlaceTroops', q, r, actionLat, actionLng, null, claimForSelf)
+          .then(() => {
+            setPickupPrompt(null);
+            playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
+            if (actionType !== 'reinforce') {
+              vibrate(HAPTIC.claim);
+            }
+            setMapFeedback({
+              tone: 'success',
+              message: getPlaceSuccessMessage(actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
+              targetHex: currentHex
+            });
+          })
+          .catch(cause => {
+            playSound('error');
+            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: currentHex });
+          });
+        break;
+      }
+      case 'attack': {
+        setSelectedHex(currentHex);
+        const cell = gameState.grid[`${q},${r}`];
+        const defenderTroops = cell?.troops ?? 0;
+        const maxTroops = myPlayer?.carriedTroops ?? 0;
+        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
+        setAttackCount(maxTroops);
+        break;
+      }
+      case 'pickup': {
+        setSelectedHex(currentHex);
+        const cell = gameState.grid[`${q},${r}`];
+        setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
+        setPickupCount(1);
+        break;
+      }
+      case 'ignore':
+        setMapFeedback(null);
+        break;
+    }
+  }, [currentHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
 
   const handleDismissTileActions = useCallback(() => {
     setSelectedHex(null);
@@ -1292,7 +1374,10 @@ export default function App() {
           error={error}
           locationError={effectiveLocationError}
           tileActions={tileActions}
+          currentHexActions={currentHexActions}
+          currentHexCell={currentHexCell}
           onTileAction={handleTileAction}
+          onCurrentHexAction={handleCurrentHexAction}
           onDismissTileActions={handleDismissTileActions}
           attackPrompt={attackPrompt}
           attackCount={attackCount}

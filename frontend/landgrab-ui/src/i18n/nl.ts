@@ -325,6 +325,19 @@ const nl = {
       tileInfo: '({{q}}, {{r}})',
     },
 
+    dock: {
+      noLocation: 'Wachten op GPS-signaal…',
+      outsideGrid: 'Ga naar het spelgebied',
+      noActions: 'Alles veilig — blijf bewegen!',
+      carrying: 'Draagt',
+      troops: 'troepen',
+      owner: 'Eigenaar',
+      terrain: 'Terrein',
+      defendBonus: '+{{bonus}}% verdediging',
+      fortified: 'Versterkt',
+      fort: 'Fort',
+    },
+
     // Meldingen (F8)
     toast: {
       tileLost: '⚔️ {{attacker}} heeft je tegel op ({{q}}, {{r}}) veroverd!',
