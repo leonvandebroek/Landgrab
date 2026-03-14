@@ -141,7 +141,7 @@ export function MiniMap({
       </button>
       <canvas
         ref={canvasRef}
-        style={{ width: CSS_W, height: CSS_H }}
+        style={{ width: '100%', height: '100%' }}
         onClick={handleCanvasClick}
       />
     </div>
