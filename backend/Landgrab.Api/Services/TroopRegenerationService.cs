@@ -22,24 +22,28 @@ public sealed class TroopRegenerationService(
 
                 foreach (var roomCode in gameService.GetPlayingRoomCodes())
                 {
+                    var room = gameService.GetRoom(roomCode);
+                    if (room == null) continue;
+                    if (room.State.IsPaused) continue;
+
                     var (state, error) = gameService.AddReinforcementsToAllHexes(roomCode);
                     if (error != null || state == null)
                         continue;
 
                     // Phase 10: Process duel expiry
-                    var room = gameService.GetRoom(roomCode);
-                    if (room != null)
-                    {
-                        gameService.ProcessDuelExpiry(room);
-                    }
+                    gameService.ProcessDuelExpiry(room);
 
                     // Phase 7: Fog of War — per-player broadcasts
                     if (state.Dynamics.FogOfWarEnabled)
                     {
-                        room ??= gameService.GetRoom(roomCode);
-                        if (room != null)
+                        foreach (var (connectionId, userId) in room.ConnectionMap)
                         {
-                            foreach (var (connectionId, userId) in room.ConnectionMap)
+                            // Host in observer mode gets full unfiltered state
+                            if (room.HostUserId.ToString() == userId && state.HostObserverMode)
+                            {
+                                await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", state, stoppingToken);
+                            }
+                            else
                             {
                                 var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
                                 await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);

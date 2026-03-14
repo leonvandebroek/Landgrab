@@ -19,6 +19,7 @@ import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
 import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
+import { HostControlPlane } from './components/game/HostControlPlane';
 import type { ClaimMode, CombatResult, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, Mission, PendingDuel, RandomEvent, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
 import './styles/index.css';
 
@@ -81,6 +82,7 @@ export default function App() {
   const [eventWarning, setEventWarning] = useState<RandomEvent | null>(null);
   const [missionNotification, setMissionNotification] = useState<{ mission: Mission; type: 'assigned' | 'completed' | 'failed' } | null>(null);
   const [pendingDuel, setPendingDuel] = useState<PendingDuel | null>(null);
+  const [hostMessage, setHostMessage] = useState<{ message: string; fromHost: boolean } | null>(null);
   const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
   const [hasAcknowledgedRules, setHasAcknowledgedRules] = useState(false);
   const location = useGeolocation(Boolean(auth));
@@ -93,6 +95,7 @@ export default function App() {
   const pendingResumeRef = useRef<PendingResume | null>(null);
   const savedSessionRef = useRef<SavedSession | null>(savedSession);
   const resumeSequenceRef = useRef(0);
+  const notificationTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedRoomCode = savedSession?.roomCode ?? '';
   const activeRoomCode = gameState?.roomCode ?? '';
   const rulesKey = activeRoomCode ? `lg-rules-ack-${activeRoomCode}` : '';
@@ -109,6 +112,33 @@ export default function App() {
   useEffect(() => {
     savedSessionRef.current = savedSession;
   }, [savedSession]);
+
+  // Clean up all notification auto-dismiss timers on unmount
+  useEffect(() => {
+    return () => {
+      for (const id of Object.values(notificationTimersRef.current)) {
+        clearTimeout(id);
+      }
+    };
+  }, []);
+
+  /** Set state and schedule auto-clear after `ms`. Cancels any prior timer for the same key. */
+  const scheduleAutoClear = useCallback(<T,>(
+    key: string,
+    setter: React.Dispatch<React.SetStateAction<T>>,
+    value: T,
+    clearValue: T,
+    ms: number,
+  ) => {
+    if (notificationTimersRef.current[key]) {
+      clearTimeout(notificationTimersRef.current[key]);
+    }
+    setter(value);
+    notificationTimersRef.current[key] = setTimeout(() => {
+      setter(clearValue);
+      delete notificationTimersRef.current[key];
+    }, ms);
+  }, []);
 
   const saveSession = useCallback((roomCode: string) => {
     if (!auth?.userId) {
@@ -311,32 +341,32 @@ export default function App() {
       setError(localizeLobbyError(message, t));
     },
     onRandomEvent: (event) => {
-      setRandomEvent(event);
-      setTimeout(() => setRandomEvent(null), 8000);
+      scheduleAutoClear('randomEvent', setRandomEvent, event, null, 8000);
     },
     onEventWarning: (event) => {
-      setEventWarning(event);
-      setTimeout(() => setEventWarning(null), 120000);
+      scheduleAutoClear('eventWarning', setEventWarning, event, null, 120000);
     },
     onMissionAssigned: (mission) => {
-      setMissionNotification({ mission, type: 'assigned' });
-      setTimeout(() => setMissionNotification(null), 6000);
+      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'assigned' as const }, null, 6000);
     },
     onMissionCompleted: (mission) => {
-      setMissionNotification({ mission, type: 'completed' });
-      setTimeout(() => setMissionNotification(null), 6000);
+      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'completed' as const }, null, 6000);
     },
     onMissionFailed: (mission) => {
-      setMissionNotification({ mission, type: 'failed' });
-      setTimeout(() => setMissionNotification(null), 6000);
+      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'failed' as const }, null, 6000);
     },
     onDuelChallenge: (duel) => {
-      setPendingDuel(duel);
-      // Auto-expire after 30s
-      setTimeout(() => setPendingDuel((current) => current?.id === duel.id ? null : current), 30000);
+      scheduleAutoClear('pendingDuel', setPendingDuel, duel, null, 30000);
     },
     onDuelResult: () => {
+      if (notificationTimersRef.current['pendingDuel']) {
+        clearTimeout(notificationTimersRef.current['pendingDuel']);
+        delete notificationTimersRef.current['pendingDuel'];
+      }
       setPendingDuel(null);
+    },
+    onHostMessage: (data: { message: string; fromHost: boolean }) => {
+      scheduleAutoClear('hostMessage', setHostMessage, data, null, 10000);
     },
     onTemplateSaved: (data) => {
       console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
@@ -878,6 +908,33 @@ export default function App() {
       });
   }, [clearGameplayUi, clearSession, invoke, refreshMyRooms]);
 
+  // ── Host Observer Mode handlers ──────────────────────────────────
+  const handleSetObserverMode = useCallback((enabled: boolean) => {
+    if (!activeRoomCode) return;
+    invoke('SetHostObserverMode', activeRoomCode, enabled).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handleUpdateDynamicsLive = useCallback((dynamics: GameDynamics) => {
+    if (!activeRoomCode) return;
+    invoke('UpdateGameDynamicsLive', activeRoomCode, dynamics).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handleTriggerEvent = useCallback((eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => {
+    if (!activeRoomCode) return;
+    invoke('TriggerGameEvent', activeRoomCode, eventType, targetQ ?? null, targetR ?? null, targetAllianceId ?? null)
+      .catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handleSendHostMessage = useCallback((message: string, allianceIds?: string[]) => {
+    if (!activeRoomCode) return;
+    invoke('SendHostMessage', activeRoomCode, message, allianceIds ?? null).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
+  const handlePauseGame = useCallback((paused: boolean) => {
+    if (!activeRoomCode) return;
+    invoke('PauseGame', activeRoomCode, paused).catch(cause => setError(String(cause)));
+  }, [activeRoomCode, invoke]);
+
   const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined) => {
     if (commandoTargetingMode) {
       handleActivateCommandoRaid(q, r);
@@ -1163,6 +1220,36 @@ export default function App() {
       );
     }
 
+    const isObserverMode = myPlayer?.isHost && gameState.hostObserverMode;
+
+    if (isObserverMode) {
+      return (
+        <>
+          {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+          <HostControlPlane
+            state={gameState}
+            onSwitchToPlayer={() => handleSetObserverMode(false)}
+            onUpdateDynamics={handleUpdateDynamicsLive}
+            onTriggerEvent={handleTriggerEvent}
+            onSendMessage={handleSendHostMessage}
+            onPauseGame={handlePauseGame}
+            onReturnToLobby={handleReturnToLobby}
+            error={error}
+          >
+            <GameMap
+              state={gameState}
+              myUserId={auth.userId}
+              currentLocation={currentLocation}
+              constrainViewportToGrid
+              onHexClick={handleHexClick}
+              selectedHex={selectedHex}
+              playerDisplayPrefs={playerDisplayPrefs}
+            />
+          </HostControlPlane>
+        </>
+      );
+    }
+
     return (
       <>
         {connectionBanner && <ConnectionBanner message={connectionBanner} />}
@@ -1210,6 +1297,10 @@ export default function App() {
           carriedTroops={myPlayer?.carriedTroops ?? 0}
           isInOwnHex={isInOwnHex}
           hasLocation={Boolean(currentLocation)}
+          hostMessage={hostMessage}
+          isPaused={gameState.isPaused}
+          isHost={myPlayer?.isHost}
+          onSetObserverMode={handleSetObserverMode}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
         >
@@ -1283,6 +1374,7 @@ export default function App() {
           clearGameplayUi();
           setView('lobby');
         }}
+        onSetObserverMode={handleSetObserverMode}
         error={error}
         invoke={invoke}
       />

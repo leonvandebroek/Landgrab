@@ -68,6 +68,7 @@ public sealed class MissionService(
                 {
                     var room = gameService.GetRoom(roomCode);
                     if (room == null || !room.State.Dynamics.MissionSystemEnabled) continue;
+                    if (room.State.IsPaused) continue;
 
                     await ProcessMissions(gameService, room, stoppingToken);
                 }

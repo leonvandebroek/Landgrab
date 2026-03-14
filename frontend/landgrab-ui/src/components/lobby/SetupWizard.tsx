@@ -39,6 +39,7 @@ interface Props {
     onStartGame: () => void;
     onReturnToLobby: () => void;
     onLogout: () => void;
+    onSetObserverMode?: (enabled: boolean) => void;
     error: string;
     invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
@@ -72,6 +73,7 @@ export function SetupWizard({
     onStartGame,
     onReturnToLobby,
     onLogout,
+    onSetObserverMode,
     error,
     invoke,
 }: Props) {
@@ -134,11 +136,35 @@ export function SetupWizard({
     return (
         <div className="wizard-page">
             <div className="wizard-container">
+                {/* Observer mode toggle for host */}
+                {isHost && onSetObserverMode && (
+                    <div className="observer-mode-toggle">
+                        <span className="observer-mode-label">{t('observer.modeToggle' as never)}</span>
+                        <div className="observer-mode-options">
+                            <button
+                                type="button"
+                                className={`observer-mode-btn${!gameState.hostObserverMode ? ' active' : ''}`}
+                                onClick={() => onSetObserverMode(false)}
+                            >
+                                {t('observer.playerMode' as never)}
+                            </button>
+                            <button
+                                type="button"
+                                className={`observer-mode-btn${gameState.hostObserverMode ? ' active' : ''}`}
+                                onClick={() => onSetObserverMode(true)}
+                            >
+                                {t('observer.observerMode' as never)}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Header with step indicator */}
                 <div className="wizard-header">
                     <div className="wizard-header-left">
                         <span className="room-code">{gameState.roomCode}</span>
                         {!isHost && <span className="phase-badge">{t('lobby.guestRole')}</span>}
+                        {isHost && gameState.hostObserverMode && <span className="phase-badge">{t('observer.observerBadge' as never)}</span>}
                     </div>
                     <div className="wizard-step-indicator">
                         {Array.from({ length: TOTAL_STEPS }, (_, i) => (

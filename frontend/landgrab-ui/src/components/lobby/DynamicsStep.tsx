@@ -1,30 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
-
-/* ── Constants ────────────────────────────────────────────────────────── */
-
-const PRESETS = [
-    'Klassiek', 'Territorium', 'Formatie', 'Logistiek',
-    'Infiltratie', 'Chaos', 'Tolweg', 'Aangepast',
-] as const;
-
-const COPRESENCE_MODES = [
-    'Standoff', 'PresenceBattle', 'PresenceBonus',
-    'Ambush', 'Toll', 'Duel', 'Rally', 'Drain',
-    'Stealth', 'Hostage', 'Scout', 'Beacon',
-    'FrontLine', 'Relay', 'JagerProoi', 'Shepherd', 'CommandoRaid',
-] as const;
-
-const FEATURE_KEYS = [
-    'terrain', 'playerRoles', 'fogOfWar', 'supplyLines', 'hq',
-    'timedEscalation', 'underdogPact', 'neutralNPC', 'randomEvents', 'missionSystem',
-] as const;
-
-type FeatureKey = typeof FEATURE_KEYS[number];
-
-/** Maps a feature key to its corresponding GameDynamics boolean field. */
-const featureField = (key: FeatureKey): keyof GameDynamics =>
-    `${key}Enabled` as keyof GameDynamics;
+import { DYNAMICS_PRESETS as PRESETS, COPRESENCE_MODES, FEATURE_KEYS, featureField } from '../../utils/dynamics';
+import type { FeatureKey } from '../../utils/dynamics';
 
 /* ── Component ────────────────────────────────────────────────────────── */
 
