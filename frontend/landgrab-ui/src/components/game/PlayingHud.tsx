@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, HexCell, RandomEvent, Mission, PendingDuel } from '../../types/game';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
@@ -153,7 +153,22 @@ export function PlayingHud({
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'missions' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
+  const layoutRef = useRef<HTMLDivElement>(null);
+
   const isTimedGame = state.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
+
+  // Track PlayerHUD height so overlays/minimap stay clear of it
+  useEffect(() => {
+    const layout = layoutRef.current;
+    if (!layout) return;
+    const hud = layout.querySelector('.player-hud') as HTMLElement | null;
+    if (!hud) return;
+    const observer = new ResizeObserver(([entry]) => {
+      layout.style.setProperty('--player-hud-h', `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height)}px`);
+    });
+    observer.observe(hud);
+    return () => observer.disconnect();
+  }, []);
 
   // Game countdown timer for TimedGame win condition
   useEffect(() => {
@@ -252,7 +267,7 @@ export function PlayingHud({
   const getMissionStatus = (mission: Mission) => t(`missions.status.${mission.status}` as never, { defaultValue: mission.status });
 
   return (
-    <div className="game-layout hud-active">
+    <div className="game-layout hud-active" ref={layoutRef}>
       <div className="top-status-bar">
         {locationError && <div className="top-warning-bar">📍 {locationError}</div>}
         {error && <div className="top-warning-bar">⚠️ {error}</div>}

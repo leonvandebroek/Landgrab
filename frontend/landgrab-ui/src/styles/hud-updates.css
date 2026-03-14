@@ -104,8 +104,8 @@
   left: 0;
   right: 0;
   padding: 0.5rem 0.75rem;
-  /* Push content above the PlayerHUD bar (~5.5rem) + safe area */
-  padding-bottom: calc(5.5rem + max(0.5rem, env(safe-area-inset-bottom)));
+  /* Push content above the PlayerHUD bar (tracked via --player-hud-h) + safe area */
+  padding-bottom: calc(var(--player-hud-h, 10rem) + max(0.5rem, env(safe-area-inset-bottom)));
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

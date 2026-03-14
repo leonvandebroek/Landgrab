@@ -5095,7 +5095,7 @@ input:checked + .display-settings-slider:before {
    ═══════════════════════════════════════════════════════ */
 .mini-map-container {
   position: absolute;
-  bottom: 170px;
+  bottom: calc(var(--player-hud-h, 170px) + 8px);
   left: 10px;
   width: 160px;
   height: 120px;
@@ -5136,7 +5136,7 @@ input:checked + .display-settings-slider:before {
   position: absolute;
   top: auto;
   right: auto;
-  bottom: 170px;
+  bottom: calc(var(--player-hud-h, 170px) + 8px);
   left: 12px;
   width: 44px;
   height: 44px;
