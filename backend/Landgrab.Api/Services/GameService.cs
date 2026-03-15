@@ -5,6 +5,10 @@ namespace Landgrab.Api.Services;
 public class GameService(
     RoomService roomService,
     LobbyService lobbyService,
+    AllianceConfigService allianceConfigService,
+    MapAreaService mapAreaService,
+    GameTemplateService gameTemplateService,
+    GameConfigService gameConfigService,
     GameplayService gameplayService,
     AbilityService abilityService,
     DuelService duelService,
@@ -26,29 +30,39 @@ public class GameService(
     public IReadOnlyList<string> GetPlayingRoomCodes() => roomService.GetPlayingRoomCodes();
     public void RemoveConnection(GameRoom room, string connectionId, bool returnedToLobby = false) => roomService.RemoveConnection(room, connectionId, returnedToLobby);
 
-    public (GameState? state, string? error) SetAlliance(string roomCode, string userId, string allianceName) => lobbyService.SetAlliance(roomCode, userId, allianceName);
-    public (GameState? state, string? error) ConfigureAlliances(string roomCode, string userId, List<string> allianceNames) => lobbyService.ConfigureAlliances(roomCode, userId, allianceNames);
-    public (GameState? state, string? error) DistributePlayersRandomly(string roomCode, string userId) => lobbyService.DistributePlayersRandomly(roomCode, userId);
-    public (GameState? state, string? error) AssignAllianceStartingTile(string roomCode, string userId, int q, int r, string allianceId) => lobbyService.AssignAllianceStartingTile(roomCode, userId, q, r, allianceId);
-    public (GameState? state, string? error) SetMapLocation(string roomCode, string userId, double lat, double lng) => lobbyService.SetMapLocation(roomCode, userId, lat, lng);
-    public (GameState? state, string? error) SetTileSize(string roomCode, string userId, int meters) => lobbyService.SetTileSize(roomCode, userId, meters);
-    public (bool success, string? error) SetHostBypassGps(string roomCode, string userId, bool bypass) => lobbyService.SetHostBypassGps(roomCode, userId, bypass);
-    public (bool success, string? error) SetMaxFootprint(string roomCode, string userId, int meters) => lobbyService.SetMaxFootprint(roomCode, userId, meters);
-    public Task<(bool success, string? error)> LoadMapTemplate(string roomCode, string userId, Guid templateId, IServiceScopeFactory scopeFactory) => lobbyService.LoadMapTemplate(roomCode, userId, templateId, scopeFactory);
-    public Task<(bool success, string? error, Guid? templateId)> SaveCurrentAreaAsTemplate(string roomCode, string userId, string name, string? description, IServiceScopeFactory scopeFactory) => lobbyService.SaveCurrentAreaAsTemplate(roomCode, userId, name, description, scopeFactory);
-    public (GameState? state, string? error) UseCenteredGameArea(string roomCode, string userId) => lobbyService.UseCenteredGameArea(roomCode, userId);
-    public (GameState? state, string? error) SetPatternGameArea(string roomCode, string userId, string pattern) => lobbyService.SetPatternGameArea(roomCode, userId, pattern);
-    public (GameState? state, string? error) SetCustomGameArea(string roomCode, string userId, IReadOnlyList<HexCoordinateDto> coordinates) => lobbyService.SetCustomGameArea(roomCode, userId, coordinates);
-    public (GameState? state, string? error) SetClaimMode(string roomCode, string userId, string claimMode) => lobbyService.SetClaimMode(roomCode, userId, claimMode);
-    public (GameState? state, string? error) SetAllowSelfClaim(string roomCode, string userId, bool allow) => lobbyService.SetAllowSelfClaim(roomCode, userId, allow);
-    public (GameState? state, string? error) SetWinCondition(string roomCode, string userId, string winConditionType, int value) => lobbyService.SetWinCondition(roomCode, userId, winConditionType, value);
-    public (GameState? state, string? error) SetCopresenceModes(string roomCode, string userId, List<string> modes) => lobbyService.SetCopresenceModes(roomCode, userId, modes);
-    public (GameState? state, string? error) SetCopresencePreset(string roomCode, string userId, string preset) => lobbyService.SetCopresencePreset(roomCode, userId, preset);
-    public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics) => lobbyService.SetGameDynamics(roomCode, userId, dynamics);
+    public (GameState? state, string? error) SetAlliance(string roomCode, string userId, string allianceName) => allianceConfigService.SetAlliance(roomCode, userId, allianceName);
+    public (GameState? state, string? error) ConfigureAlliances(string roomCode, string userId, List<string> allianceNames) => allianceConfigService.ConfigureAlliances(roomCode, userId, allianceNames);
+    public (GameState? state, string? error) DistributePlayersRandomly(string roomCode, string userId) => allianceConfigService.DistributePlayersRandomly(roomCode, userId);
+    public (GameState? state, string? error) AssignAllianceStartingTile(string roomCode, string userId, int q, int r, string allianceId) => allianceConfigService.AssignAllianceStartingTile(roomCode, userId, q, r, allianceId);
+    public (GameState? state, string? error) SetMapLocation(string roomCode, string userId, double lat, double lng) => mapAreaService.SetMapLocation(roomCode, userId, lat, lng);
+    public (GameState? state, string? error) SetTileSize(string roomCode, string userId, int meters) => mapAreaService.SetTileSize(roomCode, userId, meters);
+    public (bool success, string? error) SetHostBypassGps(string roomCode, string userId, bool bypass) => mapAreaService.SetHostBypassGps(roomCode, userId, bypass);
+    public (bool success, string? error) SetMaxFootprint(string roomCode, string userId, int meters) => mapAreaService.SetMaxFootprint(roomCode, userId, meters);
+    public Task<(bool success, string? error)> LoadMapTemplate(string roomCode, string userId, Guid templateId, IServiceScopeFactory scopeFactory)
+    {
+        _ = scopeFactory;
+        return gameTemplateService.LoadMapTemplate(roomCode, userId, templateId);
+    }
+
+    public Task<(bool success, string? error, Guid? templateId)> SaveCurrentAreaAsTemplate(string roomCode, string userId, string name, string? description, IServiceScopeFactory scopeFactory)
+    {
+        _ = scopeFactory;
+        return gameTemplateService.SaveCurrentAreaAsTemplate(roomCode, userId, name, description);
+    }
+
+    public (GameState? state, string? error) UseCenteredGameArea(string roomCode, string userId) => mapAreaService.UseCenteredGameArea(roomCode, userId);
+    public (GameState? state, string? error) SetPatternGameArea(string roomCode, string userId, string pattern) => mapAreaService.SetPatternGameArea(roomCode, userId, pattern);
+    public (GameState? state, string? error) SetCustomGameArea(string roomCode, string userId, IReadOnlyList<HexCoordinateDto> coordinates) => mapAreaService.SetCustomGameArea(roomCode, userId, coordinates);
+    public (GameState? state, string? error) SetClaimMode(string roomCode, string userId, string claimMode) => gameConfigService.SetClaimMode(roomCode, userId, claimMode);
+    public (GameState? state, string? error) SetAllowSelfClaim(string roomCode, string userId, bool allow) => gameConfigService.SetAllowSelfClaim(roomCode, userId, allow);
+    public (GameState? state, string? error) SetWinCondition(string roomCode, string userId, string winConditionType, int value) => gameConfigService.SetWinCondition(roomCode, userId, winConditionType, value);
+    public (GameState? state, string? error) SetCopresenceModes(string roomCode, string userId, List<string> modes) => gameConfigService.SetCopresenceModes(roomCode, userId, modes);
+    public (GameState? state, string? error) SetCopresencePreset(string roomCode, string userId, string preset) => gameConfigService.SetCopresencePreset(roomCode, userId, preset);
+    public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics) => gameConfigService.SetGameDynamics(roomCode, userId, dynamics);
     public (GameState? state, string? error) SetPlayerRole(string roomCode, string userId, string role) => lobbyService.SetPlayerRole(roomCode, userId, role);
-    public (GameState? state, string? error) SetAllianceHQ(string roomCode, string userId, int q, int r, string allianceId) => lobbyService.SetAllianceHQ(roomCode, userId, q, r, allianceId);
-    public (GameState? state, string? error) SetMasterTile(string roomCode, string userId, double lat, double lng) => lobbyService.SetMasterTile(roomCode, userId, lat, lng);
-    public (GameState? state, string? error) SetMasterTileByHex(string roomCode, string userId, int q, int r) => lobbyService.SetMasterTileByHex(roomCode, userId, q, r);
+    public (GameState? state, string? error) SetAllianceHQ(string roomCode, string userId, int q, int r, string allianceId) => allianceConfigService.SetAllianceHQ(roomCode, userId, q, r, allianceId);
+    public (GameState? state, string? error) SetMasterTile(string roomCode, string userId, double lat, double lng) => mapAreaService.SetMasterTile(roomCode, userId, lat, lng);
+    public (GameState? state, string? error) SetMasterTileByHex(string roomCode, string userId, int q, int r) => mapAreaService.SetMasterTileByHex(roomCode, userId, q, r);
     public (GameState? state, string? error) AssignStartingTile(string roomCode, string userId, int q, int r, string targetPlayerId) => lobbyService.AssignStartingTile(roomCode, userId, q, r, targetPlayerId);
     public (GameState? state, string? error) StartGame(string roomCode, string userId) => lobbyService.StartGame(roomCode, userId);
 

@@ -9,8 +9,8 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
     private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
-    private static bool IsHost(GameRoom room, string userId) => LobbyService.IsHost(room, userId);
-    private static IReadOnlyDictionary<string, List<CopresenceMode>> CopresencePresets => LobbyService.CopresencePresets;
+    private static bool IsHost(GameRoom room, string userId) => GameStateCommon.IsHost(room, userId);
+    private static IReadOnlyDictionary<string, List<CopresenceMode>> CopresencePresets => GameStateCommon.CopresencePresets;
 
     public (GameState? state, string? error) SetHostObserverMode(string roomCode, string userId, bool enabled)
     {

@@ -1,140 +1,140 @@
 # Landgrab 🗺️
 
-> **Conquer your neighborhood.** A real-world territory game for kids — Land Grab meets Risk, played on an actual map of your street.
+> **Conquer your neighborhood.** A real-world territory game: Land Grab meets Risk on top of a real map.
 
 ## What is it?
 
-Landgrab overlays a hexagonal grid on **your real neighborhood map** (OpenStreetMap). Players roll dice, claim hexes, and battle for territory using Risk-style combat. Two game modes:
+Landgrab overlays a hex grid on a neighborhood map. Players claim territory, move troops, trigger abilities, and fight for control in real time.
 
 | Mode | Description |
 |---|---|
-| **Alliances** (room-based) | 2–4 players create a room with a short code, form alliances, and battle on a local hex grid centered on the host's GPS location. |
-| **Free-for-All** (global) | Persistent world map. Any logged-in player can claim and attack hexes near their real-world location — territories survive between sessions. |
-
-## Game Mechanics
-
-**Land Grab element:** Roll 2 dice → sum = number of moves. Spend moves claiming empty hexes adjacent to your territory.
-
-**Risk element:**
-- Troops on every hex
-- Attack enemy hexes with dice combat (attacker: 1–3 dice, defender: 1–2 dice + ally bonus)
-- Ties go to the defender
-- Earn reinforcements at start of turn: `max(3, territories ÷ 3)`
-- Alliance members share territory borders and get a +1 defense die when allied hexes are adjacent
-
-**Win condition (Alliances mode):** First alliance to control ≥60% of hexes, or most territory when all hexes are claimed.
+| **Alliances** | 2–4 players create a room, configure the map, form alliances, and play on a host-centered local grid. |
+| **Free-for-All** | A persistent global map where logged-in players can claim and attack nearby hexes. |
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 19 + TypeScript + Vite + Leaflet.js |
-| Backend | ASP.NET Core 8 Minimal API + SignalR |
-| Realtime | ASP.NET Core SignalR (dev) → Azure SignalR Service (prod) |
-| Database | PostgreSQL + Entity Framework Core |
-| Auth | Custom JWT — username + email + bcrypt password |
-| Map tiles | OpenStreetMap (free, no API key) |
-| Hosting | Azure Static Web Apps (frontend) + Azure Container Apps (backend) |
+| Frontend | React 19, TypeScript, Vite, Zustand, Leaflet |
+| Backend | ASP.NET Core 8 Minimal API, SignalR, Entity Framework Core |
+| Database | SQL Server |
+| Auth | Custom JWT, bcrypt |
+| Realtime | ASP.NET Core SignalR locally, Azure SignalR in production |
+| Hosting | Azure Static Web Apps + Azure Container Apps |
 
-## Getting Started (Local Dev)
+## Getting Started
 
 ### Prerequisites
+
 - [.NET 8 SDK](https://dotnet.microsoft.com/download)
 - [Node.js 20+](https://nodejs.org)
-- [PostgreSQL 15+](https://www.postgresql.org) running locally
+- SQL Server 2022+ locally, or Docker for the full stack
 
-### 1. Backend
+### Backend
 
 ```bash
 cd backend/Landgrab.Api
-# Edit appsettings.json or set environment variables:
-# ConnectionStrings__DefaultConnection = "Host=localhost;Database=landgrab;..."
-# Jwt__Secret = "your-256-bit-secret"
+# Set environment variables or appsettings values:
+# ConnectionStrings__DefaultConnection="Server=localhost;Database=landgrab;..."
+# Jwt__Secret="your-32+-character-secret"
 
 dotnet run
-# API available at http://localhost:5000
-# SignalR hub at ws://localhost:5000/hub/game
+# HTTP profile listens on http://localhost:5001
+# SignalR hub: ws://localhost:5001/hub/game
 ```
 
-### 2. Frontend
+### Frontend
 
 ```bash
 cd frontend/landgrab-ui
 npm install
 npm run dev
-# App available at http://localhost:5173
-# Proxies /api and /hub to http://localhost:5000
+# App: http://localhost:5173
+# /api and /hub proxy to http://localhost:5001
 ```
 
-### 3. Open in browser
+Open `http://localhost:5173`, create an account, and start or join a room.
 
-Go to `http://localhost:5173`, create an account, and start a game room.
+## Architecture
 
-To test multiplayer: open a second tab (or phone on same WiFi at `http://<your-ip>:5173`) and join with the room code.
+### Backend
 
-## Docker (full stack)
+- `GameService` is the main façade for game operations.
+- It coordinates domain services including `RoomService`, `LobbyService`, `GameplayService`, `AbilityService`, `DuelService`, `WinConditionService`, `HostControlService`, `GameStateService`, and `MissionService`.
+- Supporting services cover hex math, terrain fetching, global map behavior, and room persistence.
+- SignalR `GameHub` is split into partial classes:
+  - `GameHub.cs` - base hub, DI, connection lifecycle
+  - `GameHub.Lobby.cs` - room setup, alliances, templates, lobby actions
+  - `GameHub.Gameplay.cs` - gameplay actions, abilities, duels
+  - `GameHub.Host.cs` - host-only controls, pauses, events, observer flows
+
+### Frontend
+
+- State is organized with Zustand stores:
+  - `gameStore`
+  - `gameplayStore`
+  - `notificationStore`
+  - `uiStore`
+- Core hooks:
+  - `useAuth`
+  - `useSignalR`
+  - `useSignalRHandlers`
+  - `useGameActions` as the main façade over domain hooks (`useGameActionsLobby`, `useGameActionsGameplay`, `useGameActionsAbilities`, `useGameActionsHost`)
+  - `useAutoResume` for saved-session recovery
+- Large UI surfaces are code-split with lazy-loaded chunks for `GameMap`, `PlayingHud`, and `GameLobby`.
+
+## Testing
+
+- Backend coverage includes **96 xUnit tests** across auth, hex math, win conditions, gameplay, abilities, and duels.
+- Run the test suite with:
 
 ```bash
-# Copy and edit environment variables
-cp .env.example .env   # set JWT_SECRET etc.
-
-docker compose up --build
-# App at http://localhost
+cd backend/Landgrab.Tests
+dotnet test
 ```
+
+## Docker
+
+```bash
+# Required: set JWT_SECRET
+docker compose up --build
+```
+
+- Frontend: `http://localhost`
+- Backend container port: `http://localhost:7000`
+- SQL Server: `localhost:1433`
 
 ## Azure Deployment
 
-See [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). Required secrets:
+Deployment is defined in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+
+Required secrets:
 
 | Secret | Description |
 |---|---|
 | `AZURE_CREDENTIALS` | Azure service principal JSON |
 | `AZURE_RESOURCE_GROUP` | Resource group name |
-| `AZURE_STATIC_WEB_APPS_API_TOKEN` | From Azure Static Web Apps |
-| `JWT_SECRET` | 32+ char random secret |
-
-### Azure infrastructure checklist
-- [ ] Azure Static Web Apps (free tier) — for frontend
-- [ ] Azure Container Apps (consumption plan) — for backend
-- [ ] Azure Database for PostgreSQL Flexible Server (B1ms, ~$15/mo)
-- [ ] Azure SignalR Service (free tier dev → Standard Unit 1 for prod)
-- [ ] Azure Communication Services Email (free for <100 emails/day)
-- [ ] Azure Key Vault (for secrets in production)
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | Azure Static Web Apps token |
+| `JWT_SECRET` | Application JWT secret |
 
 ## Project Structure
 
-```
+```text
 Landgrab/
 ├── backend/
-│   └── Landgrab.Api/          # ASP.NET Core 8 API
-│       ├── Auth/              # JWT, bcrypt, email service
-│       ├── Data/              # EF Core DbContext
-│       ├── Endpoints/         # Minimal API endpoints
-│       ├── Hubs/              # SignalR GameHub
-│       ├── Models/            # Domain models + DTOs
-│       └── Services/          # Game logic, hex math, global map
+│   ├── Landgrab.Api/      # API, SignalR hub, domain services
+│   └── Landgrab.Tests/    # xUnit test suite
 ├── frontend/
-│   └── landgrab-ui/           # React + TypeScript + Vite
-│       └── src/
-│           ├── components/    # Auth, Lobby, Map, Game, Global
-│           ├── hooks/         # useSignalR, useAuth, useGeolocation
-│           └── types/         # Shared TypeScript types
-├── docker-compose.yml
-└── .github/workflows/         # CI + Azure deploy
+│   └── landgrab-ui/       # React app
+├── docs/                  # Documentation and intentional screenshots
+├── resources/             # App assets
+├── infrastructure/        # Infra and deployment files
+└── docker-compose.yml
 ```
 
 ## Privacy
 
-Only your **username** is visible to other players. Your email is stored privately (for account recovery only) and never shared or displayed. No real name, phone, or location data is stored.
-
-## Extending the Game
-
-The event-sourced `game_events` table and the clean `GameService` domain model make it easy to add:
-- New game modes (Capture the Flag, King of the Hill)
-- Power-ups (extra troops, fortify a hex)
-- Time-limited rounds
-- Push notifications (via Azure Notification Hubs)
-- Alliance chat
+Only usernames are shown to other players. Email is stored for account handling and is not displayed publicly.
 
 ## License
 

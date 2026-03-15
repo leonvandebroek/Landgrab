@@ -26,6 +26,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
 builder.Services.AddSingleton<GameStateService>();
+builder.Services.AddSingleton<AllianceConfigService>();
+builder.Services.AddSingleton<MapAreaService>();
+builder.Services.AddSingleton<GameTemplateService>();
+builder.Services.AddSingleton<GameConfigService>();
 builder.Services.AddSingleton<LobbyService>();
 builder.Services.AddSingleton<AbilityService>();
 builder.Services.AddSingleton<DuelService>();

@@ -5,6 +5,28 @@ namespace Landgrab.Api.Services;
 internal static class GameStateCommon
 {
     internal const int MaxEventLogEntries = 100;
+    internal const int DefaultGridRadius = 8;
+    internal const int DefaultTileSizeMeters = 25;
+    internal const int MaxFootprintMeters = 1_000;
+    internal const int MinimumDrawnHexCount = 7;
+
+    internal static readonly string[] Colors =
+        ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
+         "#e91e63", "#00bcd4", "#8bc34a", "#ff5722", "#673ab7", "#009688", "#ffc107", "#795548"];
+
+    internal static readonly string[] AllianceColors =
+        ["#ef4444", "#06b6d4", "#f59e0b", "#a855f7", "#10b981", "#ec4899", "#e67e22", "#34495e"];
+
+    internal static readonly Dictionary<string, List<CopresenceMode>> CopresencePresets = new()
+    {
+        ["Klassiek"] = [],
+        ["Territorium"] = [CopresenceMode.Shepherd, CopresenceMode.Drain],
+        ["Formatie"] = [CopresenceMode.FrontLine, CopresenceMode.Rally],
+        ["Logistiek"] = [CopresenceMode.Shepherd, CopresenceMode.Relay, CopresenceMode.FrontLine],
+        ["Infiltratie"] = [CopresenceMode.Stealth, CopresenceMode.CommandoRaid, CopresenceMode.Scout],
+        ["Chaos"] = [CopresenceMode.JagerProoi, CopresenceMode.Duel, CopresenceMode.PresenceBonus],
+        ["Tolweg"] = [CopresenceMode.Beacon, CopresenceMode.Toll, CopresenceMode.Drain],
+    };
 
     internal static void AppendEventLog(GameState state, GameEventLogEntry entry)
     {
@@ -169,5 +191,98 @@ internal static class GameStateCommon
                 RewardKey = m.RewardKey
             }).ToList()
         };
+    }
+
+    internal static bool IsHost(GameRoom room, string userId) => room.HostUserId.ToString() == userId;
+
+    internal static void EnsureGrid(GameState state)
+    {
+        if (state.Grid.Count == 0)
+            state.Grid = BuildGridForState(state);
+    }
+
+    internal static Dictionary<string, HexCell> BuildGridForState(GameState state)
+    {
+        return state.GameAreaMode switch
+        {
+            GameAreaMode.Pattern when state.GameAreaPattern.HasValue =>
+                HexService.BuildGrid(BuildPatternCoordinates(state.GameAreaPattern.Value)),
+            GameAreaMode.Drawn when state.Grid.Count > 0 =>
+                HexService.BuildGrid(state.Grid.Values.Select(cell => (cell.Q, cell.R))),
+            _ => HexService.BuildGrid(HexService.Spiral(Math.Max(1, state.GridRadius)))
+        };
+    }
+
+    internal static int GetAllowedTileSizeMeters(
+        IEnumerable<(int q, int r)> coordinates,
+        int requestedMeters,
+        int maxFootprintMeters)
+    {
+        var maxAllowedMeters = Math.Max(15,
+            HexService.GetMaxTileSizeForFootprint(coordinates, maxFootprintMeters));
+        return Math.Clamp(requestedMeters, 15, maxAllowedMeters);
+    }
+
+    internal static void ResetBoardStateForAreaChange(GameState state)
+    {
+        state.MasterTileQ = null;
+        state.MasterTileR = null;
+
+        foreach (var cell in state.Grid.Values)
+        {
+            cell.OwnerId = null;
+            cell.OwnerAllianceId = null;
+            cell.OwnerName = null;
+            cell.OwnerColor = null;
+            cell.Troops = 0;
+            cell.IsMasterTile = false;
+        }
+
+        foreach (var player in state.Players)
+        {
+            GameplayService.ResetCarriedTroops(player);
+            player.TerritoryCount = 0;
+        }
+
+        foreach (var alliance in state.Alliances)
+            alliance.TerritoryCount = 0;
+    }
+
+    internal static IEnumerable<(int q, int r)> BuildPatternCoordinates(GameAreaPattern pattern)
+    {
+        return HexService.Spiral(DefaultGridRadius).Where(coord => pattern switch
+        {
+            GameAreaPattern.WideFront => FitsWideFront(coord.q, coord.r),
+            GameAreaPattern.TallFront => FitsTallFront(coord.q, coord.r),
+            GameAreaPattern.Crossroads => FitsCrossroads(coord.q, coord.r),
+            GameAreaPattern.Starburst => FitsStarburst(coord.q, coord.r),
+            _ => true
+        });
+    }
+
+    private static bool FitsWideFront(int q, int r)
+    {
+        var s = -q - r;
+        return Math.Abs(q) <= DefaultGridRadius && Math.Abs(r) <= 4 && Math.Abs(s) <= DefaultGridRadius;
+    }
+
+    private static bool FitsTallFront(int q, int r)
+    {
+        var s = -q - r;
+        return Math.Abs(q) <= 4 && Math.Abs(r) <= DefaultGridRadius && Math.Abs(s) <= DefaultGridRadius;
+    }
+
+    private static bool FitsCrossroads(int q, int r)
+    {
+        var s = -q - r;
+        var radius = HexService.HexDistance(q, r);
+        return radius <= 4 || Math.Abs(q) <= 1 || Math.Abs(r) <= 1 || Math.Abs(s) <= 1;
+    }
+
+    private static bool FitsStarburst(int q, int r)
+    {
+        var s = -q - r;
+        var radius = HexService.HexDistance(q, r);
+        return radius <= 5 || (radius <= DefaultGridRadius && (q == 0 || r == 0 || s == 0));
     }
 }

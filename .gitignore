@@ -416,3 +416,17 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Session artifacts
+todos.db
+.todos.db
+
+# Screenshots (use docs/ for intentional documentation images)
+*.png
+*.jpg
+*.jpeg
+!resources/**/*.png
+!resources/**/*.jpg
+!docs/**/*.png
+!docs/**/*.jpg
+!frontend/landgrab-ui/public/**/*.png

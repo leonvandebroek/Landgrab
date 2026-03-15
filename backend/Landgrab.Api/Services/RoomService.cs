@@ -7,13 +7,13 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
 {
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
 
-    private static int DefaultGridRadius => LobbyService.DefaultGridRadius;
-    private static int DefaultTileSizeMeters => LobbyService.DefaultTileSizeMeters;
-    private static int MaxFootprintMeters => LobbyService.MaxFootprintMeters;
-    private static string[] Colors => LobbyService.Colors;
-    private static Dictionary<string, HexCell> BuildGridForState(GameState state) => LobbyService.BuildGridForState(state);
+    private static int DefaultGridRadius => GameStateCommon.DefaultGridRadius;
+    private static int DefaultTileSizeMeters => GameStateCommon.DefaultTileSizeMeters;
+    private static int MaxFootprintMeters => GameStateCommon.MaxFootprintMeters;
+    private static string[] Colors => GameStateCommon.Colors;
+    private static Dictionary<string, HexCell> BuildGridForState(GameState state) => GameStateCommon.BuildGridForState(state);
     private static int GetAllowedTileSizeMeters(IEnumerable<(int q, int r)> coordinates, int requestedMeters, int maxFootprintMeters) =>
-        LobbyService.GetAllowedTileSizeMeters(coordinates, requestedMeters, maxFootprintMeters);
+        GameStateCommon.GetAllowedTileSizeMeters(coordinates, requestedMeters, maxFootprintMeters);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
     private static void ReturnCarriedTroops(GameState state, PlayerDto player) => GameplayService.ReturnCarriedTroops(state, player);
