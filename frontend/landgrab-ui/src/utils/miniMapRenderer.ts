@@ -3,6 +3,10 @@
 
 export interface MiniMapData {
   grid: Record<string, { q: number; r: number; ownerColor?: string; ownerId?: string }>;
+  /**
+   * Viewport bounds already projected into axial-pixel space (px = q × 1.5, py = (r + q × 0.5) × √3).
+   * Callers are responsible for converting Leaflet lat/lng bounds to this space before passing here.
+   */
   viewportBounds: { north: number; south: number; east: number; west: number } | null;
   myUserId: string;
   hqHexes: Array<{ q: number; r: number; color: string }>;
@@ -93,10 +97,7 @@ export function renderMiniMap(
   // ── Viewport rectangle (semi-transparent dashed border) ──
   if (data.viewportBounds) {
     const b = data.viewportBounds;
-    // Map lat/lng-like viewport bounds into the same axial-pixel canvas space.
-    // The viewport bounds arrive in the same coordinate space as the grid's
-    // axial-pixel positions (pre-projected by the caller), so we can linearly
-    // map them using the same scale/offset.
+    // viewportBounds is already in axial-pixel space (projected by the caller).
     const vLeft   = (b.west - minPx)  * scale + offsetX;
     const vRight  = (b.east - minPx)  * scale + offsetX;
     const vTop    = (maxPy - b.north) * scale + offsetY;

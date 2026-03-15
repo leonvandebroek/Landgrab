@@ -31,7 +31,10 @@ export function computeSupplyNetwork(
     if (alliance.hqHexQ == null || alliance.hqHexR == null) continue;
 
     const hqKey = `${alliance.hqHexQ},${alliance.hqHexR}`;
-    if (!grid[hqKey]) continue;
+    const hqCell = grid[hqKey];
+    // Only seed BFS from the HQ if the alliance still owns it.
+    // A captured HQ keeps its coordinates but must not propagate supply.
+    if (!hqCell || hqCell.ownerAllianceId !== alliance.id) continue;
 
     // BFS from HQ
     const visited = new Set<string>();

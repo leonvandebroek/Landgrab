@@ -89,6 +89,7 @@ interface Props {
   onDismissToast?: (id: string) => void;
   mainMapBounds?: { north: number; south: number; east: number; west: number } | null;
   selectedHexScreenPos?: { x: number; y: number } | null;
+  onNavigateMap?: (lat: number, lng: number) => void;
 }
 
 export function PlayingHud({
@@ -146,7 +147,8 @@ export function PlayingHud({
   children,
   toasts,
   onDismissToast,
-  mainMapBounds
+  mainMapBounds,
+  onNavigateMap,
 }: Props) {
   const { t } = useTranslation();
   const { soundEnabled, toggleSound } = useSound();
@@ -611,6 +613,7 @@ export function PlayingHud({
           mapLng={state.mapLng}
           tileSizeMeters={state.tileSizeMeters}
           mainMapBounds={mainMapBounds ?? null}
+          onNavigate={onNavigateMap}
         />
       )}
     </div>

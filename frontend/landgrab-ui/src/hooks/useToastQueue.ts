@@ -34,7 +34,10 @@ export function useToastQueue(maxVisible: number = DEFAULT_MAX_VISIBLE) {
 
   const pushToast = useCallback(
     (partial: Omit<GameToast, 'id'>) => {
-      const id = crypto.randomUUID();
+      const id =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
       const toast: GameToast = { ...partial, id };
       const duration = partial.duration ?? DEFAULT_DURATION_MS;
 
