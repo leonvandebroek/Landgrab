@@ -164,8 +164,7 @@ export function useSignalRHandlers({
     onHostMessage: (data) => {
       useNotificationStore.getState().setHostMessage(data);
     },
-    onTemplateSaved: (data) => {
-      console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
+    onTemplateSaved: () => {
     },
     onReconnected: () => {
       useUiStore.getState().clearError();

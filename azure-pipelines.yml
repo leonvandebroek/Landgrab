@@ -54,6 +54,17 @@ stages:
             displayName: 'Build backend'
             workingDirectory: backend/Landgrab.Api
 
+          - script: dotnet test backend/Landgrab.Tests/Landgrab.Tests.csproj --configuration Release --verbosity normal --logger trx --results-directory $(Build.ArtifactStagingDirectory)/test-results
+            displayName: 'Run Tests'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-results/**/*.trx'
+              mergeTestResults: true
+            condition: succeededOrFailed()
+
           # Frontend
           - script: npm ci
             displayName: 'Install frontend dependencies'
@@ -66,6 +77,10 @@ stages:
 
           - script: npm run build
             displayName: 'Build frontend'
+            workingDirectory: frontend/landgrab-ui
+
+          - script: npm run lint
+            displayName: 'Lint frontend'
             workingDirectory: frontend/landgrab-ui
 
           # Copy SPA into backend wwwroot

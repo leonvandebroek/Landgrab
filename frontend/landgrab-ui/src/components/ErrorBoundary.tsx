@@ -82,6 +82,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     this.setState({ errorInfo })
+    // Keep this browser log so unexpected render crashes still surface without
+    // a dedicated client-side error reporting pipeline.
     console.error('ErrorBoundary caught an error:', error, errorInfo)
   }
 

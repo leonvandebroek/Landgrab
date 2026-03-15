@@ -100,9 +100,6 @@ export function useSignalR(token: string | null, events: GameEvents) {
             eventsRef.current.onReconnected?.();
           }
         } catch (err) {
-          if (!isDisposed() && !isExpectedStartAbort(err)) {
-            console.warn('SignalR manual reconnect failed:', err);
-          }
           if (!isDisposed() && connectionRef.current === conn && manualReconnectAttemptsRef.current < MANUAL_RECONNECT_MAX_ATTEMPTS) {
             manualReconnectTimerRef.current = window.setTimeout(attemptReconnect, MANUAL_RECONNECT_DELAY_MS);
           } else if (!isDisposed()) {
@@ -180,13 +177,10 @@ export function useSignalR(token: string | null, events: GameEvents) {
       }
     });
 
-    conn.onclose((err) => {
+    conn.onclose(() => {
       if (!disposed) {
         setConnected(false);
         setReconnecting(true);
-        if (err && !isExpectedStartAbort(err)) {
-          console.warn('SignalR connection closed:', err);
-        }
         scheduleManualReconnect(conn, isDisposed);
       }
     });
@@ -203,12 +197,11 @@ export function useSignalR(token: string | null, events: GameEvents) {
           setConnected(true);
           setReconnecting(false);
         }
-      } catch (err) {
-        if (!disposed && !isExpectedStartAbort(err)) {
-          console.error('SignalR connect error:', err);
-          setConnected(false);
-          setReconnecting(true);
-          scheduleManualReconnect(conn, isDisposed);
+        } catch (err) {
+          if (!disposed && !isExpectedStartAbort(err)) {
+            setConnected(false);
+            setReconnecting(true);
+            scheduleManualReconnect(conn, isDisposed);
         }
       }
     });

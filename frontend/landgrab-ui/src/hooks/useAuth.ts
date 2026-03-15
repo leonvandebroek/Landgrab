@@ -84,9 +84,8 @@ export function useAuth() {
     void Promise.resolve().then(async () => {
       try {
         await loadCurrentUser();
-      } catch (error) {
+      } catch {
         if (!cancelled) {
-          console.warn('Failed to restore auth session.', error);
           clearAuth();
         }
       } finally {
@@ -110,8 +109,7 @@ export function useAuth() {
       void Promise.resolve().then(async () => {
         try {
           await refreshAuthCookie();
-        } catch (error) {
-          console.warn('Failed to refresh auth cookie.', error);
+        } catch {
         }
       });
     }, AUTH_REFRESH_INTERVAL_MS);
