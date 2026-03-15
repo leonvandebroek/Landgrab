@@ -89,6 +89,10 @@ export default function App() {
   const [mainMapBounds, setMainMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
   const [selectedHexScreenPos, setSelectedHexScreenPos] = useState<{ x: number; y: number } | null>(null);
   const { toasts, pushToast, dismissToast } = useToastQueue();
+  const mapNavigateRef = useRef<((lat: number, lng: number) => void) | null>(null);
+  const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
+    mapNavigateRef.current?.(lat, lng);
+  }, []);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
@@ -331,8 +335,8 @@ export default function App() {
       pushToast({
         type: 'combat',
         message: result.attackerWon
-          ? `Combat won at (${result.q}, ${result.r})!`
-          : `Combat lost at (${result.q}, ${result.r})!`,
+          ? t('game.toast.combatWon', { q: result.q, r: result.r })
+          : t('game.toast.combatLost', { q: result.q, r: result.r }),
       });
     },
     onTileLost: (data) => {
@@ -344,8 +348,8 @@ export default function App() {
         targetHex: [data.Q, data.R]
       });
       pushToast({
-        type: 'combat',
-        message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
+        type: 'territory',
+        message: t('game.toast.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
         teamColor: undefined,
       });
     },
@@ -1424,6 +1428,7 @@ export default function App() {
           onDismissToast={dismissToast}
           mainMapBounds={mainMapBounds}
           selectedHexScreenPos={selectedHexScreenPos}
+          onNavigateMap={handleMiniMapNavigate}
         >
           <GameMap
             state={gameState}
@@ -1435,6 +1440,7 @@ export default function App() {
             playerDisplayPrefs={playerDisplayPrefs}
             onBoundsChange={setMainMapBounds}
             onHexScreenPosition={setSelectedHexScreenPos}
+            navigateRef={mapNavigateRef}
           />
         </PlayingHud>
         {combatResult && (

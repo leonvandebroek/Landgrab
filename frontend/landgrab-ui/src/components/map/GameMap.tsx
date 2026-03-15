@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import L from 'leaflet';
@@ -39,6 +39,8 @@ interface Props {
   playerDisplayPrefs?: PlayerDisplayPreferences;
   onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
   onHexScreenPosition?: (pos: { x: number; y: number } | null) => void;
+  /** Ref populated with a navigate function once the Leaflet map is ready. */
+  navigateRef?: MutableRefObject<((lat: number, lng: number) => void) | null>;
 }
 
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
@@ -59,6 +61,7 @@ export function GameMap({
   playerDisplayPrefs,
   onBoundsChange,
   onHexScreenPosition,
+  navigateRef,
 }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -132,6 +135,11 @@ export function GameMap({
     animLayerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
+    // Expose a navigate function for external callers (e.g. mini-map click-to-navigate)
+    if (navigateRef) {
+      navigateRef.current = (lat: number, lng: number) => map.setView([lat, lng]);
+    }
+
     // Inject terrain SVG patterns after map init
     setTimeout(() => {
       if (containerRef.current) injectTerrainPatternSVG(containerRef.current);
@@ -152,8 +160,9 @@ export function GameMap({
       layerGroupRef.current = null;
       animLayerGroupRef.current = null;
       geometryKeyRef.current = '';
+      if (navigateRef) navigateRef.current = null;
     };
-  }, [constrainViewportToGrid, t]);
+  }, [constrainViewportToGrid, navigateRef, t]);
 
   useEffect(() => {
     const map = mapRef.current;
