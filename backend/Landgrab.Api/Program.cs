@@ -27,6 +27,9 @@ builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
 builder.Services.AddSingleton<GameStateService>();
 builder.Services.AddSingleton<LobbyService>();
+builder.Services.AddSingleton<AbilityService>();
+builder.Services.AddSingleton<DuelService>();
+builder.Services.AddSingleton<WinConditionService>();
 builder.Services.AddSingleton<GameplayService>();
 builder.Services.AddSingleton<HostControlService>();
 builder.Services.AddSingleton<GameService>();        // facade over in-memory game rooms

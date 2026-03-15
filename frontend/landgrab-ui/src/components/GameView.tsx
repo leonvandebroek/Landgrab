@@ -1,23 +1,24 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
-import { useGameStore } from '../stores/gameStore';
-import { useGameplayStore } from '../stores/gameplayStore';
-import { useUiStore } from '../stores/uiStore';
+import { ConnectionBanner } from './ConnectionBanner';
 import { CombatModal } from './game/CombatModal';
 import { GameRulesPage } from './game/GameRulesPage';
 import { HostControlPlane } from './game/HostControlPlane';
 import { LoadingFallback } from './LoadingFallback';
+import { useGameStore } from '../stores/gameStore';
+import { useGameplayStore } from '../stores/gameplayStore';
+import { useUiStore } from '../stores/uiStore';
 import type { GameDynamics, HexCell, ReClaimMode } from '../types/game';
 import type { PlayerDisplayPreferences } from '../types/playerPreferences';
-import type { GameToast } from '../hooks/useToastQueue';
 import type { TileAction, TileActionType } from './game/tileInteraction';
+import type { GameToast } from '../hooks/useToastQueue';
 
+// Heavy components loaded lazily — same split as original App.
 const GameMap = lazy(() =>
-  import('./map/GameMap').then(module => ({ default: module.GameMap })),
+  import('./map/GameMap').then(m => ({ default: m.GameMap }))
 );
-
 const PlayingHud = lazy(() =>
-  import('./game/PlayingHud').then(module => ({ default: module.PlayingHud })),
+  import('./game/PlayingHud').then(m => ({ default: m.PlayingHud }))
 );
 
 interface LocationPoint {
@@ -25,116 +26,147 @@ interface LocationPoint {
   lng: number;
 }
 
-interface GameViewProps {
-  connectionBanner?: ReactNode;
-  currentHex: [number, number] | null;
-  currentHexActions: TileAction[];
-  currentLocation: LocationPoint | null;
-  debugGpsPanel: ReactNode;
-  debugToggleButton: ReactNode;
-  locationError: string | null;
-  mapNavigateRef: MutableRefObject<((lat: number, lng: number) => void) | null>;
-  onAcceptDuel: (duelId: string) => Promise<void>;
-  onActivateBeacon: () => Promise<void>;
-  onActivateStealth: () => Promise<void>;
-  onAcknowledgeRules: () => void;
-  onConfirmAttack: () => Promise<void>;
-  onConfirmPickup: () => void;
-  onCurrentHexAction: (actionType: TileActionType) => void;
-  onDeactivateBeacon: () => Promise<void>;
-  onDeclineDuel: (duelId: string) => Promise<void>;
-  onDismissTileActions: () => void;
-  onDismissToast: (id: string) => void;
+/** All game-action callbacks sourced from useGameActions in App. */
+export interface GameViewActions {
   onHexClick: (q: number, r: number, cell: HexCell | undefined) => void;
-  onNavigateMap: (lat: number, lng: number) => void;
-  onPauseGame: (paused: boolean) => void;
-  onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
-  onReClaim: (mode: ReClaimMode) => Promise<void>;
+  onConfirmPickup: () => void;
   onReturnToLobby: () => void;
-  onSendHostMessage: (message: string, allianceIds?: string[]) => void;
+  currentHexActions: TileAction[];
+  onCurrentHexAction: (actionType: TileActionType) => void;
+  onDismissTileActions: () => void;
+  onConfirmAttack: () => Promise<void>;
+  onAcceptDuel: (duelId: string) => Promise<void>;
+  onDeclineDuel: (duelId: string) => Promise<void>;
+  onActivateBeacon: () => Promise<void>;
+  onDeactivateBeacon: () => Promise<void>;
+  onActivateStealth: () => Promise<void>;
   onSetObserverMode: (enabled: boolean) => void;
-  onTriggerEvent: (eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => void;
-  onUpdateDynamics: (dynamics: GameDynamics) => void;
-  playerDisplayPrefs: PlayerDisplayPreferences;
-  toasts: GameToast[];
-  userId: string;
-  username: string;
+  onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
+  onTriggerEvent: (
+    eventType: string,
+    targetQ?: number,
+    targetR?: number,
+    targetAllianceId?: string,
+  ) => void;
+  onSendHostMessage: (message: string, allianceIds?: string[]) => void;
+  onPauseGame: (paused: boolean) => void;
+  onReClaimHex: (mode: ReClaimMode) => Promise<void>;
 }
 
+export interface GameViewProps {
+  /** The authenticated user's ID. */
+  userId: string;
+  /** Pre-formatted banner text; empty string means no banner. */
+  connectionBanner: string;
+  currentLocation: LocationPoint | null;
+  currentHex: [number, number] | null;
+  effectiveLocationError: string | null;
+  currentPlayerName: string;
+  playerDisplayPrefs: PlayerDisplayPreferences;
+  onPlayerDisplayPrefsChange: (
+    next:
+      | PlayerDisplayPreferences
+      | ((current: PlayerDisplayPreferences) => PlayerDisplayPreferences),
+  ) => void;
+  /** Ref forwarded to GameMap so PlayingHud's minimap can pan the main map. */
+  mapNavigateRef: MutableRefObject<((lat: number, lng: number) => void) | null>;
+  onNavigateMap: (lat: number, lng: number) => void;
+  debugToggle: ReactNode;
+  debugPanel: ReactNode;
+  toasts: GameToast[];
+  onDismissToast: (id: string) => void;
+  actions: GameViewActions;
+}
+
+/**
+ * Renders the full in-game UI for `view === 'game'`.
+ *
+ * Reads gameState, selectedHex, combatResult, hasAcknowledgedRules, error,
+ * setMainMapBounds and setSelectedHexScreenPos directly from Zustand stores.
+ * Delegates everything else through props to keep App as a thin orchestrator.
+ */
 export function GameView({
-  connectionBanner,
-  currentHex,
-  currentHexActions,
-  currentLocation,
-  debugGpsPanel,
-  debugToggleButton,
-  locationError,
-  mapNavigateRef,
-  onAcceptDuel,
-  onActivateBeacon,
-  onActivateStealth,
-  onAcknowledgeRules,
-  onConfirmAttack,
-  onConfirmPickup,
-  onCurrentHexAction,
-  onDeactivateBeacon,
-  onDeclineDuel,
-  onDismissTileActions,
-  onDismissToast,
-  onHexClick,
-  onNavigateMap,
-  onPauseGame,
-  onPlayerDisplayPrefsChange,
-  onReClaim,
-  onReturnToLobby,
-  onSendHostMessage,
-  onSetObserverMode,
-  onTriggerEvent,
-  onUpdateDynamics,
-  playerDisplayPrefs,
-  toasts,
   userId,
-  username,
+  connectionBanner,
+  currentLocation,
+  currentHex,
+  effectiveLocationError,
+  currentPlayerName,
+  playerDisplayPrefs,
+  onPlayerDisplayPrefsChange,
+  mapNavigateRef,
+  onNavigateMap,
+  debugToggle,
+  debugPanel,
+  toasts,
+  onDismissToast,
+  actions,
 }: GameViewProps) {
+  // ── Store reads ─────────────────────────────────────────────────────────
   const gameState = useGameStore(state => state.gameState);
   const selectedHex = useGameplayStore(state => state.selectedHex);
   const combatResult = useGameplayStore(state => state.combatResult);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
-  const error = useUiStore(state => state.error);
   const hasAcknowledgedRules = useUiStore(state => state.hasAcknowledgedRules);
+  const setHasAcknowledgedRules = useUiStore(state => state.setHasAcknowledgedRules);
+  const error = useUiStore(state => state.error);
   const setMainMapBounds = useUiStore(state => state.setMainMapBounds);
   const setSelectedHexScreenPos = useUiStore(state => state.setSelectedHexScreenPos);
 
-  if (!gameState) {
-    return null;
-  }
+  // ── Rules-acknowledgment logic ──────────────────────────────────────────
+  // Scoped here because it is exclusively needed by the game view.
+  const rulesKey = gameState?.roomCode ? `lg-rules-ack-${gameState.roomCode}` : '';
 
+  useEffect(() => {
+    if (!rulesKey) {
+      setHasAcknowledgedRules(false);
+      return;
+    }
+    setHasAcknowledgedRules(sessionStorage.getItem(rulesKey) === 'true');
+  }, [rulesKey, setHasAcknowledgedRules]);
+
+  const handleAcknowledgeRules = useCallback(() => {
+    if (rulesKey) {
+      sessionStorage.setItem(rulesKey, 'true');
+    }
+    setHasAcknowledgedRules(true);
+  }, [rulesKey, setHasAcknowledgedRules]);
+
+  // ── Derived values ──────────────────────────────────────────────────────
+  const myPlayer = useMemo(() => {
+    if (!gameState) return null;
+    return gameState.players.find(p => p.id === userId) ?? null;
+  }, [gameState, userId]);
+
+  // ── All hooks must fire before any conditional return ───────────────────
+  if (!gameState) return null;
+
+  // ── Rules gate ──────────────────────────────────────────────────────────
   if (!hasAcknowledgedRules) {
     return (
       <>
-        {connectionBanner}
-        <GameRulesPage gameState={gameState} onContinue={onAcknowledgeRules} />
+        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+        <GameRulesPage gameState={gameState} onContinue={handleAcknowledgeRules} />
       </>
     );
   }
 
-  const myPlayer = gameState.players.find(player => player.id === userId) ?? null;
+  // ── Observer / host-control mode ────────────────────────────────────────
   const isObserverMode = Boolean(myPlayer?.isHost && gameState.hostObserverMode);
-  const currentPlayerName = myPlayer?.name ?? username;
 
   if (isObserverMode) {
     return (
       <>
-        {connectionBanner}
+        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
         <Suspense fallback={<LoadingFallback />}>
           <HostControlPlane
             state={gameState}
-            onSwitchToPlayer={() => onSetObserverMode(false)}
-            onUpdateDynamics={onUpdateDynamics}
-            onTriggerEvent={onTriggerEvent}
-            onSendMessage={onSendHostMessage}
-            onPauseGame={onPauseGame}
-            onReturnToLobby={onReturnToLobby}
+            onSwitchToPlayer={() => actions.onSetObserverMode(false)}
+            onUpdateDynamics={actions.onUpdateDynamicsLive}
+            onTriggerEvent={actions.onTriggerEvent}
+            onSendMessage={actions.onSendHostMessage}
+            onPauseGame={actions.onPauseGame}
+            onReturnToLobby={actions.onReturnToLobby}
             error={error}
           >
             <GameMap
@@ -142,7 +174,7 @@ export function GameView({
               myUserId={userId}
               currentLocation={currentLocation}
               constrainViewportToGrid
-              onHexClick={onHexClick}
+              onHexClick={actions.onHexClick}
               selectedHex={selectedHex}
               playerDisplayPrefs={playerDisplayPrefs}
             />
@@ -152,32 +184,33 @@ export function GameView({
     );
   }
 
+  // ── Standard playing mode ────────────────────────────────────────────────
   return (
     <>
-      {connectionBanner}
+      {connectionBanner && <ConnectionBanner message={connectionBanner} />}
       <Suspense fallback={<LoadingFallback />}>
         <PlayingHud
           myUserId={userId}
           currentHex={currentHex}
-          onConfirmPickup={onConfirmPickup}
-          onReturnToLobby={onReturnToLobby}
-          locationError={locationError}
-          currentHexActions={currentHexActions}
-          onCurrentHexAction={onCurrentHexAction}
-          onDismissTileActions={onDismissTileActions}
-          onConfirmAttack={onConfirmAttack}
-          onAcceptDuel={onAcceptDuel}
-          onDeclineDuel={onDeclineDuel}
-          onActivateBeacon={onActivateBeacon}
-          onDeactivateBeacon={onDeactivateBeacon}
-          onActivateStealth={onActivateStealth}
+          onConfirmPickup={actions.onConfirmPickup}
+          onReturnToLobby={actions.onReturnToLobby}
+          locationError={effectiveLocationError}
+          currentHexActions={actions.currentHexActions}
+          onCurrentHexAction={actions.onCurrentHexAction}
+          onDismissTileActions={actions.onDismissTileActions}
+          onConfirmAttack={actions.onConfirmAttack}
+          onAcceptDuel={actions.onAcceptDuel}
+          onDeclineDuel={actions.onDeclineDuel}
+          onActivateBeacon={actions.onActivateBeacon}
+          onDeactivateBeacon={actions.onDeactivateBeacon}
+          onActivateStealth={actions.onActivateStealth}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}
           hasLocation={Boolean(currentLocation)}
-          onSetObserverMode={onSetObserverMode}
-          debugToggle={debugToggleButton}
-          debugPanel={debugGpsPanel}
+          onSetObserverMode={actions.onSetObserverMode}
+          debugToggle={debugToggle}
+          debugPanel={debugPanel}
           toasts={toasts}
           onDismissToast={onDismissToast}
           onNavigateMap={onNavigateMap}
@@ -187,7 +220,7 @@ export function GameView({
             myUserId={userId}
             currentLocation={currentLocation}
             constrainViewportToGrid
-            onHexClick={onHexClick}
+            onHexClick={actions.onHexClick}
             selectedHex={selectedHex}
             playerDisplayPrefs={playerDisplayPrefs}
             onBoundsChange={setMainMapBounds}
@@ -201,7 +234,7 @@ export function GameView({
           result={combatResult}
           gameMode={gameState.gameMode}
           allowSelfClaim={gameState.allowSelfClaim !== false}
-          onReClaim={onReClaim}
+          onReClaim={actions.onReClaimHex}
           onClose={() => setCombatResult(null)}
         />
       )}

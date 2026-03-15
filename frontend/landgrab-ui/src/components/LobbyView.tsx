@@ -1,167 +1,167 @@
 import { lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ConnectionBanner } from './ConnectionBanner';
+import { LoadingFallback } from './LoadingFallback';
 import { useGameStore } from '../stores/gameStore';
 import { useUiStore } from '../stores/uiStore';
-import { LoadingFallback } from './LoadingFallback';
 import type {
   ClaimMode,
   CopresenceMode,
   GameAreaPattern,
   GameDynamics,
   HexCoordinate,
+  RoomSummary,
   WinConditionType,
 } from '../types/game';
-import type { SignalRInvoke } from '../hooks/useAutoResume';
 
+// GameLobby is large – keep the same lazy split as the original App.
 const GameLobby = lazy(() =>
-  import('./lobby/GameLobby').then(module => ({ default: module.GameLobby })),
+  import('./lobby/GameLobby').then(m => ({ default: m.GameLobby }))
 );
+
+type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
 interface LocationPoint {
   lat: number;
   lng: number;
 }
 
-interface LobbyViewProps {
-  connected: boolean;
-  currentLocation: LocationPoint | null;
-  debugGpsPanel: ReactNode;
-  debugToggleButton: ReactNode;
-  invoke: SignalRInvoke | null;
-  locationError: string | null;
-  locationLoading: boolean;
-  mapEditorLabel: string;
-  onAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
-  onAssignStartingTile: (q: number, r: number, playerId: string) => void;
-  onConfigureAlliances: (names: string[]) => void;
+/** All lobby-specific action callbacks sourced from useGameActions in App. */
+export interface LobbyViewActions {
   onCreateRoom: () => void;
-  onDistributePlayers: () => void;
   onJoinRoom: (code: string) => void;
-  onLogout: () => void;
-  onOpenMapEditor: () => void;
-  onReturnToLobby: () => void;
   onSetAlliance: (name: string) => void;
-  onSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
-  onSetAllowSelfClaim: (allow: boolean) => Promise<void>;
+  onSetMapLocation: (lat: number, lng: number) => void;
+  onSetTileSize: (meters: number) => void;
+  onUseCenteredGameArea: () => void;
+  onSetPatternGameArea: (pattern: GameAreaPattern) => void;
+  onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   onSetClaimMode: (mode: ClaimMode) => void;
+  onSetAllowSelfClaim: (allow: boolean) => Promise<void>;
+  onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetCopresenceModes: (modes: CopresenceMode[]) => void;
   onSetCopresencePreset: (preset: string) => void;
-  onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   onSetGameDynamics: (dynamics: GameDynamics) => void;
-  onSetMapLocation: (lat: number, lng: number) => void;
+  onSetPlayerRole: (role: string) => Promise<void>;
+  onSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
   onSetMasterTile: (lat: number, lng: number) => void;
   onSetMasterTileByHex: (q: number, r: number) => void;
-  onSetObserverMode: (enabled: boolean) => void;
-  onSetPatternGameArea: (pattern: GameAreaPattern) => void;
-  onSetPlayerRole: (role: string) => Promise<void>;
-  onSetTileSize: (meters: number) => void;
-  onSetWinCondition: (type: WinConditionType, value: number) => void;
+  onAssignStartingTile: (q: number, r: number, playerId: string) => void;
+  onConfigureAlliances: (names: string[]) => void;
+  onDistributePlayers: () => void;
+  onAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
   onStartGame: () => void;
-  onUseCenteredGameArea: () => void;
-  token: string;
-  userId: string;
-  username: string;
+  onReturnToLobby: () => void;
+  onSetObserverMode: (enabled: boolean) => void;
 }
 
+export interface LobbyViewProps {
+  /** Pre-formatted banner text; empty string means no banner. */
+  connectionBanner: string;
+  username: string;
+  userId: string;
+  authToken: string;
+  connected: boolean;
+  currentLocation: LocationPoint | null;
+  effectiveLocationError: string | null;
+  effectiveLocationLoading: boolean;
+  visibleRecentRooms: RoomSummary[];
+  invoke: SignalRInvoke;
+  /** Handles full logout sequence including session/state cleanup. */
+  onLogout: () => void;
+  /** Rendered by the debug GPS panel slot (may be null). */
+  debugPanel: ReactNode;
+  /** Rendered by the debug-tools toggle button slot (may be null). */
+  debugToggle: ReactNode;
+  actions: LobbyViewActions;
+}
+
+/**
+ * Renders the lobby UI (view === 'lobby' fallthrough in App).
+ *
+ * Reads `gameState` and `error` directly from Zustand stores; reads `setView`
+ * from uiStore for the map-editor shortcut button.
+ */
 export function LobbyView({
+  connectionBanner,
+  username,
+  userId,
+  authToken,
   connected,
   currentLocation,
-  debugGpsPanel,
-  debugToggleButton,
+  effectiveLocationError,
+  effectiveLocationLoading,
+  visibleRecentRooms,
   invoke,
-  locationError,
-  locationLoading,
-  mapEditorLabel,
-  onAssignAllianceStartingTile,
-  onAssignStartingTile,
-  onConfigureAlliances,
-  onCreateRoom,
-  onDistributePlayers,
-  onJoinRoom,
   onLogout,
-  onOpenMapEditor,
-  onReturnToLobby,
-  onSetAlliance,
-  onSetAllianceHQ,
-  onSetAllowSelfClaim,
-  onSetClaimMode,
-  onSetCopresenceModes,
-  onSetCopresencePreset,
-  onSetCustomGameArea,
-  onSetGameDynamics,
-  onSetMapLocation,
-  onSetMasterTile,
-  onSetMasterTileByHex,
-  onSetObserverMode,
-  onSetPatternGameArea,
-  onSetPlayerRole,
-  onSetTileSize,
-  onSetWinCondition,
-  onStartGame,
-  onUseCenteredGameArea,
-  token,
-  userId,
-  username,
+  debugPanel,
+  debugToggle,
+  actions,
 }: LobbyViewProps) {
+  const { t } = useTranslation();
   const gameState = useGameStore(state => state.gameState);
-  const myRooms = useGameStore(state => state.myRooms);
   const error = useUiStore(state => state.error);
-  const visibleRecentRooms = connected ? myRooms : [];
+  const setView = useUiStore(state => state.setView);
 
   return (
     <>
+      {connectionBanner && <ConnectionBanner message={connectionBanner} />}
       <Suspense fallback={<LoadingFallback />}>
         <GameLobby
           username={username}
           myUserId={userId}
-          authToken={token}
+          authToken={authToken}
           gameState={gameState}
           connected={connected}
           currentLocation={currentLocation}
-          locationError={locationError}
-          locationLoading={locationLoading}
+          locationError={effectiveLocationError}
+          locationLoading={effectiveLocationLoading}
           recentRooms={visibleRecentRooms}
-          onCreateRoom={onCreateRoom}
-          onJoinRoom={onJoinRoom}
-          onSetAlliance={onSetAlliance}
-          onSetMapLocation={onSetMapLocation}
-          onSetTileSize={onSetTileSize}
-          onUseCenteredGameArea={onUseCenteredGameArea}
-          onSetPatternGameArea={onSetPatternGameArea}
-          onSetCustomGameArea={onSetCustomGameArea}
-          onSetClaimMode={onSetClaimMode}
-          onSetAllowSelfClaim={onSetAllowSelfClaim}
-          onSetWinCondition={onSetWinCondition}
-          onSetCopresenceModes={onSetCopresenceModes}
-          onSetCopresencePreset={onSetCopresencePreset}
-          onSetGameDynamics={onSetGameDynamics}
-          onSetPlayerRole={onSetPlayerRole}
-          onSetAllianceHQ={onSetAllianceHQ}
-          onSetMasterTile={onSetMasterTile}
-          onSetMasterTileByHex={onSetMasterTileByHex}
-          onAssignStartingTile={onAssignStartingTile}
-          onConfigureAlliances={onConfigureAlliances}
-          onDistributePlayers={onDistributePlayers}
-          onAssignAllianceStartingTile={onAssignAllianceStartingTile}
-          onStartGame={onStartGame}
-          onReturnToLobby={onReturnToLobby}
+          onCreateRoom={actions.onCreateRoom}
+          onJoinRoom={actions.onJoinRoom}
+          onSetAlliance={actions.onSetAlliance}
+          onSetMapLocation={actions.onSetMapLocation}
+          onSetTileSize={actions.onSetTileSize}
+          onUseCenteredGameArea={actions.onUseCenteredGameArea}
+          onSetPatternGameArea={actions.onSetPatternGameArea}
+          onSetCustomGameArea={actions.onSetCustomGameArea}
+          onSetClaimMode={actions.onSetClaimMode}
+          onSetAllowSelfClaim={actions.onSetAllowSelfClaim}
+          onSetWinCondition={actions.onSetWinCondition}
+          onSetCopresenceModes={actions.onSetCopresenceModes}
+          onSetCopresencePreset={actions.onSetCopresencePreset}
+          onSetGameDynamics={actions.onSetGameDynamics}
+          onSetPlayerRole={actions.onSetPlayerRole}
+          onSetAllianceHQ={actions.onSetAllianceHQ}
+          onSetMasterTile={actions.onSetMasterTile}
+          onSetMasterTileByHex={actions.onSetMasterTileByHex}
+          onAssignStartingTile={actions.onAssignStartingTile}
+          onConfigureAlliances={actions.onConfigureAlliances}
+          onDistributePlayers={actions.onDistributePlayers}
+          onAssignAllianceStartingTile={actions.onAssignAllianceStartingTile}
+          onStartGame={actions.onStartGame}
+          onReturnToLobby={actions.onReturnToLobby}
           onLogout={onLogout}
-          onSetObserverMode={onSetObserverMode}
+          onSetObserverMode={actions.onSetObserverMode}
           error={error}
-          invoke={invoke ?? undefined}
+          invoke={invoke}
         />
       </Suspense>
+
+      {/* Map-editor shortcut – only shown when not already in a game. */}
       {!gameState && (
         <button
           type="button"
           className="btn-secondary map-editor-toggle"
-          onClick={onOpenMapEditor}
+          onClick={() => setView('mapEditor')}
         >
-          🗺️ {mapEditorLabel}
+          🗺️ {t('mapEditor.title')}
         </button>
       )}
-      {debugGpsPanel}
-      {debugToggleButton}
+
+      {debugPanel}
+      {debugToggle}
     </>
   );
 }

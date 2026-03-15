@@ -251,7 +251,7 @@ export function useGameActionsGameplay({
     setPickupPrompt(null);
     clearError();
 
-    if (!isHostBypass && (!currentHex || currentHex[0] != q || currentHex[1] != r)) {
+    if (!isHostBypass && (!currentHex || currentHex[0] !== q || currentHex[1] !== r)) {
       const interactionStatus = getTileInteractionStatus({
         state: gameState,
         player: myPlayer,

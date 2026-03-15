@@ -6,9 +6,15 @@ public class GameService(
     RoomService roomService,
     LobbyService lobbyService,
     GameplayService gameplayService,
+    AbilityService abilityService,
+    DuelService duelService,
     HostControlService hostControlService,
-    GameStateService gameStateService)
+    GameStateService gameStateService,
+    WinConditionService winConditionService)
 {
+    private readonly WinConditionService _winConditionService = winConditionService;
+    internal WinConditionService WinConditionService => _winConditionService;
+
     public GameRoom CreateRoom(string hostUserId, string hostUsername, string connectionId) => roomService.CreateRoom(hostUserId, hostUsername, connectionId);
     public (GameRoom? room, string? error) JoinRoom(string roomCode, string userId, string username, string connectionId) => roomService.JoinRoom(roomCode, userId, username, connectionId);
     public GameRoom? GetRoom(string code) => roomService.GetRoom(code);
@@ -46,20 +52,20 @@ public class GameService(
     public (GameState? state, string? error) AssignStartingTile(string roomCode, string userId, int q, int r, string targetPlayerId) => lobbyService.AssignStartingTile(roomCode, userId, q, r, targetPlayerId);
     public (GameState? state, string? error) StartGame(string roomCode, string userId) => lobbyService.StartGame(roomCode, userId);
 
-    public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId) => gameplayService.ActivateBeacon(roomCode, userId);
-    public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => gameplayService.DeactivateBeacon(roomCode, userId);
-    public (GameState? state, string? error) ActivateStealth(string roomCode, string userId) => gameplayService.ActivateStealth(roomCode, userId);
-    public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => gameplayService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
+    public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId) => abilityService.ActivateBeacon(roomCode, userId);
+    public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => abilityService.DeactivateBeacon(roomCode, userId);
+    public (GameState? state, string? error) ActivateStealth(string roomCode, string userId) => abilityService.ActivateStealth(roomCode, userId);
+    public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
     public (GameState? state, string? error, PendingDuel? newDuel, (string payerId, int amount, int hexQ, int hexR)? tollPaid, (string hunterId, string preyId, int reward)? preyCaught) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng) => gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);
     public (GameState? state, string? error, AmbushResult? ambushResult) PickUpTroops(string roomCode, string userId, int q, int r, int count, double playerLat, double playerLng) => gameplayService.PickUpTroops(roomCode, userId, q, r, count, playerLat, playerLng);
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null, bool claimForSelf = false) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount, claimForSelf);
     public (GameState? state, string? error) ReClaimHex(string roomCode, string userId, int q, int r, ReClaimMode mode) => gameplayService.ReClaimHex(roomCode, userId, q, r, mode);
     public (GameState? state, string? error) AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
-    public PendingDuel? InitiateDuel(string roomCode, string challengerId, string targetId, int q, int r) => gameplayService.InitiateDuel(roomCode, challengerId, targetId, q, r);
-    public (bool success, string? winnerId, string? loserId) ResolveDuel(string roomCode, string duelId, bool accepted) => gameplayService.ResolveDuel(roomCode, duelId, accepted);
-    public (GameState? state, string? error) DetainPlayer(string roomCode, string detainerId, string targetId) => gameplayService.DetainPlayer(roomCode, detainerId, targetId);
-    public void ProcessHostageReleases(GameRoom room) => gameplayService.ProcessHostageReleases(room);
-    public void ProcessDuelExpiry(GameRoom room) => gameplayService.ProcessDuelExpiry(room);
+    public PendingDuel? InitiateDuel(string roomCode, string challengerId, string targetId, int q, int r) => duelService.InitiateDuel(roomCode, challengerId, targetId, q, r);
+    public (bool success, string? winnerId, string? loserId) ResolveDuel(string roomCode, string duelId, bool accepted) => duelService.ResolveDuel(roomCode, duelId, accepted);
+    public (GameState? state, string? error) DetainPlayer(string roomCode, string detainerId, string targetId) => duelService.DetainPlayer(roomCode, detainerId, targetId);
+    public void ProcessHostageReleases(GameRoom room) => duelService.ProcessHostageReleases(room);
+    public void ProcessDuelExpiry(GameRoom room) => duelService.ProcessDuelExpiry(room);
 
     public void AppendEventLogPublic(GameState state, GameEventLogEntry entry) => gameStateService.AppendEventLog(state, entry);
     public GameState SnapshotStatePublic(GameState state) => gameStateService.SnapshotState(state);

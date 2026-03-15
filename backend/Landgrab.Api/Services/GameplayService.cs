@@ -2,168 +2,17 @@ using Landgrab.Api.Models;
 
 namespace Landgrab.Api.Services;
 
-public class GameplayService(IGameRoomProvider roomProvider, GameStateService gameStateService, ILogger<GameplayService> logger)
+public class GameplayService(
+    IGameRoomProvider roomProvider,
+    GameStateService gameStateService,
+    WinConditionService winConditionService,
+    DuelService duelService)
 {
-    private readonly ILogger<GameplayService> _logger = logger;
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
     private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
-
-    public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Beacons only work during gameplay.");
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Beacon))
-                return (null, "Beacon mode is not active.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-            if (player.CurrentLat == null || player.CurrentLng == null)
-                return (null, "Your location is required to activate a beacon.");
-
-            player.IsBeacon = true;
-            player.BeaconLat = player.CurrentLat;
-            player.BeaconLng = player.CurrentLng;
-
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "BeaconActivated",
-                Message = $"{player.Name} activated a beacon.",
-                PlayerId = userId,
-                PlayerName = player.Name
-            });
-
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
-
-    public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-
-            player.IsBeacon = false;
-            player.BeaconLat = null;
-            player.BeaconLng = null;
-
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
-
-    public (GameState? state, string? error) ActivateStealth(string roomCode, string userId)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Stealth only works during gameplay.");
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Stealth))
-                return (null, "Stealth mode is not active.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-            if (player.StealthCooldownUntil.HasValue && player.StealthCooldownUntil > DateTime.UtcNow)
-                return (null, "Stealth is on cooldown.");
-            if (player.StealthUntil.HasValue && player.StealthUntil > DateTime.UtcNow)
-                return (null, "Already stealthed.");
-
-            player.StealthUntil = DateTime.UtcNow.AddMinutes(3);
-            player.StealthCooldownUntil = DateTime.UtcNow.AddMinutes(8); // 3 min active + 5 min cooldown
-
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "StealthActivated",
-                Message = $"{player.Name} activated stealth.",
-                PlayerId = userId,
-                PlayerName = player.Name
-            });
-
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
-
-    public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Commando raids only work during gameplay.");
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.CommandoRaid))
-                return (null, "CommandoRaid mode is not active.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-            if (player.IsCommandoActive)
-                return (null, "You already have an active commando raid.");
-            if (player.CommandoCooldownUntil.HasValue && player.CommandoCooldownUntil > DateTime.UtcNow)
-                return (null, "Commando raid is on cooldown.");
-
-            // Validate target is within 3 hex distance of player
-            if (player.CurrentLat.HasValue && player.CurrentLng.HasValue && room.State.HasMapLocation)
-            {
-                var playerHex = HexService.LatLngToHexForRoom(player.CurrentLat.Value, player.CurrentLng.Value,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var dist = HexService.HexDistance(playerHex.q - targetQ, playerHex.r - targetR);
-                if (dist > 3)
-                    return (null, "Target hex must be within 3 hex distance.");
-            }
-
-            var key = HexService.Key(targetQ, targetR);
-            if (!room.State.Grid.ContainsKey(key))
-                return (null, "Invalid target hex.");
-
-            player.IsCommandoActive = true;
-            player.CommandoTargetQ = targetQ;
-            player.CommandoTargetR = targetR;
-            player.CommandoDeadline = DateTime.UtcNow.AddMinutes(5);
-            player.CommandoCooldownUntil = DateTime.UtcNow.AddMinutes(15);
-
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "CommandoRaidStarted",
-                Message = $"{player.Name} launched a commando raid towards ({targetQ}, {targetR})!",
-                PlayerId = userId,
-                PlayerName = player.Name,
-                Q = targetQ,
-                R = targetR
-            });
-
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
 
     public (GameState? state, string? error, PendingDuel? newDuel,
         (string payerId, int amount, int hexQ, int hexR)? tollPaid,
@@ -404,7 +253,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
                         SetCellOwner(targetCell, player);
                         targetCell.Troops = Math.Max(1, player.CarriedTroops);
                         ResetCarriedTroops(player);
-                        RefreshTerritoryCount(room.State);
+                        winConditionService.RefreshTerritoryCount(room.State);
 
                         AppendEventLog(room.State, new GameEventLogEntry
                         {
@@ -532,7 +381,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
                 }
             }
 
-            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
             return (snapshot, null, newDuel, tollPaidInfo, preyCaughtInfo);
@@ -619,7 +468,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
             player.CarriedTroopsSourceR = r;
             player.CurrentLat = playerLat;
             player.CurrentLng = playerLng;
-            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null, null);
@@ -684,7 +533,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
 
                 cell.Troops += player.CarriedTroops;
                 ResetCarriedTroops(player);
-                ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+                winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
                 return (reinforceSnapshot, null, null, null);
@@ -696,8 +545,8 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
                 if (neutralClaimError != null)
                     return (null, neutralClaimError, null, null);
 
-                RefreshTerritoryCount(room.State);
-                ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+                winConditionService.RefreshTerritoryCount(room.State);
+                winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
                 return (neutralClaimSnapshot, null, null, null);
@@ -787,7 +636,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
             player.CarriedTroops -= deployedTroops;
             if (player.CarriedTroops == 0)
                 ResetCarriedTroops(player);
-            RefreshTerritoryCount(room.State);
+            winConditionService.RefreshTerritoryCount(room.State);
             AppendEventLog(room.State, new GameEventLogEntry
             {
                 Type = "TileCaptured",
@@ -822,7 +671,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
                 }
             }
 
-            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var attackSnapshot = SnapshotState(room.State);
             QueuePersistence(room, attackSnapshot);
             var combatResult = new CombatResult
@@ -892,8 +741,8 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
                     break;
             }
 
-            RefreshTerritoryCount(room.State);
-            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.RefreshTerritoryCount(room.State);
+            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -1109,9 +958,9 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
 
             // Phase 10: Process hostage releases (before snapshot so changes are included)
             if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Hostage))
-                ProcessHostageReleases(room);
+                duelService.ProcessHostageReleases(room);
 
-            ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -1224,7 +1073,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
         return null;
     }
 
-    private static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r)
+    internal static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r)
     {
         if (!state.HasMapLocation)
             return [];
@@ -1288,450 +1137,10 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
         ResetCarriedTroops(player);
     }
 
-    internal static void RefreshTerritoryCount(GameState state)
-    {
-        foreach (var player in state.Players)
-            player.TerritoryCount = HexService.TerritoryCount(state.Grid, player.Id);
-
-        foreach (var alliance in state.Alliances)
-            alliance.TerritoryCount = HexService.AllianceTerritoryCount(state.Grid, alliance.Id);
-    }
-
-    private static void ApplyWinConditionAndLog(GameState state, DateTime now)
-    {
-        var previousPhase = state.Phase;
-        ApplyWinCondition(state, now);
-        if (previousPhase == GamePhase.GameOver || state.Phase != GamePhase.GameOver)
-            return;
-
-        ComputeAchievements(state);
-        AppendEventLog(state, new GameEventLogEntry
-        {
-            Type = "GameOver",
-            Message = state.WinnerName == null
-                ? "The game is over."
-                : $"{state.WinnerName} won the game.",
-            WinnerId = state.WinnerId,
-            WinnerName = state.WinnerName,
-            IsAllianceVictory = state.IsAllianceVictory
-        });
-    }
-
-    private static void ComputeAchievements(GameState state)
-    {
-        state.Achievements.Clear();
-
-        // Territory Leader: player with highest TerritoryCount
-        var maxTerritory = state.Players.Max(p => p.TerritoryCount);
-        if (maxTerritory > 0)
-        {
-            foreach (var p in state.Players.Where(p => p.TerritoryCount == maxTerritory))
-            {
-                state.Achievements.Add(new Achievement
-                {
-                    Id = "territoryLeader",
-                    PlayerId = p.Id,
-                    PlayerName = p.Name,
-                    TitleKey = "achievement.territoryLeader",
-                    Value = maxTerritory.ToString()
-                });
-            }
-        }
-
-        // Army Commander: player with most total troops on the map
-        var troopsByPlayer = state.Players.Select(p => new
-        {
-            Player = p,
-            TotalTroops = state.Grid.Values.Where(c => c.OwnerId == p.Id).Sum(c => c.Troops)
-        }).ToList();
-        var maxTroops = troopsByPlayer.Count > 0 ? troopsByPlayer.Max(t => t.TotalTroops) : 0;
-        if (maxTroops > 0)
-        {
-            foreach (var t in troopsByPlayer.Where(t => t.TotalTroops == maxTroops))
-            {
-                state.Achievements.Add(new Achievement
-                {
-                    Id = "armyCommander",
-                    PlayerId = t.Player.Id,
-                    PlayerName = t.Player.Name,
-                    TitleKey = "achievement.armyCommander",
-                    Value = maxTroops.ToString()
-                });
-            }
-        }
-
-        // Conqueror: player with most TileCaptured events as attacker
-        var capturesByPlayer = state.EventLog
-            .Where(e => e.Type == "TileCaptured" && e.PlayerId != null)
-            .GroupBy(e => e.PlayerId!)
-            .Select(g => new { PlayerId = g.Key, Count = g.Count() })
-            .ToList();
-        if (capturesByPlayer.Count > 0)
-        {
-            var maxCaptures = capturesByPlayer.Max(c => c.Count);
-            foreach (var c in capturesByPlayer.Where(c => c.Count == maxCaptures))
-            {
-                var player = state.Players.FirstOrDefault(p => p.Id == c.PlayerId);
-                if (player != null)
-                {
-                    state.Achievements.Add(new Achievement
-                    {
-                        Id = "conqueror",
-                        PlayerId = player.Id,
-                        PlayerName = player.Name,
-                        TitleKey = "achievement.conqueror",
-                        Value = maxCaptures.ToString()
-                    });
-                }
-            }
-        }
-
-        // First Strike: player with earliest TileCaptured event
-        var firstCapture = state.EventLog
-            .Where(e => e.Type == "TileCaptured" && e.PlayerId != null)
-            .OrderBy(e => e.CreatedAt)
-            .FirstOrDefault();
-        if (firstCapture != null)
-        {
-            var earliestTime = firstCapture.CreatedAt;
-            var firstStrikers = state.EventLog
-                .Where(e => e.Type == "TileCaptured" && e.PlayerId != null && e.CreatedAt == earliestTime)
-                .Select(e => e.PlayerId!)
-                .Distinct();
-            foreach (var playerId in firstStrikers)
-            {
-                var player = state.Players.FirstOrDefault(p => p.Id == playerId);
-                if (player != null)
-                {
-                    state.Achievements.Add(new Achievement
-                    {
-                        Id = "firstStrike",
-                        PlayerId = player.Id,
-                        PlayerName = player.Name,
-                        TitleKey = "achievement.firstStrike"
-                    });
-                }
-            }
-        }
-    }
-
-    internal static void ApplyWinCondition(GameState state, DateTime now)
-    {
-        if (state.Phase == GamePhase.GameOver)
-            return;
-
-        RefreshTerritoryCount(state);
-
-        if (state.WinConditionType == WinConditionType.TimedGame &&
-            state.GameStartedAt.HasValue &&
-            state.GameDurationMinutes.HasValue &&
-            now >= state.GameStartedAt.Value.AddMinutes(state.GameDurationMinutes.Value))
-        {
-            if (TrySetTerritoryLeaderAsWinner(state))
-                state.Phase = GamePhase.GameOver;
-            return;
-        }
-
-        switch (state.WinConditionType)
-        {
-            case WinConditionType.TerritoryPercent:
-                ApplyTerritoryPercentWinCondition(state);
-                break;
-            case WinConditionType.Elimination:
-                ApplyEliminationWinCondition(state);
-                break;
-        }
-    }
-
-    internal static void ApplyTerritoryPercentWinCondition(GameState state)
-    {
-        var claimableHexes = state.Grid.Values.Count(cell => !cell.IsMasterTile);
-        if (claimableHexes == 0)
-            return;
-
-        if (state.Alliances.Count > 0)
-        {
-            foreach (var alliance in state.Alliances)
-            {
-                if (alliance.TerritoryCount * 100 < claimableHexes * state.WinConditionValue)
-                    continue;
-
-                state.Phase = GamePhase.GameOver;
-                state.WinnerId = alliance.Id;
-                state.WinnerName = alliance.Name;
-                state.IsAllianceVictory = true;
-                return;
-            }
-        }
-        else
-        {
-            foreach (var player in state.Players)
-            {
-                if (player.TerritoryCount * 100 < claimableHexes * state.WinConditionValue)
-                    continue;
-
-                state.Phase = GamePhase.GameOver;
-                state.WinnerId = player.Id;
-                state.WinnerName = player.Name;
-                state.IsAllianceVictory = false;
-                return;
-            }
-        }
-
-        var claimedHexes = state.Grid.Values.Count(cell => !cell.IsMasterTile && cell.OwnerId != null);
-        if (claimedHexes >= claimableHexes && TrySetTerritoryLeaderAsWinner(state))
-            state.Phase = GamePhase.GameOver;
-    }
-
-    internal static void ApplyEliminationWinCondition(GameState state)
-    {
-        if (state.Alliances.Count > 0)
-        {
-            var survivingAlliance = state.Alliances.Where(alliance => alliance.TerritoryCount > 0).ToList();
-            if (survivingAlliance.Count <= 1 && TrySetTerritoryLeaderAsWinner(state))
-            {
-                state.Phase = GamePhase.GameOver;
-            }
-
-            return;
-        }
-
-        var survivingPlayers = state.Players.Where(player => player.TerritoryCount > 0).ToList();
-        if (survivingPlayers.Count <= 1 && TrySetTerritoryLeaderAsWinner(state))
-        {
-            state.Phase = GamePhase.GameOver;
-        }
-    }
-
-    internal static bool TrySetTerritoryLeaderAsWinner(GameState state)
-    {
-        if (state.Alliances.Count > 0)
-        {
-            var allianceWinner = state.Alliances
-                .OrderByDescending(alliance => alliance.TerritoryCount)
-                .ThenBy(alliance => alliance.Name, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-
-            if (allianceWinner == null)
-                return false;
-
-            state.WinnerId = allianceWinner.Id;
-            state.WinnerName = allianceWinner.Name;
-            state.IsAllianceVictory = true;
-            return true;
-        }
-
-        var playerWinner = state.Players
-            .OrderByDescending(player => player.TerritoryCount)
-            .ThenBy(player => player.Name, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
-
-        if (playerWinner == null)
-            return false;
-
-        state.WinnerId = playerWinner.Id;
-        state.WinnerName = playerWinner.Name;
-        state.IsAllianceVictory = false;
-        return true;
-    }
-
-    // Phase 10: Duel — challenge when hostile copresence detected
-    public PendingDuel? InitiateDuel(string roomCode, string challengerId, string targetId, int q, int r)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null) return null;
-
-        lock (room.SyncRoot)
-        {
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Duel))
-                return null;
-
-            // Check both players are in the hex
-            var playersInHex = GetPlayersInHex(room.State, q, r);
-            var challenger = playersInHex.FirstOrDefault(p => p.Id == challengerId);
-            var target = playersInHex.FirstOrDefault(p => p.Id == targetId);
-            if (challenger == null || target == null) return null;
-
-            // Check no existing duel for either player
-            if (room.PendingDuels.Values.Any(d => d.PlayerIds.Contains(challengerId) || d.PlayerIds.Contains(targetId)))
-                return null;
-
-            var duel = new PendingDuel
-            {
-                PlayerIds = [challengerId, targetId],
-                TileQ = q,
-                TileR = r,
-                ExpiresAt = DateTime.UtcNow.AddSeconds(30)
-            };
-            room.PendingDuels[duel.Id] = duel;
-            return duel;
-        }
-    }
-
-    public (bool success, string? winnerId, string? loserId) ResolveDuel(string roomCode, string duelId, bool accepted)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null) return (false, null, null);
-
-        lock (room.SyncRoot)
-        {
-            if (!room.PendingDuels.TryGetValue(duelId, out var duel))
-                return (false, null, null);
-
-            room.PendingDuels.Remove(duelId);
-
-            if (!accepted || DateTime.UtcNow > duel.ExpiresAt)
-                return (false, null, null);
-
-            // Resolve duel: compare territory + carried troops
-            var player1 = room.State.Players.FirstOrDefault(p => p.Id == duel.PlayerIds[0]);
-            var player2 = room.State.Players.FirstOrDefault(p => p.Id == duel.PlayerIds[1]);
-            if (player1 == null || player2 == null) return (false, null, null);
-
-            var score1 = player1.TerritoryCount + player1.CarriedTroops;
-            var score2 = player2.TerritoryCount + player2.CarriedTroops;
-
-            // Add some randomness
-            score1 += Random.Shared.Next(1, 7);
-            score2 += Random.Shared.Next(1, 7);
-
-            var winnerId = score1 >= score2 ? player1.Id : player2.Id;
-            var loserId = score1 >= score2 ? player2.Id : player1.Id;
-
-            // Winner gets the duel tile
-            var hexKey = HexService.Key(duel.TileQ, duel.TileR);
-            if (room.State.Grid.TryGetValue(hexKey, out var cell))
-            {
-                var winner = room.State.Players.First(p => p.Id == winnerId);
-                SetCellOwner(cell, winner);
-                cell.Troops = Math.Max(cell.Troops, 1);
-            }
-
-            var winnerPlayer = room.State.Players.First(p => p.Id == winnerId);
-            var loserPlayer = room.State.Players.First(p => p.Id == loserId);
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "DuelResult",
-                Message = $"{winnerPlayer.Name} won a duel against {loserPlayer.Name}!",
-                PlayerId = winnerId,
-                PlayerName = winnerPlayer.Name,
-                TargetPlayerId = loserId,
-                TargetPlayerName = loserPlayer.Name,
-                Q = duel.TileQ,
-                R = duel.TileR
-            });
-
-            return (true, winnerId, loserId);
-        }
-    }
-
-    // Phase 10: Hostage — detain a player
-    public (GameState? state, string? error) DetainPlayer(string roomCode, string detainerId, string targetId)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null) return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Hostage))
-                return (null, "Hostage mode is not enabled.");
-
-            var detainer = room.State.Players.FirstOrDefault(p => p.Id == detainerId);
-            var target = room.State.Players.FirstOrDefault(p => p.Id == targetId);
-            if (detainer == null || target == null)
-                return (null, "Player not found.");
-
-            // Check copresence — both must be in same hex
-            if (detainer.CurrentLat == null || detainer.CurrentLng == null
-                || target.CurrentLat == null || target.CurrentLng == null || !room.State.HasMapLocation)
-                return (null, "Cannot determine player positions.");
-
-            var detainerHex = HexService.LatLngToHexForRoom(detainer.CurrentLat.Value, detainer.CurrentLng!.Value,
-                room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-            var targetHex = HexService.LatLngToHexForRoom(target.CurrentLat.Value, target.CurrentLng!.Value,
-                room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-
-            if (detainerHex.q != targetHex.q || detainerHex.r != targetHex.r)
-                return (null, "Target must be in the same hex.");
-
-            // Must be hostile
-            if (detainer.AllianceId != null && detainer.AllianceId == target.AllianceId)
-                return (null, "Cannot detain an allied player.");
-
-            // Already detained?
-            if (target.HeldByPlayerId != null)
-                return (null, "Target is already detained.");
-
-            target.HeldByPlayerId = detainerId;
-            target.HeldUntil = DateTime.UtcNow.AddMinutes(3);
-
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "Hostage",
-                Message = $"{detainer.Name} detained {target.Name}!",
-                PlayerId = detainerId,
-                PlayerName = detainer.Name,
-                TargetPlayerId = targetId,
-                TargetPlayerName = target.Name
-            });
-
-            return (SnapshotState(room.State), null);
-        }
-    }
-
-    // Phase 10: Release detained players — called from regen tick
-    public void ProcessHostageReleases(GameRoom room)
-    {
-        lock (room.SyncRoot)
-        {
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Hostage))
-                return;
-
-            var now = DateTime.UtcNow;
-            foreach (var player in room.State.Players.Where(p => p.HeldByPlayerId != null))
-            {
-                var shouldRelease = false;
-
-                // Timer expired
-                if (player.HeldUntil.HasValue && now > player.HeldUntil.Value)
-                    shouldRelease = true;
-
-                // Ally copresence — check if an allied player is in the same hex
-                if (!shouldRelease && player.CurrentLat != null && player.CurrentLng != null && room.State.HasMapLocation)
-                {
-                    var heldHex = HexService.LatLngToHexForRoom(player.CurrentLat.Value, player.CurrentLng!.Value,
-                        room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                    var rescuers = GetPlayersInHex(room.State, heldHex.q, heldHex.r)
-                        .Where(p => p.Id != player.Id && p.AllianceId != null && p.AllianceId == player.AllianceId);
-                    if (rescuers.Any())
-                        shouldRelease = true;
-                }
-
-                if (shouldRelease)
-                {
-                    player.HeldByPlayerId = null;
-                    player.HeldUntil = null;
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "HostageReleased",
-                        Message = $"{player.Name} has been released!",
-                        PlayerId = player.Id,
-                        PlayerName = player.Name
-                    });
-                }
-            }
-        }
-    }
-
-    // Phase 10: Duel expiry cleanup
-    public void ProcessDuelExpiry(GameRoom room)
-    {
-        lock (room.SyncRoot)
-        {
-            var now = DateTime.UtcNow;
-            var expired = room.PendingDuels.Where(kv => now > kv.Value.ExpiresAt).Select(kv => kv.Key).ToList();
-            foreach (var id in expired)
-                room.PendingDuels.Remove(id);
-        }
-    }
+    internal static void RefreshTerritoryCount(GameState state) => WinConditionService.RefreshTerritoryCountCore(state);
+    internal static void ApplyWinCondition(GameState state, DateTime now) => WinConditionService.ApplyWinConditionCore(state, now);
+    internal static void ApplyTerritoryPercentWinCondition(GameState state) => WinConditionService.ApplyTerritoryPercentWinConditionCore(state);
+    internal static void ApplyEliminationWinCondition(GameState state) => WinConditionService.ApplyEliminationWinConditionCore(state);
+    internal static bool TrySetTerritoryLeaderAsWinner(GameState state) => WinConditionService.TrySetTerritoryLeaderAsWinnerCore(state);
+    internal static void ApplyWinConditionAndLog(GameState state, DateTime now) => WinConditionService.ApplyWinConditionAndLogCore(state, now);
 }

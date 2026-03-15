@@ -1,30 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AuthPage } from './components/auth/AuthPage';
-import { GameView } from './components/GameView';
-import { LobbyView } from './components/LobbyView';
-import { MapEditorPage } from './components/editor/MapEditorPage';
-import { DebugLocationPanel } from './components/game/DebugLocationPanel';
-import { GameOver } from './components/game/GameOver';
-import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import { useAuth } from './hooks/useAuth';
 import { useAutoResume } from './hooks/useAutoResume';
-import type { SignalRInvoke } from './hooks/useAutoResume';
 import { useGameActions } from './hooks/useGameActions';
-import { useGeolocation } from './hooks/useGeolocation';
-import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSignalR } from './hooks/useSignalR';
 import { useSignalRHandlers } from './hooks/useSignalRHandlers';
+import { useGeolocation } from './hooks/useGeolocation';
+import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { useToastQueue } from './hooks/useToastQueue';
+import { AuthPage } from './components/auth/AuthPage';
+import { MapEditorPage } from './components/editor/MapEditorPage';
+import { ConnectionBanner } from './components/ConnectionBanner';
+import { DebugLocationPanel } from './components/game/DebugLocationPanel';
+import { GameOver } from './components/game/GameOver';
+import { GameView } from './components/GameView';
+import type { GameViewActions } from './components/GameView';
+import { LobbyView } from './components/LobbyView';
+import type { LobbyViewActions } from './components/LobbyView';
+import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
+import type { GameState, RoomSummary } from './types/game';
 import { useGameStore } from './stores/gameStore';
+import type { SavedSession } from './stores/gameStore';
 import { useGameplayStore } from './stores/gameplayStore';
 import { useUiStore } from './stores/uiStore';
-import type { RoomSummary } from './types/game';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
+
+type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
 interface LocationPoint {
   lat: number;
@@ -34,8 +39,11 @@ interface LocationPoint {
 export default function App() {
   const { t } = useTranslation();
   const { auth, authReady, login, register, logout } = useAuth();
+
+  // ── Store reads ──────────────────────────────────────────────────────────
   const gameState = useGameStore(state => state.gameState);
   const savedSession = useGameStore(state => state.savedSession);
+  const myRooms = useGameStore(state => state.myRooms);
   const autoResuming = useGameStore(state => state.autoResuming);
   const setGameState = useGameStore(state => state.setGameState);
   const setMyRooms = useGameStore(state => state.setMyRooms);
@@ -48,84 +56,122 @@ export default function App() {
   const debugLocation = useUiStore(state => state.debugLocation);
   const setView = useUiStore(state => state.setView);
   const setError = useUiStore(state => state.setError);
-  const setHasAcknowledgedRules = useUiStore(state => state.setHasAcknowledgedRules);
   const setShowDebugTools = useUiStore(state => state.setShowDebugTools);
   const setDebugLocationEnabled = useUiStore(state => state.setDebugLocationEnabled);
   const setDebugLocation = useUiStore(state => state.setDebugLocation);
+
+  // ── Toast queue / misc hooks ─────────────────────────────────────────────
   const { toasts, pushToast, dismissToast } = useToastQueue();
+  const mapNavigateRef = useRef<((lat: number, lng: number) => void) | null>(null);
+  const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
+    mapNavigateRef.current?.(lat, lng);
+  }, []);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
-  const mapNavigateRef = useRef<((lat: number, lng: number) => void) | null>(null);
+
+  // ── SignalR wiring ───────────────────────────────────────────────────────
+  //
+  // useAutoResume needs `connected` and `invoke` from useSignalR, but
+  // useSignalRHandlers needs session callbacks (saveSession, resolveResume*)
+  // from useAutoResume — a circular dependency.
+  //
+  // Resolution:
+  //  1. Create `savedSessionRef` here so it can be shared with
+  //     useSignalRHandlers before useAutoResume is called.
+  //  2. Create a single `autoResumeRef` object that holds the real callbacks
+  //     once useAutoResume returns, plus three stable wrapper useCallbacks
+  //     that always delegate through it.  useSignalRHandlers uses only the
+  //     stable wrappers, so its useMemo never stales on callback identity.
+  //  3. Call useSignalRHandlers → useSignalR → useAutoResume in that order.
+  //  4. After useAutoResume returns, populate autoResumeRef.current
+  //     synchronously (safe ref mutation during render, before effects fire).
+
   const invokeRef = useRef<SignalRInvoke | null>(null);
-  const savedRoomCode = savedSession?.roomCode ?? '';
-  const rulesKey = gameState?.roomCode ? `lg-rules-ack-${gameState.roomCode}` : '';
 
-  useEffect(() => {
-    if (!rulesKey) {
-      setHasAcknowledgedRules(false);
-      return;
-    }
+  // Shared with useSignalRHandlers; useAutoResume manages .current syncing.
+  const savedSessionRef = useRef<SavedSession | null>(savedSession);
 
-    setHasAcknowledgedRules(sessionStorage.getItem(rulesKey) === 'true');
-  }, [rulesKey, setHasAcknowledgedRules]);
+  const autoResumeRef = useRef<{
+    saveSession: (code: string) => void;
+    resolveResumeFromState: (state: GameState) => boolean;
+    resolveResumeFromError: (msg: string) => boolean;
+  }>({
+    saveSession: () => {},
+    resolveResumeFromState: () => false,
+    resolveResumeFromError: () => false,
+  });
 
-  const autoResume = useAutoResume({ auth, t });
+  // Stable wrappers — identity never changes, so useSignalRHandlers' useMemo
+  // is not invalidated when the real callbacks are replaced after first render.
+  const stableSaveSession = useCallback(
+    (code: string) => { autoResumeRef.current.saveSession(code); },
+    [],
+  );
+  const stableResolveFromState = useCallback(
+    (state: GameState) => autoResumeRef.current.resolveResumeFromState(state),
+    [],
+  );
+  const stableResolveFromError = useCallback(
+    (msg: string) => autoResumeRef.current.resolveResumeFromError(msg),
+    [],
+  );
+
   const signalRHandlers = useSignalRHandlers({
     getInvoke: () => invokeRef.current,
-    saveSession: autoResume.saveSession,
-    resolveResumeFromState: autoResume.resolveResumeFromState,
-    resolveResumeFromError: autoResume.resolveResumeFromError,
-    savedSessionRef: autoResume.savedSessionRef,
+    saveSession: stableSaveSession,
+    resolveResumeFromState: stableResolveFromState,
+    resolveResumeFromError: stableResolveFromError,
+    savedSessionRef,
     t,
     playSound,
     pushToast,
   });
+
   const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, signalRHandlers);
+  // Update stable ref so handlers always call the latest invoke.
   invokeRef.current = invoke;
 
-  useEffect(() => autoResume.handleConnectionChange(connected, invoke), [autoResume, connected, invoke]);
+  // Now we have connected + invoke — call useAutoResume.
+  const { saveSession, clearSession, resolveResumeFromState, resolveResumeFromError, pendingResumeRef } =
+    useAutoResume({ auth, connected, invoke, t, savedSessionRef });
 
+  // Wire stable wrappers to the real callbacks (synchronous ref mutation,
+  // safe during render — effects haven't run yet at this point).
+  autoResumeRef.current = { saveSession, resolveResumeFromState, resolveResumeFromError };
+
+  // ── Location ─────────────────────────────────────────────────────────────
   const liveLocation = useMemo<LocationPoint | null>(() => {
-    if (location.lat == null || location.lng == null) {
-      return null;
-    }
-
+    if (location.lat == null || location.lng == null) return null;
     return { lat: location.lat, lng: location.lng };
   }, [location.lat, location.lng]);
 
   const usingDebugLocation = DEBUG_GPS_AVAILABLE && debugLocationEnabled && debugLocation !== null;
-  const currentLocation = useMemo<LocationPoint | null>(() => {
-    if (usingDebugLocation) {
-      return debugLocation;
-    }
 
+  const currentLocation = useMemo<LocationPoint | null>(() => {
+    if (usingDebugLocation) return debugLocation;
     return liveLocation;
   }, [debugLocation, liveLocation, usingDebugLocation]);
 
   const effectiveLocationError = usingDebugLocation ? null : location.error;
   const effectiveLocationLoading = usingDebugLocation ? false : location.loading;
-  const mapCenterLocation = useMemo<LocationPoint | null>(() => {
-    if (!gameState || gameState.mapLat == null || gameState.mapLng == null) {
-      return null;
-    }
 
+  const mapCenterLocation = useMemo<LocationPoint | null>(() => {
+    if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
     return { lat: gameState.mapLat, lng: gameState.mapLng };
   }, [gameState]);
 
+  // ── Player / game derived values ─────────────────────────────────────────
   const myPlayer = useMemo(() => {
-    if (!auth || !gameState) {
-      return null;
-    }
-
+    if (!auth || !gameState) return null;
     return gameState.players.find(player => player.id === auth.userId) ?? null;
   }, [auth, gameState]);
 
   const isHostBypass = Boolean(gameState?.hostBypassGps && myPlayer?.isHost);
+
   const currentHex = useMemo(() => {
     if (!gameState || !currentLocation || gameState.mapLat == null || gameState.mapLng == null) {
       return null;
     }
-
     return latLngToRoomHex(
       currentLocation.lat,
       currentLocation.lng,
@@ -135,6 +181,9 @@ export default function App() {
     );
   }, [currentLocation, gameState]);
 
+  const currentPlayerName = myPlayer?.name ?? auth?.username ?? '';
+
+  // ── Game actions ─────────────────────────────────────────────────────────
   const {
     handleCreateRoom,
     handleJoinRoom,
@@ -183,7 +232,7 @@ export default function App() {
     auth,
     connected,
     autoResuming,
-    pendingResumeRef: autoResume.pendingResumeRef,
+    pendingResumeRef,
     gameState,
     currentLocation,
     currentHex,
@@ -191,20 +240,31 @@ export default function App() {
     isHostBypass,
     t,
     playSound,
-    clearSession: autoResume.clearSession,
+    clearSession,
   });
 
-  const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
-    mapNavigateRef.current?.(lat, lng);
-  }, []);
+  // ── GetMyRooms effect ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!auth || !connected || gameState || autoResuming) return;
 
-  const handleAcknowledgeRules = useCallback(() => {
-    if (rulesKey) {
-      sessionStorage.setItem(rulesKey, 'true');
-    }
+    let cancelled = false;
+    void invoke<RoomSummary[]>('GetMyRooms')
+      .then(rooms => {
+        if (!cancelled) setMyRooms(Array.isArray(rooms) ? rooms : []);
+      })
+      .catch(cause => {
+        if (!cancelled) setError(localizeLobbyError(getErrorMessage(cause), t));
+      });
 
-    setHasAcknowledgedRules(true);
-  }, [rulesKey, setHasAcknowledgedRules]);
+    return () => { cancelled = true; };
+  }, [auth, autoResuming, connected, gameState, invoke, t]);
+
+  // ── Debug GPS helpers ────────────────────────────────────────────────────
+  const canStepDebugByHex = Boolean(
+    gameState?.mapLat != null &&
+    gameState?.mapLng != null &&
+    (currentLocation ?? mapCenterLocation),
+  );
 
   const applyDebugLocation = useCallback((lat: number, lng: number) => {
     setDebugLocation({ lat, lng });
@@ -216,23 +276,12 @@ export default function App() {
     setDebugLocationEnabled(false);
     setDebugLocation(null);
     setError('');
-  }, [setDebugLocation, setDebugLocationEnabled, setError]);
-
-  const canStepDebugByHex = Boolean(
-    gameState?.mapLat != null
-      && gameState?.mapLng != null
-      && (currentLocation ?? mapCenterLocation),
-  );
+  }, [setDebugLocationEnabled, setDebugLocation, setError]);
 
   const stepDebugLocationByHex = useCallback((dq: number, dr: number): LocationPoint | null => {
-    if (!gameState || gameState.mapLat == null || gameState.mapLng == null) {
-      return null;
-    }
-
+    if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
     const seedLocation = currentLocation ?? mapCenterLocation;
-    if (!seedLocation) {
-      return null;
-    }
+    if (!seedLocation) return null;
 
     const [baseQ, baseR] = latLngToRoomHex(
       seedLocation.lat,
@@ -248,43 +297,44 @@ export default function App() {
       gameState.mapLng,
       gameState.tileSizeMeters,
     );
-
     const nextLocation = { lat: nextLat, lng: nextLng };
     applyDebugLocation(nextLocation.lat, nextLocation.lng);
     return nextLocation;
   }, [applyDebugLocation, currentLocation, gameState, mapCenterLocation]);
 
-  useEffect(() => {
-    if (!auth || !connected || gameState || autoResuming) {
-      return;
-    }
-
-    let cancelled = false;
-    void invoke<RoomSummary[]>('GetMyRooms')
-      .then(rooms => {
-        if (!cancelled) {
-          setMyRooms(Array.isArray(rooms) ? rooms : []);
-        }
-      })
-      .catch(cause => {
-        if (!cancelled) {
-          setError(localizeLobbyError(getErrorMessage(cause), t));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [auth, autoResuming, connected, gameState, invoke, setError, setMyRooms, t]);
-
-  const connectionBannerMessage = autoResuming
+  // ── Connection / session banner ──────────────────────────────────────────
+  const savedRoomCode = savedSession?.roomCode ?? '';
+  const connectionBanner = autoResuming
     ? t('errors.restoringRoom', { code: savedRoomCode })
     : reconnecting
       ? t('errors.reconnecting')
       : '';
-  const connectionBanner = connectionBannerMessage
-    ? <ConnectionBanner message={connectionBannerMessage} />
-    : null;
+
+  // ── Logout handler ───────────────────────────────────────────────────────
+  const handleLogout = useCallback(() => {
+    clearSession();
+    disableDebugLocation();
+    setShowDebugTools(false);
+    setMyRooms([]);
+    void logout();
+    setGameState(null);
+    setPickupPrompt(null);
+    clearGameplayUi();
+    setView('lobby');
+  }, [
+    clearGameplayUi,
+    clearSession,
+    disableDebugLocation,
+    logout,
+    setGameState,
+    setMyRooms,
+    setPickupPrompt,
+    setShowDebugTools,
+    setView,
+  ]);
+
+  // ── Debug panel / toggle nodes ───────────────────────────────────────────
+  const visibleRecentRooms = auth && connected ? myRooms : [];
 
   const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && showDebugTools && view !== 'gameover' ? (
     <DebugLocationPanel
@@ -308,21 +358,74 @@ export default function App() {
     </button>
   ) : null;
 
-  const handleLogout = useCallback(() => {
-    autoResume.clearSession();
-    disableDebugLocation();
-    setShowDebugTools(false);
-    setMyRooms([]);
-    void logout();
-    setGameState(null);
-    setPickupPrompt(null);
-    clearGameplayUi();
-    setView('lobby');
-  }, [autoResume, clearGameplayUi, disableDebugLocation, logout, setGameState, setMyRooms, setPickupPrompt, setShowDebugTools, setView]);
+  // ── Action groupings for child views ─────────────────────────────────────
+  const gameViewActions = useMemo<GameViewActions>(() => ({
+    onHexClick: handleHexClick,
+    onConfirmPickup: handleConfirmPickup,
+    onReturnToLobby: handleReturnToLobby,
+    currentHexActions,
+    onCurrentHexAction: handleCurrentHexAction,
+    onDismissTileActions: handleDismissTileActions,
+    onConfirmAttack: handleConfirmAttack,
+    onAcceptDuel: handleAcceptDuel,
+    onDeclineDuel: handleDeclineDuel,
+    onActivateBeacon: handleActivateBeacon,
+    onDeactivateBeacon: handleDeactivateBeacon,
+    onActivateStealth: handleActivateStealth,
+    onSetObserverMode: handleSetObserverMode,
+    onUpdateDynamicsLive: handleUpdateDynamicsLive,
+    onTriggerEvent: handleTriggerEvent,
+    onSendHostMessage: handleSendHostMessage,
+    onPauseGame: handlePauseGame,
+    onReClaimHex: handleReClaimHex,
+  }), [
+    handleHexClick, handleConfirmPickup, handleReturnToLobby, currentHexActions,
+    handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
+    handleAcceptDuel, handleDeclineDuel, handleActivateBeacon, handleDeactivateBeacon,
+    handleActivateStealth, handleSetObserverMode, handleUpdateDynamicsLive,
+    handleTriggerEvent, handleSendHostMessage, handlePauseGame, handleReClaimHex,
+  ]);
 
-  if (!authReady) {
-    return null;
-  }
+  const lobbyViewActions = useMemo<LobbyViewActions>(() => ({
+    onCreateRoom: handleCreateRoom,
+    onJoinRoom: handleJoinRoom,
+    onSetAlliance: handleSetAlliance,
+    onSetMapLocation: handleSetMapLocation,
+    onSetTileSize: handleSetTileSize,
+    onUseCenteredGameArea: handleUseCenteredGameArea,
+    onSetPatternGameArea: handleSetPatternGameArea,
+    onSetCustomGameArea: handleSetCustomGameArea,
+    onSetClaimMode: handleSetClaimMode,
+    onSetAllowSelfClaim: handleSetAllowSelfClaim,
+    onSetWinCondition: handleSetWinCondition,
+    onSetCopresenceModes: handleSetCopresenceModes,
+    onSetCopresencePreset: handleSetCopresencePreset,
+    onSetGameDynamics: handleSetGameDynamics,
+    onSetPlayerRole: handleSetPlayerRole,
+    onSetAllianceHQ: handleSetAllianceHQ,
+    onSetMasterTile: handleSetMasterTile,
+    onSetMasterTileByHex: handleSetMasterTileByHex,
+    onAssignStartingTile: handleAssignStartingTile,
+    onConfigureAlliances: handleConfigureAlliances,
+    onDistributePlayers: handleDistributePlayers,
+    onAssignAllianceStartingTile: handleAssignAllianceStartingTile,
+    onStartGame: handleStartGame,
+    onReturnToLobby: handleReturnToLobby,
+    onSetObserverMode: handleSetObserverMode,
+  }), [
+    handleCreateRoom, handleJoinRoom, handleSetAlliance, handleSetMapLocation,
+    handleSetTileSize, handleUseCenteredGameArea, handleSetPatternGameArea,
+    handleSetCustomGameArea, handleSetClaimMode, handleSetAllowSelfClaim,
+    handleSetWinCondition, handleSetCopresenceModes, handleSetCopresencePreset,
+    handleSetGameDynamics, handleSetPlayerRole, handleSetAllianceHQ,
+    handleSetMasterTile, handleSetMasterTileByHex, handleAssignStartingTile,
+    handleConfigureAlliances, handleDistributePlayers, handleAssignAllianceStartingTile,
+    handleStartGame, handleReturnToLobby, handleSetObserverMode,
+  ]);
+
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  if (!authReady) return null;
 
   if (!auth) {
     return <AuthPage onLogin={login} onRegister={register} />;
@@ -335,7 +438,7 @@ export default function App() {
   if (view === 'gameover' && gameState) {
     return (
       <>
-        {connectionBanner}
+        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
         <GameOver state={gameState} onPlayAgain={handlePlayAgain} />
       </>
     );
@@ -344,98 +447,41 @@ export default function App() {
   if (view === 'game' && gameState) {
     return (
       <GameView
-        connectionBanner={connectionBanner}
-        currentHex={currentHex}
-        currentHexActions={currentHexActions}
-        currentLocation={currentLocation}
-        debugGpsPanel={debugGpsPanel}
-        debugToggleButton={debugToggleButton}
-        locationError={effectiveLocationError}
-        mapNavigateRef={mapNavigateRef}
-        onAcceptDuel={handleAcceptDuel}
-        onActivateBeacon={handleActivateBeacon}
-        onActivateStealth={handleActivateStealth}
-        onAcknowledgeRules={handleAcknowledgeRules}
-        onConfirmAttack={handleConfirmAttack}
-        onConfirmPickup={handleConfirmPickup}
-        onCurrentHexAction={handleCurrentHexAction}
-        onDeactivateBeacon={handleDeactivateBeacon}
-        onDeclineDuel={handleDeclineDuel}
-        onDismissTileActions={handleDismissTileActions}
-        onDismissToast={dismissToast}
-        onHexClick={handleHexClick}
-        onNavigateMap={handleMiniMapNavigate}
-        onPauseGame={handlePauseGame}
-        onPlayerDisplayPrefsChange={setPlayerDisplayPrefs}
-        onReClaim={handleReClaimHex}
-        onReturnToLobby={handleReturnToLobby}
-        onSendHostMessage={handleSendHostMessage}
-        onSetObserverMode={handleSetObserverMode}
-        onTriggerEvent={handleTriggerEvent}
-        onUpdateDynamics={handleUpdateDynamicsLive}
-        playerDisplayPrefs={playerDisplayPrefs}
-        toasts={toasts}
         userId={auth.userId}
-        username={auth.username}
+        connectionBanner={connectionBanner}
+        currentLocation={currentLocation}
+        currentHex={currentHex}
+        effectiveLocationError={effectiveLocationError}
+        currentPlayerName={currentPlayerName}
+        playerDisplayPrefs={playerDisplayPrefs}
+        onPlayerDisplayPrefsChange={setPlayerDisplayPrefs}
+        mapNavigateRef={mapNavigateRef}
+        onNavigateMap={handleMiniMapNavigate}
+        debugToggle={debugToggleButton}
+        debugPanel={debugGpsPanel}
+        toasts={toasts}
+        onDismissToast={dismissToast}
+        actions={gameViewActions}
       />
     );
   }
 
   return (
-    <>
-      {connectionBanner}
-      <LobbyView
-        connected={connected}
-        currentLocation={currentLocation}
-        debugGpsPanel={debugGpsPanel}
-        debugToggleButton={debugToggleButton}
-        invoke={invoke}
-        locationError={effectiveLocationError}
-        locationLoading={effectiveLocationLoading}
-        mapEditorLabel={t('mapEditor.title')}
-        onAssignAllianceStartingTile={handleAssignAllianceStartingTile}
-        onAssignStartingTile={handleAssignStartingTile}
-        onConfigureAlliances={handleConfigureAlliances}
-        onCreateRoom={handleCreateRoom}
-        onDistributePlayers={handleDistributePlayers}
-        onJoinRoom={handleJoinRoom}
-        onLogout={handleLogout}
-        onOpenMapEditor={() => setView('mapEditor')}
-        onReturnToLobby={handleReturnToLobby}
-        onSetAlliance={handleSetAlliance}
-        onSetAllianceHQ={handleSetAllianceHQ}
-        onSetAllowSelfClaim={handleSetAllowSelfClaim}
-        onSetClaimMode={handleSetClaimMode}
-        onSetCopresenceModes={handleSetCopresenceModes}
-        onSetCopresencePreset={handleSetCopresencePreset}
-        onSetCustomGameArea={handleSetCustomGameArea}
-        onSetGameDynamics={handleSetGameDynamics}
-        onSetMapLocation={handleSetMapLocation}
-        onSetMasterTile={handleSetMasterTile}
-        onSetMasterTileByHex={handleSetMasterTileByHex}
-        onSetObserverMode={handleSetObserverMode}
-        onSetPatternGameArea={handleSetPatternGameArea}
-        onSetPlayerRole={handleSetPlayerRole}
-        onSetTileSize={handleSetTileSize}
-        onSetWinCondition={handleSetWinCondition}
-        onStartGame={handleStartGame}
-        onUseCenteredGameArea={handleUseCenteredGameArea}
-        token={auth.token}
-        userId={auth.userId}
-        username={auth.username}
-      />
-    </>
-  );
-}
-
-function ConnectionBanner({ message }: { message: string }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="connection-banner"
-    >
-      {message}
-    </div>
+    <LobbyView
+      connectionBanner={connectionBanner}
+      username={auth.username}
+      userId={auth.userId}
+      authToken={auth.token}
+      connected={connected}
+      currentLocation={currentLocation}
+      effectiveLocationError={effectiveLocationError}
+      effectiveLocationLoading={effectiveLocationLoading}
+      visibleRecentRooms={visibleRecentRooms}
+      invoke={invoke}
+      onLogout={handleLogout}
+      debugPanel={debugGpsPanel}
+      debugToggle={debugToggleButton}
+      actions={lobbyViewActions}
+    />
   );
 }
