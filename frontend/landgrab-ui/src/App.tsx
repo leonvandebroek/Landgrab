@@ -7,6 +7,7 @@ import { useGeolocation } from './hooks/useGeolocation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { vibrate, HAPTIC } from './utils/haptics';
+import { useToastQueue } from './hooks/useToastQueue';
 import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
@@ -85,6 +86,13 @@ export default function App() {
   const [hostMessage, setHostMessage] = useState<{ message: string; fromHost: boolean } | null>(null);
   const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
   const [hasAcknowledgedRules, setHasAcknowledgedRules] = useState(false);
+  const [mainMapBounds, setMainMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
+  const [selectedHexScreenPos, setSelectedHexScreenPos] = useState<{ x: number; y: number } | null>(null);
+  const { toasts, pushToast, dismissToast } = useToastQueue();
+  const mapNavigateRef = useRef<((lat: number, lng: number) => void) | null>(null);
+  const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
+    mapNavigateRef.current?.(lat, lng);
+  }, []);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
   const lastLocationRef = useRef('');
@@ -126,8 +134,8 @@ export default function App() {
   const scheduleAutoClear = useCallback(<T,>(
     key: string,
     setter: React.Dispatch<React.SetStateAction<T>>,
-    value: T,
-    clearValue: T,
+    value: NoInfer<T>,
+    clearValue: NoInfer<T>,
     ms: number,
   ) => {
     if (notificationTimersRef.current[key]) {
@@ -324,14 +332,25 @@ export default function App() {
     onCombatResult: (result) => {
       vibrate(HAPTIC.attack);
       setCombatResult(result);
+      pushToast({
+        type: 'combat',
+        message: result.attackerWon
+          ? t('game.toast.combatWon', { q: result.q, r: result.r })
+          : t('game.toast.combatLost', { q: result.q, r: result.r }),
+      });
     },
     onTileLost: (data) => {
       playSound('notification');
       vibrate(HAPTIC.loss);
       setMapFeedback({
         tone: 'error',
-        message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
+        message: t('game.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
         targetHex: [data.Q, data.R]
+      });
+      pushToast({
+        type: 'territory',
+        message: t('game.toast.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
+        teamColor: undefined,
       });
     },
     onError: (message) => {
@@ -342,6 +361,10 @@ export default function App() {
     },
     onRandomEvent: (event) => {
       scheduleAutoClear('randomEvent', setRandomEvent, event, null, 8000);
+      pushToast({
+        type: 'event',
+        message: event.title,
+      });
     },
     onEventWarning: (event) => {
       scheduleAutoClear('eventWarning', setEventWarning, event, null, 120000);
@@ -351,6 +374,11 @@ export default function App() {
     },
     onMissionCompleted: (mission) => {
       scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'completed' as const }, null, 6000);
+      pushToast({
+        type: 'mission',
+        message: mission.title,
+        icon: '✅',
+      });
     },
     onMissionFailed: (mission) => {
       scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'failed' as const }, null, 6000);
@@ -373,6 +401,14 @@ export default function App() {
     },
     onReconnected: () => {
       clearError();
+      // Immediately re-establish room mapping so hub calls don't fail
+      // before the justConnected useEffect fires (race condition fix).
+      const session = savedSessionRef.current;
+      if (session?.roomCode) {
+        invoke('RejoinRoom', session.roomCode).catch(() => {
+          // Silently ignore — the justConnected useEffect will also attempt rejoin.
+        });
+      }
     }
   });
 
@@ -988,6 +1024,24 @@ export default function App() {
     });
   }, [gameState, selectedHex, myPlayer, currentHex, isHostBypass]);
 
+  const currentHexActions = useMemo<TileAction[]>(() => {
+    if (!gameState || gameState.phase !== 'Playing' || !currentHex) return [];
+    const targetCell = gameState.grid[`${currentHex[0]},${currentHex[1]}`];
+    return getTileActions({
+      state: gameState,
+      player: myPlayer,
+      targetHex: currentHex,
+      targetCell,
+      currentHex,
+      isHostBypass,
+    });
+  }, [gameState, currentHex, myPlayer, isHostBypass]);
+
+  const currentHexCell = useMemo(() => {
+    if (!gameState || !currentHex) return undefined;
+    return gameState.grid[`${currentHex[0]},${currentHex[1]}`];
+  }, [gameState, currentHex]);
+
   const handleTileAction = useCallback((actionType: TileActionType) => {
     if (!selectedHex || !gameState) return;
     const [q, r] = selectedHex;
@@ -1051,6 +1105,70 @@ export default function App() {
         break;
     }
   }, [selectedHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
+
+  const handleCurrentHexAction = useCallback((actionType: TileActionType) => {
+    if (!currentHex || !gameState) return;
+    const [q, r] = currentHex;
+
+    let actionLat: number;
+    let actionLng: number;
+    if (isHostBypass && gameState.mapLat != null && gameState.mapLng != null) {
+      const [hexLat, hexLng] = roomHexToLatLng(q, r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
+      actionLat = hexLat;
+      actionLng = hexLng;
+    } else if (currentLocation) {
+      actionLat = currentLocation.lat;
+      actionLng = currentLocation.lng;
+    } else {
+      return;
+    }
+
+    switch (actionType) {
+      case 'claim':
+      case 'reinforce':
+      case 'claimAlliance':
+      case 'claimSelf': {
+        const claimForSelf = actionType === 'claimSelf';
+        invoke('PlaceTroops', q, r, actionLat, actionLng, null, claimForSelf)
+          .then(() => {
+            setPickupPrompt(null);
+            playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
+            if (actionType !== 'reinforce') {
+              vibrate(HAPTIC.claim);
+            }
+            setMapFeedback({
+              tone: 'success',
+              message: getPlaceSuccessMessage(actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
+              targetHex: currentHex
+            });
+          })
+          .catch(cause => {
+            playSound('error');
+            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: currentHex });
+          });
+        break;
+      }
+      case 'attack': {
+        setSelectedHex(currentHex);
+        const cell = gameState.grid[`${q},${r}`];
+        const defenderTroops = cell?.troops ?? 0;
+        const maxTroops = myPlayer?.carriedTroops ?? 0;
+        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
+        setAttackCount(maxTroops);
+        break;
+      }
+      case 'pickup': {
+        setSelectedHex(currentHex);
+        const cell = gameState.grid[`${q},${r}`];
+        setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
+        setPickupCount(1);
+        break;
+      }
+      case 'ignore':
+        setMapFeedback(null);
+        break;
+    }
+  }, [currentHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
 
   const handleDismissTileActions = useCallback(() => {
     setSelectedHex(null);
@@ -1268,7 +1386,10 @@ export default function App() {
           error={error}
           locationError={effectiveLocationError}
           tileActions={tileActions}
+          currentHexActions={currentHexActions}
+          currentHexCell={currentHexCell}
           onTileAction={handleTileAction}
+          onCurrentHexAction={handleCurrentHexAction}
           onDismissTileActions={handleDismissTileActions}
           attackPrompt={attackPrompt}
           attackCount={attackCount}
@@ -1303,6 +1424,11 @@ export default function App() {
           onSetObserverMode={handleSetObserverMode}
           debugToggle={debugToggleButton}
           debugPanel={debugGpsPanel}
+          toasts={toasts}
+          onDismissToast={dismissToast}
+          mainMapBounds={mainMapBounds}
+          selectedHexScreenPos={selectedHexScreenPos}
+          onNavigateMap={handleMiniMapNavigate}
         >
           <GameMap
             state={gameState}
@@ -1312,6 +1438,9 @@ export default function App() {
             onHexClick={handleHexClick}
             selectedHex={selectedHex}
             playerDisplayPrefs={playerDisplayPrefs}
+            onBoundsChange={setMainMapBounds}
+            onHexScreenPosition={setSelectedHexScreenPos}
+            navigateRef={mapNavigateRef}
           />
         </PlayingHud>
         {combatResult && (

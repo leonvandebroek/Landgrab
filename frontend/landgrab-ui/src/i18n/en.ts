@@ -218,6 +218,7 @@ const en = {
     count: 'Count',
     confirm: 'Confirm',
     cancel: 'Cancel',
+    close: 'Close',
     hintWithTroops: 'Stand on any hex and tap it to place troops or conquer it.',
     hintNoTroops: 'Stand on one of your own hexes and tap it to pick up troops.',
     gpsLocation: 'GPS: {{lat}}, {{lon}}',
@@ -272,9 +273,9 @@ const en = {
       claimBtn: 'Claim Territory',
       attackBtn: 'Attack',
       reinforceBtn: 'Reinforce',
-      pickupBtn: 'Pick Up Troops',
-      claimAllianceBtn: 'Claim for Alliance',
-      claimSelfBtn: 'Claim for Myself',
+      pickupBtn: 'Pick Up',
+      claimAllianceBtn: 'Alliance',
+      claimSelfBtn: 'Personal',
       attackPrompt: 'How many troops to deploy?',
       defenderTroops: 'Defender has {{count}} troops',
       deployCount: 'Deploy {{count}} troops',
@@ -304,6 +305,61 @@ const en = {
       captured: 'Captured {{q}}, {{r}}.',
       pickedUp_one: 'Picked up {{count}} troop from {{q}}, {{r}}.',
       pickedUp_other: 'Picked up {{count}} troops from {{q}}, {{r}}.',
+    },
+
+    // Supply lines (F3)
+    supplyLine: {
+      connected: 'Connected to HQ',
+      disconnected: 'Disconnected from supply network',
+      supplyLines: 'Supply lines',
+    },
+
+    // Mini-map (F4)
+    miniMap: {
+      title: 'Strategic overview',
+      toggle: 'Toggle mini-map',
+    },
+
+    // Radial menu (F6)
+    radial: {
+      dismiss: 'Dismiss',
+      tileInfo: '({{q}}, {{r}})',
+    },
+
+    dock: {
+      noLocation: 'Waiting for GPS signal…',
+      outsideGrid: 'Move to the game area',
+      noActions: 'All clear — keep moving!',
+      carrying: 'Carrying',
+      troops: 'troops',
+      owner: 'Owner',
+      terrain: 'Terrain',
+      defendBonus: '+{{bonus}} defence',
+      fortified: 'Fortified',
+      fort: 'Fort',
+      relation: {
+        own: 'Your tile',
+        allied: 'Allied',
+        enemy: 'Enemy',
+        neutral: 'Neutral',
+      },
+    },
+    tileInfo: {
+      owner: 'Owner',
+      troops: 'Troops',
+      terrain: 'Terrain',
+      status: 'Status',
+      unclaimed: 'Unclaimed territory',
+    },
+
+    // Toast notifications (F8)
+    toast: {
+      tileLost: '⚔️ {{attacker}} captured your tile at ({{q}}, {{r}})!',
+      combatWon: '🎉 You won the battle at ({{q}}, {{r}})!',
+      combatLost: '💀 You lost the battle at ({{q}}, {{r}})',
+      eventWarning: '⚠️ Event incoming: {{event}}',
+      achievementUnlocked: '🏆 Achievement: {{name}}',
+      territoryMilestone: '🚩 {{count}} territories held!',
     },
   },
   gameLog: {

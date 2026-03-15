@@ -218,6 +218,7 @@ const nl = {
     count: 'Aantal',
     confirm: 'Bevestigen',
     cancel: 'Annuleren',
+    close: 'Sluiten',
     hintWithTroops: 'Sta op een gebied en tik erop om troepen te plaatsen of te veroveren.',
     hintNoTroops: 'Sta op een van je eigen gebieden en tik erop om troepen op te halen.',
     gpsLocation: 'GPS: {{lat}}, {{lon}}',
@@ -272,9 +273,9 @@ const nl = {
       claimBtn: 'Claim Gebied',
       attackBtn: 'Aanvallen',
       reinforceBtn: 'Versterken',
-      pickupBtn: 'Troepen Ophalen',
-      claimAllianceBtn: 'Claim voor alliantie',
-      claimSelfBtn: 'Claim voor mezelf',
+      pickupBtn: 'Ophalen',
+      claimAllianceBtn: 'Alliantie',
+      claimSelfBtn: 'Persoonlijk',
       attackPrompt: 'Hoeveel troepen inzetten?',
       defenderTroops: 'Verdediger heeft {{count}} troepen',
       deployCount: '{{count}} troepen inzetten',
@@ -304,6 +305,61 @@ const nl = {
       captured: '{{q}}, {{r}} is veroverd.',
       pickedUp_one: '{{count}} troep opgehaald van {{q}}, {{r}}.',
       pickedUp_other: '{{count}} troepen opgehaald van {{q}}, {{r}}.',
+    },
+
+    // Bevoorradingslijnen (F3)
+    supplyLine: {
+      connected: 'Verbonden met HQ',
+      disconnected: 'Afgesneden van bevoorradingsnetwerk',
+      supplyLines: 'Bevoorradingslijnen',
+    },
+
+    // Mini-kaart (F4)
+    miniMap: {
+      title: 'Strategisch overzicht',
+      toggle: 'Mini-kaart aan/uit',
+    },
+
+    // Radiaal menu (F6)
+    radial: {
+      dismiss: 'Sluiten',
+      tileInfo: '({{q}}, {{r}})',
+    },
+
+    dock: {
+      noLocation: 'Wachten op GPS-signaal…',
+      outsideGrid: 'Ga naar het spelgebied',
+      noActions: 'Alles veilig — blijf bewegen!',
+      carrying: 'Draagt',
+      troops: 'troepen',
+      owner: 'Eigenaar',
+      terrain: 'Terrein',
+      defendBonus: '+{{bonus}} verdediging',
+      fortified: 'Versterkt',
+      fort: 'Fort',
+      relation: {
+        own: 'Jouw gebied',
+        allied: 'Geallieerd',
+        enemy: 'Vijand',
+        neutral: 'Neutraal',
+      },
+    },
+    tileInfo: {
+      owner: 'Eigenaar',
+      troops: 'Troepen',
+      terrain: 'Terrein',
+      status: 'Status',
+      unclaimed: 'Onbezet gebied',
+    },
+
+    // Meldingen (F8)
+    toast: {
+      tileLost: '⚔️ {{attacker}} heeft je tegel op ({{q}}, {{r}}) veroverd!',
+      combatWon: '🎉 Je hebt het gevecht op ({{q}}, {{r}}) gewonnen!',
+      combatLost: '💀 Je hebt het gevecht op ({{q}}, {{r}}) verloren',
+      eventWarning: '⚠️ Event onderweg: {{event}}',
+      achievementUnlocked: '🏆 Prestatie: {{name}}',
+      territoryMilestone: '🚩 {{count}} territoria bezet!',
     },
   },
   gameLog: {

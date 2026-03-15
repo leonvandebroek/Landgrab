@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import L from 'leaflet';
@@ -14,6 +14,13 @@ import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { terrainFillColors, terrainFillOpacity } from '../../utils/terrainColors';
 import { terrainIcons } from '../../utils/terrainIcons';
 import { getTimeOverlayStyle, getTimePeriod } from '../../utils/timeOfDay';
+import { showTroopBadges, showTerrainIcons as showTerrainIconsZoom, showBorderEffects, showBuildingIcons, showHexTooltips, showContestEffects, showSupplyLines, showTroopAnimations } from '../../utils/zoomThresholds';
+import { hexToHSL, scaleTroopColor, scaleTroopOpacity } from '../../utils/hexColorUtils';
+import { findContestedEdges } from '../../utils/contestedEdges';
+import { computeSupplyNetwork } from '../../utils/supplyNetwork';
+import { injectTerrainPatternSVG } from './TerrainPatternDefs';
+import { useGridDiff } from '../../hooks/useGridDiff';
+import { renderTroopAnimations } from './TroopAnimationLayer';
 
 interface LocationPoint {
   lat: number;
@@ -30,12 +37,15 @@ interface Props {
   gridOverride?: Record<string, HexCell>;
   inactiveHexKeys?: string[];
   playerDisplayPrefs?: PlayerDisplayPreferences;
+  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  onHexScreenPosition?: (pos: { x: number; y: number } | null) => void;
+  /** Ref populated with a navigate function once the Leaflet map is ready. */
+  navigateRef?: MutableRefObject<((lat: number, lng: number) => void) | null>;
 }
 
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const GRID_FIT_PADDING = L.point(24, 24);
 const DEFAULT_MAP_ZOOM = 16;
-const TERRAIN_ICON_MIN_ZOOM = 15;
 const DEFAULT_PLAYER_MARKER_COLOR = '#4f8cff';
 const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
@@ -49,6 +59,9 @@ export function GameMap({
   gridOverride,
   inactiveHexKeys = [],
   playerDisplayPrefs,
+  onBoundsChange,
+  onHexScreenPosition,
+  navigateRef,
 }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,12 +72,15 @@ export function GameMap({
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
   const followedLocationKeyRef = useRef('');
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const animLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const geometryKeyRef = useRef('');
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const prevGridRef = useRef<Record<string, HexCell>>({});
   const onHexClickRef = useRef(onHexClick);
   useEffect(() => { onHexClickRef.current = onHexClick; });
+
+  const troopMovements = useGridDiff(state.grid);
 
   const initialCenterRef = useRef<[number, number]>(
     state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER
@@ -116,7 +132,18 @@ export function GameMap({
     }).addTo(map);
 
     layerGroupRef.current = L.layerGroup().addTo(map);
+    animLayerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+
+    // Expose a navigate function for external callers (e.g. mini-map click-to-navigate)
+    if (navigateRef) {
+      navigateRef.current = (lat: number, lng: number) => map.setView([lat, lng]);
+    }
+
+    // Inject terrain SVG patterns after map init
+    setTimeout(() => {
+      if (containerRef.current) injectTerrainPatternSVG(containerRef.current);
+    }, 100);
 
     // Track pointer start to distinguish taps from pans/zooms
     map.getContainer().addEventListener('pointerdown', (e: PointerEvent) => {
@@ -131,9 +158,11 @@ export function GameMap({
       map.remove();
       mapRef.current = null;
       layerGroupRef.current = null;
+      animLayerGroupRef.current = null;
       geometryKeyRef.current = '';
+      if (navigateRef) navigateRef.current = null;
     };
-  }, [constrainViewportToGrid, t]);
+  }, [constrainViewportToGrid, navigateRef, t]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -152,6 +181,36 @@ export function GameMap({
       map.off('zoomend', handleZoomEnd);
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !onBoundsChange) return;
+    const handleMoveEnd = () => {
+      const b = map.getBounds();
+      onBoundsChange({
+        north: b.getNorth(),
+        south: b.getSouth(),
+        east: b.getEast(),
+        west: b.getWest(),
+      });
+    };
+    handleMoveEnd();
+    map.on('moveend', handleMoveEnd);
+    return () => { map.off('moveend', handleMoveEnd); };
+  }, [onBoundsChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!onHexScreenPosition || !map) return;
+    if (!selectedHex || state.mapLat == null || state.mapLng == null) {
+      onHexScreenPosition(null);
+      return;
+    }
+    const [lat, lng] = roomHexToLatLng(selectedHex[0], selectedHex[1], state.mapLat, state.mapLng, state.tileSizeMeters);
+    const point = map.latLngToContainerPoint([lat, lng]);
+    const rect = map.getContainer().getBoundingClientRect();
+    onHexScreenPosition({ x: rect.left + point.x, y: rect.top + point.y });
+  }, [selectedHex, state.mapLat, state.mapLng, state.tileSizeMeters, onHexScreenPosition]);
 
   useEffect(() => {
     const id = window.setInterval(() => setTimePeriod(getTimePeriod()), 60_000);
@@ -296,7 +355,24 @@ export function GameMap({
     const effectivePlayerDisplayPrefs = playerDisplayPrefs ?? DEFAULT_PLAYER_PREFS;
     const playerMarkerSizeMultiplier = MARKER_SIZE_MULTIPLIER[effectivePlayerDisplayPrefs.markerSize] ?? 1;
     const markerZoomScale = getMarkerZoomScale(currentZoom);
-    const showTerrainIcons = currentZoom >= TERRAIN_ICON_MIN_ZOOM;
+    const shouldShowTerrainIcons = showTerrainIconsZoom(currentZoom);
+    const shouldShowTroopBadges = showTroopBadges(currentZoom);
+    const shouldShowBorderEffects = showBorderEffects(currentZoom);
+    const shouldShowBuildingIcons = showBuildingIcons(currentZoom);
+    const shouldShowHexTooltips = showHexTooltips(currentZoom);
+    const shouldShowContestEffects = showContestEffects(currentZoom);
+    const shouldShowSupplyLines = showSupplyLines(currentZoom);
+
+    // Pre-compute supply network for disconnected hex dimming
+    const supplyDisconnected = new Set<string>();
+    let supplyEdges: Array<{ fromCenter: L.LatLngExpression; toCenter: L.LatLngExpression; teamColor: string }> = [];
+    if (shouldShowSupplyLines && state.dynamics?.supplyLinesEnabled && state.dynamics?.hqEnabled) {
+      const supplyResult = computeSupplyNetwork(
+        renderedGrid, state.alliances, state.mapLat!, state.mapLng!, state.tileSizeMeters
+      );
+      for (const key of supplyResult.disconnectedHexes) supplyDisconnected.add(key);
+      supplyEdges = supplyResult.supplyEdges;
+    }
 
     for (const cell of Object.values(renderedGrid)) {
       const cellKey = `${cell.q},${cell.r}`;
@@ -367,17 +443,17 @@ export function GameMap({
         && cell.troops === 0
         && !isInactive;
 
-      // Terrain underlay
-      if (state.dynamics?.terrainEnabled && terrainType !== 'None') {
-        L.polygon(corners, {
-          color: 'transparent',
-          weight: 0,
-          fillColor: terrainFillColors[terrainType],
-          fillOpacity: isInactive ? 0 : terrainFillOpacity[terrainType],
-          interactive: false,
-        }).addTo(layerGroup);
+      // Single-layer terrain: neutral hexes USE the terrain colour directly as fill.
+      // Owned hexes always use team colour — terrain shown via icon only.
+      const hasTerrain = state.dynamics?.terrainEnabled && terrainType !== 'None';
 
-        if (showTerrainIcons && terrainIcon && !isFogHidden && !isInactive) {
+      // Terrain icons for unowned hexes (or owned hexes without troop badges)
+      // Common terrain (Building/Road/Path) only at detailed zoom to reduce visual noise
+      const isCommonTerrain = terrainType === 'Building' || terrainType === 'Road' || terrainType === 'Path';
+      const showThisTerrainIcon = isCommonTerrain ? shouldShowBuildingIcons : shouldShowTerrainIcons;
+      if (hasTerrain && !isInactive) {
+        if (showThisTerrainIcon && terrainIcon && !isFogHidden
+          && !(shouldShowTroopBadges && cell.ownerId && cell.troops > 0)) {
           L.marker([centerLat, centerLng], {
             icon: L.divIcon({
               className: 'hex-terrain-icon',
@@ -392,27 +468,37 @@ export function GameMap({
         }
       }
 
+      // Fill colour: dark tinted for neutral hexes, bold team colour for owned
+      const neutralFill = (hasTerrain && !isInactive)
+        ? terrainFillColors[terrainType]
+        : (isInactive ? '#2d3340' : '#3b4252');
+      const neutralOpacity = (hasTerrain && !isInactive)
+        ? terrainFillOpacity[terrainType]
+        : scaleTroopOpacity(0, false);
+
       const fillColor = isFogHidden
         ? '#1a1a2e'
         : cell.isMasterTile
           ? hostColor
-          : cell.ownerColor ?? (isInactive ? '#e5edf6' : '#9fc4e8');
+          : cell.ownerId
+            ? scaleTroopColor(ownerColor, cell.troops)
+            : neutralFill;
       const fillOpacity = isFogHidden
         ? 0.7
         : isInactive
           ? 0.08
           : cell.isMasterTile
-            ? 0.58
+            ? 0.75
             : cell.ownerId
-              ? (isMine ? 0.88 : 0.72)
-              : 0.28;
+              ? scaleTroopOpacity(cell.troops, true)
+              : neutralOpacity;
       let borderColor = cell.ownerId
-        ? '#f7fbff'
+        ? 'rgba(255, 255, 255, 0.55)'
         : (isInactive
-          ? 'rgba(100, 130, 170, 0.6)'
-          : (isFogHidden ? '#d7e7f6' : 'rgba(30, 60, 100, 0.8)'));
-      let borderWeight = cell.ownerId ? 3 : (isInactive ? 1.25 : 2.5);
-      const borderOpacity = cell.ownerId || cell.isMasterTile ? 0.95 : ((isInactive || isFogHidden) ? 0.8 : 0.92);
+          ? 'rgba(80, 90, 105, 0.35)'
+          : (isFogHidden ? 'rgba(100, 115, 140, 0.4)' : 'rgba(90, 100, 120, 0.45)'));
+      let borderWeight = cell.ownerId ? 2.5 : (isInactive ? 1 : 1.5);
+      const borderOpacity = cell.ownerId || cell.isMasterTile ? 0.90 : ((isInactive || isFogHidden) ? 0.6 : 0.70);
       let dashArray: string | undefined;
 
       if (cell.isMasterTile) {
@@ -450,8 +536,9 @@ export function GameMap({
         cell.isFortified ? 'is-fortified' : '',
         newlyRevealedKeys.has(cellKey) ? 'is-revealing' : '',
         newlyClaimedKeys.has(cellKey) ? 'is-just-claimed' : '',
-        isFrontier ? 'is-frontier' : '',
-        isContested ? 'is-contested' : '',
+        shouldShowBorderEffects && isFrontier ? 'is-frontier' : '',
+        shouldShowBorderEffects && isContested ? 'is-contested' : '',
+        shouldShowSupplyLines && state.dynamics?.supplyLinesEnabled && state.dynamics?.hqEnabled && supplyDisconnected.has(cellKey) ? 'is-disconnected' : '',
       ].filter(Boolean).join(' ');
 
       const polygon = L.polygon(corners, {
@@ -464,10 +551,12 @@ export function GameMap({
         fillOpacity
       });
 
-      polygon.bindTooltip(
-        isFogHidden ? i18n.t('phase7.hiddenHex') : buildHexTooltipHtml(cell, currentHex),
-        { sticky: true, className: isFogHidden ? '' : 'hex-tooltip-card' }
-      );
+      if (shouldShowHexTooltips) {
+        polygon.bindTooltip(
+          isFogHidden ? i18n.t('phase7.hiddenHex') : buildHexTooltipHtml(cell, currentHex),
+          { sticky: true, className: isFogHidden ? '' : 'hex-tooltip-card' }
+        );
+      }
 
       // Only fire hex click on genuine taps (not after pan/zoom drag)
       polygon.on('click', (e: L.LeafletMouseEvent) => {
@@ -500,7 +589,7 @@ export function GameMap({
         }).addTo(layerGroup);
       }
 
-      if (!isInactive && !isFogHidden && (cell.troops > 0 || cell.isMasterTile)) {
+      if (shouldShowTroopBadges && !isInactive && !isFogHidden && (cell.troops > 0 || cell.isMasterTile)) {
         // Forest blind: hide enemy troop counts in forest hexes
         const isForestBlind = state.dynamics?.terrainEnabled
           && cell.terrainType === 'Forest'
@@ -511,14 +600,22 @@ export function GameMap({
         const troopLabel = isForestBlind ? '?' : String(cell.troops);
         const isHQ = isHQHex;
         const hqPrefix = isHQ ? '🏛️' : '';
-        const troopTier = cell.troops >= 20 ? 'high' : cell.troops >= 8 ? 'mid' : 'low';
         const badgeSize = Math.round(Math.min(38, Math.max(20, 22 + Math.log2(Math.max(1, cell.troops)) * 3)));
         const ringPct = Math.min(100, cell.troops * 2);
         const prefix = cell.isMasterTile ? '👑' : hqPrefix;
-        const badgeHtml = `<div class="hex-troop-badge tier-${troopTier}${isForestBlind ? ' forest-blind' : ''}" style="width:${badgeSize}px;height:${badgeSize}px">
+
+        // Team-colored badge: saturated owner color with dark background
+        const { h: bH, s: bS } = hexToHSL(ownerColor);
+        const badgeBg = `hsla(${Math.round(bH)},${Math.round(bS * 0.80)}%,22%,0.94)`;
+        const badgeBorderC = `hsla(${Math.round(bH)},${Math.round(bS * 0.65)}%,48%,0.65)`;
+        const badgeGlow = cell.troops >= 20
+          ? `0 0 12px hsla(${Math.round(bH)},${Math.round(bS)}%,50%,0.50),0 2px 6px rgba(0,0,0,0.4)`
+          : `0 2px 8px rgba(0,0,0,0.45)`;
+
+        const badgeHtml = `<div class="hex-troop-badge${isForestBlind ? ' forest-blind' : ''}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border-color:${badgeBorderC};box-shadow:${badgeGlow}">
   <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true">
-    <circle cx="18" cy="18" r="16" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.5" />
+    <circle cx="18" cy="18" r="16" fill="none" stroke="${ownerColor}" stroke-width="2.5"
+            stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.6" />
   </svg>
   ${prefix ? `<span class="troop-badge-prefix">${prefix}</span>` : ''}
   <span class="troop-count">${escapeHtml(troopLabel)}</span>
@@ -536,29 +633,60 @@ export function GameMap({
       }
 
       // Building elevation markers
-      if (cell.isFort && !isInactive && !isFogHidden) {
-        L.marker([centerLat, centerLng], {
-          icon: L.divIcon({
-            className: 'hex-building-icon',
-            html: '<div class="building fort">🏰</div>',
-            iconSize: [28, 28],
-            iconAnchor: [14, 28],
-          }),
+      if (shouldShowBuildingIcons) {
+        if (cell.isFort && !isInactive && !isFogHidden) {
+          L.marker([centerLat, centerLng], {
+            icon: L.divIcon({
+              className: 'hex-building-icon',
+              html: '<div class="building fort">🏰</div>',
+              iconSize: [28, 28],
+              iconAnchor: [14, 28],
+            }),
+            interactive: false,
+            zIndexOffset: -10,
+          }).addTo(layerGroup);
+        }
+
+        if (isHQHex && !cell.isMasterTile && !isInactive && !isFogHidden) {
+          L.marker([centerLat, centerLng], {
+            icon: L.divIcon({
+              className: 'hex-building-icon',
+              html: '<div class="building hq">🏛️</div>',
+              iconSize: [28, 28],
+              iconAnchor: [14, 28],
+            }),
+            interactive: false,
+            zIndexOffset: -10,
+          }).addTo(layerGroup);
+        }
+      }
+    }
+
+    // Supply line visualization
+    if (shouldShowSupplyLines && state.dynamics?.supplyLinesEnabled && state.dynamics?.hqEnabled) {
+      for (const edge of supplyEdges) {
+        L.polyline([edge.fromCenter, edge.toCenter], {
+          color: edge.teamColor,
+          weight: 1.5,
+          opacity: 0.4,
+          dashArray: '8 4',
           interactive: false,
-          zIndexOffset: -10,
+          className: 'supply-line',
         }).addTo(layerGroup);
       }
+    }
 
-      if (isHQHex && !cell.isMasterTile && !isInactive && !isFogHidden) {
-        L.marker([centerLat, centerLng], {
-          icon: L.divIcon({
-            className: 'hex-building-icon',
-            html: '<div class="building hq">🏛️</div>',
-            iconSize: [28, 28],
-            iconAnchor: [14, 28],
-          }),
+    // Contested border edges
+    if (shouldShowContestEffects) {
+      const contestedEdges = findContestedEdges(renderedGrid, state.mapLat!, state.mapLng!, state.tileSizeMeters);
+      for (const edge of contestedEdges) {
+        const intensityClass = edge.intensity > 0.6 ? 'contested-edge-intense' : '';
+        L.polyline([edge.from, edge.to], {
+          color: edge.teamAColor,
+          weight: 3,
+          opacity: 0.7,
           interactive: false,
-          zIndexOffset: -10,
+          className: `contested-edge ${intensityClass}`,
         }).addTo(layerGroup);
       }
     }
@@ -673,6 +801,20 @@ export function GameMap({
 
     prevGridRef.current = { ...renderedGrid };
   }, [currentHex, currentLocation, currentZoom, inactiveHexKeySet, myUserId, playerDisplayPrefs, renderedGrid, selectedHex, state]);
+
+  useEffect(() => {
+    const layerGroup = animLayerGroupRef.current;
+    if (!layerGroup || state.mapLat == null || state.mapLng == null) return;
+    if (troopMovements.length === 0) {
+      layerGroup.clearLayers();
+      return;
+    }
+    if (!showTroopAnimations(currentZoom)) {
+      layerGroup.clearLayers();
+      return;
+    }
+    renderTroopAnimations(troopMovements, layerGroup, state.mapLat, state.mapLng, state.tileSizeMeters);
+  }, [troopMovements, state.mapLat, state.mapLng, state.tileSizeMeters, currentZoom]);
 
   return (
     <div className={`game-map-container time-${timePeriod}`}>

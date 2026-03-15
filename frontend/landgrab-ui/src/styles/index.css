@@ -1,4 +1,5 @@
 @import './glassmorphism.css';
+@import './hud-updates.css';
 /* ── Reset & base ──────────────────────────────────────────────────────── */
 *,
 *::before,
@@ -6,6 +7,11 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
 }
 
 :root {
@@ -25,7 +31,7 @@
 
 body {
   background: var(--bg);
-  min-height: 100vh;
+  overscroll-behavior: none;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -709,10 +715,10 @@ input:focus {
   background: white;
   border: 2px solid rgba(0, 0, 0, 0.2);
   border-radius: 4px;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3653,7 +3659,7 @@ input:checked + .display-settings-slider:before {
 /* ── Guidance Banner ────────────────────────────────────────────────────── */
 .guidance-banner {
   position: absolute;
-  top: 75px; 
+  top: 75px;
   left: 50%;
   transform: translateX(-50%) translateY(-15px);
   background: rgba(10, 18, 32, 0.93);
@@ -4151,16 +4157,6 @@ input:checked + .display-settings-slider:before {
   border: 1.5px solid rgba(255,255,255,0.18);
   box-shadow: 0 2px 8px rgba(0,0,0,0.35);
   transition: transform 0.2s ease;
-}
-.hex-troop-badge.tier-high {
-  background: rgba(180, 40, 30, 0.88);
-  border-color: rgba(255,100,80,0.45);
-  box-shadow: 0 0 10px rgba(231, 76, 60, 0.35), 0 2px 6px rgba(0,0,0,0.3);
-}
-.hex-troop-badge.tier-mid {
-  background: rgba(180, 140, 10, 0.82);
-  border-color: rgba(241,196,15,0.35);
-  box-shadow: 0 0 6px rgba(241, 196, 15, 0.2), 0 2px 6px rgba(0,0,0,0.3);
 }
 .troop-ring {
   position: absolute;
@@ -5030,4 +5026,137 @@ input:checked + .display-settings-slider:before {
 .host-message-banner {
   background: rgba(52, 152, 219, 0.25) !important;
   border-left: 3px solid var(--accent) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Feature: Contested Border Edges
+   ═══════════════════════════════════════════════════════ */
+@keyframes edge-spark {
+  0%, 100% { stroke-opacity: 0.3; stroke-width: 2; }
+  50% { stroke-opacity: 1; stroke-width: 4; filter: drop-shadow(0 0 6px currentColor); }
+}
+
+.contested-edge {
+  animation: edge-spark 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.contested-edge-intense {
+  animation-duration: 0.8s;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Feature: Supply Lines
+   ═══════════════════════════════════════════════════════ */
+@keyframes supply-flow {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+.supply-line {
+  animation: supply-flow 1.5s linear infinite;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.hex-polygon.is-disconnected {
+  opacity: 0.5 !important;
+  filter: grayscale(40%) !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Feature: Troop Movement Animations
+   ═══════════════════════════════════════════════════════ */
+@keyframes troop-flow-anim {
+  from { stroke-dashoffset: 12; }
+  to { stroke-dashoffset: 0; }
+}
+
+.troop-flow {
+  animation: troop-flow-anim 0.6s linear infinite;
+  pointer-events: none;
+}
+
+.troop-flow-attack {
+  filter: drop-shadow(0 0 4px rgba(231, 76, 60, 0.6));
+}
+
+.troop-flow-transfer {
+  filter: drop-shadow(0 0 3px rgba(52, 152, 219, 0.4));
+}
+
+.troop-dot {
+  animation: pulse-confirm 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Feature: Mini-map
+   ═══════════════════════════════════════════════════════ */
+.mini-map-container {
+  position: absolute;
+  bottom: calc(var(--player-hud-h, 170px) + 8px);
+  left: 10px;
+  width: 160px;
+  height: 120px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+  z-index: 1050;
+  pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  background: #0f1923;
+}
+
+.mini-map-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.mini-map-toggle:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.mini-map-toggle-collapsed {
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: calc(var(--player-hud-h, 170px) + 8px);
+  left: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(15, 25, 35, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  pointer-events: auto;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Feature: Zoom-level detail scaling - strategic mode
+   ═══════════════════════════════════════════════════════ */
+.hex-polygon.is-owned {
+  transition: fill-opacity 0.25s ease, fill 0.25s ease;
 }
