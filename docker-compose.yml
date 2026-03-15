@@ -4,17 +4,19 @@ services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     platform: linux/amd64
+    # MSSQL requires root for initial setup in Docker
     user: "0:0"
     environment:
       ACCEPT_EULA: "Y"
-      SA_PASSWORD: "Dev_Password1!"
+      # Override via .env file or environment variable
+      SA_PASSWORD: "${SA_PASSWORD:-Dev_Password1!}"
       MSSQL_PID: Developer
     ports:
       - "1433:1433"
     volumes:
       - sqldata:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Dev_Password1!' -Q 'SELECT 1' -No -b"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SA_PASSWORD:-Dev_Password1!}' -Q 'SELECT 1' -No -b"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -29,7 +31,7 @@ services:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Server=db,1433;Initial Catalog=landgrab;User Id=sa;Password=Dev_Password1!;Encrypt=False;TrustServerCertificate=True;
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Initial Catalog=landgrab;User Id=sa;Password=${SA_PASSWORD:-Dev_Password1!};Encrypt=False;TrustServerCertificate=True;
       - Jwt__Secret=${JWT_SECRET:?JWT_SECRET environment variable must be set}
       - App__BaseUrl=${APP_URL:-http://localhost}
       - AllowedOrigins__0=http://localhost
@@ -43,7 +45,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "80:8080"
 
 volumes:
   sqldata:

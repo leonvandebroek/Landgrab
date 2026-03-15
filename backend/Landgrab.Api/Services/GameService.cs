@@ -1557,25 +1557,30 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         }
     }
 
-    public (GameState? state, string? error, PendingDuel? newDuel) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, PendingDuel? newDuel,
+        (string payerId, int amount, int hexQ, int hexR)? tollPaid,
+        (string hunterId, string preyId, int reward)? preyCaught) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
-            return (null, error, null);
+            return (null, error, null, null, null);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.", null);
+            return (null, "Room not found.", null, null, null);
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Player locations are only tracked while the game is playing.", null);
+                return (null, "Player locations are only tracked while the game is playing.", null, null, null);
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
-                return (null, "Player not in room.", null);
+                return (null, "Player not in room.", null, null, null);
+
+            (string payerId, int amount, int hexQ, int hexR)? tollPaidInfo = null;
+            (string hunterId, string preyId, int reward)? preyCaughtInfo = null;
 
             var previousPhase = room.State.Phase;
             player.CurrentLat = lat;
@@ -1719,6 +1724,8 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                         if (player.CarriedTroops <= 0)
                             ResetCarriedTroops(player);
 
+                        tollPaidInfo = (userId, tollAmount, tollHex.q, tollHex.r);
+
                         AppendEventLog(room.State, new GameEventLogEntry
                         {
                             Type = "TollPaid",
@@ -1841,6 +1848,10 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                     preyPlayer.IsPrey = true;
                 }
 
+                // TODO: Implement PreyEscaped event - needs escape condition design
+                // (e.g., prey stays alive for X minutes, or prey reaches a safe zone)
+                // Frontend expects: { preyId, reward }
+
                 if (preyPlayer != null && preyPlayer.Id != userId
                     && preyPlayer.CurrentLat.HasValue && preyPlayer.CurrentLng.HasValue)
                 {
@@ -1853,17 +1864,20 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
                         && (player.AllianceId == null || player.AllianceId != preyPlayer.AllianceId))
                     {
                         // Caught! Hunter gets +3 troops on nearest owned hex
+                        var reward = 3;
                         var hunterNearestOwned = HexService.SpiralSearch(hunterHex.q, hunterHex.r, room.State.GridRadius)
                             .Select(pos => room.State.Grid.TryGetValue(HexService.Key(pos.q, pos.r), out var c) ? c : null)
                             .FirstOrDefault(c => c != null && (c.OwnerId == userId
                                 || (player.AllianceId != null && c.OwnerAllianceId == player.AllianceId)));
                         if (hunterNearestOwned != null)
-                            hunterNearestOwned.Troops += 3;
+                            hunterNearestOwned.Troops += reward;
+
+                        preyCaughtInfo = (userId, preyPlayer.Id, reward);
 
                         AppendEventLog(room.State, new GameEventLogEntry
                         {
                             Type = "PreyCaught",
-                            Message = $"{player.Name} caught the prey ({preyPlayer.Name})! +3 bonus troops.",
+                            Message = $"{player.Name} caught the prey ({preyPlayer.Name})! +{reward} bonus troops.",
                             PlayerId = userId,
                             PlayerName = player.Name,
                             TargetPlayerId = preyPlayer.Id,
@@ -1913,35 +1927,35 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
-            return (snapshot, null, newDuel);
+            return (snapshot, null, newDuel, tollPaidInfo, preyCaughtInfo);
         }
     }
 
-    public (GameState? state, string? error) PickUpTroops(string roomCode, string userId,
+    public (GameState? state, string? error, AmbushResult? ambushResult) PickUpTroops(string roomCode, string userId,
         int q, int r, int count, double playerLat, double playerLng)
     {
         if (count < 1)
-            return (null, "Pick-up count must be at least 1.");
+            return (null, "Pick-up count must be at least 1.", null);
 
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
-            return (null, error);
+            return (null, error, null);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.");
+            return (null, "Room not found.", null);
 
         if (room.State.IsPaused)
-            return (null, "Game is paused.");
+            return (null, "Game is paused.", null);
 
         lock (room.SyncRoot)
         {
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
-                return (null, validationError);
+                return (null, validationError, null);
             if (cell.IsMasterTile)
-                return (null, "The master tile cannot be used for troop pick-up.");
+                return (null, "The master tile cannot be used for troop pick-up.", null);
             // Phase 5: Ambush — hostile presence cancels pickup and triggers troop loss
             if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Ambush))
             {
@@ -1970,17 +1984,26 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
                     var ambushSnapshot = SnapshotState(room.State);
                     QueuePersistence(room, ambushSnapshot);
-                    return (null, "Ambush! A hostile player intercepted your pickup.");
+                    return (ambushSnapshot, null, new AmbushResult
+                    {
+                        AttackerId = hostilePresent.Id,
+                        DefenderId = userId,
+                        Q = q,
+                        R = r,
+                        AttackerWon = true,
+                        TroopsLost = troopsLost,
+                        NewState = ambushSnapshot
+                    });
                 }
             }
 
             if (cell.OwnerId != userId)
-                return (null, "You can only pick up troops from your own hexes.");
+                return (null, "You can only pick up troops from your own hexes.", null);
             if (cell.Troops < count)
-                return (null, "That hex does not have enough troops.");
+                return (null, "That hex does not have enough troops.", null);
             if (player.CarriedTroops > 0 &&
                 (player.CarriedTroopsSourceQ != q || player.CarriedTroopsSourceR != r))
-                return (null, "Place your carried troops before picking up from a different hex.");
+                return (null, "Place your carried troops before picking up from a different hex.", null);
 
             cell.Troops -= count;
             player.CarriedTroops += count;
@@ -1991,7 +2014,7 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
-            return (snapshot, null);
+            return (snapshot, null, null);
         }
     }
 
@@ -2489,12 +2512,27 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
 
     private void QueuePersistence(GameRoom room, GameState stateSnapshot)
     {
-        _ = roomPersistenceService.PersistRoomStateAsync(
-            room.Code,
-            room.HostUserId,
-            room.CreatedAt,
-            stateSnapshot,
-            DateTime.UtcNow);
+        var roomCode = room.Code;
+        var hostUserId = room.HostUserId;
+        var createdAt = room.CreatedAt;
+        var persistedAt = DateTime.UtcNow;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await roomPersistenceService.PersistRoomStateAsync(
+                    roomCode,
+                    hostUserId,
+                    createdAt,
+                    stateSnapshot,
+                    persistedAt);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to persist room state for {RoomCode}", roomCode);
+            }
+        });
     }
 
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase)
@@ -2874,31 +2912,78 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
         if (!fullSnapshot.Dynamics.FogOfWarEnabled)
             return fullSnapshot;
 
-        var visibleKeys = GetVisibleHexKeys(fullSnapshot, userId);
+        return CreatePlayerSnapshot(fullSnapshot, userId);
+    }
 
-        // Create a new grid with hidden cells scrubbed
-        var fogGrid = new Dictionary<string, HexCell>();
+    public GameState GetPlayerSnapshot(
+        GameState fullSnapshot,
+        string userId,
+        IReadOnlyDictionary<string, HexCell> hiddenFogCells)
+    {
+        if (!fullSnapshot.Dynamics.FogOfWarEnabled)
+            return fullSnapshot;
+
+        return CreatePlayerSnapshot(fullSnapshot, userId, hiddenFogCells);
+    }
+
+    private GameState CreatePlayerSnapshot(
+        GameState fullSnapshot,
+        string userId,
+        IReadOnlyDictionary<string, HexCell>? hiddenFogCells = null)
+    {
+        var visibleKeys = GetVisibleHexKeys(fullSnapshot, userId);
+        var fogGrid = new Dictionary<string, HexCell>(fullSnapshot.Grid.Count);
+
         foreach (var (key, cell) in fullSnapshot.Grid)
         {
             if (visibleKeys.Contains(key))
             {
-                fogGrid[key] = cell; // already a snapshot copy
+                fogGrid[key] = cell;
+                continue;
             }
-            else
-            {
-                fogGrid[key] = new HexCell
-                {
-                    Q = cell.Q,
-                    R = cell.R,
-                    TerrainType = cell.TerrainType, // terrain is always visible
-                    Troops = 0,
-                    // Everything else null/default — hidden
-                };
-            }
+
+            fogGrid[key] = hiddenFogCells != null
+                ? hiddenFogCells[key]
+                : CreateHiddenFogCell(cell);
         }
 
-        // Return a shallow clone with the fog grid
-        var playerSnapshot = new GameState
+        var playerSnapshot = CreateSnapshotEnvelope(fullSnapshot, fogGrid);
+        playerSnapshot.Missions = GetVisibleMissions(fullSnapshot, userId);
+        return playerSnapshot;
+    }
+
+    public IReadOnlyDictionary<string, HexCell> CreateHiddenFogCellsForBroadcast(GameState fullSnapshot)
+    {
+        if (!fullSnapshot.Dynamics.FogOfWarEnabled)
+            return new Dictionary<string, HexCell>(0);
+
+        return CreateHiddenFogCells(fullSnapshot);
+    }
+
+    private static Dictionary<string, HexCell> CreateHiddenFogCells(GameState fullSnapshot)
+    {
+        var hiddenFogCells = new Dictionary<string, HexCell>(fullSnapshot.Grid.Count);
+
+        foreach (var (key, cell) in fullSnapshot.Grid)
+            hiddenFogCells[key] = CreateHiddenFogCell(cell);
+
+        return hiddenFogCells;
+    }
+
+    private static HexCell CreateHiddenFogCell(HexCell cell)
+    {
+        return new HexCell
+        {
+            Q = cell.Q,
+            R = cell.R,
+            TerrainType = cell.TerrainType,
+            Troops = 0,
+        };
+    }
+
+    private static GameState CreateSnapshotEnvelope(GameState fullSnapshot, Dictionary<string, HexCell> fogGrid)
+    {
+        return new GameState
         {
             RoomCode = fullSnapshot.RoomCode,
             Phase = fullSnapshot.Phase,
@@ -2935,16 +3020,17 @@ public class GameService(RoomPersistenceService roomPersistenceService, ILogger<
             PreyTargetR = fullSnapshot.PreyTargetR,
             IsRushHour = fullSnapshot.IsRushHour,
         };
+    }
 
-        // Filter missions to only those visible to this player
+    private static List<Mission> GetVisibleMissions(GameState fullSnapshot, string userId)
+    {
         var player = fullSnapshot.Players.FirstOrDefault(p => p.Id == userId);
-        playerSnapshot.Missions = playerSnapshot.Missions
+
+        return fullSnapshot.Missions
             .Where(m => m.Scope == "Main" || m.Scope == "Interim"
                 || (m.Scope == "Team" && m.TargetTeamId == player?.AllianceId)
                 || (m.Scope == "Personal" && m.TargetPlayerId == userId))
             .ToList();
-
-        return playerSnapshot;
     }
 
     private static void SetCellOwner(HexCell cell, PlayerDto player)

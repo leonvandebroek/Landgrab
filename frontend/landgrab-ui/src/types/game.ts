@@ -35,6 +35,27 @@ export interface HexCoordinate {
   r: number;
 }
 
+export type MapInteractionTone = 'info' | 'success' | 'error';
+
+export interface MapInteractionFeedback {
+  tone: MapInteractionTone;
+  message: string;
+  targetHex?: [number, number] | null;
+}
+
+export interface PickupPrompt {
+  q: number;
+  r: number;
+  max: number;
+}
+
+export interface AttackPrompt {
+  q: number;
+  r: number;
+  max: number;
+  defenderTroops: number;
+}
+
 export interface HexCell {
   q: number;
   r: number;
@@ -189,10 +210,10 @@ export interface CombatResult {
   newState: GameState;
   q: number;
   r: number;
-  previousOwnerName?: string;
-  attackerBonus?: number;
-  defenderBonus?: number;
-  defenderTerrainType?: TerrainType;
+  previousOwnerName: string | null;
+  attackerBonus: number;
+  defenderBonus: number;
+  defenderTerrainType: TerrainType | null;
 }
 
 export interface Mission {

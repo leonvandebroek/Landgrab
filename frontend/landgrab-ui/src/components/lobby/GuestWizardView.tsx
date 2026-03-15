@@ -12,6 +12,7 @@ interface LocationPoint {
 interface Props {
     gameState: GameState;
     myUserId: string;
+    authToken: string;
     currentLocation: LocationPoint | null;
     onSetAlliance: (name: string) => void;
     onSetPlayerRole?: (role: string) => void;
@@ -29,6 +30,7 @@ const TOTAL_STEPS = 3;
 export function GuestWizardView({
     gameState,
     myUserId,
+    authToken,
     currentLocation,
     onSetAlliance,
     onSetPlayerRole,
@@ -114,6 +116,7 @@ export function GuestWizardView({
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}
+                            authToken={authToken}
                             isHost={false}
                             currentLocation={currentLocation}
                             canStart={false}

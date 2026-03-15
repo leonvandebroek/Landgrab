@@ -53,6 +53,10 @@ public sealed class RandomEventService(
     {
         var eventType = EventTypes[Random.Shared.Next(EventTypes.Length)];
 
+        // TODO: Implement EventWarning pre-event notification
+        // Currently events fire immediately without warning phase
+        // Frontend expects same RandomEvent type but as a preview before effects apply
+
         lock (room.SyncRoot)
         {
             switch (eventType)

@@ -8,7 +8,8 @@ import type {
 const BASE = '/api/map-templates';
 
 function authHeaders(token: string): Record<string, string> {
-  return { Authorization: `Bearer ${token}` };
+  const normalizedToken = token.trim();
+  return normalizedToken ? { Authorization: `Bearer ${normalizedToken}` } : {};
 }
 
 function jsonHeaders(token: string): Record<string, string> {
@@ -23,13 +24,19 @@ async function ensureOk(res: Response): Promise<void> {
 }
 
 export async function listMapTemplates(token: string): Promise<MapTemplate[]> {
-  const res = await fetch(BASE, { headers: authHeaders(token) });
+  const res = await fetch(BASE, {
+    credentials: 'include',
+    headers: authHeaders(token),
+  });
   await ensureOk(res);
   return res.json() as Promise<MapTemplate[]>;
 }
 
 export async function getMapTemplate(token: string, id: string): Promise<MapTemplateDetail> {
-  const res = await fetch(`${BASE}/${id}`, { headers: authHeaders(token) });
+  const res = await fetch(`${BASE}/${id}`, {
+    credentials: 'include',
+    headers: authHeaders(token),
+  });
   await ensureOk(res);
   return res.json() as Promise<MapTemplateDetail>;
 }
@@ -40,6 +47,7 @@ export async function createMapTemplate(
 ): Promise<MapTemplateDetail> {
   const res = await fetch(BASE, {
     method: 'POST',
+    credentials: 'include',
     headers: jsonHeaders(token),
     body: JSON.stringify(data),
   });
@@ -54,6 +62,7 @@ export async function updateMapTemplate(
 ): Promise<MapTemplateDetail> {
   const res = await fetch(`${BASE}/${id}`, {
     method: 'PUT',
+    credentials: 'include',
     headers: jsonHeaders(token),
     body: JSON.stringify(data),
   });
@@ -64,6 +73,7 @@ export async function updateMapTemplate(
 export async function deleteMapTemplate(token: string, id: string): Promise<void> {
   const res = await fetch(`${BASE}/${id}`, {
     method: 'DELETE',
+    credentials: 'include',
     headers: authHeaders(token),
   });
   await ensureOk(res);
@@ -75,6 +85,7 @@ export async function duplicateMapTemplate(
 ): Promise<MapTemplateDetail> {
   const res = await fetch(`${BASE}/${id}/duplicate`, {
     method: 'POST',
+    credentials: 'include',
     headers: authHeaders(token),
   });
   await ensureOk(res);

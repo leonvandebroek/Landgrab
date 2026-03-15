@@ -15,6 +15,7 @@ interface LocationPoint {
 interface Props {
     gameState: GameState;
     myUserId: string;
+    authToken: string;
     currentLocation: LocationPoint | null;
     locationError: string | null;
     locationLoading: boolean;
@@ -49,6 +50,7 @@ const TOTAL_STEPS = 5;
 export function SetupWizard({
     gameState,
     myUserId,
+    authToken,
     currentLocation,
     locationError,
     locationLoading,
@@ -232,6 +234,7 @@ export function SetupWizard({
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}
+                            authToken={authToken}
                             isHost={isHost}
                             currentLocation={currentLocation}
                             canStart={canStart}

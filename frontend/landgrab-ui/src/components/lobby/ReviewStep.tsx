@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameAreaMode, GameAreaPattern, GameState, HexCell, HexCoordinate, MapTemplate } from '../../types/game';
 import { listMapTemplates } from '../../api/mapTemplateApi';
-import { useAuth } from '../../hooks/useAuth';
 import { GameMap } from '../map/GameMap';
 import { hexKey } from '../map/HexMath';
 import { CustomSelect } from './CustomSelect';
@@ -29,6 +28,7 @@ interface LocationPoint {
 interface Props {
     gameState: GameState;
     myUserId: string;
+    authToken: string;
     isHost: boolean;
     currentLocation: LocationPoint | null;
     canStart: boolean;
@@ -45,6 +45,7 @@ interface Props {
 export function ReviewStep({
     gameState,
     myUserId,
+    authToken,
     isHost,
     currentLocation,
     canStart,
@@ -58,7 +59,6 @@ export function ReviewStep({
     invoke,
 }: Props) {
     const { t } = useTranslation();
-    const { auth } = useAuth();
     const [showCustomize, setShowCustomize] = useState(false);
     const [selectedHex, setSelectedHex] = useState<[number, number] | null>(null);
     const [selectedPlayerId, setSelectedPlayerId] = useState('');
@@ -156,17 +156,16 @@ export function ReviewStep({
 
     // Template fetching
     const fetchTemplates = useCallback(async () => {
-        if (!auth?.token) return;
         setTemplateLoading(true);
         try {
-            const list = await listMapTemplates(auth.token);
+            const list = await listMapTemplates(authToken);
             setTemplates(list);
         } catch {
             // Template fetch errors are non-critical
         } finally {
             setTemplateLoading(false);
         }
-    }, [auth?.token]);
+    }, [authToken]);
 
     useEffect(() => {
         if (areaMode === 'Template') {

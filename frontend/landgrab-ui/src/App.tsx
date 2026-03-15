@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useAuth } from './hooks/useAuth';
@@ -18,14 +18,18 @@ import { PlayingHud } from './components/game/PlayingHud';
 import { CombatModal } from './components/game/CombatModal';
 import { GameOver } from './components/game/GameOver';
 import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
-import type { MapInteractionFeedback, TileAction, TileActionType } from './components/game/tileInteraction';
+import type { TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import { HostControlPlane } from './components/game/HostControlPlane';
-import type { ClaimMode, CombatResult, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, Mission, PendingDuel, RandomEvent, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
+import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
+import { useGameStore } from './stores/gameStore';
+import type { SavedSession } from './stores/gameStore';
+import { useGameplayStore } from './stores/gameplayStore';
+import { useNotificationStore } from './stores/notificationStore';
+import { useUiStore } from './stores/uiStore';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
-const SESSION_STORAGE_KEY = 'landgrab_session';
 const RESUME_TIMEOUT_MS = 5000;
 const LOCATION_BROADCAST_THROTTLE_MS = 3000;
 
@@ -41,17 +45,6 @@ interface LocationPoint {
   lng: number;
 }
 
-interface PickupPrompt {
-  q: number;
-  r: number;
-  max: number;
-}
-
-interface SavedSession {
-  roomCode: string;
-  userId: string;
-}
-
 interface PendingResume {
   source: ResumeSource;
   expectedRoomCode?: string;
@@ -61,33 +54,57 @@ interface PendingResume {
 
 export default function App() {
   const { t } = useTranslation();
-  const { auth, login, register, logout } = useAuth();
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [error, setError] = useState('');
-  const [view, setView] = useState<'lobby' | 'game' | 'gameover' | 'mapEditor'>('lobby');
-  const [selectedHex, setSelectedHex] = useState<[number, number] | null>(null);
-  const [mapFeedback, setMapFeedback] = useState<MapInteractionFeedback | null>(null);
-  const [pickupPrompt, setPickupPrompt] = useState<PickupPrompt | null>(null);
-  const [pickupCount, setPickupCount] = useState(1);
-  const [autoResuming, setAutoResuming] = useState(false);
-  const [savedSession, setSavedSession] = useState<SavedSession | null>(loadSavedSession);
-  const [myRooms, setMyRooms] = useState<RoomSummary[]>([]);
-  const [showDebugTools, setShowDebugTools] = useState(false);
-  const [debugLocationEnabled, setDebugLocationEnabled] = useState(false);
-  const [debugLocation, setDebugLocation] = useState<LocationPoint | null>(null);
-  const [attackPrompt, setAttackPrompt] = useState<{ q: number; r: number; max: number; defenderTroops: number } | null>(null);
-  const [attackCount, setAttackCount] = useState(1);
-  const [commandoTargetingMode, setCommandoTargetingMode] = useState(false);
-  const [combatResult, setCombatResult] = useState<CombatResult | null>(null);
-  const [randomEvent, setRandomEvent] = useState<RandomEvent | null>(null);
-  const [eventWarning, setEventWarning] = useState<RandomEvent | null>(null);
-  const [missionNotification, setMissionNotification] = useState<{ mission: Mission; type: 'assigned' | 'completed' | 'failed' } | null>(null);
-  const [pendingDuel, setPendingDuel] = useState<PendingDuel | null>(null);
-  const [hostMessage, setHostMessage] = useState<{ message: string; fromHost: boolean } | null>(null);
+  const { auth, authReady, login, register, logout } = useAuth();
+  const gameState = useGameStore(state => state.gameState);
+  const savedSession = useGameStore(state => state.savedSession);
+  const myRooms = useGameStore(state => state.myRooms);
+  const autoResuming = useGameStore(state => state.autoResuming);
+  const setGameState = useGameStore(state => state.setGameState);
+  const updateGameState = useGameStore(state => state.updateGameState);
+  const setMyRooms = useGameStore(state => state.setMyRooms);
+  const setAutoResuming = useGameStore(state => state.setAutoResuming);
+  const selectedHex = useGameplayStore(state => state.selectedHex);
+  const mapFeedback = useGameplayStore(state => state.mapFeedback);
+  const pickupPrompt = useGameplayStore(state => state.pickupPrompt);
+  const pickupCount = useGameplayStore(state => state.pickupCount);
+  const attackPrompt = useGameplayStore(state => state.attackPrompt);
+  const attackCount = useGameplayStore(state => state.attackCount);
+  const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
+  const combatResult = useGameplayStore(state => state.combatResult);
+  const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
+  const setSelectedHex = useGameplayStore(state => state.setSelectedHex);
+  const setMapFeedback = useGameplayStore(state => state.setMapFeedback);
+  const setPickupPrompt = useGameplayStore(state => state.setPickupPrompt);
+  const setPickupCount = useGameplayStore(state => state.setPickupCount);
+  const setAttackPrompt = useGameplayStore(state => state.setAttackPrompt);
+  const setAttackCount = useGameplayStore(state => state.setAttackCount);
+  const setCombatResult = useGameplayStore(state => state.setCombatResult);
+  const setCommandoTargetingMode = useGameplayStore(state => state.setCommandoTargetingMode);
+  const clearGameplayUi = useGameplayStore(state => state.clearGameplayUi);
   const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
-  const [hasAcknowledgedRules, setHasAcknowledgedRules] = useState(false);
-  const [mainMapBounds, setMainMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
-  const [selectedHexScreenPos, setSelectedHexScreenPos] = useState<{ x: number; y: number } | null>(null);
+  const randomEvent = useNotificationStore(state => state.randomEvent);
+  const eventWarning = useNotificationStore(state => state.eventWarning);
+  const missionNotification = useNotificationStore(state => state.missionNotification);
+  const pendingDuel = useNotificationStore(state => state.pendingDuel);
+  const hostMessage = useNotificationStore(state => state.hostMessage);
+  const setPendingDuel = useNotificationStore(state => state.setPendingDuel);
+  const view = useUiStore(state => state.view);
+  const error = useUiStore(state => state.error);
+  const hasAcknowledgedRules = useUiStore(state => state.hasAcknowledgedRules);
+  const showDebugTools = useUiStore(state => state.showDebugTools);
+  const debugLocationEnabled = useUiStore(state => state.debugLocationEnabled);
+  const debugLocation = useUiStore(state => state.debugLocation);
+  const mainMapBounds = useUiStore(state => state.mainMapBounds);
+  const selectedHexScreenPos = useUiStore(state => state.selectedHexScreenPos);
+  const setView = useUiStore(state => state.setView);
+  const setError = useUiStore(state => state.setError);
+  const clearError = useUiStore(state => state.clearError);
+  const setHasAcknowledgedRules = useUiStore(state => state.setHasAcknowledgedRules);
+  const setShowDebugTools = useUiStore(state => state.setShowDebugTools);
+  const setDebugLocationEnabled = useUiStore(state => state.setDebugLocationEnabled);
+  const setDebugLocation = useUiStore(state => state.setDebugLocation);
+  const setMainMapBounds = useUiStore(state => state.setMainMapBounds);
+  const setSelectedHexScreenPos = useUiStore(state => state.setSelectedHexScreenPos);
   const { toasts, pushToast, dismissToast } = useToastQueue();
   const mapNavigateRef = useRef<((lat: number, lng: number) => void) | null>(null);
   const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
@@ -103,7 +120,6 @@ export default function App() {
   const pendingResumeRef = useRef<PendingResume | null>(null);
   const savedSessionRef = useRef<SavedSession | null>(savedSession);
   const resumeSequenceRef = useRef(0);
-  const notificationTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const savedRoomCode = savedSession?.roomCode ?? '';
   const activeRoomCode = gameState?.roomCode ?? '';
   const rulesKey = activeRoomCode ? `lg-rules-ack-${activeRoomCode}` : '';
@@ -121,33 +137,6 @@ export default function App() {
     savedSessionRef.current = savedSession;
   }, [savedSession]);
 
-  // Clean up all notification auto-dismiss timers on unmount
-  useEffect(() => {
-    return () => {
-      for (const id of Object.values(notificationTimersRef.current)) {
-        clearTimeout(id);
-      }
-    };
-  }, []);
-
-  /** Set state and schedule auto-clear after `ms`. Cancels any prior timer for the same key. */
-  const scheduleAutoClear = useCallback(<T,>(
-    key: string,
-    setter: React.Dispatch<React.SetStateAction<T>>,
-    value: NoInfer<T>,
-    clearValue: NoInfer<T>,
-    ms: number,
-  ) => {
-    if (notificationTimersRef.current[key]) {
-      clearTimeout(notificationTimersRef.current[key]);
-    }
-    setter(value);
-    notificationTimersRef.current[key] = setTimeout(() => {
-      setter(clearValue);
-      delete notificationTimersRef.current[key];
-    }, ms);
-  }, []);
-
   const saveSession = useCallback((roomCode: string) => {
     if (!auth?.userId) {
       return;
@@ -160,14 +149,12 @@ export default function App() {
 
     const next = { roomCode: normalizedRoomCode, userId: auth.userId };
     savedSessionRef.current = next;
-    setSavedSession(next);
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
-  }, [auth]);
+    useGameStore.getState().setSavedSession(next);
+  }, [auth?.userId]);
 
   const clearSession = useCallback(() => {
     savedSessionRef.current = null;
-    setSavedSession(null);
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    useGameStore.getState().clearSession();
   }, []);
 
   const clearPendingResume = useCallback((outcome?: ResumeOutcome) => {
@@ -268,45 +255,29 @@ export default function App() {
     return { lat: gameState.mapLat, lng: gameState.mapLng };
   }, [gameState]);
 
-  const clearError = () => setError('');
-  const clearGameplayUi = useCallback(() => {
-    setSelectedHex(null);
-    setMapFeedback(null);
-    setAttackPrompt(null);
-    setCommandoTargetingMode(false);
-    setCombatResult(null);
-  }, []);
-
-  // Auto-dismiss map feedback toasts after 3.5s
-  useEffect(() => {
-    if (!mapFeedback) return;
-    const timer = setTimeout(() => setMapFeedback(null), 3500);
-    return () => clearTimeout(timer);
-  }, [mapFeedback]);
-
   const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover' | 'mapEditor') => {
     const normalizedState = normalizeGameState(state, gameState);
     resolveResumeFromState(normalizedState);
     if (normalizedState.roomCode) {
       saveSession(normalizedState.roomCode);
     }
-    setGameState(normalizedState);
-    setPickupPrompt(null);
+    useGameStore.getState().setGameState(normalizedState);
+    useGameplayStore.getState().setPickupPrompt(null);
 
     if (nextView) {
-      setView(nextView);
+      useUiStore.getState().setView(nextView);
     } else if (normalizedState.phase === 'Playing') {
-      setView('game');
+      useUiStore.getState().setView('game');
     } else if (normalizedState.phase === 'GameOver') {
-      setView('gameover');
+      useUiStore.getState().setView('gameover');
     }
 
     if ((nextView && nextView !== 'game') || (!nextView && normalizedState.phase !== 'Playing')) {
-      clearGameplayUi();
+      useGameplayStore.getState().clearGameplayUi();
     }
 
-    clearError();
-  }, [clearGameplayUi, gameState, resolveResumeFromState, saveSession]);
+    useUiStore.getState().clearError();
+  }, [gameState, resolveResumeFromState, saveSession]);
 
   const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, {
     onRoomCreated: (code, state) => {
@@ -325,13 +296,12 @@ export default function App() {
     onGameOver: () => {
       playSound('victory');
       vibrate(HAPTIC.victory);
-      clearGameplayUi();
-      setCombatResult(null);
+      useGameplayStore.getState().clearGameplayUi();
       setView('gameover');
     },
     onCombatResult: (result) => {
       vibrate(HAPTIC.attack);
-      setCombatResult(result);
+      useGameplayStore.getState().setCombatResult(result);
       pushToast({
         type: 'combat',
         message: result.attackerWon
@@ -342,7 +312,7 @@ export default function App() {
     onTileLost: (data) => {
       playSound('notification');
       vibrate(HAPTIC.loss);
-      setMapFeedback({
+      useGameplayStore.getState().setMapFeedback({
         tone: 'error',
         message: t('game.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
         targetHex: [data.Q, data.R]
@@ -357,23 +327,23 @@ export default function App() {
       if (resolveResumeFromError(message)) {
         return;
       }
-      setError(localizeLobbyError(message, t));
+      useUiStore.getState().setError(localizeLobbyError(message, t));
     },
     onRandomEvent: (event) => {
-      scheduleAutoClear('randomEvent', setRandomEvent, event, null, 8000);
+      useNotificationStore.getState().setRandomEvent(event);
       pushToast({
         type: 'event',
         message: event.title,
       });
     },
     onEventWarning: (event) => {
-      scheduleAutoClear('eventWarning', setEventWarning, event, null, 120000);
+      useNotificationStore.getState().setEventWarning(event);
     },
     onMissionAssigned: (mission) => {
-      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'assigned' as const }, null, 6000);
+      useNotificationStore.getState().setMissionNotification({ mission, type: 'assigned' });
     },
     onMissionCompleted: (mission) => {
-      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'completed' as const }, null, 6000);
+      useNotificationStore.getState().setMissionNotification({ mission, type: 'completed' });
       pushToast({
         type: 'mission',
         message: mission.title,
@@ -381,26 +351,22 @@ export default function App() {
       });
     },
     onMissionFailed: (mission) => {
-      scheduleAutoClear('missionNotification', setMissionNotification, { mission, type: 'failed' as const }, null, 6000);
+      useNotificationStore.getState().setMissionNotification({ mission, type: 'failed' });
     },
     onDuelChallenge: (duel) => {
-      scheduleAutoClear('pendingDuel', setPendingDuel, duel, null, 30000);
+      useNotificationStore.getState().setPendingDuel(duel);
     },
     onDuelResult: () => {
-      if (notificationTimersRef.current['pendingDuel']) {
-        clearTimeout(notificationTimersRef.current['pendingDuel']);
-        delete notificationTimersRef.current['pendingDuel'];
-      }
-      setPendingDuel(null);
+      useNotificationStore.getState().setPendingDuel(null);
     },
     onHostMessage: (data: { message: string; fromHost: boolean }) => {
-      scheduleAutoClear('hostMessage', setHostMessage, data, null, 10000);
+      useNotificationStore.getState().setHostMessage(data);
     },
     onTemplateSaved: (data) => {
       console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
     },
     onReconnected: () => {
-      clearError();
+      useUiStore.getState().clearError();
       // Immediately re-establish room mapping so hub calls don't fail
       // before the justConnected useEffect fires (race condition fix).
       const session = savedSessionRef.current;
@@ -461,14 +427,6 @@ export default function App() {
 
   const isHostBypass = Boolean(gameState?.hostBypassGps && myPlayer?.isHost);
 
-  const selectedHexKey = useMemo(() => {
-    if (!selectedHex) {
-      return null;
-    }
-
-    return `${selectedHex[0]},${selectedHex[1]}`;
-  }, [selectedHex]);
-
   const currentHex = useMemo(() => {
     if (!gameState || !currentLocation || gameState.mapLat == null || gameState.mapLng == null) {
       return null;
@@ -517,7 +475,7 @@ export default function App() {
     if (key === prevCurrentHexRef.current) return;
     prevCurrentHexRef.current = key;
 
-    if (gameState?.phase === 'Playing' && currentHex) {
+      if (gameState?.phase === 'Playing' && currentHex) {
       setSelectedHex(currentHex);
       setMapFeedback(null);
       setPickupPrompt(null);
@@ -755,7 +713,7 @@ export default function App() {
     const previousTileSizeMeters = gameState?.tileSizeMeters ?? meters;
     const roomCode = gameState?.roomCode ?? '';
 
-    setGameState(previousState => previousState
+    updateGameState(previousState => previousState
       ? {
         ...previousState,
         tileSizeMeters: meters
@@ -763,7 +721,7 @@ export default function App() {
       : previousState);
 
     invoke('SetTileSize', meters).catch(cause => {
-      setGameState(previousState => {
+      updateGameState(previousState => {
         if (!previousState || previousState.roomCode !== roomCode) {
           return previousState;
         }
@@ -775,7 +733,7 @@ export default function App() {
       });
       setError(String(cause));
     });
-  }, [gameState?.roomCode, gameState?.tileSizeMeters, invoke]);
+  }, [gameState?.roomCode, gameState?.tileSizeMeters, invoke, updateGameState]);
 
   const handleUseCenteredGameArea = useCallback(() => {
     invoke('UseCenteredGameArea').catch(cause => setError(String(cause)));
@@ -868,7 +826,7 @@ export default function App() {
     } catch (err) {
       setError(String(err));
     }
-  }, [invoke]);
+  }, [invoke, setPendingDuel]);
 
   const handleDeclineDuel = useCallback(async (duelId: string) => {
     try {
@@ -877,7 +835,7 @@ export default function App() {
     } catch (err) {
       setError(String(err));
     }
-  }, [invoke]);
+  }, [invoke, setPendingDuel]);
 
   const handleDetainPlayer = useCallback(async (targetPlayerId: string) => {
     try {
@@ -1301,12 +1259,16 @@ export default function App() {
     <button
       type="button"
       className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
-      onClick={() => setShowDebugTools(value => !value)}
+      onClick={() => setShowDebugTools(!showDebugTools)}
       aria-pressed={showDebugTools}
     >
       {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
     </button>
   ) : null;
+
+  if (!authReady) {
+    return null;
+  }
 
   if (!auth) {
     return <AuthPage onLogin={login} onRegister={register} />;
@@ -1462,6 +1424,7 @@ export default function App() {
       <GameLobby
         username={auth.username}
         myUserId={auth.userId}
+        authToken={auth.token}
         gameState={gameState}
         connected={connected}
         currentLocation={currentLocation}
@@ -1497,7 +1460,7 @@ export default function App() {
           disableDebugLocation();
           setShowDebugTools(false);
           setMyRooms([]);
-          logout();
+          void logout();
           setGameState(null);
           setPickupPrompt(null);
           clearGameplayUi();
@@ -1520,27 +1483,6 @@ export default function App() {
       {debugToggleButton}
     </>
   );
-}
-
-function loadSavedSession(): SavedSession | null {
-  try {
-    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw) as Partial<SavedSession> | null;
-    if (!parsed?.roomCode || typeof parsed.roomCode !== 'string'
-      || !parsed.userId || typeof parsed.userId !== 'string') {
-      return null;
-    }
-
-    const roomCode = parsed.roomCode.trim().toUpperCase();
-    const userId = parsed.userId.trim();
-    return roomCode && userId ? { roomCode, userId } : null;
-  } catch {
-    return null;
-  }
 }
 
 function getErrorMessage(error: unknown): string {

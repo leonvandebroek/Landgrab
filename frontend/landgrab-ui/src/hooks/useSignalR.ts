@@ -116,19 +116,23 @@ export function useSignalR(token: string | null, events: GameEvents) {
   }, [clearManualReconnect]);
 
   useEffect(() => {
-    if (!token) {
+    if (token === null) {
       clearManualReconnect();
       return;
     }
 
     let disposed = false;
     const isDisposed = () => disposed;
+    const connectionOptions: signalR.IHttpConnectionOptions = {
+      transport: signalR.HttpTransportType.WebSockets
+    };
+
+    if (token) {
+      connectionOptions.accessTokenFactory = () => token;
+    }
 
     const conn = new signalR.HubConnectionBuilder()
-      .withUrl('/hub/game', {
-        accessTokenFactory: () => token,
-        transport: signalR.HttpTransportType.WebSockets
-      })
+      .withUrl('/hub/game', connectionOptions)
       .withAutomaticReconnect({
         nextRetryDelayInMilliseconds: ({ previousRetryCount }) => AUTO_RECONNECT_DELAYS[previousRetryCount] ?? null
       })

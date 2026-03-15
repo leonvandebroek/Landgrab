@@ -36,18 +36,17 @@ public sealed class TroopRegenerationService(
                     // Phase 7: Fog of War — per-player broadcasts
                     if (state.Dynamics.FogOfWarEnabled)
                     {
+                        var hostObserverUserId = state.HostObserverMode
+                            ? room.HostUserId.ToString()
+                            : null;
+                        var hiddenFogCells = gameService.CreateHiddenFogCellsForBroadcast(state);
+
                         foreach (var (connectionId, userId) in room.ConnectionMap)
                         {
-                            // Host in observer mode gets full unfiltered state
-                            if (room.HostUserId.ToString() == userId && state.HostObserverMode)
-                            {
-                                await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", state, stoppingToken);
-                            }
-                            else
-                            {
-                                var playerSnapshot = gameService.GetPlayerSnapshot(state, userId);
-                                await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);
-                            }
+                            var playerSnapshot = hostObserverUserId == userId
+                                ? state
+                                : gameService.GetPlayerSnapshot(state, userId, hiddenFogCells);
+                            await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);
                         }
                     }
                     else

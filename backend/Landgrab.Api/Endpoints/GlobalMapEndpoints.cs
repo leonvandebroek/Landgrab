@@ -19,6 +19,15 @@ public static class GlobalMapEndpoints
         double lat, double lng, int radius,
         GlobalMapService service)
     {
+        if (double.IsNaN(lat) || double.IsNaN(lng) || double.IsInfinity(lat) || double.IsInfinity(lng))
+            return Results.BadRequest(new { error = "Invalid coordinate values." });
+
+        if (lat < -90 || lat > 90)
+            return Results.BadRequest(new { error = "Latitude must be between -90 and 90." });
+
+        if (lng < -180 || lng > 180)
+            return Results.BadRequest(new { error = "Longitude must be between -180 and 180." });
+
         var hexes = await service.GetHexesNearAsync(lat, lng, Math.Clamp(radius, 10, 200));
         return Results.Ok(hexes);
     }

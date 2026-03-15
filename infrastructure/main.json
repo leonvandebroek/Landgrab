@@ -1,0 +1,167 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "12142295605403255394"
+    }
+  },
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "defaultValue": "landgrab-prod",
+      "metadata": {
+        "description": "Base name for all resources"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region"
+      }
+    },
+    "sqlAdminUser": {
+      "type": "string",
+      "defaultValue": "sqladmin",
+      "metadata": {
+        "description": "SQL Server admin username"
+      }
+    },
+    "sqlAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL Server admin password"
+      }
+    },
+    "jwtSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "JWT signing secret (min 32 chars)"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[format('plan-{0}', parameters('appName'))]",
+      "location": "[parameters('location')]",
+      "kind": "linux",
+      "sku": {
+        "name": "B1",
+        "tier": "Basic"
+      },
+      "properties": {
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2023-12-01",
+      "name": "[format('app-{0}', parameters('appName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('plan-{0}', parameters('appName')))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "linuxFxVersion": "DOTNETCORE|8.0",
+          "webSocketsEnabled": true,
+          "alwaysOn": true,
+          "minTlsVersion": "1.2",
+          "ftpsState": "Disabled",
+          "appSettings": [
+            {
+              "name": "ASPNETCORE_ENVIRONMENT",
+              "value": "Production"
+            },
+            {
+              "name": "App__BaseUrl",
+              "value": "[format('https://app-{0}.azurewebsites.net', parameters('appName'))]"
+            },
+            {
+              "name": "Jwt__Secret",
+              "value": "[parameters('jwtSecret')]"
+            },
+            {
+              "name": "ConnectionStrings__DefaultConnection",
+              "value": "[format('Server=tcp:sql-{0}.database.windows.net,1433;Initial Catalog=landgrab;User Id={1};Password={2};Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', parameters('appName'), parameters('sqlAdminUser'), parameters('sqlAdminPassword'))]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', format('plan-{0}', parameters('appName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[format('sql-{0}', parameters('appName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "administratorLogin": "[parameters('sqlAdminUser')]",
+        "administratorLoginPassword": "[parameters('sqlAdminPassword')]",
+        "version": "12.0"
+      }
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[format('{0}/{1}', format('sql-{0}', parameters('appName')), 'landgrab')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "GP_S_Gen5_1",
+        "tier": "GeneralPurpose"
+      },
+      "properties": {
+        "autoPauseDelay": 60,
+        "minCapacity": "0.5",
+        "collation": "SQL_Latin1_General_CP1_CI_AS"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', format('sql-{0}', parameters('appName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[format('{0}/{1}/{2}', format('sql-{0}', parameters('appName')), 'landgrab', 'default')]",
+      "properties": {
+        "retentionDays": 7,
+        "diffBackupIntervalInHours": 12
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers/databases', format('sql-{0}', parameters('appName')), 'landgrab')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Sql/servers/firewallRules",
+      "apiVersion": "2023-08-01-preview",
+      "name": "[format('{0}/{1}', format('sql-{0}', parameters('appName')), 'AllowAzureServices')]",
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Sql/servers', format('sql-{0}', parameters('appName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "appServiceName": {
+      "type": "string",
+      "value": "[format('app-{0}', parameters('appName'))]"
+    },
+    "appServiceDefaultHostname": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', format('app-{0}', parameters('appName'))), '2023-12-01').defaultHostName)]"
+    },
+    "sqlServerFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Sql/servers', format('sql-{0}', parameters('appName'))), '2023-08-01-preview').fullyQualifiedDomainName]"
+    }
+  }
+}

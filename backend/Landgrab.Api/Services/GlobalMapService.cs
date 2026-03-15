@@ -7,10 +7,12 @@ namespace Landgrab.Api.Services;
 public class GlobalMapService(AppDbContext db)
 {
     private const int AttackCooldownMinutes = 5;
+    private const int StartingHexSearchRadius = 5;
 
     public async Task<IEnumerable<GlobalHex>> GetHexesForUserAsync(Guid userId)
     {
         return await db.GlobalHexes
+            .AsNoTracking()
             .Where(h => h.OwnerUserId == userId)
             .Include(h => h.Owner)
             .Include(h => h.OwnerAlliance)
@@ -25,6 +27,7 @@ public class GlobalMapService(AppDbContext db)
         var approxRadius = radiusKm;
 
         return await db.GlobalHexes
+            .AsNoTracking()
             .Where(h =>
                 h.Q >= centerQ - approxRadius && h.Q <= centerQ + approxRadius &&
                 h.R >= centerR - approxRadius && h.R <= centerR + approxRadius)
@@ -47,14 +50,28 @@ public class GlobalMapService(AppDbContext db)
             return (null, "Need at least 2 troops to attack.");
 
         var toHex = await db.GlobalHexes.FindAsync(toQ, toR);
+        var attackerAllianceIdLoaded = false;
+        Guid? attackerAllianceId = null;
+
+        async Task<Guid?> GetAttackerAllianceIdAsync()
+        {
+            if (attackerAllianceIdLoaded)
+                return attackerAllianceId;
+
+            attackerAllianceId = await GetUserAllianceIdAsync(attackerUserId);
+            attackerAllianceIdLoaded = true;
+            return attackerAllianceId;
+        }
+
         if (toHex == null)
         {
             // Empty unclaimed hex — just claim it
             var newHex = new GlobalHex
             {
-                Q = toQ, R = toR,
+                Q = toQ,
+                R = toR,
                 OwnerUserId = attackerUserId,
-                OwnerAllianceId = await GetUserAllianceIdAsync(attackerUserId),
+                OwnerAllianceId = await GetAttackerAllianceIdAsync(),
                 Troops = 1,
                 LastCaptured = DateTime.UtcNow
             };
@@ -80,7 +97,7 @@ public class GlobalMapService(AppDbContext db)
         if (attackRoll > defendRoll)
         {
             toHex.OwnerUserId = attackerUserId;
-            toHex.OwnerAllianceId = await GetUserAllianceIdAsync(attackerUserId);
+            toHex.OwnerAllianceId = await GetAttackerAllianceIdAsync();
             toHex.Troops = 1;
             toHex.LastCaptured = DateTime.UtcNow;
             toHex.AttackCooldownUntil = null;
@@ -100,6 +117,7 @@ public class GlobalMapService(AppDbContext db)
     public async Task<IEnumerable<object>> GetLeaderboardAsync(int top = 20)
     {
         var playerCounts = await db.GlobalHexes
+            .AsNoTracking()
             .Where(h => h.OwnerUserId != null)
             .GroupBy(h => h.OwnerUserId)
             .Select(g => new { UserId = g.Key, Count = g.Count() })
@@ -115,33 +133,56 @@ public class GlobalMapService(AppDbContext db)
     public async Task EnsurePlayerHasStartingHex(Guid userId, double lat, double lng)
     {
         var alreadyHasHex = await db.GlobalHexes.AnyAsync(h => h.OwnerUserId == userId);
-        if (alreadyHasHex) return;
+        if (alreadyHasHex)
+            return;
 
         var (q, r) = LatLngToHex(lat, lng);
         var allianceId = await GetUserAllianceIdAsync(userId);
+        var candidateHexes = new List<(int q, int r)>();
 
-        // Find nearest unclaimed hex
-        for (var radius = 0; radius <= 5; radius++)
+        for (var radius = 0; radius <= StartingHexSearchRadius; radius++)
         {
-            foreach (var (hq, hr) in HexService.Spiral(radius).Where(h => Math.Max(Math.Abs(h.q), Math.Abs(h.r)) == radius))
+            foreach (var (hq, hr) in HexService.Spiral(radius)
+                         .Where(h => Math.Max(Math.Abs(h.q), Math.Abs(h.r)) == radius))
             {
-                var fq = q + hq;
-                var fr = r + hr;
-                var existing = await db.GlobalHexes.FindAsync(fq, fr);
-                if (existing == null)
-                {
-                    db.GlobalHexes.Add(new GlobalHex
-                    {
-                        Q = fq, R = fr,
-                        OwnerUserId = userId,
-                        OwnerAllianceId = allianceId,
-                        Troops = 3,
-                        LastCaptured = DateTime.UtcNow
-                    });
-                    await db.SaveChangesAsync();
-                    return;
-                }
+                candidateHexes.Add((q + hq, r + hr));
             }
+        }
+
+        if (candidateHexes.Count == 0)
+            return;
+
+        var minQ = candidateHexes.Min(hex => hex.q);
+        var maxQ = candidateHexes.Max(hex => hex.q);
+        var minR = candidateHexes.Min(hex => hex.r);
+        var maxR = candidateHexes.Max(hex => hex.r);
+
+        var occupiedHexes = await db.GlobalHexes
+            .AsNoTracking()
+            .Where(h => h.Q >= minQ && h.Q <= maxQ && h.R >= minR && h.R <= maxR)
+            .Select(h => new { h.Q, h.R })
+            .ToListAsync();
+
+        var occupiedCoordinates = occupiedHexes
+            .Select(hex => (hex.Q, hex.R))
+            .ToHashSet();
+
+        foreach (var (fq, fr) in candidateHexes)
+        {
+            if (occupiedCoordinates.Contains((fq, fr)))
+                continue;
+
+            db.GlobalHexes.Add(new GlobalHex
+            {
+                Q = fq,
+                R = fr,
+                OwnerUserId = userId,
+                OwnerAllianceId = allianceId,
+                Troops = 3,
+                LastCaptured = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            return;
         }
     }
 

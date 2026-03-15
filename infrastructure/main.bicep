@@ -79,6 +79,16 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
   }
 }
 
+// ── Azure SQL Database Short-Term Backup Retention ──
+resource sqlDatabaseShortTermBackup 'Microsoft.Sql/servers/databases/backupShortTermRetentionPolicies@2023-08-01-preview' = {
+  parent: sqlDatabase
+  name: 'default'
+  properties: {
+    retentionDays: 7
+    diffBackupIntervalInHours: 12
+  }
+}
+
 // ── Firewall: Allow Azure Services ──
 resource sqlFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
   parent: sqlServer

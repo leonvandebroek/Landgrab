@@ -6,12 +6,18 @@ using Landgrab.Api.Endpoints;
 using Landgrab.Api.Hubs;
 using Landgrab.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Services ──────────────────────────────────────────────────────────────
+
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -30,8 +36,8 @@ builder.Services.AddHttpClient<TerrainFetchService>();
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 
 var jwtSecret = builder.Configuration["Jwt:Secret"];
-if (string.IsNullOrWhiteSpace(jwtSecret))
-    throw new InvalidOperationException("Jwt:Secret is not configured. Provide it via environment variable or user secrets.");
+if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 64)
+    throw new InvalidOperationException("Jwt:Secret is not configured or is too short. Minimum length is 64 characters. Provide it via environment variable or user secrets.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -40,8 +46,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "landgrab",
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "landgrab",
+            ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
 
@@ -50,10 +59,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = ctx =>
             {
-                var token = ctx.Request.Query["access_token"];
-                var path = ctx.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(token) && path.StartsWithSegments("/hub"))
-                    ctx.Token = token;
+                var accessToken = ctx.Request.Query["access_token"];
+
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    ctx.Token = accessToken;
+                }
+                else if (ctx.Request.Cookies.TryGetValue("landgrab_token", out var cookieToken))
+                {
+                    ctx.Token = cookieToken;
+                }
+
                 return Task.CompletedTask;
             }
         };
@@ -83,8 +99,8 @@ var allOrigins = defaultOrigins.Concat(allowedOrigins).ToArray();
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
+              .WithHeaders("Content-Type", "Authorization", "X-Requested-With")
+              .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
               .AllowCredentials()));
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
@@ -106,6 +122,31 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 
 // ── Middleware ────────────────────────────────────────────────────────────
+
+// Response compression
+app.UseResponseCompression();
+
+// Security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)";
+    
+    if (!app.Environment.IsDevelopment())
+    {
+        context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+    }
+    
+    await next();
+});
+
+// HTTPS redirection (Production only)
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors();
 app.UseRateLimiter();

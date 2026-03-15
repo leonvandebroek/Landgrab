@@ -13,6 +13,7 @@ interface LocationPoint {
 interface Props {
   username: string;
   myUserId: string;
+  authToken: string;
   gameState: GameState | null;
   connected: boolean;
   currentLocation: LocationPoint | null;
@@ -52,6 +53,7 @@ interface Props {
 export function GameLobby({
   username,
   myUserId,
+  authToken,
   gameState,
   connected,
   currentLocation,
@@ -230,6 +232,7 @@ export function GameLobby({
       <SetupWizard
         gameState={gameState}
         myUserId={myUserId}
+        authToken={authToken}
         currentLocation={currentLocation}
         locationError={locationError}
         locationLoading={locationLoading}
@@ -265,6 +268,7 @@ export function GameLobby({
     <GuestWizardView
       gameState={gameState}
       myUserId={myUserId}
+      authToken={authToken}
       currentLocation={currentLocation}
       onSetAlliance={onSetAlliance}
       onSetPlayerRole={onSetPlayerRole}

@@ -1,4 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
+using System.Security.Claims;
 using System.Text;
 using Landgrab.Api.Auth;
 using Landgrab.Api.Data;
@@ -10,6 +12,9 @@ namespace Landgrab.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    private const string AuthCookieName = "landgrab_token";
+    private static readonly TimeSpan AuthLifetime = TimeSpan.FromHours(24);
+
     public static void MapAuthEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/auth")
@@ -17,6 +22,9 @@ public static class AuthEndpoints
 
         group.MapPost("/register", Register);
         group.MapPost("/login", Login);
+        group.MapPost("/logout", Logout).RequireAuthorization();
+        group.MapPost("/refresh", Refresh).RequireAuthorization();
+        group.MapGet("/me", Me).RequireAuthorization();
         group.MapPost("/forgot-password", ForgotPassword);
         group.MapPost("/reset-password", ResetPassword);
     }
@@ -26,7 +34,9 @@ public static class AuthEndpoints
         AppDbContext db,
         PasswordService passwords,
         JwtService jwt,
-        EmailService email)
+        EmailService email,
+        HttpContext context,
+        IWebHostEnvironment environment)
     {
         // Validate
         if (string.IsNullOrWhiteSpace(req.Username) || req.Username.Length < 3 || req.Username.Length > 30)
@@ -59,14 +69,19 @@ public static class AuthEndpoints
 
         await email.SendWelcomeAsync(user.Email, user.Username);
 
-        return Results.Ok(new AuthResponse(jwt.GenerateToken(user), user.Username, user.Id.ToString()));
+        var token = jwt.GenerateToken(user);
+        AppendAuthCookie(context, environment, token);
+
+        return Results.Ok(new AuthResponse(token, user.Username, user.Id.ToString()));
     }
 
     private static async Task<IResult> Login(
         LoginRequest req,
         AppDbContext db,
         PasswordService passwords,
-        JwtService jwt)
+        JwtService jwt,
+        HttpContext context,
+        IWebHostEnvironment environment)
     {
         if (string.IsNullOrWhiteSpace(req.UsernameOrEmail) || string.IsNullOrWhiteSpace(req.Password))
             return Results.BadRequest(new { error = "Username/email and password required." });
@@ -82,7 +97,51 @@ public static class AuthEndpoints
         if (user == null || !passwords.Verify(req.Password, user.PasswordHash))
             return Results.Unauthorized();
 
-        return Results.Ok(new AuthResponse(jwt.GenerateToken(user), user.Username, user.Id.ToString()));
+        var token = jwt.GenerateToken(user);
+        AppendAuthCookie(context, environment, token);
+
+        return Results.Ok(new AuthResponse(token, user.Username, user.Id.ToString()));
+    }
+
+    private static IResult Logout(HttpContext context, IWebHostEnvironment environment)
+    {
+        context.Response.Cookies.Delete(AuthCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !environment.IsDevelopment(),
+            SameSite = SameSiteMode.Strict,
+            Path = "/"
+        });
+
+        return Results.Ok(new { message = "Logged out" });
+    }
+
+    private static IResult Refresh(
+        HttpContext context,
+        JwtService jwt,
+        IWebHostEnvironment environment)
+    {
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var username = GetUsername(context.User);
+
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(username))
+            return Results.Unauthorized();
+
+        var token = jwt.GenerateToken(userId, username);
+        AppendAuthCookie(context, environment, token);
+
+        return Results.Ok(new { message = "Token refreshed" });
+    }
+
+    private static IResult Me(HttpContext context)
+    {
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var username = GetUsername(context.User);
+
+        if (string.IsNullOrWhiteSpace(userId))
+            return Results.Unauthorized();
+
+        return Results.Ok(new { userId, username });
     }
 
     private static async Task<IResult> ForgotPassword(
@@ -153,6 +212,26 @@ public static class AuthEndpoints
         var dataBytes = Encoding.UTF8.GetBytes(data);
         return Convert.ToBase64String(HMACSHA256.HashData(keyBytes, dataBytes));
     }
+
+    private static void AppendAuthCookie(HttpContext context, IWebHostEnvironment environment, string token)
+    {
+        context.Response.Cookies.Append(AuthCookieName, token, CreateAuthCookieOptions(environment));
+    }
+
+    private static CookieOptions CreateAuthCookieOptions(IWebHostEnvironment environment) =>
+        new()
+        {
+            HttpOnly = true,
+            Secure = !environment.IsDevelopment(),
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTimeOffset.UtcNow.Add(AuthLifetime),
+            Path = "/"
+        };
+
+    private static string? GetUsername(ClaimsPrincipal user) =>
+        user.FindFirstValue("username")
+        ?? user.FindFirstValue(ClaimTypes.Name)
+        ?? user.FindFirstValue(JwtRegisteredClaimNames.UniqueName);
 
     public record RegisterRequest(string Username, string Email, string Password);
     public record LoginRequest(string UsernameOrEmail, string Password);

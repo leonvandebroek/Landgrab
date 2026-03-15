@@ -45,6 +45,11 @@ stages:
             displayName: 'Restore NuGet packages'
             workingDirectory: backend/Landgrab.Api
 
+          - script: dotnet list package --vulnerable --include-transitive
+            displayName: 'Backend - NuGet Vulnerability Scan'
+            workingDirectory: backend/Landgrab.Api
+            continueOnError: true
+
           - script: dotnet build -c $(buildConfiguration) --no-restore
             displayName: 'Build backend'
             workingDirectory: backend/Landgrab.Api
@@ -53,6 +58,11 @@ stages:
           - script: npm ci
             displayName: 'Install frontend dependencies'
             workingDirectory: frontend/landgrab-ui
+
+          - script: npm audit --audit-level=high
+            displayName: 'Frontend - Security Audit'
+            workingDirectory: frontend/landgrab-ui
+            continueOnError: true
 
           - script: npm run build
             displayName: 'Build frontend'
