@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HexCell, AllianceDto } from '../../types/game';
 import { renderMiniMap } from '../../utils/miniMapRenderer';
-import { latLngToRoomHex, roomHexToLatLng } from './HexMath';
+import { roomHexToLatLng } from './HexMath';
 
 interface Props {
   grid: Record<string, HexCell>;
@@ -19,7 +19,8 @@ const CSS_W = 200;
 const CSS_H = 150;
 const PADDING = 12;
 
-/** Convert Leaflet lat/lng bounds into the axial-pixel coordinate space used by renderMiniMap. */
+/** Convert Leaflet lat/lng bounds into the axial-pixel coordinate space used by renderMiniMap.
+ *  Uses fractional (unrounded) q/r so the viewport rectangle tracks panning smoothly. */
 function latLngBoundsToAxialPixel(
   bounds: { north: number; south: number; east: number; west: number },
   mapLat: number,
@@ -27,8 +28,15 @@ function latLngBoundsToAxialPixel(
   tileSizeMeters: number,
 ): { north: number; south: number; east: number; west: number } {
   const sqrt3 = Math.sqrt(3);
+  const METERS_PER_DEG_LAT = 111_320;
+  /** Fractional axial-pixel without hexRound so the rectangle tracks smoothly. */
   const toAxial = (lat: number, lng: number) => {
-    const [q, r] = latLngToRoomHex(lat, lng, mapLat, mapLng, tileSizeMeters);
+    const yMeters = (lat - mapLat) * METERS_PER_DEG_LAT;
+    const cosLat = Math.cos((mapLat * Math.PI) / 180);
+    // clamp cosLat to avoid division-by-zero singularity near the poles
+    const xMeters = (lng - mapLng) * METERS_PER_DEG_LAT * Math.max(Math.abs(cosLat), 1e-9);
+    const q = ((2 / 3) * xMeters) / tileSizeMeters;
+    const r = ((-1 / 3) * xMeters + (Math.sqrt(3) / 3) * yMeters) / tileSizeMeters;
     return { px: q * 1.5, py: (r + q * 0.5) * sqrt3 };
   };
   // Project all four corners to handle skewed grids

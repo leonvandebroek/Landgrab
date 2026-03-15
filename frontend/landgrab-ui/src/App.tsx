@@ -344,7 +344,7 @@ export default function App() {
       vibrate(HAPTIC.loss);
       setMapFeedback({
         tone: 'error',
-        message: `${data.AttackerName} captured tile (${data.Q}, ${data.R})!`,
+        message: t('game.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
         targetHex: [data.Q, data.R]
       });
       pushToast({
