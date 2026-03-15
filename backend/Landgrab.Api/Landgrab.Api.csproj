@@ -19,6 +19,11 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Azure.SignalR" Version="1.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Landgrab.Tests" />
   </ItemGroup>
 
 </Project>

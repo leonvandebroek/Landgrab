@@ -6,6 +6,7 @@ using Landgrab.Api.Endpoints;
 using Landgrab.Api.Hubs;
 using Landgrab.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -85,7 +86,10 @@ builder.Services.AddAuthorization();
 
 // ── SignalR ───────────────────────────────────────────────────────────────
 
-var signalRBuilder = builder.Services.AddSignalR()
+var signalRBuilder = builder.Services.AddSignalR(options =>
+    {
+        options.AddFilter<HubExceptionFilter>();
+    })
     .AddJsonProtocol(options =>
         options.PayloadSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter()));

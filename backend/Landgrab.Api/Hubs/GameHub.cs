@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Landgrab.Api.Models;
@@ -12,6 +13,30 @@ namespace Landgrab.Api.Hubs;
 public class GameHub(GameService gameService, GlobalMapService globalMap, TerrainFetchService terrainFetchService, IServiceScopeFactory scopeFactory, ILogger<GameHub> logger)
     : Hub
 {
+    private const string InvalidRequestCode = "INVALID_INPUT";
+    private const int MaxCoordinateValue = 1000;
+    private const int MaxRoomCodeLength = 10;
+    private const int MaxAllianceNameLength = 50;
+    private const int MaxAllianceNamesCount = 20;
+    private const int MaxHostMessageLength = 500;
+    private const int MaxIdentifierLength = 100;
+    private const int MaxShortStringLength = 50;
+    private const int MaxTemplateNameLength = 100;
+    private const int MaxDescriptionLength = 500;
+    private const int MaxCustomAreaCoordinates = 500;
+    private const int MaxModesCount = 20;
+    private const int MaxTargetAllianceIdsCount = 20;
+    private const string CustomCopresencePreset = "Aangepast";
+    private static readonly ConcurrentDictionary<string, DateTime> _lastLocationUpdate = new();
+    private static readonly TimeSpan UpdatePlayerLocationInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly HashSet<string> AllowedHostEventTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Calamity",
+        "Epidemic",
+        "BonusTroops",
+        "RushHour"
+    };
+
     public override async Task OnConnectedAsync()
     {
         logger.LogInformation("Client connected: {ConnectionId} User: {User}",
@@ -21,6 +46,8 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        _lastLocationUpdate.TryRemove(Context.ConnectionId, out _);
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room != null)
         {
@@ -44,6 +71,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task JoinRoom(string roomCode)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return;
+        }
+
         var (room, error) = gameService.JoinRoom(roomCode, UserId, Username, Context.ConnectionId);
         if (error != null)
         {
@@ -59,6 +92,13 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task<string> RejoinRoom(string roomCode)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            const string message = "Invalid room code.";
+            await SendError(InvalidRequestCode, message);
+            throw new HubException(message);
+        }
+
         var existingRoom = gameService.GetRoomByUserId(UserId, roomCode);
         if (existingRoom == null)
         {
@@ -105,6 +145,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetMapLocation(double lat, double lng)
     {
+        if (!ValidateLatLng(lat, lng))
+        {
+            await SendError(InvalidRequestCode, "Invalid coordinates.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -124,6 +170,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetAlliance(string allianceName)
     {
+        if (string.IsNullOrWhiteSpace(allianceName) || !ValidateStringLength(allianceName, MaxAllianceNameLength))
+        {
+            await SendError(InvalidRequestCode, "Alliance name must be between 1 and 50 characters.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -143,6 +195,14 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task ConfigureAlliances(List<string> allianceNames)
     {
+        if (allianceNames == null ||
+            allianceNames.Count > MaxAllianceNamesCount ||
+            allianceNames.Any(name => string.IsNullOrWhiteSpace(name) || !ValidateStringLength(name, MaxAllianceNameLength)))
+        {
+            await SendError(InvalidRequestCode, "Alliance names must contain at most 20 entries with names up to 50 characters.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -181,6 +241,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task AssignAllianceStartingTile(int q, int r, string allianceId)
     {
+        if (!ValidateCoordRange(q, r) || !ValidateIdentifier(allianceId))
+        {
+            await SendError(InvalidRequestCode, "Invalid starting tile or alliance identifier.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -238,6 +304,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetPatternGameArea(string pattern)
     {
+        if (!ValidateEnumString<GameAreaPattern>(pattern))
+        {
+            await SendError(InvalidRequestCode, "Invalid game area pattern.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -257,6 +329,14 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetCustomGameArea(IReadOnlyList<HexCoordinateDto> coordinates)
     {
+        if (coordinates == null ||
+            coordinates.Count > MaxCustomAreaCoordinates ||
+            coordinates.Any(coord => coord == null || !ValidateCoordRange(coord.Q, coord.R)))
+        {
+            await SendError(InvalidRequestCode, "Custom game area must contain at most 500 valid coordinates.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -276,6 +356,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetClaimMode(string mode)
     {
+        if (!ValidateEnumString<ClaimMode>(mode))
+        {
+            await SendError(InvalidRequestCode, "Invalid claim mode.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -314,6 +400,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetWinCondition(string type, int value)
     {
+        if (!ValidateEnumString<WinConditionType>(type))
+        {
+            await SendError(InvalidRequestCode, "Invalid win condition.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -333,6 +425,15 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetCopresenceModes(List<string> modes)
     {
+        if (modes == null ||
+            modes.Count > MaxModesCount ||
+            modes.Any(mode => !ValidateEnumString<CopresenceMode>(mode) ||
+                Enum.Parse<CopresenceMode>(mode, true) == CopresenceMode.None))
+        {
+            await SendError(InvalidRequestCode, "Invalid copresence modes.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -352,6 +453,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetCopresencePreset(string preset)
     {
+        if (!ValidateCopresencePreset(preset))
+        {
+            await SendError(InvalidRequestCode, "Invalid copresence preset.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -371,6 +478,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetGameDynamics(GameDynamics dynamics)
     {
+        if (!ValidateGameDynamics(dynamics))
+        {
+            await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -390,6 +503,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetPlayerRole(string role)
     {
+        if (!ValidateEnumString<PlayerRole>(role))
+        {
+            await SendError(InvalidRequestCode, "Invalid player role.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -409,6 +528,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetAllianceHQ(int q, int r, string allianceId)
     {
+        if (!ValidateCoordRange(q, r) || !ValidateIdentifier(allianceId))
+        {
+            await SendError(InvalidRequestCode, "Invalid headquarters location or alliance identifier.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -485,6 +610,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task ActivateCommandoRaid(int targetQ, int targetR)
     {
+        if (!ValidateCoordRange(targetQ, targetR))
+        {
+            await SendError(InvalidRequestCode, "Invalid target coordinates.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -504,6 +635,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetMasterTile(double lat, double lng)
     {
+        if (!ValidateLatLng(lat, lng))
+        {
+            await SendError(InvalidRequestCode, "Invalid coordinates.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -523,6 +660,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetMasterTileByHex(int q, int r)
     {
+        if (!ValidateCoordRange(q, r))
+        {
+            await SendError(InvalidRequestCode, "Invalid hex coordinates.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -542,6 +685,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task AssignStartingTile(int q, int r, string targetPlayerId)
     {
+        if (!ValidateCoordRange(q, r) || !ValidateIdentifier(targetPlayerId))
+        {
+            await SendError(InvalidRequestCode, "Invalid starting tile or player identifier.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -590,6 +739,22 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task UpdatePlayerLocation(double lat, double lng)
     {
+        if (!ValidateLatLng(lat, lng))
+        {
+            await SendError(InvalidRequestCode, "Invalid coordinates.");
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (_lastLocationUpdate.TryGetValue(Context.ConnectionId, out var last) &&
+            now - last < UpdatePlayerLocationInterval)
+        {
+            await SendError("RATE_LIMITED", "Player location updates are being sent too quickly.");
+            return;
+        }
+
+        _lastLocationUpdate[Context.ConnectionId] = now;
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -647,6 +812,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task PickUpTroops(int q, int r, int count, double playerLat, double playerLng)
     {
+        if (!ValidateCoordRange(q, r) || !ValidateLatLng(playerLat, playerLng) || count <= 0)
+        {
+            await SendError(InvalidRequestCode, "Invalid troop pickup request.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -670,6 +841,14 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
     public async Task PlaceTroops(int q, int r, double playerLat, double playerLng,
         int? troopCount = null, bool claimForSelf = false)
     {
+        if (!ValidateCoordRange(q, r) ||
+            !ValidateLatLng(playerLat, playerLng) ||
+            (troopCount.HasValue && troopCount.Value <= 0))
+        {
+            await SendError(InvalidRequestCode, "Invalid troop placement request.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -702,6 +881,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task ReClaimHex(int q, int r, string mode)
     {
+        if (!ValidateCoordRange(q, r) || !ValidateEnumString<ReClaimMode>(mode))
+        {
+            await SendError(InvalidRequestCode, "Invalid reclaim request.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -727,6 +912,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task AttackGlobalHex(int fromQ, int fromR, int toQ, int toR)
     {
+        if (!ValidateCoordRange(fromQ, fromR) || !ValidateCoordRange(toQ, toR))
+        {
+            await SendError(InvalidRequestCode, "Invalid hex coordinates.");
+            return;
+        }
+
         var (result, error) = await globalMap.AttackHexAsync(Guid.Parse(UserId), fromQ, fromR, toQ, toR);
         if (error != null)
         {
@@ -739,6 +930,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task JoinGlobalMap(double lat, double lng)
     {
+        if (!ValidateLatLng(lat, lng))
+        {
+            await SendError(InvalidRequestCode, "Invalid coordinates.");
+            return;
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, "global");
         await globalMap.EnsurePlayerHasStartingHex(Guid.Parse(UserId), lat, lng);
         var hexes = await globalMap.GetHexesNearAsync(lat, lng);
@@ -748,6 +945,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
     // Phase 10: Duel
     public async Task AcceptDuel(string duelId)
     {
+        if (!ValidateIdentifier(duelId))
+        {
+            await SendError(InvalidRequestCode, "Invalid duel identifier.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null) { await SendError("ROOM_NOT_JOINED", "Not in a room."); return; }
 
@@ -762,6 +965,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task DeclineDuel(string duelId)
     {
+        if (!ValidateIdentifier(duelId))
+        {
+            await SendError(InvalidRequestCode, "Invalid duel identifier.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null) { await SendError("ROOM_NOT_JOINED", "Not in a room."); return; }
 
@@ -771,6 +980,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
     // Phase 10: Hostage
     public async Task DetainPlayer(string targetPlayerId)
     {
+        if (!ValidateIdentifier(targetPlayerId))
+        {
+            await SendError(InvalidRequestCode, "Invalid player identifier.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null) { await SendError("ROOM_NOT_JOINED", "Not in a room."); return; }
 
@@ -782,6 +997,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetHostBypassGps(string roomCode, bool bypass)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -803,6 +1024,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetMaxFootprint(string roomCode, int meters)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -824,6 +1051,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task LoadMapTemplate(string roomCode, Guid templateId)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -845,6 +1078,15 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SaveCurrentAreaAsTemplate(string roomCode, string name, string? description)
     {
+        if (!ValidateRoomCode(roomCode) ||
+            string.IsNullOrWhiteSpace(name) ||
+            !ValidateStringLength(name, MaxTemplateNameLength) ||
+            (description != null && !ValidateStringLength(description, MaxDescriptionLength)))
+        {
+            await SendError(InvalidRequestCode, "Invalid template details.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -867,6 +1109,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SetHostObserverMode(string roomCode, bool enabled)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -881,6 +1129,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task UpdateGameDynamicsLive(string roomCode, GameDynamics dynamics)
     {
+        if (!ValidateRoomCode(roomCode) || !ValidateGameDynamics(dynamics))
+        {
+            await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -896,6 +1150,16 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
     public async Task TriggerGameEvent(string roomCode, string eventType,
         int? targetQ, int? targetR, string? targetAllianceId)
     {
+        if (!ValidateRoomCode(roomCode) ||
+            !ValidateHostEventType(eventType) ||
+            (targetQ.HasValue != targetR.HasValue) ||
+            (targetQ.HasValue && !ValidateCoordRange(targetQ.Value, targetR!.Value)) ||
+            (targetAllianceId != null && !ValidateIdentifier(targetAllianceId)))
+        {
+            await SendError(InvalidRequestCode, "Invalid event request.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -917,6 +1181,17 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task SendHostMessage(string roomCode, string message, List<string>? targetAllianceIds)
     {
+        if (!ValidateRoomCode(roomCode) ||
+            string.IsNullOrWhiteSpace(message) ||
+            !ValidateStringLength(message, MaxHostMessageLength) ||
+            (targetAllianceIds != null &&
+                (targetAllianceIds.Count > MaxTargetAllianceIdsCount ||
+                 targetAllianceIds.Any(id => !ValidateIdentifier(id)))))
+        {
+            await SendError(InvalidRequestCode, "Invalid host message request.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -951,6 +1226,12 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
 
     public async Task PauseGame(string roomCode, bool paused)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
         {
@@ -1015,6 +1296,61 @@ public class GameHub(GameService gameService, GlobalMapService globalMap, Terrai
                 state.IsAllianceVictory
             });
         }
+    }
+
+    private static bool ValidateStringLength(string? value, int maxLength) =>
+        value is not null && value.Length <= maxLength;
+
+    private static bool ValidateCoordRange(int q, int r) =>
+        Math.Abs(q) <= MaxCoordinateValue && Math.Abs(r) <= MaxCoordinateValue;
+
+    private static bool ValidateLatLng(double lat, double lng) =>
+        double.IsFinite(lat) &&
+        double.IsFinite(lng) &&
+        lat >= -90 && lat <= 90 &&
+        lng >= -180 && lng <= 180;
+
+    private static bool ValidateRoomCode(string? roomCode) =>
+        !string.IsNullOrWhiteSpace(roomCode) && ValidateStringLength(roomCode, MaxRoomCodeLength);
+
+    private static bool ValidateIdentifier(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && ValidateStringLength(value, MaxIdentifierLength);
+
+    private static bool ValidateEnumString<TEnum>(string? value) where TEnum : struct, Enum =>
+        !string.IsNullOrWhiteSpace(value) &&
+        ValidateStringLength(value, MaxShortStringLength) &&
+        Enum.TryParse<TEnum>(value, true, out _);
+
+    private static bool ValidateCopresencePreset(string? preset) =>
+        !string.IsNullOrWhiteSpace(preset) &&
+        ValidateStringLength(preset, MaxShortStringLength) &&
+        (string.Equals(preset, CustomCopresencePreset, StringComparison.Ordinal) || LobbyService.CopresencePresets.ContainsKey(preset));
+
+    private static bool ValidateHostEventType(string? eventType) =>
+        !string.IsNullOrWhiteSpace(eventType) &&
+        ValidateStringLength(eventType, MaxIdentifierLength) &&
+        AllowedHostEventTypes.Contains(eventType);
+
+    private static bool ValidateGameDynamics(GameDynamics? dynamics)
+    {
+        if (dynamics == null || dynamics.ActiveCopresenceModes == null)
+        {
+            return false;
+        }
+
+        if (dynamics.CopresencePreset != null && !ValidateCopresencePreset(dynamics.CopresencePreset))
+        {
+            return false;
+        }
+
+        if (dynamics.ActiveCopresenceModes.Count > MaxModesCount)
+        {
+            return false;
+        }
+
+        return dynamics.ActiveCopresenceModes.All(mode =>
+            Enum.IsDefined(mode) &&
+            mode != CopresenceMode.None);
     }
 
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier)

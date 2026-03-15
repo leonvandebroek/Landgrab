@@ -1415,7 +1415,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
         }
     }
 
-    private static void ApplyWinCondition(GameState state, DateTime now)
+    internal static void ApplyWinCondition(GameState state, DateTime now)
     {
         if (state.Phase == GamePhase.GameOver)
             return;
@@ -1443,7 +1443,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
         }
     }
 
-    private static void ApplyTerritoryPercentWinCondition(GameState state)
+    internal static void ApplyTerritoryPercentWinCondition(GameState state)
     {
         var claimableHexes = state.Grid.Values.Count(cell => !cell.IsMasterTile);
         if (claimableHexes == 0)
@@ -1483,7 +1483,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
             state.Phase = GamePhase.GameOver;
     }
 
-    private static void ApplyEliminationWinCondition(GameState state)
+    internal static void ApplyEliminationWinCondition(GameState state)
     {
         if (state.Alliances.Count > 0)
         {
@@ -1503,7 +1503,7 @@ public class GameplayService(IGameRoomProvider roomProvider, GameStateService ga
         }
     }
 
-    private static bool TrySetTerritoryLeaderAsWinner(GameState state)
+    internal static bool TrySetTerritoryLeaderAsWinner(GameState state)
     {
         if (state.Alliances.Count > 0)
         {
