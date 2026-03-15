@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import type { TileAction, TileActionType } from './tileInteraction';
+import { useGameplayStore } from '../../stores/gameplayStore';
 import { terrainDefendBonus } from '../../utils/terrainColors';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -29,9 +30,6 @@ interface PlayerHUDProps {
   onActivateBeacon: () => void;
   onDeactivateBeacon: () => void;
   onActivateStealth: () => void;
-  commandoTargetingMode: boolean;
-  onStartCommandoTargeting: () => void;
-  onCancelCommandoTargeting: () => void;
 }
 
 type HexRelation = 'own' | 'allied' | 'enemy' | 'neutral';
@@ -83,11 +81,10 @@ export function PlayerHUD({
   onActivateBeacon,
   onDeactivateBeacon,
   onActivateStealth,
-  commandoTargetingMode,
-  onStartCommandoTargeting,
-  onCancelCommandoTargeting,
 }: PlayerHUDProps) {
   const { t } = useTranslation();
+  const commandoTargetingMode = useGameplayStore((state) => state.commandoTargetingMode);
+  const setCommandoTargetingMode = useGameplayStore((state) => state.setCommandoTargetingMode);
   const [, setTick] = useState(0);
 
   // Ability state
@@ -266,7 +263,7 @@ export function PlayerHUD({
                 <button
                   type="button"
                   className="player-hud__ability player-hud__ability--targeting"
-                  onClick={onCancelCommandoTargeting}
+                  onClick={() => setCommandoTargetingMode(false)}
                 >
                   <span className="player-hud__ability-icon">🎯</span>
                   <span className="player-hud__ability-label">{t('phase6.commandoSelectTarget' as never)}</span>
@@ -278,7 +275,7 @@ export function PlayerHUD({
               <button
                 type="button"
                 className={`player-hud__ability ${isActive ? 'player-hud__ability--active' : ''} ${isOnCooldown ? 'player-hud__ability--cooldown' : ''}`}
-                onClick={!isActive && !isOnCooldown ? onStartCommandoTargeting : undefined}
+                onClick={!isActive && !isOnCooldown ? () => setCommandoTargetingMode(true) : undefined}
                 disabled={isActive || isOnCooldown}
               >
                 <span className="player-hud__ability-icon">⚔️</span>

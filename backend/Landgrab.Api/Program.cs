@@ -22,7 +22,13 @@ builder.Services.AddResponseCompression(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddSingleton<GameService>();        // in-memory game rooms
+builder.Services.AddSingleton<RoomService>();
+builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
+builder.Services.AddSingleton<GameStateService>();
+builder.Services.AddSingleton<LobbyService>();
+builder.Services.AddSingleton<GameplayService>();
+builder.Services.AddSingleton<HostControlService>();
+builder.Services.AddSingleton<GameService>();        // facade over in-memory game rooms
 builder.Services.AddSingleton<RoomPersistenceService>();
 builder.Services.AddScoped<GlobalMapService>();
 builder.Services.AddSingleton<JwtService>();

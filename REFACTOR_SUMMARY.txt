@@ -1,0 +1,351 @@
+================================================================================
+                    GameService Refactor Analysis - SUMMARY
+================================================================================
+
+DELIVERABLE: Comprehensive refactor map for splitting GameService (3965 lines) 
+into 5 specialized services + thin facade
+
+FILES CREATED:
+  1. GAMESERVICE_REFACTOR_MAP.md (559 lines) - Detailed analysis document
+  2. GAMESERVICE_REFACTOR_QUICK_GUIDE.md - Quick reference with checklist
+
+================================================================================
+                            1. CONSTRUCTOR DEPENDENCIES
+================================================================================
+
+CURRENT (Monolith):
+  GameService(RoomPersistenceService, ILogger)
+  └─ RoomPersistenceService: Handles DB persistence (async)
+  └─ ILogger: Logging
+
+SHARED STATE (Singleton):
+  _rooms: ConcurrentDictionary<string, GameRoom>  ← Only mutable shared state
+  Colors[16]: Player color palette (static, immutable)
+  AllianceColors[8]: Alliance color palette (static, immutable)
+  CopresencePresets: Game mode templates (static, immutable)
+
+AFTER REFACTOR:
+  ✓ RoomService(ILogger) - owns _rooms
+  ✓ LobbyService(RoomService, ILogger)
+  ✓ GameplayService(RoomService, GameStateService, ILogger)
+  ✓ HostControlService(RoomService, GameStateService, ILogger)
+  ✓ GameStateService(RoomService, RoomPersistenceService, ILogger)
+  ✓ GameService(RoomService, LobbyService, GameplayService, 
+                 HostControlService, GameStateService, ILogger) - facade only
+
+LIFETIME: ALL services must be SINGLETON (no scoped variants possible)
+
+================================================================================
+                        2. PUBLIC METHODS BY SERVICE
+================================================================================
+
+RoomService (9 methods):
+  CreateRoom, JoinRoom, GetRoom, GetRoomByConnection, GetRoomByUserId,
+  RemoveConnection, RestoreRooms, GetRoomsForUser, GetPlayingRoomCodes
+
+LobbyService (26 methods):
+  SetAlliance, ConfigureAlliances, DistributePlayersRandomly,
+  AssignAllianceStartingTile, SetMapLocation, SetTileSize,
+  SetHostBypassGps, SetMaxFootprint, LoadMapTemplate,
+  SaveCurrentAreaAsTemplate, UseCenteredGameArea, SetPatternGameArea,
+  SetCustomGameArea, SetClaimMode, SetAllowSelfClaim, SetWinCondition,
+  SetCopresenceModes, SetCopresencePreset, SetGameDynamics, SetPlayerRole,
+  SetAllianceHQ, SetMasterTile, SetMasterTileByHex, AssignStartingTile,
+  StartGame
+
+GameplayService (12 methods):
+  UpdatePlayerLocation, PickUpTroops, PlaceTroops, ReClaimHex,
+  ActivateBeacon, DeactivateBeacon, ActivateStealth, ActivateCommandoRaid,
+  ResolveDuel, DetainPlayer, SetHostObserverMode, PauseGame
+
+HostControlService (5 methods):
+  TriggerGameEvent, UpdateGameDynamicsLive, SendHostMessage,
+  GetAllianceConnectionIds, ProcessHostageReleases
+
+GameStateService (15+ methods):
+  GetStateSnapshot, AddReinforcementsToAllHexes, ProcessDuelExpiry,
+  GetPlayerSnapshot (2 overloads), CreateHiddenFogCellsForBroadcast,
+  InitiateDuel, AppendEventLogPublic, SnapshotStatePublic,
+  [+ internal helpers: SnapshotState, QueuePersistence, ApplyWinCondition, etc.]
+
+GameService Facade:
+  Routes ALL calls to above 5 services (minimal logic)
+
+================================================================================
+                     3. PRIVATE HELPERS BY SERVICE
+================================================================================
+
+RoomService: None (simple CRUD)
+
+LobbyService:
+  ValidateMasterTilePlacement, ValidateGameAreaUpdate, ApplyGameArea,
+  SetMasterTileByHexCore, AutoAssignTiles, ResetBoardStateForAreaChange,
+  BuildPatternCoordinates, FitsWideFront, FitsTallFront, FitsCrossroads,
+  FitsStarburst, IsHost
+
+GameplayService:
+  ValidateRealtimeAction, ClaimNeutralHex, GetPlayersInHex, SetCellOwner,
+  SetCellOwnerForSelf, ReturnCarriedTroops, ResetCarriedTroops,
+  RefreshTerritoryCount
+
+HostControlService: TBD (inherits from GameplayService or standalone)
+
+GameStateService:
+  QueuePersistence, QueuePersistenceIfGameOver, CreatePlayerSnapshot,
+  CreateSnapshotEnvelope, CreateHiddenFogCells, CreateHiddenFogCell,
+  GetVisibleHexKeys, GetVisibleMissions, EnsureGrid,
+  ApplyWinConditionAndLog, ApplyWinCondition, ApplyTerritoryPercentWinCondition,
+  ApplyEliminationWinCondition, TrySetTerritoryLeaderAsWinner,
+  ComputeAchievements, SnapshotState (core), ValidateCoordinates,
+  GenerateCode
+
+================================================================================
+                    4. CROSS-SERVICE DEPENDENCIES & CYCLES
+================================================================================
+
+DEPENDENCY FLOW (no circular):
+  GameService (facade) 
+    → RoomService (owns _rooms, no deps)
+    → LobbyService (→ RoomService)
+    → GameplayService (→ RoomService + GameStateService)
+    → HostControlService (→ RoomService + GameStateService)
+    → GameStateService (→ RoomService + RoomPersistenceService)
+
+CRITICAL PATTERN: Modify State + Persist
+  1. Get room via RoomService.GetRoom()
+  2. Acquire lock on room.SyncRoot
+  3. Modify room.State (inside lock)
+  4. Create snapshot via GameStateService.GetStateSnapshot()
+  5. Queue persistence via GameStateService.QueuePersistence()
+  6. Release lock
+  7. Return snapshot to caller
+
+NO CYCLES: All dependencies flow downward. GameStateService calls
+RoomPersistenceService (async, non-blocking).
+
+⚠️ ASYNC/LOCK HAZARD:
+  Release lock BEFORE calling async methods.
+  Current code pattern is CORRECT: extract data under lock, release, then
+  call async RoomPersistenceService.
+
+✓ THREADING:
+  RoomPersistenceService uses IServiceScopeFactory to create Scoped DB contexts
+  inside async methods. This is safe (scoped contexts isolated per async call).
+
+================================================================================
+                  5. METHODS CONSUMED BY OTHER SERVICES
+================================================================================
+
+GameHub consumes:
+  RoomService: CreateRoom, JoinRoom, GetRoomByConnection, GetStateSnapshot,
+               RemoveConnection, GetRoomsForUser, GetRoomByUserId
+  LobbyService: All 26 lobby methods
+  GameplayService: All 12 gameplay methods
+  HostControlService: All 5 host methods
+
+TroopRegenerationService (background) consumes:
+  RoomService: GetPlayingRoomCodes, GetRoom
+  GameStateService: AddReinforcementsToAllHexes, ProcessDuelExpiry,
+                    CreateHiddenFogCellsForBroadcast, GetPlayerSnapshot
+
+RandomEventService (background) consumes:
+  RoomService: GetPlayingRoomCodes, GetRoom
+  GameStateService: AppendEventLogPublic, SnapshotStatePublic
+
+MissionService (background) consumes:
+  RoomService: GetPlayingRoomCodes, GetRoom
+  GameStateService: GetStateSnapshot, SnapshotStatePublic
+
+✓ NO OTHER SERVICES CONSUME GameService DIRECTLY
+  (All routing goes through GameService facade)
+
+================================================================================
+                          6. DI/LIFETIME PITFALLS
+================================================================================
+
+✓ SINGLETON REQUIREMENT (Critical)
+  All 6 services must be AddSingleton (they share _rooms dict in memory)
+  This is NON-NEGOTIABLE due to in-memory game state architecture.
+
+✗ PITFALL 1: Scoped Services
+  If any service is Scoped, multiple instances = multiple _rooms dicts
+  = rooms become invisible to other instances
+  = BROKEN GAMEPLAY
+
+✗ PITFALL 2: Holding Locks During Async
+  lock (room.SyncRoot) { ... await asyncCall(...); }  ← DEADLOCK RISK
+  SOLUTION: Release lock before async calls (current code does this ✓)
+
+✗ PITFALL 3: BG Services Creating New GameService
+  TroopRegenerationService creates Scoped container → GetRequiredService<GameService>()
+  BUT GameService is Singleton, so even from Scoped container, you get same
+  Singleton instance. This is SAFE ✓
+
+✗ PITFALL 4: Static Mutable State
+  If Colors[], AllianceColors[], CopresencePresets were mutated concurrently
+  = RACE CONDITIONS
+  SOLUTION: Make them readonly at init (current code does this ✓)
+
+✗ PITFALL 5: Missing Locks on room.State
+  If code modifies room.State without lock = RACE CONDITIONS
+  SOLUTION: All public methods must acquire room.SyncRoot lock
+
+================================================================================
+                   7. NON-OBVIOUS FILES NEEDING CHANGES
+================================================================================
+
+Files That MUST Change:
+
+  1. Program.cs (High Impact)
+     - Change: RegisterSingleton<RoomService>()
+     - Change: RegisterSingleton<LobbyService>()
+     - Change: RegisterSingleton<GameplayService>()
+     - Change: RegisterSingleton<HostControlService>()
+     - Change: RegisterSingleton<GameStateService>()
+     - Change: RegisterSingleton<GameService>() (facade)
+     - Change: Startup restoration call RoomService.RestoreRooms() instead of GameService
+
+  2. GameHub.cs (No Changes to Injection!)
+     public class GameHub(GameService gameService, ...)
+     All method calls remain unchanged (route through facade)
+
+  3-5. TroopRegenerationService, RandomEventService, MissionService (No Changes!)
+     They already call the right GameService methods
+     Methods continue to exist on facade ✓
+
+Files That DON'T Change:
+  ✓ RoomPersistenceService (unchanged)
+  ✓ All model files (GameRoom, GameState, HexCell, PlayerDto, etc.)
+  ✓ HexService, TerrainFetchService, GlobalMapService, etc.
+  ✓ Endpoints, Auth, Data context
+
+================================================================================
+                        IMPLEMENTATION ORDER
+================================================================================
+
+1. Create RoomService.cs
+   - Copy _rooms dict ownership
+   - Copy 9 room methods
+   - No internal dependencies
+
+2. Create GameStateService.cs
+   - Copy state snapshot/persistence methods
+   - Depends on RoomService (read-only)
+   - Depends on RoomPersistenceService (async calls)
+
+3. Create LobbyService.cs
+   - Copy 26 lobby configuration methods
+   - Depends on RoomService (get/modify room)
+   - Copy static data: Colors[], AllianceColors[], CopresencePresets
+   - Copy helpers: ValidateMasterTilePlacement, ApplyGameArea, etc.
+
+4. Create GameplayService.cs
+   - Copy 12 gameplay methods
+   - Depends on RoomService (get room)
+   - Depends on GameStateService (persist state)
+   - Copy helpers: ValidateRealtimeAction, GetPlayersInHex, etc.
+
+5. Create HostControlService.cs
+   - Copy 5 host control methods
+   - Depends on RoomService + GameStateService
+   - Possibly copies ProcessHostageReleases helper
+
+6. Create New GameService.cs (Facade)
+   - ~100 lines
+   - Inject all 5 services
+   - Each method delegates to appropriate service
+   - Constructor just passes through to services
+
+7. Update Program.cs
+   - Register 5 new services as Singletons
+   - Update startup restoration code
+
+8. Verify
+   - All unit tests pass
+   - GameHub integration works
+   - Background services work
+   - Load test with multiple concurrent rooms
+
+================================================================================
+                           KEY METRICS
+================================================================================
+
+Current State:
+  GameService.cs: 3965 lines (monolith)
+  Program.cs: 201 lines (simple registration)
+  GameHub.cs: 1068 lines (calls GameService)
+
+After Refactor:
+  RoomService.cs: ~400 lines (CRUD)
+  LobbyService.cs: ~1000 lines (setup)
+  GameplayService.cs: ~1200 lines (gameplay)
+  HostControlService.cs: ~200 lines (admin)
+  GameStateService.cs: ~800 lines (state)
+  GameService.cs: ~100 lines (facade only)
+  
+  Total: ~3700 lines (same total, better organized)
+  Max single file: 1200 lines (GameplayService)
+
+Program.cs: +10 lines (5 new service registrations)
+GameHub.cs: No changes (still injects GameService)
+Startup: ~5 lines changed (call RoomService.RestoreRooms)
+
+Testing Impact:
+  ✓ Can unit test GameplayService without LobbyService
+  ✓ Can unit test GameStateService without GameplayService
+  ✓ Can mock RoomService easily
+  ✓ Easier to test persistence queueing in isolation
+
+Maintainability Gain:
+  Before: 1 file with 50+ methods, 8+ responsibilities
+  After: 5 files, 1-5 methods/responsibilities each
+  → 4-8x easier to navigate per file
+
+================================================================================
+                              RECOMMENDATIONS
+================================================================================
+
+1. Create comprehensive unit tests for each new service BEFORE splitting
+   - Test RoomService room tracking
+   - Test GameStateService snapshots & persistence
+   - Test LobbyService configuration validation
+   - Test GameplayService movement & combat
+   - Test HostControlService admin ops
+
+2. Keep GameService facade thin
+   - No business logic in facade
+   - Just route method calls
+   - Makes it easy to refactor further later
+
+3. Consider Future Splitting
+   - HostControlService could be merged into GameplayService if needed
+   - GameStateService helpers could grow into separate StateTransformService
+   - Could eventually have PeristenceService and StateService separate
+
+4. Document Lock Requirements
+   - Every public method must document: "Requires caller to hold room.SyncRoot"
+   - Or alternatively, method acquires lock internally
+   - Be consistent for clarity
+
+5. Monitor Performance
+   - TroopRegenerationService iterates GetPlayingRoomCodes() every 30s
+   - With 100s of concurrent rooms, this could be slow
+   - Consider caching active room codes if needed
+
+6. Consider Event/Message Bus
+   - Currently uses lock-based communication
+   - Could eventually migrate to message-driven architecture
+   - But that's a separate, larger refactor
+
+================================================================================
+                          END OF SUMMARY
+================================================================================
+
+Total Analysis Documents: 2 files
+  - GAMESERVICE_REFACTOR_MAP.md (559 lines, comprehensive)
+  - GAMESERVICE_REFACTOR_QUICK_GUIDE.md (quick reference, checklists)
+  - REFACTOR_SUMMARY.txt (this file, high-level overview)
+
+Next Step: Review documents, validate method distribution, begin implementation
+with RoomService.
+

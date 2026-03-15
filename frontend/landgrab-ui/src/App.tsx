@@ -1,37 +1,50 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { useAuth } from './hooks/useAuth';
+import { useGameActions } from './hooks/useGameActions';
 import { useSignalR } from './hooks/useSignalR';
+import { useSignalRHandlers } from './hooks/useSignalRHandlers';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
-import { vibrate, HAPTIC } from './utils/haptics';
 import { useToastQueue } from './hooks/useToastQueue';
 import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
 import { GameRulesPage } from './components/game/GameRulesPage';
-import { GameLobby } from './components/lobby/GameLobby';
-import { GameMap } from './components/map/GameMap';
-import { PlayingHud } from './components/game/PlayingHud';
+import { LoadingFallback } from './components/LoadingFallback';
+
+// Heavy components loaded via React.lazy for bundle splitting.
+// Named exports are re-mapped to default exports inline.
+const GameLobby = lazy(() =>
+  import('./components/lobby/GameLobby').then(m => ({ default: m.GameLobby }))
+);
+const GameMap = lazy(() =>
+  import('./components/map/GameMap').then(m => ({ default: m.GameMap }))
+);
+const PlayingHud = lazy(() =>
+  import('./components/game/PlayingHud').then(m => ({ default: m.PlayingHud }))
+);
 import { CombatModal } from './components/game/CombatModal';
 import { GameOver } from './components/game/GameOver';
-import { getTileInteractionStatus, getTileActions } from './components/game/tileInteraction';
-import type { TileAction, TileActionType } from './components/game/tileInteraction';
 import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import { HostControlPlane } from './components/game/HostControlPlane';
-import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCell, HexCoordinate, ReClaimMode, RoomSummary, WinConditionType } from './types/game';
+import type { GameState, RoomSummary } from './types/game';
 import { useGameStore } from './stores/gameStore';
 import type { SavedSession } from './stores/gameStore';
 import { useGameplayStore } from './stores/gameplayStore';
-import { useNotificationStore } from './stores/notificationStore';
 import { useUiStore } from './stores/uiStore';
+import {
+  getErrorMessage,
+  isClearlyStaleJoinFailure,
+  isClearlyStaleRejoinFailure,
+  isMissingRejoinMethodFailure,
+  localizeLobbyError,
+} from './utils/gameHelpers';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
 const RESUME_TIMEOUT_MS = 5000;
-const LOCATION_BROADCAST_THROTTLE_MS = 3000;
 
 type ResumeSource = 'join' | 'rejoin';
 
@@ -52,6 +65,8 @@ interface PendingResume {
   timeoutId: number;
 }
 
+type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
+
 export default function App() {
   const { t } = useTranslation();
   const { auth, authReady, login, register, logout } = useAuth();
@@ -60,42 +75,20 @@ export default function App() {
   const myRooms = useGameStore(state => state.myRooms);
   const autoResuming = useGameStore(state => state.autoResuming);
   const setGameState = useGameStore(state => state.setGameState);
-  const updateGameState = useGameStore(state => state.updateGameState);
   const setMyRooms = useGameStore(state => state.setMyRooms);
   const setAutoResuming = useGameStore(state => state.setAutoResuming);
   const selectedHex = useGameplayStore(state => state.selectedHex);
-  const mapFeedback = useGameplayStore(state => state.mapFeedback);
-  const pickupPrompt = useGameplayStore(state => state.pickupPrompt);
-  const pickupCount = useGameplayStore(state => state.pickupCount);
-  const attackPrompt = useGameplayStore(state => state.attackPrompt);
-  const attackCount = useGameplayStore(state => state.attackCount);
-  const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
   const combatResult = useGameplayStore(state => state.combatResult);
-  const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
-  const setSelectedHex = useGameplayStore(state => state.setSelectedHex);
-  const setMapFeedback = useGameplayStore(state => state.setMapFeedback);
   const setPickupPrompt = useGameplayStore(state => state.setPickupPrompt);
-  const setPickupCount = useGameplayStore(state => state.setPickupCount);
-  const setAttackPrompt = useGameplayStore(state => state.setAttackPrompt);
-  const setAttackCount = useGameplayStore(state => state.setAttackCount);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
-  const setCommandoTargetingMode = useGameplayStore(state => state.setCommandoTargetingMode);
   const clearGameplayUi = useGameplayStore(state => state.clearGameplayUi);
   const [playerDisplayPrefs, setPlayerDisplayPrefs] = usePlayerPreferences();
-  const randomEvent = useNotificationStore(state => state.randomEvent);
-  const eventWarning = useNotificationStore(state => state.eventWarning);
-  const missionNotification = useNotificationStore(state => state.missionNotification);
-  const pendingDuel = useNotificationStore(state => state.pendingDuel);
-  const hostMessage = useNotificationStore(state => state.hostMessage);
-  const setPendingDuel = useNotificationStore(state => state.setPendingDuel);
   const view = useUiStore(state => state.view);
   const error = useUiStore(state => state.error);
   const hasAcknowledgedRules = useUiStore(state => state.hasAcknowledgedRules);
   const showDebugTools = useUiStore(state => state.showDebugTools);
   const debugLocationEnabled = useUiStore(state => state.debugLocationEnabled);
   const debugLocation = useUiStore(state => state.debugLocation);
-  const mainMapBounds = useUiStore(state => state.mainMapBounds);
-  const selectedHexScreenPos = useUiStore(state => state.selectedHexScreenPos);
   const setView = useUiStore(state => state.setView);
   const setError = useUiStore(state => state.setError);
   const clearError = useUiStore(state => state.clearError);
@@ -112,13 +105,10 @@ export default function App() {
   }, []);
   const location = useGeolocation(Boolean(auth));
   const { playSound } = useSound();
-  const lastLocationRef = useRef('');
-  const locationThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingLocationRef = useRef<{ lat: number; lon: number } | null>(null);
-  const lastSendTimeRef = useRef<number>(0);
   const previousConnectedRef = useRef(false);
   const pendingResumeRef = useRef<PendingResume | null>(null);
   const savedSessionRef = useRef<SavedSession | null>(savedSession);
+  const invokeRef = useRef<SignalRInvoke | null>(null);
   const resumeSequenceRef = useRef(0);
   const savedRoomCode = savedSession?.roomCode ?? '';
   const activeRoomCode = gameState?.roomCode ?? '';
@@ -255,167 +245,18 @@ export default function App() {
     return { lat: gameState.mapLat, lng: gameState.mapLng };
   }, [gameState]);
 
-  const applyIncomingState = useCallback((state: GameState, nextView?: 'lobby' | 'game' | 'gameover' | 'mapEditor') => {
-    const normalizedState = normalizeGameState(state, gameState);
-    resolveResumeFromState(normalizedState);
-    if (normalizedState.roomCode) {
-      saveSession(normalizedState.roomCode);
-    }
-    useGameStore.getState().setGameState(normalizedState);
-    useGameplayStore.getState().setPickupPrompt(null);
-
-    if (nextView) {
-      useUiStore.getState().setView(nextView);
-    } else if (normalizedState.phase === 'Playing') {
-      useUiStore.getState().setView('game');
-    } else if (normalizedState.phase === 'GameOver') {
-      useUiStore.getState().setView('gameover');
-    }
-
-    if ((nextView && nextView !== 'game') || (!nextView && normalizedState.phase !== 'Playing')) {
-      useGameplayStore.getState().clearGameplayUi();
-    }
-
-    useUiStore.getState().clearError();
-  }, [gameState, resolveResumeFromState, saveSession]);
-
-  const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, {
-    onRoomCreated: (code, state) => {
-      saveSession(code || state.roomCode);
-      applyIncomingState(state, 'lobby');
-    },
-    onPlayerJoined: (state) => {
-      applyIncomingState(state, state.phase === 'Lobby' ? 'lobby' : undefined);
-    },
-    onGameStarted: (state) => {
-      applyIncomingState(state, 'game');
-    },
-    onStateUpdated: (state) => {
-      applyIncomingState(state);
-    },
-    onGameOver: () => {
-      playSound('victory');
-      vibrate(HAPTIC.victory);
-      useGameplayStore.getState().clearGameplayUi();
-      setView('gameover');
-    },
-    onCombatResult: (result) => {
-      vibrate(HAPTIC.attack);
-      useGameplayStore.getState().setCombatResult(result);
-      pushToast({
-        type: 'combat',
-        message: result.attackerWon
-          ? t('game.toast.combatWon', { q: result.q, r: result.r })
-          : t('game.toast.combatLost', { q: result.q, r: result.r }),
-      });
-    },
-    onTileLost: (data) => {
-      playSound('notification');
-      vibrate(HAPTIC.loss);
-      useGameplayStore.getState().setMapFeedback({
-        tone: 'error',
-        message: t('game.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
-        targetHex: [data.Q, data.R]
-      });
-      pushToast({
-        type: 'territory',
-        message: t('game.toast.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
-        teamColor: undefined,
-      });
-    },
-    onError: (message) => {
-      if (resolveResumeFromError(message)) {
-        return;
-      }
-      useUiStore.getState().setError(localizeLobbyError(message, t));
-    },
-    onRandomEvent: (event) => {
-      useNotificationStore.getState().setRandomEvent(event);
-      pushToast({
-        type: 'event',
-        message: event.title,
-      });
-    },
-    onEventWarning: (event) => {
-      useNotificationStore.getState().setEventWarning(event);
-    },
-    onMissionAssigned: (mission) => {
-      useNotificationStore.getState().setMissionNotification({ mission, type: 'assigned' });
-    },
-    onMissionCompleted: (mission) => {
-      useNotificationStore.getState().setMissionNotification({ mission, type: 'completed' });
-      pushToast({
-        type: 'mission',
-        message: mission.title,
-        icon: '✅',
-      });
-    },
-    onMissionFailed: (mission) => {
-      useNotificationStore.getState().setMissionNotification({ mission, type: 'failed' });
-    },
-    onDuelChallenge: (duel) => {
-      useNotificationStore.getState().setPendingDuel(duel);
-    },
-    onDuelResult: () => {
-      useNotificationStore.getState().setPendingDuel(null);
-    },
-    onHostMessage: (data: { message: string; fromHost: boolean }) => {
-      useNotificationStore.getState().setHostMessage(data);
-    },
-    onTemplateSaved: (data) => {
-      console.log('[SignalR] TemplateSaved:', data.templateId, data.name);
-    },
-    onReconnected: () => {
-      useUiStore.getState().clearError();
-      // Immediately re-establish room mapping so hub calls don't fail
-      // before the justConnected useEffect fires (race condition fix).
-      const session = savedSessionRef.current;
-      if (session?.roomCode) {
-        invoke('RejoinRoom', session.roomCode).catch(() => {
-          // Silently ignore — the justConnected useEffect will also attempt rejoin.
-        });
-      }
-    }
+  const signalRHandlers = useSignalRHandlers({
+    getInvoke: () => invokeRef.current,
+    saveSession,
+    resolveResumeFromState,
+    resolveResumeFromError,
+    savedSessionRef,
+    t,
+    playSound,
+    pushToast,
   });
-
-  const clearLocationThrottle = useCallback(() => {
-    if (locationThrottleRef.current !== null) {
-      clearTimeout(locationThrottleRef.current);
-      locationThrottleRef.current = null;
-    }
-  }, []);
-
-  const sendPendingLocation = useCallback(() => {
-    clearLocationThrottle();
-
-    const pendingLocation = pendingLocationRef.current;
-    if (!pendingLocation) {
-      return;
-    }
-
-    const locationKey = `${pendingLocation.lat.toFixed(6)},${pendingLocation.lon.toFixed(6)}`;
-    if (lastLocationRef.current === locationKey) {
-      pendingLocationRef.current = null;
-      return;
-    }
-
-    pendingLocationRef.current = null;
-    lastLocationRef.current = locationKey;
-    lastSendTimeRef.current = Date.now();
-
-    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lon)
-      .catch(cause => setError(String(cause)));
-  }, [clearLocationThrottle, invoke]);
-
-  const refreshMyRooms = useCallback(async () => {
-    if (!auth || !connected) {
-      setMyRooms([]);
-      return;
-    }
-
-    const rooms = await invoke<RoomSummary[]>('GetMyRooms');
-    setMyRooms(Array.isArray(rooms) ? rooms : []);
-  }, [auth, connected, invoke]);
+  const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, signalRHandlers);
+  invokeRef.current = invoke;
 
   const myPlayer = useMemo(() => {
     if (!auth || !gameState) {
@@ -441,24 +282,65 @@ export default function App() {
     );
   }, [currentLocation, gameState]);
 
-  const currentHexKey = useMemo(() => {
-    if (!currentHex) {
-      return null;
-    }
-
-    return `${currentHex[0]},${currentHex[1]}`;
-  }, [currentHex]);
-
-  const isInOwnHex = useMemo(() => {
-    if (!auth || !gameState || !currentHexKey) {
-      return false;
-    }
-
-    return gameState.grid[currentHexKey]?.ownerId === auth.userId;
-  }, [auth, currentHexKey, gameState]);
-
-  const playerColor = myPlayer?.allianceColor ?? myPlayer?.color ?? '#4f8cff';
   const currentPlayerName = myPlayer?.name ?? auth?.username ?? '';
+  const {
+    handleCreateRoom,
+    handleJoinRoom,
+    handleSetAlliance,
+    handleSetMapLocation,
+    handleSetTileSize,
+    handleUseCenteredGameArea,
+    handleSetPatternGameArea,
+    handleSetCustomGameArea,
+    handleSetClaimMode,
+    handleSetAllowSelfClaim,
+    handleSetWinCondition,
+    handleSetCopresenceModes,
+    handleSetCopresencePreset,
+    handleSetGameDynamics,
+    handleSetPlayerRole,
+    handleSetAllianceHQ,
+    handleActivateBeacon,
+    handleDeactivateBeacon,
+    handleActivateStealth,
+    handleAcceptDuel,
+    handleDeclineDuel,
+    handleSetMasterTile,
+    handleSetMasterTileByHex,
+    handleAssignStartingTile,
+    handleConfigureAlliances,
+    handleDistributePlayers,
+    handleAssignAllianceStartingTile,
+    handleStartGame,
+    handleReturnToLobby,
+    handleSetObserverMode,
+    handleUpdateDynamicsLive,
+    handleTriggerEvent,
+    handleSendHostMessage,
+    handlePauseGame,
+    handleHexClick,
+    currentHexActions,
+    handleCurrentHexAction,
+    handleDismissTileActions,
+    handleConfirmPickup,
+    handleConfirmAttack,
+    handleReClaimHex,
+    handlePlayAgain,
+  } = useGameActions({
+    invoke,
+    auth,
+    connected,
+    autoResuming,
+    pendingResumeRef,
+    gameState,
+    currentLocation,
+    currentHex,
+    myPlayer,
+    isHostBypass,
+    t,
+    playSound,
+    clearSession,
+  });
 
   const handleAcknowledgeRules = useCallback(() => {
     if (rulesKey) {
@@ -467,21 +349,6 @@ export default function App() {
 
     setHasAcknowledgedRules(true);
   }, [rulesKey]);
-
-  // Auto-show tile actions when the player physically moves to a new hex
-  const prevCurrentHexRef = useRef<string | null>(null);
-  useEffect(() => {
-    const key = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
-    if (key === prevCurrentHexRef.current) return;
-    prevCurrentHexRef.current = key;
-
-      if (gameState?.phase === 'Playing' && currentHex) {
-      setSelectedHex(currentHex);
-      setMapFeedback(null);
-      setPickupPrompt(null);
-      setAttackPrompt(null);
-    }
-  }, [currentHex, gameState?.phase]);
 
   const canStepDebugByHex = Boolean(
     gameState?.mapLat != null
@@ -530,48 +397,6 @@ export default function App() {
     applyDebugLocation(nextLocation.lat, nextLocation.lng);
     return nextLocation;
   }, [applyDebugLocation, currentLocation, gameState, mapCenterLocation]);
-
-  useEffect(() => {
-    if (!connected || gameState?.phase !== 'Playing' || !currentLocation) {
-      clearLocationThrottle();
-      pendingLocationRef.current = null;
-      lastSendTimeRef.current = 0;
-      lastLocationRef.current = '';
-      return;
-    }
-
-    pendingLocationRef.current = { lat: currentLocation.lat, lon: currentLocation.lng };
-
-    const locationKey = `${currentLocation.lat.toFixed(6)},${currentLocation.lng.toFixed(6)}`;
-    if (lastLocationRef.current === locationKey) {
-      pendingLocationRef.current = null;
-      return;
-    }
-
-    const elapsedSinceLastSend = Date.now() - lastSendTimeRef.current;
-    if (elapsedSinceLastSend >= LOCATION_BROADCAST_THROTTLE_MS) {
-      sendPendingLocation();
-      return;
-    }
-
-    clearLocationThrottle();
-    locationThrottleRef.current = setTimeout(() => {
-      sendPendingLocation();
-    }, LOCATION_BROADCAST_THROTTLE_MS - elapsedSinceLastSend);
-  }, [clearLocationThrottle, connected, currentLocation, gameState?.phase, sendPendingLocation]);
-
-  useEffect(() => {
-    const shouldFlushPendingLocation = connected && gameState?.phase === 'Playing';
-
-    return () => {
-      if (shouldFlushPendingLocation) {
-        sendPendingLocation();
-        return;
-      }
-
-      clearLocationThrottle();
-    };
-  }, [clearLocationThrottle, connected, gameState?.phase, sendPendingLocation]);
 
   useEffect(() => {
     const justConnected = connected && !previousConnectedRef.current;
@@ -683,561 +508,6 @@ export default function App() {
     };
   }, [auth, autoResuming, connected, gameState, invoke, t]);
 
-  const handleCreateRoom = useCallback(() => {
-    if (autoResuming || pendingResumeRef.current) {
-      setError(t('errors.pleaseWait'));
-      return;
-    }
-
-    invoke('CreateRoom').catch(cause => setError(localizeLobbyError(getErrorMessage(cause), t)));
-  }, [autoResuming, invoke, t]);
-
-  const handleJoinRoom = useCallback((code: string) => {
-    if (autoResuming || pendingResumeRef.current) {
-      setError(t('errors.pleaseWait'));
-      return;
-    }
-
-    invoke('JoinRoom', code).catch(cause => setError(localizeLobbyError(getErrorMessage(cause), t)));
-  }, [autoResuming, invoke, t]);
-
-  const handleSetAlliance = useCallback((name: string) => {
-    invoke('SetAlliance', name).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetMapLocation = useCallback((lat: number, lng: number) => {
-    invoke('SetMapLocation', lat, lng).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetTileSize = useCallback((meters: number) => {
-    const previousTileSizeMeters = gameState?.tileSizeMeters ?? meters;
-    const roomCode = gameState?.roomCode ?? '';
-
-    updateGameState(previousState => previousState
-      ? {
-        ...previousState,
-        tileSizeMeters: meters
-      }
-      : previousState);
-
-    invoke('SetTileSize', meters).catch(cause => {
-      updateGameState(previousState => {
-        if (!previousState || previousState.roomCode !== roomCode) {
-          return previousState;
-        }
-
-        return {
-          ...previousState,
-          tileSizeMeters: previousTileSizeMeters
-        };
-      });
-      setError(String(cause));
-    });
-  }, [gameState?.roomCode, gameState?.tileSizeMeters, invoke, updateGameState]);
-
-  const handleUseCenteredGameArea = useCallback(() => {
-    invoke('UseCenteredGameArea').catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetPatternGameArea = useCallback((pattern: GameAreaPattern) => {
-    invoke('SetPatternGameArea', pattern).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetCustomGameArea = useCallback((coordinates: HexCoordinate[]) => {
-    invoke('SetCustomGameArea', coordinates).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetClaimMode = useCallback((mode: ClaimMode) => {
-    invoke('SetClaimMode', mode).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetAllowSelfClaim = useCallback(async (allow: boolean) => {
-    await invoke('SetAllowSelfClaim', allow);
-  }, [invoke]);
-
-  const handleSetWinCondition = useCallback((type: WinConditionType, value: number) => {
-    invoke('SetWinCondition', type, value).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetCopresenceModes = useCallback((modes: CopresenceMode[]) => {
-    invoke('SetCopresenceModes', modes).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetCopresencePreset = useCallback((preset: string) => {
-    invoke('SetCopresencePreset', preset).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetGameDynamics = useCallback((dynamics: GameDynamics) => {
-    invoke('SetGameDynamics', dynamics).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetPlayerRole = useCallback(async (role: string) => {
-    try {
-      await invoke('SetPlayerRole', role);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleSetAllianceHQ = useCallback(async (q: number, r: number, allianceId: string) => {
-    try {
-      await invoke('SetAllianceHQ', q, r, allianceId);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleActivateBeacon = useCallback(async () => {
-    try {
-      await invoke('ActivateBeacon');
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleDeactivateBeacon = useCallback(async () => {
-    try {
-      await invoke('DeactivateBeacon');
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleActivateStealth = useCallback(async () => {
-    try {
-      await invoke('ActivateStealth');
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number) => {
-    try {
-      await invoke('ActivateCommandoRaid', targetQ, targetR);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleAcceptDuel = useCallback(async (duelId: string) => {
-    try {
-      await invoke('AcceptDuel', duelId);
-      setPendingDuel(null);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke, setPendingDuel]);
-
-  const handleDeclineDuel = useCallback(async (duelId: string) => {
-    try {
-      await invoke('DeclineDuel', duelId);
-      setPendingDuel(null);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke, setPendingDuel]);
-
-  const handleDetainPlayer = useCallback(async (targetPlayerId: string) => {
-    try {
-      await invoke('DetainPlayer', targetPlayerId);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [invoke]);
-
-  const handleSetMasterTile = useCallback((lat: number, lng: number) => {
-    invoke('SetMasterTile', lat, lng).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleSetMasterTileByHex = useCallback((q: number, r: number) => {
-    invoke('SetMasterTileByHex', q, r).catch(cause => {
-      const message = getErrorMessage(cause);
-      if (!isMissingHubMethodFailure(message) || !gameState || gameState.mapLat == null || gameState.mapLng == null) {
-        setError(localizeLobbyError(message, t));
-        return;
-      }
-
-      const [fallbackLat, fallbackLng] = roomHexToLatLng(
-        q,
-        r,
-        gameState.mapLat,
-        gameState.mapLng,
-        gameState.tileSizeMeters
-      );
-      invoke('SetMasterTile', fallbackLat, fallbackLng)
-        .catch(fallbackCause => setError(localizeLobbyError(getErrorMessage(fallbackCause), t)));
-    });
-  }, [gameState, invoke, t]);
-
-  const handleAssignStartingTile = useCallback((q: number, r: number, playerId: string) => {
-    invoke('AssignStartingTile', q, r, playerId).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleConfigureAlliances = useCallback((names: string[]) => {
-    invoke('ConfigureAlliances', names).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleDistributePlayers = useCallback(() => {
-    invoke('DistributePlayers').catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleAssignAllianceStartingTile = useCallback((q: number, r: number, allianceId: string) => {
-    invoke('AssignAllianceStartingTile', q, r, allianceId).catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleStartGame = useCallback(() => {
-    invoke('StartGame').catch(cause => setError(String(cause)));
-  }, [invoke]);
-
-  const handleReturnToLobby = useCallback(() => {
-    void invoke('ReturnToLobby')
-      .catch(cause => setError(String(cause)))
-      .finally(() => {
-        clearSession();
-        setGameState(null);
-        setPickupPrompt(null);
-        clearGameplayUi();
-        setView('lobby');
-        void refreshMyRooms().catch(cause => setError(String(cause)));
-      });
-  }, [clearGameplayUi, clearSession, invoke, refreshMyRooms]);
-
-  // ── Host Observer Mode handlers ──────────────────────────────────
-  const handleSetObserverMode = useCallback((enabled: boolean) => {
-    if (!activeRoomCode) return;
-    invoke('SetHostObserverMode', activeRoomCode, enabled).catch(cause => setError(String(cause)));
-  }, [activeRoomCode, invoke]);
-
-  const handleUpdateDynamicsLive = useCallback((dynamics: GameDynamics) => {
-    if (!activeRoomCode) return;
-    invoke('UpdateGameDynamicsLive', activeRoomCode, dynamics).catch(cause => setError(String(cause)));
-  }, [activeRoomCode, invoke]);
-
-  const handleTriggerEvent = useCallback((eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => {
-    if (!activeRoomCode) return;
-    invoke('TriggerGameEvent', activeRoomCode, eventType, targetQ ?? null, targetR ?? null, targetAllianceId ?? null)
-      .catch(cause => setError(String(cause)));
-  }, [activeRoomCode, invoke]);
-
-  const handleSendHostMessage = useCallback((message: string, allianceIds?: string[]) => {
-    if (!activeRoomCode) return;
-    invoke('SendHostMessage', activeRoomCode, message, allianceIds ?? null).catch(cause => setError(String(cause)));
-  }, [activeRoomCode, invoke]);
-
-  const handlePauseGame = useCallback((paused: boolean) => {
-    if (!activeRoomCode) return;
-    invoke('PauseGame', activeRoomCode, paused).catch(cause => setError(String(cause)));
-  }, [activeRoomCode, invoke]);
-
-  const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined) => {
-    if (commandoTargetingMode) {
-      handleActivateCommandoRaid(q, r);
-      setCommandoTargetingMode(false);
-      return;
-    }
-
-    if (!auth || !gameState || gameState.phase !== 'Playing') {
-      return;
-    }
-
-    const targetHex: [number, number] = [q, r];
-    setSelectedHex(targetHex);
-    setPickupPrompt(null);
-    clearError();
-
-    // Check if player is NOT on this hex - show info message (skip when host GPS bypass is active)
-    if (!isHostBypass && (!currentHex || currentHex[0] !== q || currentHex[1] !== r)) {
-      const interactionStatus = getTileInteractionStatus({
-        state: gameState,
-        player: myPlayer,
-        targetHex,
-        targetCell: cell,
-        currentHex,
-        t,
-        isHostBypass,
-      });
-      setMapFeedback({
-        tone: interactionStatus.action === 'none' ? interactionStatus.tone : 'info',
-        message: interactionStatus.message,
-        targetHex
-      });
-      return;
-    }
-
-    // Player IS on this hex (or host bypass is active) - TileActionPanel will show via tileActions memo
-    // Clear any old feedback
-    setMapFeedback(null);
-  }, [auth, commandoTargetingMode, currentHex, gameState, handleActivateCommandoRaid, isHostBypass, myPlayer, t]);
-
-  const tileActions = useMemo<TileAction[]>(() => {
-    if (!gameState || gameState.phase !== 'Playing' || !selectedHex) return [];
-    const targetCell = gameState.grid[`${selectedHex[0]},${selectedHex[1]}`];
-    return getTileActions({
-      state: gameState,
-      player: myPlayer,
-      targetHex: selectedHex,
-      targetCell,
-      currentHex,
-      isHostBypass,
-    });
-  }, [gameState, selectedHex, myPlayer, currentHex, isHostBypass]);
-
-  const currentHexActions = useMemo<TileAction[]>(() => {
-    if (!gameState || gameState.phase !== 'Playing' || !currentHex) return [];
-    const targetCell = gameState.grid[`${currentHex[0]},${currentHex[1]}`];
-    return getTileActions({
-      state: gameState,
-      player: myPlayer,
-      targetHex: currentHex,
-      targetCell,
-      currentHex,
-      isHostBypass,
-    });
-  }, [gameState, currentHex, myPlayer, isHostBypass]);
-
-  const currentHexCell = useMemo(() => {
-    if (!gameState || !currentHex) return undefined;
-    return gameState.grid[`${currentHex[0]},${currentHex[1]}`];
-  }, [gameState, currentHex]);
-
-  const handleTileAction = useCallback((actionType: TileActionType) => {
-    if (!selectedHex || !gameState) return;
-    const [q, r] = selectedHex;
-
-    // When host GPS bypass is active, send hex center coordinates instead of actual GPS
-    let actionLat: number;
-    let actionLng: number;
-    if (isHostBypass && gameState.mapLat != null && gameState.mapLng != null) {
-      const [hexLat, hexLng] = roomHexToLatLng(q, r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
-      actionLat = hexLat;
-      actionLng = hexLng;
-    } else if (currentLocation) {
-      actionLat = currentLocation.lat;
-      actionLng = currentLocation.lng;
-    } else {
-      return; // no location available
-    }
-
-    switch (actionType) {
-      case 'claim':
-      case 'reinforce':
-      case 'claimAlliance':
-      case 'claimSelf': {
-        const claimForSelf = actionType === 'claimSelf';
-        invoke('PlaceTroops', q, r, actionLat, actionLng, null, claimForSelf)
-          .then(() => {
-            setPickupPrompt(null);
-            playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
-            if (actionType !== 'reinforce') {
-              vibrate(HAPTIC.claim);
-            }
-            setMapFeedback({
-              tone: 'success',
-              message: getPlaceSuccessMessage(actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
-              targetHex: selectedHex
-            });
-          })
-          .catch(cause => {
-            playSound('error');
-            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: selectedHex });
-          });
-        break;
-      }
-      case 'attack': {
-        const cell = gameState.grid[`${q},${r}`];
-        const defenderTroops = cell?.troops ?? 0;
-        const maxTroops = myPlayer?.carriedTroops ?? 0;
-        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
-        setAttackCount(maxTroops);
-        break;
-      }
-      case 'pickup': {
-        const cell = gameState.grid[`${q},${r}`];
-        setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
-        setPickupCount(1);
-        break;
-      }
-      case 'ignore':
-        setSelectedHex(null);
-        setMapFeedback(null);
-        break;
-    }
-  }, [selectedHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
-
-  const handleCurrentHexAction = useCallback((actionType: TileActionType) => {
-    if (!currentHex || !gameState) return;
-    const [q, r] = currentHex;
-
-    let actionLat: number;
-    let actionLng: number;
-    if (isHostBypass && gameState.mapLat != null && gameState.mapLng != null) {
-      const [hexLat, hexLng] = roomHexToLatLng(q, r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
-      actionLat = hexLat;
-      actionLng = hexLng;
-    } else if (currentLocation) {
-      actionLat = currentLocation.lat;
-      actionLng = currentLocation.lng;
-    } else {
-      return;
-    }
-
-    switch (actionType) {
-      case 'claim':
-      case 'reinforce':
-      case 'claimAlliance':
-      case 'claimSelf': {
-        const claimForSelf = actionType === 'claimSelf';
-        invoke('PlaceTroops', q, r, actionLat, actionLng, null, claimForSelf)
-          .then(() => {
-            setPickupPrompt(null);
-            playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
-            if (actionType !== 'reinforce') {
-              vibrate(HAPTIC.claim);
-            }
-            setMapFeedback({
-              tone: 'success',
-              message: getPlaceSuccessMessage(actionType === 'reinforce' ? 'reinforce' : 'claim', q, r, t),
-              targetHex: currentHex
-            });
-          })
-          .catch(cause => {
-            playSound('error');
-            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: currentHex });
-          });
-        break;
-      }
-      case 'attack': {
-        setSelectedHex(currentHex);
-        const cell = gameState.grid[`${q},${r}`];
-        const defenderTroops = cell?.troops ?? 0;
-        const maxTroops = myPlayer?.carriedTroops ?? 0;
-        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
-        setAttackCount(maxTroops);
-        break;
-      }
-      case 'pickup': {
-        setSelectedHex(currentHex);
-        const cell = gameState.grid[`${q},${r}`];
-        setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
-        setPickupCount(1);
-        break;
-      }
-      case 'ignore':
-        setMapFeedback(null);
-        break;
-    }
-  }, [currentHex, currentLocation, gameState, isHostBypass, myPlayer, invoke, playSound, t]);
-
-  const handleDismissTileActions = useCallback(() => {
-    setSelectedHex(null);
-    setMapFeedback(null);
-  }, []);
-
-  const handleConfirmPickup = useCallback(() => {
-    if (!pickupPrompt) {
-      return;
-    }
-
-    // When host GPS bypass is active, use hex center coordinates
-    let pickupLat: number;
-    let pickupLng: number;
-    if (isHostBypass && gameState && gameState.mapLat != null && gameState.mapLng != null) {
-      const [hexLat, hexLng] = roomHexToLatLng(pickupPrompt.q, pickupPrompt.r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
-      pickupLat = hexLat;
-      pickupLng = hexLng;
-    } else if (currentLocation) {
-      pickupLat = currentLocation.lat;
-      pickupLng = currentLocation.lng;
-    } else {
-      return; // no location available
-    }
-
-    const targetHex: [number, number] = [pickupPrompt.q, pickupPrompt.r];
-    clearError();
-    setSelectedHex(targetHex);
-    invoke('PickUpTroops', pickupPrompt.q, pickupPrompt.r, pickupCount, pickupLat, pickupLng)
-      .then(() => {
-        setPickupPrompt(null);
-        playSound('pickup');
-        setMapFeedback({
-          tone: 'success',
-          message: t('game.mapFeedback.pickedUp', {
-            count: pickupCount,
-            q: pickupPrompt.q,
-            r: pickupPrompt.r
-          }),
-          targetHex
-        });
-      })
-      .catch(cause => {
-        setMapFeedback({
-          tone: 'error',
-          message: getErrorMessage(cause),
-          targetHex
-        });
-      });
-  }, [currentLocation, gameState, invoke, isHostBypass, pickupCount, pickupPrompt, playSound, t]);
-
-  const handleConfirmAttack = useCallback(async () => {
-    if (!attackPrompt) return;
-
-    // When host GPS bypass is active, use hex center coordinates
-    let attackLat: number;
-    let attackLng: number;
-    if (isHostBypass && gameState && gameState.mapLat != null && gameState.mapLng != null) {
-      const [hexLat, hexLng] = roomHexToLatLng(attackPrompt.q, attackPrompt.r, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
-      attackLat = hexLat;
-      attackLng = hexLng;
-    } else if (currentLocation) {
-      attackLat = currentLocation.lat;
-      attackLng = currentLocation.lng;
-    } else {
-      return; // no location available
-    }
-
-    try {
-      await invoke('PlaceTroops', attackPrompt.q, attackPrompt.r, attackLat, attackLng, attackCount, false);
-      playSound('attack');
-      // CombatResult will come via SignalR event
-    } catch (err) {
-      playSound('error');
-      setMapFeedback({ tone: 'error', message: getErrorMessage(err), targetHex: [attackPrompt.q, attackPrompt.r] });
-    } finally {
-      setAttackPrompt(null);
-    }
-  }, [attackPrompt, attackCount, currentLocation, gameState, invoke, isHostBypass, playSound]);
-
-  const handleCancelAttack = useCallback(() => {
-    setAttackPrompt(null);
-  }, []);
-
-  const handleReClaimHex = useCallback(async (mode: ReClaimMode) => {
-    if (!combatResult) return;
-    if (mode === 'Alliance') {
-      // Default behavior — tile is already claimed for alliance by PlaceTroops
-      setCombatResult(null);
-      return;
-    }
-    try {
-      await invoke('ReClaimHex', combatResult.q, combatResult.r, mode);
-    } catch (err) {
-      setMapFeedback({ tone: 'error', message: getErrorMessage(err), targetHex: [combatResult.q, combatResult.r] });
-    } finally {
-      setCombatResult(null);
-    }
-  }, [combatResult, invoke]);
-
-  const handlePlayAgain = useCallback(() => {
-    clearSession();
-    setMyRooms([]);
-    setGameState(null);
-    clearGameplayUi();
-    setView('lobby');
-    setError('');
-    setPickupPrompt(null);
-    void refreshMyRooms().catch(cause => setError(String(cause)));
-  }, [clearGameplayUi, clearSession, refreshMyRooms]);
-
   const connectionBanner = autoResuming
     ? t('errors.restoringRoom', { code: savedRoomCode })
     : reconnecting
@@ -1306,16 +576,62 @@ export default function App() {
       return (
         <>
           {connectionBanner && <ConnectionBanner message={connectionBanner} />}
-          <HostControlPlane
-            state={gameState}
-            onSwitchToPlayer={() => handleSetObserverMode(false)}
-            onUpdateDynamics={handleUpdateDynamicsLive}
-            onTriggerEvent={handleTriggerEvent}
-            onSendMessage={handleSendHostMessage}
-            onPauseGame={handlePauseGame}
-            onReturnToLobby={handleReturnToLobby}
-            error={error}
-          >
+          <Suspense fallback={<LoadingFallback />}>
+            <HostControlPlane
+              state={gameState}
+              onSwitchToPlayer={() => handleSetObserverMode(false)}
+              onUpdateDynamics={handleUpdateDynamicsLive}
+              onTriggerEvent={handleTriggerEvent}
+              onSendMessage={handleSendHostMessage}
+              onPauseGame={handlePauseGame}
+              onReturnToLobby={handleReturnToLobby}
+              error={error}
+            >
+              <GameMap
+                state={gameState}
+                myUserId={auth.userId}
+                currentLocation={currentLocation}
+                constrainViewportToGrid
+                onHexClick={handleHexClick}
+                selectedHex={selectedHex}
+                playerDisplayPrefs={playerDisplayPrefs}
+              />
+            </HostControlPlane>
+          </Suspense>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
+        <Suspense fallback={<LoadingFallback />}>
+        <PlayingHud
+          myUserId={auth.userId}
+          currentHex={currentHex}
+          onConfirmPickup={handleConfirmPickup}
+          onReturnToLobby={handleReturnToLobby}
+          locationError={effectiveLocationError}
+          currentHexActions={currentHexActions}
+          onCurrentHexAction={handleCurrentHexAction}
+          onDismissTileActions={handleDismissTileActions}
+          onConfirmAttack={handleConfirmAttack}
+          onAcceptDuel={handleAcceptDuel}
+          onDeclineDuel={handleDeclineDuel}
+          onActivateBeacon={handleActivateBeacon}
+          onDeactivateBeacon={handleDeactivateBeacon}
+          onActivateStealth={handleActivateStealth}
+          playerDisplayPrefs={playerDisplayPrefs}
+          onPlayerDisplayPrefsChange={setPlayerDisplayPrefs}
+          currentPlayerName={currentPlayerName}
+          hasLocation={Boolean(currentLocation)}
+          onSetObserverMode={handleSetObserverMode}
+          debugToggle={debugToggleButton}
+          debugPanel={debugGpsPanel}
+          toasts={toasts}
+          onDismissToast={dismissToast}
+          onNavigateMap={handleMiniMapNavigate}
+        >
             <GameMap
               state={gameState}
               myUserId={auth.userId}
@@ -1324,87 +640,12 @@ export default function App() {
               onHexClick={handleHexClick}
               selectedHex={selectedHex}
               playerDisplayPrefs={playerDisplayPrefs}
+              onBoundsChange={setMainMapBounds}
+              onHexScreenPosition={setSelectedHexScreenPos}
+              navigateRef={mapNavigateRef}
             />
-          </HostControlPlane>
-        </>
-      );
-    }
-
-    return (
-      <>
-        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
-        <PlayingHud
-          state={gameState}
-          myUserId={auth.userId}
-          currentHex={currentHex}
-          selectedHex={selectedHex}
-          interactionFeedback={mapFeedback}
-          pickupPrompt={pickupPrompt}
-          pickupCount={pickupCount}
-          onPickupCountChange={setPickupCount}
-          onConfirmPickup={handleConfirmPickup}
-          onCancelPickup={() => setPickupPrompt(null)}
-          onReturnToLobby={handleReturnToLobby}
-          error={error}
-          locationError={effectiveLocationError}
-          tileActions={tileActions}
-          currentHexActions={currentHexActions}
-          currentHexCell={currentHexCell}
-          onTileAction={handleTileAction}
-          onCurrentHexAction={handleCurrentHexAction}
-          onDismissTileActions={handleDismissTileActions}
-          attackPrompt={attackPrompt}
-          attackCount={attackCount}
-          onAttackCountChange={setAttackCount}
-          onConfirmAttack={handleConfirmAttack}
-          onCancelAttack={handleCancelAttack}
-          randomEvent={randomEvent}
-          eventWarning={eventWarning}
-          isRushHour={gameState?.isRushHour}
-          missionNotification={missionNotification}
-          pendingDuel={pendingDuel}
-          onAcceptDuel={handleAcceptDuel}
-          onDeclineDuel={handleDeclineDuel}
-          onDetainPlayer={handleDetainPlayer}
-          onActivateBeacon={handleActivateBeacon}
-          onDeactivateBeacon={handleDeactivateBeacon}
-          onActivateStealth={handleActivateStealth}
-          commandoTargetingMode={commandoTargetingMode}
-          onStartCommandoTargeting={() => setCommandoTargetingMode(true)}
-          onCancelCommandoTargeting={() => setCommandoTargetingMode(false)}
-          playerDisplayPrefs={playerDisplayPrefs}
-          onPlayerDisplayPrefsChange={setPlayerDisplayPrefs}
-          playerColor={playerColor}
-          currentPlayerName={currentPlayerName}
-          selectedHexKey={selectedHexKey}
-          carriedTroops={myPlayer?.carriedTroops ?? 0}
-          isInOwnHex={isInOwnHex}
-          hasLocation={Boolean(currentLocation)}
-          hostMessage={hostMessage}
-          isPaused={gameState.isPaused}
-          isHost={myPlayer?.isHost}
-          onSetObserverMode={handleSetObserverMode}
-          debugToggle={debugToggleButton}
-          debugPanel={debugGpsPanel}
-          toasts={toasts}
-          onDismissToast={dismissToast}
-          mainMapBounds={mainMapBounds}
-          selectedHexScreenPos={selectedHexScreenPos}
-          onNavigateMap={handleMiniMapNavigate}
-        >
-          <GameMap
-            state={gameState}
-            myUserId={auth.userId}
-            currentLocation={currentLocation}
-            constrainViewportToGrid
-            onHexClick={handleHexClick}
-            selectedHex={selectedHex}
-            playerDisplayPrefs={playerDisplayPrefs}
-            onBoundsChange={setMainMapBounds}
-            onHexScreenPosition={setSelectedHexScreenPos}
-            navigateRef={mapNavigateRef}
-          />
-        </PlayingHud>
+          </PlayingHud>
+        </Suspense>
         {combatResult && (
           <CombatModal
             result={combatResult}
@@ -1421,55 +662,57 @@ export default function App() {
   return (
     <>
       {connectionBanner && <ConnectionBanner message={connectionBanner} />}
-      <GameLobby
-        username={auth.username}
-        myUserId={auth.userId}
-        authToken={auth.token}
-        gameState={gameState}
-        connected={connected}
-        currentLocation={currentLocation}
-        locationError={effectiveLocationError}
-        locationLoading={effectiveLocationLoading}
-        recentRooms={visibleRecentRooms}
-        onCreateRoom={handleCreateRoom}
-        onJoinRoom={handleJoinRoom}
-        onSetAlliance={handleSetAlliance}
-        onSetMapLocation={handleSetMapLocation}
-        onSetTileSize={handleSetTileSize}
-        onUseCenteredGameArea={handleUseCenteredGameArea}
-        onSetPatternGameArea={handleSetPatternGameArea}
-        onSetCustomGameArea={handleSetCustomGameArea}
-        onSetClaimMode={handleSetClaimMode}
-        onSetAllowSelfClaim={handleSetAllowSelfClaim}
-        onSetWinCondition={handleSetWinCondition}
-        onSetCopresenceModes={handleSetCopresenceModes}
-        onSetCopresencePreset={handleSetCopresencePreset}
-        onSetGameDynamics={handleSetGameDynamics}
-        onSetPlayerRole={handleSetPlayerRole}
-        onSetAllianceHQ={handleSetAllianceHQ}
-        onSetMasterTile={handleSetMasterTile}
-        onSetMasterTileByHex={handleSetMasterTileByHex}
-        onAssignStartingTile={handleAssignStartingTile}
-        onConfigureAlliances={handleConfigureAlliances}
-        onDistributePlayers={handleDistributePlayers}
-        onAssignAllianceStartingTile={handleAssignAllianceStartingTile}
-        onStartGame={handleStartGame}
-        onReturnToLobby={handleReturnToLobby}
-        onLogout={() => {
-          clearSession();
-          disableDebugLocation();
-          setShowDebugTools(false);
-          setMyRooms([]);
-          void logout();
-          setGameState(null);
-          setPickupPrompt(null);
-          clearGameplayUi();
-          setView('lobby');
-        }}
-        onSetObserverMode={handleSetObserverMode}
-        error={error}
-        invoke={invoke}
-      />
+      <Suspense fallback={<LoadingFallback />}>
+        <GameLobby
+          username={auth.username}
+          myUserId={auth.userId}
+          authToken={auth.token}
+          gameState={gameState}
+          connected={connected}
+          currentLocation={currentLocation}
+          locationError={effectiveLocationError}
+          locationLoading={effectiveLocationLoading}
+          recentRooms={visibleRecentRooms}
+          onCreateRoom={handleCreateRoom}
+          onJoinRoom={handleJoinRoom}
+          onSetAlliance={handleSetAlliance}
+          onSetMapLocation={handleSetMapLocation}
+          onSetTileSize={handleSetTileSize}
+          onUseCenteredGameArea={handleUseCenteredGameArea}
+          onSetPatternGameArea={handleSetPatternGameArea}
+          onSetCustomGameArea={handleSetCustomGameArea}
+          onSetClaimMode={handleSetClaimMode}
+          onSetAllowSelfClaim={handleSetAllowSelfClaim}
+          onSetWinCondition={handleSetWinCondition}
+          onSetCopresenceModes={handleSetCopresenceModes}
+          onSetCopresencePreset={handleSetCopresencePreset}
+          onSetGameDynamics={handleSetGameDynamics}
+          onSetPlayerRole={handleSetPlayerRole}
+          onSetAllianceHQ={handleSetAllianceHQ}
+          onSetMasterTile={handleSetMasterTile}
+          onSetMasterTileByHex={handleSetMasterTileByHex}
+          onAssignStartingTile={handleAssignStartingTile}
+          onConfigureAlliances={handleConfigureAlliances}
+          onDistributePlayers={handleDistributePlayers}
+          onAssignAllianceStartingTile={handleAssignAllianceStartingTile}
+          onStartGame={handleStartGame}
+          onReturnToLobby={handleReturnToLobby}
+          onLogout={() => {
+            clearSession();
+            disableDebugLocation();
+            setShowDebugTools(false);
+            setMyRooms([]);
+            void logout();
+            setGameState(null);
+            setPickupPrompt(null);
+            clearGameplayUi();
+            setView('lobby');
+          }}
+          onSetObserverMode={handleSetObserverMode}
+          error={error}
+          invoke={invoke}
+        />
+      </Suspense>
       {!gameState && (
         <button
           type="button"
@@ -1483,109 +726,6 @@ export default function App() {
       {debugToggleButton}
     </>
   );
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
-function normalizeGameState(state: GameState, previousState?: GameState | null): GameState {
-  const previousEventLog = previousState?.roomCode === state.roomCode && Array.isArray(previousState.eventLog)
-    ? previousState.eventLog
-    : undefined;
-
-  return {
-    ...state,
-    eventLog: Array.isArray(state.eventLog) ? state.eventLog : previousEventLog,
-    dynamics: state.dynamics ?? {
-      activeCopresenceModes: [],
-      copresencePreset: null,
-      terrainEnabled: false,
-      playerRolesEnabled: false,
-      fogOfWarEnabled: false,
-      supplyLinesEnabled: false,
-      hqEnabled: false,
-      timedEscalationEnabled: false,
-      underdogPactEnabled: false,
-      neutralNPCEnabled: false,
-      randomEventsEnabled: false,
-      missionSystemEnabled: false,
-    },
-  };
-}
-
-function isClearlyStaleJoinFailure(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes('room not found');
-}
-
-function isClearlyStaleRejoinFailure(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes('no active room');
-}
-
-function isMissingRejoinMethodFailure(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes('does not exist')
-    || normalized.includes('unknown hub method')
-    || normalized.includes('method not found')
-    || normalized.includes('not implemented');
-}
-
-function isMissingHubMethodFailure(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes('method does not exist')
-    || normalized.includes('unknown hub method')
-    || normalized.includes('method not found')
-    || normalized.includes('does not exist');
-}
-
-function localizeLobbyError(message: unknown, t: TFunction): string {
-  const text = typeof message === 'string' ? message : JSON.stringify(message);
-  const normalized = text.toLowerCase();
-
-  if (normalized.includes('room not found')) {
-    return t('lobby.joinErrors.roomNotFound');
-  }
-
-  if (normalized.includes('room is full') || normalized.includes('full')) {
-    return t('lobby.joinErrors.roomFull');
-  }
-
-  if (normalized.includes('already in')) {
-    return t('lobby.joinErrors.alreadyInRoom');
-  }
-
-  if (normalized.includes('unable to rejoin') || normalized.includes('no active room')) {
-    return t('lobby.joinErrors.roomUnavailable');
-  }
-
-  if (normalized.includes('not in a room')) {
-    return t('lobby.joinErrors.notInRoom');
-  }
-
-  return text;
-}
-
-function getPlaceSuccessMessage(
-  placeOutcome: 'claim' | 'reinforce' | 'capture' | undefined,
-  q: number,
-  r: number,
-  t: TFunction
-): string {
-  switch (placeOutcome) {
-    case 'reinforce':
-      return t('game.mapFeedback.reinforced', { q, r });
-    case 'capture':
-      return t('game.mapFeedback.captured', { q, r });
-    case 'claim':
-    default:
-      return t('game.mapFeedback.claimed', { q, r });
-  }
 }
 
 function ConnectionBanner({ message }: { message: string }) {

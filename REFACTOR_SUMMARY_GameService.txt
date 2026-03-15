@@ -1,0 +1,360 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    GAMESERVICE REFACTOR QUICK SUMMARY
+═══════════════════════════════════════════════════════════════════════════════
+
+FILE ANALYZED: /backend/Landgrab.Api/Services/GameService.cs
+  Size: 3,965 lines
+  Public Methods: 61
+  Primary Consumer: GameHub (104 calls)
+
+───────────────────────────────────────────────────────────────────────────────
+CONSUMER BREAKDOWN
+───────────────────────────────────────────────────────────────────────────────
+
+GameHub                 104 calls   (Main Hub interface)
+TroopRegenerationService 6 calls   (Periodic reinforcement)
+RandomEventService       5 calls   (Random events)
+MissionService           2 calls   (Mission tracking)
+─────────────────────────────────
+TOTAL:                  117 calls
+
+───────────────────────────────────────────────────────────────────────────────
+TARGET REFACTORED SERVICES (10 SERVICES)
+───────────────────────────────────────────────────────────────────────────────
+
+1. RoomConnectionService         (~200 LOC)
+   Methods: CreateRoom, JoinRoom, GetRoom, GetRoomByConnection, GetRoomByUserId,
+            RemoveConnection, GetRoomsForUser, GetPlayingRoomCodes, RestoreRooms,
+            GetAllianceConnectionIds
+   Key: Manages room lifecycle & player connections
+   
+2. GameLobbyService              (~400 LOC)
+   Methods: SetAlliance, ConfigureAlliances, SetMapLocation, SetWinCondition,
+            SetClaimMode, SetGameDynamics, SetCopresenceModes, LoadMapTemplate,
+            SaveCurrentAreaAsTemplate, SetTileSize, etc.
+   Key: Pre-game configuration
+   
+3. GameStartService              (~150 LOC)
+   Methods: StartGame, AssignStartingTile, SetMasterTile, SetMasterTileByHex,
+            SetAllianceHQ
+   Key: Game initialization
+   
+4. GameplayService               (~1,200 LOC) ★ CRITICAL - LARGEST SERVICE
+   Methods: UpdatePlayerLocation, PickUpTroops, PlaceTroops, ReClaimHex,
+            AddReinforcementsToAllHexes
+   Key: Core game mechanics (movement, combat, claiming)
+   
+5. CopresenceAbilityService      (~300 LOC)
+   Methods: ActivateBeacon, DeactivateBeacon, ActivateStealth,
+            ActivateCommandoRaid
+   Key: Special ability modes
+   
+6. DuelManagementService         (~120 LOC)
+   Methods: InitiateDuel, ResolveDuel, ProcessDuelExpiry
+   Key: Duel lifecycle management
+   
+7. HostageManagementService      (~80 LOC)
+   Methods: DetainPlayer, ProcessHostageReleases
+   Key: Hostage mechanics
+   
+8. EventManagementService        (~100 LOC)
+   Methods: AppendEventLogPublic
+   Key: Event logging
+   
+9. GameStateManagementService    (~200 LOC)
+   Methods: GetStateSnapshot, GetPlayerSnapshot (2x), SnapshotStatePublic,
+            CreateHiddenFogCellsForBroadcast
+   Key: State queries & visibility
+   
+10. AdminHostService             (~200 LOC)
+    Methods: TriggerGameEvent, SendHostMessage, UpdateGameDynamicsLive,
+             SetHostObserverMode, PauseGame
+    Key: Host admin actions
+
+───────────────────────────────────────────────────────────────────────────────
+CRITICAL BACKGROUND SERVICE DEPENDENCIES
+───────────────────────────────────────────────────────────────────────────────
+
+TroopRegenerationService MUST HAVE:
+  • GetPlayingRoomCodes() - room discovery [RoomConnectionService]
+  • GetRoom(roomCode) - room access [RoomConnectionService]
+  • AddReinforcementsToAllHexes() - game tick [GameplayService]
+  • ProcessDuelExpiry() - duel cleanup [DuelManagementService]
+  • CreateHiddenFogCellsForBroadcast() - fog of war [GameStateManagementService]
+  • GetPlayerSnapshot() - visibility [GameStateManagementService]
+
+RandomEventService MUST HAVE:
+  • GetPlayingRoomCodes() - room discovery [RoomConnectionService]
+  • GetRoom(roomCode) - room access [RoomConnectionService]
+  • AppendEventLogPublic() - event logging [EventManagementService]
+  • SnapshotStatePublic() - state snapshot [GameStateManagementService]
+
+MissionService MUST HAVE:
+  • GetPlayingRoomCodes() - room discovery [RoomConnectionService]
+  • GetRoom(roomCode) - room access [RoomConnectionService]
+  • SnapshotStatePublic() - state snapshot [GameStateManagementService]
+
+───────────────────────────────────────────────────────────────────────────────
+METHOD GROUPING BY CATEGORY
+───────────────────────────────────────────────────────────────────────────────
+
+ROOM MANAGEMENT (10 methods):
+  CreateRoom, JoinRoom, GetRoom, GetRoomByConnection, GetRoomByUserId,
+  RemoveConnection, GetRoomsForUser, GetPlayingRoomCodes, RestoreRooms,
+  GetAllianceConnectionIds
+
+LOBBY CONFIGURATION (20 methods):
+  SetAlliance, ConfigureAlliances, DistributePlayersRandomly, SetMapLocation,
+  SetTileSize, SetHostBypassGps, SetMaxFootprint, UseCenteredGameArea,
+  SetPatternGameArea, SetCustomGameArea, SetClaimMode, SetAllowSelfClaim,
+  SetWinCondition, SetCopresenceModes, SetCopresencePreset, SetGameDynamics,
+  SetPlayerRole, LoadMapTemplate, SaveCurrentAreaAsTemplate
+
+GAME START (5 methods):
+  StartGame, AssignStartingTile, SetMasterTile, SetMasterTileByHex,
+  SetAllianceHQ
+
+GAMEPLAY CORE (5 methods):
+  UpdatePlayerLocation, PickUpTroops, PlaceTroops, ReClaimHex,
+  AddReinforcementsToAllHexes
+
+SPECIAL ABILITIES (4 methods):
+  ActivateBeacon, DeactivateBeacon, ActivateStealth, ActivateCommandoRaid
+
+DUEL MANAGEMENT (3 methods):
+  InitiateDuel, ResolveDuel, ProcessDuelExpiry
+
+HOSTAGE MECHANICS (2 methods):
+  DetainPlayer, ProcessHostageReleases
+
+EVENT & STATE (7 methods):
+  AppendEventLogPublic, SnapshotStatePublic, GetStateSnapshot, GetPlayerSnapshot,
+  CreateHiddenFogCellsForBroadcast
+
+ADMIN ACTIONS (5 methods):
+  TriggerGameEvent, SendHostMessage, UpdateGameDynamicsLive, SetHostObserverMode,
+  PauseGame
+
+───────────────────────────────────────────────────────────────────────────────
+CROSS-SERVICE DEPENDENCIES
+───────────────────────────────────────────────────────────────────────────────
+
+DEPENDENCY HIERARCHY:
+
+  Level 1 (BASE):
+  ├─ RoomPersistenceService [injected]
+  └─ RoomConnectionService
+
+  Level 2 (CORE DOMAIN):
+  ├─ GameStateManagementService [utility only]
+  ├─ EventManagementService [utility only]
+  ├─ GameLobbyService [depends on Level 1 + GlobalMapService, TerrainFetchService]
+  └─ GameStartService [depends on Level 1 + HexService]
+
+  Level 3 (GAMEPLAY):
+  ├─ GameplayService [depends on Level 1,2 + HexService, DuelManagementService]
+  ├─ DuelManagementService [depends on Level 1]
+  ├─ HostageManagementService [depends on Level 1]
+  └─ CopresenceAbilityService [depends on Level 1,2,3]
+
+  Level 4 (ADMIN):
+  └─ AdminHostService [depends on Level 1,2,3]
+
+EXTERNAL DEPENDENCIES:
+  • GlobalMapService [for map templates]
+  • TerrainFetchService [for terrain data]
+  • HexService [for hex operations]
+
+───────────────────────────────────────────────────────────────────────────────
+THREAD SAFETY CONSTRAINTS
+───────────────────────────────────────────────────────────────────────────────
+
+✓ Current Implementation:
+  - All methods use: lock (room.SyncRoot) { ... }
+  - Background services directly mutate room.State inside their own locks
+  - QueuePersistence() handles deferred DB updates
+
+⚠ REFACTORING MUST:
+  1. Keep room.SyncRoot as single synchronization point
+  2. New services must use same lock pattern
+  3. Do NOT introduce new locks for individual services
+  4. Background services must continue direct mutation (performance critical)
+  5. Utility methods (snapshots, visibility) must be reentrant
+
+───────────────────────────────────────────────────────────────────────────────
+NEW FILES TO CREATE
+───────────────────────────────────────────────────────────────────────────────
+
+Services/ (10 new files):
+  ✓ RoomConnectionService.cs
+  ✓ GameLobbyService.cs
+  ✓ GameStartService.cs
+  ✓ GameplayService.cs [CRITICAL - largest]
+  ✓ CopresenceAbilityService.cs
+  ✓ DuelManagementService.cs
+  ✓ HostageManagementService.cs
+  ✓ EventManagementService.cs
+  ✓ GameStateManagementService.cs
+  ✓ AdminHostService.cs
+  ? IGameService.cs [optional facade]
+
+Models/ (verify existing):
+  ✓ CombatResult
+  ✓ AmbushResult
+  ✓ PendingDuel
+  ✓ GameEventLogEntry
+  ✓ Mission
+
+Program.cs:
+  ✓ Update DI registration (10 new services)
+
+GameHub.cs:
+  ✓ Update constructor injection (104 calls → 10 services)
+
+───────────────────────────────────────────────────────────────────────────────
+REFACTORING RISKS & MITIGATIONS
+───────────────────────────────────────────────────────────────────────────────
+
+HIGH RISK:
+  ✗ Breaking background services
+    → Keep GetPlayingRoomCodes, GetRoom public; minimal facade if needed
+    
+  ✗ Race conditions in new services
+    → Use existing room.SyncRoot pattern consistently everywhere
+
+MEDIUM RISK:
+  ✗ UpdatePlayerLocation complexity (400+ LOC)
+    → Split into: Movement + Duel + Toll sub-logic
+    
+  ✗ Fog of War visibility bugs
+    → CreateHiddenFogCellsForBroadcast is 370 LOC of complex logic
+    → Test thoroughly before/after migration
+    
+  ✗ Circular dependencies
+    → Use dependency injection, avoid service-to-service cross-calls
+    
+  ✗ State mutation isolation
+    → All public methods must maintain lock discipline
+
+───────────────────────────────────────────────────────────────────────────────
+IMPLEMENTATION SEQUENCE (RECOMMENDED)
+───────────────────────────────────────────────────────────────────────────────
+
+Phase 1: Foundation (LOW RISK)
+  → RoomConnectionService extraction
+  → Update DI, test room creation/joining
+
+Phase 2: Utilities (LOW RISK)
+  → GameStateManagementService extraction
+  → Test snapshots & visibility
+
+Phase 3: Duel System (LOW RISK)
+  → DuelManagementService extraction
+  → Test with background services
+
+Phase 4: Lobby (MEDIUM RISK)
+  → GameLobbyService extraction
+  → Update ~20 GameHub methods
+
+Phase 5: Game Startup (MEDIUM RISK)
+  → GameStartService extraction
+  → Update ~5 GameHub methods
+
+Phase 6: Gameplay (HIGH RISK - CRITICAL PATH)
+  → GameplayService extraction (~1200 LOC)
+  → Split UpdatePlayerLocation if possible
+  → Heavy testing required
+
+Phase 7: Remaining Services (MEDIUM RISK)
+  → CopresenceAbilityService
+  → HostageManagementService
+  → EventManagementService
+  → AdminHostService
+
+Phase 8: Integration (MEDIUM RISK)
+  → Verify all background services
+  → Full system integration test
+
+───────────────────────────────────────────────────────────────────────────────
+GAMEHUB REFACTORING EXAMPLE (Before/After)
+───────────────────────────────────────────────────────────────────────────────
+
+BEFORE:
+public class GameHub(GameService gameService, ...)
+{
+    public async Task CreateRoom()
+    {
+        var room = gameService.CreateRoom(UserId, Username, Context.ConnectionId);
+        var state = gameService.GetStateSnapshot(room.Code);
+        await Clients.Caller.SendAsync("RoomCreated", room.Code, state);
+    }
+}
+
+AFTER:
+public class GameHub(
+    RoomConnectionService roomService,
+    GameStateManagementService stateService,
+    ...)
+{
+    public async Task CreateRoom()
+    {
+        var room = roomService.CreateRoom(UserId, Username, Context.ConnectionId);
+        var state = stateService.GetStateSnapshot(room.Code);
+        await Clients.Caller.SendAsync("RoomCreated", room.Code, state);
+    }
+}
+
+───────────────────────────────────────────────────────────────────────────────
+KEY METRICS & STATISTICS
+───────────────────────────────────────────────────────────────────────────────
+
+Current GameService:
+  Total LOC:           3,965
+  Public Methods:      61
+  Method Calls:        ~117 from consumers
+  
+Refactored Services:
+  RoomConnectionService:         ~200 LOC (10 methods)
+  GameLobbyService:              ~400 LOC (20 methods)
+  GameStartService:              ~150 LOC (5 methods)
+  GameplayService:              ~1,200 LOC (5 methods) ★ LARGEST
+  CopresenceAbilityService:      ~300 LOC (4 methods)
+  DuelManagementService:         ~120 LOC (3 methods)
+  HostageManagementService:       ~80 LOC (2 methods)
+  EventManagementService:        ~100 LOC (1 method)
+  GameStateManagementService:    ~200 LOC (7 methods)
+  AdminHostService:              ~200 LOC (5 methods)
+  ─────────────────────────────────────────────
+  Total:                        ~2,950 LOC (10 services)
+  
+Reduction in GameService:
+  From: 3,965 LOC
+  To:   ~1,000 LOC (core utilities, removed)
+  Or:   Keep as facade delegating to 10 services
+
+GameHub Refactoring:
+  Inject: 10 domain services (instead of 1 monolith)
+  Update: 104 method calls (distributed across services)
+  Files:  1 file (GameHub.cs)
+
+───────────────────────────────────────────────────────────────────────────────
+DOCUMENTATION REFERENCE
+───────────────────────────────────────────────────────────────────────────────
+
+Full detailed analysis available in:
+  /Landgrab/REFACTOR_MAP_GameService.md (753 lines)
+
+Contains:
+  • Section 1: Complete consumer analysis with line numbers
+  • Section 2: Method grouping by target service domain
+  • Section 3: Cross-service dependencies graph
+  • Section 4: Background service dependencies detail
+  • Section 5: Thread safety & state management discussion
+  • Section 6: Extra files & types needed
+  • Section 7: Detailed method mapping table (61 methods)
+  • Section 8: Implementation notes & constraints
+  • Section 9: DI configuration chain
+  • Section 10: Refactoring risks & mitigations
+  • Section 11: Recommended implementation sequence
+
+═══════════════════════════════════════════════════════════════════════════════

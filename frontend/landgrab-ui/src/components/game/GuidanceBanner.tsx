@@ -1,26 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameState } from '../../types/game';
+import { useGameStore } from '../../stores/gameStore';
+import { useGameplayStore } from '../../stores/gameplayStore';
 
 interface GuidanceBannerProps {
-  gameState: GameState;
-  selectedHexKey: string | null;
   carriedTroops: number;
   isInOwnHex: boolean;
   hasLocation: boolean;
 }
 
 export function GuidanceBanner({
-  gameState,
-  selectedHexKey,
   carriedTroops,
   isInOwnHex,
   hasLocation
 }: GuidanceBannerProps) {
   const { t } = useTranslation();
+  const gameState = useGameStore((state) => state.gameState);
+  const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
   const selectedHexExists = useMemo(
-    () => Boolean(selectedHexKey && gameState.grid[selectedHexKey]),
-    [gameState.grid, selectedHexKey]
+    () => Boolean(gameState && selectedHexKey && gameState.grid[selectedHexKey]),
+    [gameState, selectedHexKey]
   );
   const computedHint = useMemo(() => {
     if (!hasLocation) {

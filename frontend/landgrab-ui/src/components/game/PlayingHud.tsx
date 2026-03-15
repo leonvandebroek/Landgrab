@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameState, HexCell, RandomEvent, Mission, PendingDuel } from '../../types/game';
+import type { HexCell, Mission } from '../../types/game';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
 import { hexKey } from '../map/HexMath';
 import { useSound } from '../../hooks/useSound';
+import { useGameStore } from '../../stores/gameStore';
+import { useGameplayStore } from '../../stores/gameplayStore';
+import { useNotificationStore } from '../../stores/notificationStore';
+import { useUiStore } from '../../stores/uiStore';
 import { GameEventLog } from './GameEventLog';
 import { GameRulesPage } from './GameRulesPage';
 import { GuidanceBanner } from './GuidanceBanner';
@@ -16,148 +20,89 @@ import type { GameToast } from '../../hooks/useToastQueue';
 import { PlayerHUD } from './PlayerHUD';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
-import type { MapInteractionFeedback, TileAction, TileActionType } from './tileInteraction';
-
-interface PickupPrompt {
-  q: number;
-  r: number;
-  max: number;
-}
-
-interface AttackPrompt {
-  q: number;
-  r: number;
-  max: number;
-  defenderTroops: number;
-}
+import type { TileAction, TileActionType } from './tileInteraction';
 
 interface Props {
-  state: GameState;
   myUserId: string;
   currentHex: [number, number] | null;
-  selectedHex: [number, number] | null;
-  interactionFeedback: MapInteractionFeedback | null;
-  pickupPrompt: PickupPrompt | null;
-  pickupCount: number;
-  onPickupCountChange: (count: number) => void;
   onConfirmPickup: () => void;
-  onCancelPickup: () => void;
   onReturnToLobby: () => void;
-  error: string;
   locationError: string | null;
-  tileActions?: TileAction[];
   currentHexActions?: TileAction[];
-  currentHexCell?: HexCell;
   onCurrentHexAction?: (actionType: TileActionType) => void;
-  onTileAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
-  attackPrompt: AttackPrompt | null;
-  attackCount: number;
-  onAttackCountChange: (count: number) => void;
   onConfirmAttack: () => void;
-  onCancelAttack: () => void;
-  randomEvent?: RandomEvent | null;
-  eventWarning?: RandomEvent | null;
-  isRushHour?: boolean;
-  missionNotification?: { mission: Mission; type: 'assigned' | 'completed' | 'failed' } | null;
-  pendingDuel?: PendingDuel | null;
   onAcceptDuel?: (duelId: string) => void;
   onDeclineDuel?: (duelId: string) => void;
-  onDetainPlayer?: (targetPlayerId: string) => void;
   onActivateBeacon?: () => void;
   onDeactivateBeacon?: () => void;
   onActivateStealth?: () => void;
-  commandoTargetingMode?: boolean;
-  onStartCommandoTargeting?: () => void;
-  onCancelCommandoTargeting?: () => void;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
-  playerColor: string;
   currentPlayerName: string;
-  selectedHexKey: string | null;
-  carriedTroops: number;
-  isInOwnHex: boolean;
   hasLocation: boolean;
-  hostMessage?: { message: string; fromHost: boolean } | null;
-  isPaused?: boolean;
-  isHost?: boolean;
   onSetObserverMode?: (enabled: boolean) => void;
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
   toasts?: GameToast[];
   onDismissToast?: (id: string) => void;
-  mainMapBounds?: { north: number; south: number; east: number; west: number } | null;
-  selectedHexScreenPos?: { x: number; y: number } | null;
   onNavigateMap?: (lat: number, lng: number) => void;
 }
 
 export function PlayingHud({
-  state,
   myUserId,
   currentHex,
-  selectedHex,
-  interactionFeedback,
-  pickupPrompt,
-  pickupCount,
-  onPickupCountChange,
   onConfirmPickup,
-  onCancelPickup,
   onReturnToLobby,
-  error,
   locationError,
-  tileActions: _tileActions,
   currentHexActions,
-  currentHexCell,
   onCurrentHexAction,
-  onTileAction: _onTileAction,
   onDismissTileActions,
-  attackPrompt,
-  attackCount,
-  onAttackCountChange,
   onConfirmAttack,
-  onCancelAttack,
-  randomEvent,
-  eventWarning,
-  isRushHour,
-  missionNotification,
-  pendingDuel,
   onAcceptDuel,
   onDeclineDuel,
   onActivateBeacon,
   onDeactivateBeacon,
   onActivateStealth,
-  commandoTargetingMode,
-  onStartCommandoTargeting,
-  onCancelCommandoTargeting,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
-  playerColor,
   currentPlayerName,
-  selectedHexKey,
-  carriedTroops,
-  isInOwnHex,
   hasLocation,
-  hostMessage,
-  isPaused,
-  isHost,
   onSetObserverMode,
   debugToggle,
   debugPanel,
   children,
   toasts,
   onDismissToast,
-  mainMapBounds,
   onNavigateMap,
 }: Props) {
   const { t } = useTranslation();
   const { soundEnabled, toggleSound } = useSound();
+  const state = useGameStore((store) => store.gameState);
+  const selectedHex = useGameplayStore((store) => store.selectedHex);
+  const interactionFeedback = useGameplayStore((store) => store.mapFeedback);
+  const pickupPrompt = useGameplayStore((store) => store.pickupPrompt);
+  const pickupCount = useGameplayStore((store) => store.pickupCount);
+  const attackPrompt = useGameplayStore((store) => store.attackPrompt);
+  const attackCount = useGameplayStore((store) => store.attackCount);
+  const setPickupPrompt = useGameplayStore((store) => store.setPickupPrompt);
+  const setPickupCount = useGameplayStore((store) => store.setPickupCount);
+  const setAttackCount = useGameplayStore((store) => store.setAttackCount);
+  const setAttackPrompt = useGameplayStore((store) => store.setAttackPrompt);
+  const randomEvent = useNotificationStore((store) => store.randomEvent);
+  const eventWarning = useNotificationStore((store) => store.eventWarning);
+  const missionNotification = useNotificationStore((store) => store.missionNotification);
+  const pendingDuel = useNotificationStore((store) => store.pendingDuel);
+  const hostMessage = useNotificationStore((store) => store.hostMessage);
+  const error = useUiStore((store) => store.error);
+  const mainMapBounds = useUiStore((store) => store.mainMapBounds);
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'missions' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
-  const isTimedGame = state.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
+  const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
 
   // Track PlayerHUD height so overlays/minimap stay clear of it
   useEffect(() => {
@@ -174,7 +119,7 @@ export function PlayingHud({
 
   // Game countdown timer for TimedGame win condition
   useEffect(() => {
-    if (!isTimedGame) return;
+    if (!state || !isTimedGame) return;
 
     const endTime = new Date(state.gameStartedAt!).getTime() + state.gameDurationMinutes! * 60 * 1000;
 
@@ -185,38 +130,53 @@ export function PlayingHud({
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [isTimedGame, state.gameStartedAt, state.gameDurationMinutes]);
+  }, [isTimedGame, state]);
 
   // Derive displayed time — null when not a timed game
   const displayTimeRemaining = isTimedGame ? timeRemaining : null;
 
-  const me = state.players.find((p) => p.id === myUserId);
+  const me = state?.players.find((p) => p.id === myUserId);
+  const currentHexCell: HexCell | undefined = useMemo(() => {
+    if (!state || !currentHex) {
+      return undefined;
+    }
+
+    return state.grid[hexKey(currentHex[0], currentHex[1])] ?? undefined;
+  }, [currentHex, state]);
+  const playerColor = me?.allianceColor ?? me?.color ?? '#4f8cff';
+  const carriedTroops = me?.carriedTroops ?? 0;
+  const isInOwnHex = Boolean(currentHexCell && me && currentHexCell.ownerId === me.id);
+  const isHost = Boolean(me?.isHost);
 
   const myMissions = useMemo(() => {
-    if (!state.missions) return [];
+    if (!state?.missions) return [];
     return state.missions.filter(m => m.status === 'Active' || m.status === 'Completed');
-  }, [state.missions]);
+  }, [state]);
 
   const activeMissionCount = myMissions.filter(m => m.status === 'Active').length;
 
   const myTotalTroops = useMemo(() => {
-    if (!me) return 0;
+    if (!state || !me) return 0;
     return Object.values(state.grid).reduce((sum, h) => {
       return h.ownerId === me.id ? sum + h.troops : sum;
     }, 0);
-  }, [state.grid, me]);
+  }, [state, me]);
 
   const sortedPlayers = useMemo(() => {
+    if (!state) {
+      return [];
+    }
+
     return [...state.players].sort((a, b) => {
       if (a.isWinner !== b.isWinner) return a.isWinner ? -1 : 1;
       return b.territoryCount - a.territoryCount;
     });
-  }, [state.players]);
+  }, [state]);
 
-  const totalHexes = useMemo(() => Object.keys(state.grid).length, [state.grid]);
+  const totalHexes = useMemo(() => Object.keys(state?.grid ?? {}).length, [state]);
 
   const interactionStatus = useMemo(() => {
-    if (pickupPrompt) return null;
+    if (!state || pickupPrompt) return null;
     const targetCell = selectedHex ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined : undefined;
     return getTileInteractionStatus({
       state,
@@ -229,7 +189,7 @@ export function PlayingHud({
   }, [state, me, currentHex, selectedHex, t, pickupPrompt]);
 
   // Resolve the target cell for TileInfoCard from selectedHex
-  const selectedCell: HexCell | undefined = selectedHex
+  const selectedCell: HexCell | undefined = state && selectedHex
     ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
     : undefined;
 
@@ -268,6 +228,10 @@ export function PlayingHud({
   const getMissionScope = (mission: Mission) => t(`missions.scope.${mission.scope}` as never, { defaultValue: mission.scope });
   const getMissionStatus = (mission: Mission) => t(`missions.status.${mission.status}` as never, { defaultValue: mission.status });
 
+  if (!state) {
+    return null;
+  }
+
   return (
     <div className="game-layout hud-active" ref={layoutRef}>
       <div className="top-status-bar">
@@ -283,7 +247,7 @@ export function PlayingHud({
             🎲 {t(`phase8.eventType.${randomEvent.type}` as never)} — {randomEvent.description}
           </div>
         )}
-        {isPaused && (
+        {state.isPaused && (
           <div className="top-warning-bar event-warning">
             ⏸ {t('observer.gamePaused' as never)}
           </div>
@@ -317,7 +281,7 @@ export function PlayingHud({
                 <span className="stat-label">{t('game.hudTimer')}</span>
               </div>
             )}
-            {isRushHour && (
+            {state.isRushHour && (
               <div className="stat-item">
                 <span className="stat-value warning">⚡</span>
                 <span className="stat-label">{t('phase8.rushHour' as never)}</span>
@@ -336,8 +300,6 @@ export function PlayingHud({
         </div>
 
         <GuidanceBanner
-          gameState={state}
-          selectedHexKey={selectedHexKey}
           carriedTroops={carriedTroops}
           isInOwnHex={isInOwnHex}
           hasLocation={hasLocation}
@@ -356,13 +318,13 @@ export function PlayingHud({
                   value={pickupCount}
                   aria-label={t('game.pickupPrompt')}
                   title={t('game.pickupPrompt')}
-                  onChange={(e) => onPickupCountChange(Number(e.target.value))}
+                  onChange={(e) => setPickupCount(Number(e.target.value))}
                 />
                 <span>{pickupPrompt.max}</span>
               </div>
               <div style={{ fontWeight: 'bold', fontSize: '1.2rem'}}>{pickupCount}</div>
               <div className="hud-action-bar">
-                <button className="hud-btn" onClick={onCancelPickup}>{t('game.cancel')}</button>
+                <button className="hud-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
                 <button className="hud-btn primary" onClick={onConfirmPickup}>{t('game.confirm')}</button>
               </div>
             </div>
@@ -380,7 +342,7 @@ export function PlayingHud({
                   value={attackCount}
                   aria-label={t('game.tileAction.attackPrompt')}
                   title={t('game.tileAction.attackPrompt')}
-                  onChange={(e) => onAttackCountChange(Number(e.target.value))}
+                  onChange={(e) => setAttackCount(Number(e.target.value))}
                 />
                 <span>{attackPrompt.max}</span>
               </div>
@@ -388,7 +350,7 @@ export function PlayingHud({
                 {t('game.tileAction.deployCount', { count: attackCount })}
               </div>
               <div className="hud-action-bar">
-                <button className="hud-btn" onClick={onCancelAttack}>{t('game.cancel')}</button>
+                <button className="hud-btn" onClick={() => setAttackPrompt(null)}>{t('game.cancel')}</button>
                 <button className="hud-btn primary" onClick={onConfirmAttack}>{t('game.confirm')}</button>
               </div>
             </div>
@@ -600,9 +562,6 @@ export function PlayingHud({
         onActivateBeacon={onActivateBeacon ?? (() => {})}
         onDeactivateBeacon={onDeactivateBeacon ?? (() => {})}
         onActivateStealth={onActivateStealth ?? (() => {})}
-        commandoTargetingMode={commandoTargetingMode ?? false}
-        onStartCommandoTargeting={onStartCommandoTargeting ?? (() => {})}
-        onCancelCommandoTargeting={onCancelCommandoTargeting ?? (() => {})}
       />
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (
         <MiniMap
