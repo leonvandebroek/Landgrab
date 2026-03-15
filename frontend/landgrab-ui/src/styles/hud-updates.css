@@ -1187,6 +1187,13 @@
   display: flex;
   align-items: stretch;
   gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.player-hud__tile-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .player-hud__tile-actions:empty {
@@ -1210,8 +1217,8 @@
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.15s ease;
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 0 0;
+  min-width: 72px;
   position: relative;
   -webkit-tap-highlight-color: transparent;
   animation: hud-btn-enter 0.2s ease both;
