@@ -59,6 +59,7 @@ public class GameService(
     public (GameState? state, string? error) SetCopresencePreset(string roomCode, string userId, string preset) => gameConfigService.SetCopresencePreset(roomCode, userId, preset);
     public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics) => gameConfigService.SetGameDynamics(roomCode, userId, dynamics);
     public (GameState? state, string? error) SetPlayerRole(string roomCode, string userId, string role) => lobbyService.SetPlayerRole(roomCode, userId, role);
+    public (GameState? state, string? error) SetWizardStep(string roomCode, string userId, int step) => lobbyService.SetWizardStep(roomCode, userId, step);
     public (GameState? state, string? error) SetAllianceHQ(string roomCode, string userId, int q, int r, string allianceId) => allianceConfigService.SetAllianceHQ(roomCode, userId, q, r, allianceId);
     public (GameState? state, string? error) SetMasterTile(string roomCode, string userId, double lat, double lng) => mapAreaService.SetMasterTile(roomCode, userId, lat, lng);
     public (GameState? state, string? error) SetMasterTileByHex(string roomCode, string userId, int q, int r) => mapAreaService.SetMasterTileByHex(roomCode, userId, q, r);

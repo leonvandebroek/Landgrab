@@ -129,12 +129,17 @@ export function GameView({
     if (!gameState) return null;
     return gameState.players.find(p => p.id === userId) ?? null;
   }, [gameState, userId]);
+  const isHost = myPlayer?.isHost ?? false;
+
+  // Host GPS-bypass: suppress location error banner when host is bypassing GPS
+  const isHostBypass = Boolean(gameState?.hostBypassGps && isHost);
+  const shouldShowRulesGate = !hasAcknowledgedRules && !isHost;
 
   // ── All hooks must fire before any conditional return ───────────────────
   if (!gameState) return null;
 
   // ── Rules gate ──────────────────────────────────────────────────────────
-  if (!hasAcknowledgedRules) {
+  if (shouldShowRulesGate) {
     return (
       <>
         {connectionBanner && <ConnectionBanner message={connectionBanner} />}
@@ -187,6 +192,7 @@ export function GameView({
           onConfirmReinforce={actions.onConfirmReinforce}
           onReturnToLobby={actions.onReturnToLobby}
           locationError={effectiveLocationError}
+          isHostBypass={isHostBypass}
           currentHexActions={actions.currentHexActions}
           onCurrentHexAction={actions.onCurrentHexAction}
           onDismissTileActions={actions.onDismissTileActions}
@@ -222,7 +228,6 @@ export function GameView({
         <CombatModal
           result={combatResult}
           gameMode={gameState.gameMode}
-          allowSelfClaim={gameState.allowSelfClaim !== false}
           onReClaim={actions.onReClaimHex}
           onClose={() => setCombatResult(null)}
         />

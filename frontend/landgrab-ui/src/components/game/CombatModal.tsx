@@ -1,16 +1,15 @@
-import type { CombatResult } from '../../types/game';
+import type { CombatResult, ReClaimMode } from '../../types/game';
 import { useTranslation } from 'react-i18next';
 import { DiceRoller } from './DiceRoller';
 
 interface Props {
   result: CombatResult;
   gameMode?: string;
-  allowSelfClaim?: boolean;
-  onReClaim?: (mode: 'Alliance' | 'Self' | 'Abandon') => void;
+  onReClaim?: (mode: ReClaimMode) => void;
   onClose: () => void;
 }
 
-export function CombatModal({ result, gameMode, allowSelfClaim, onReClaim, onClose }: Props) {
+export function CombatModal({ result, gameMode, onReClaim, onClose }: Props) {
   const { t } = useTranslation();
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -58,11 +57,6 @@ export function CombatModal({ result, gameMode, allowSelfClaim, onReClaim, onClo
                 <button className="btn-primary" onClick={() => { onReClaim?.('Alliance'); onClose(); }}>
                   {t('combat.claimForAlliance')}
                 </button>
-                {allowSelfClaim !== false && (
-                  <button className="btn-secondary" onClick={() => { onReClaim?.('Self'); onClose(); }}>
-                    {t('combat.claimForSelf')}
-                  </button>
-                )}
                 <button className="btn-secondary" style={{ color: 'var(--danger, #e74c3c)' }} onClick={() => { onReClaim?.('Abandon'); onClose(); }}>
                   {t('combat.abandon')}
                 </button>

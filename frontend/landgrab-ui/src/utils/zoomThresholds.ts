@@ -33,9 +33,9 @@ export function showBorderEffects(zoom: number): boolean {
   return zoom >= 13;
 }
 
-/** Show player name labels on territory blobs. */
-export function showPlayerNames(zoom: number): boolean {
-  return zoom >= 15;
+/** Show player name labels on territory blobs. Always on — names aid spatial awareness at all zoom levels. */
+export function showPlayerNames(_zoom: number): boolean {
+  return true;
 }
 
 /** Show building/road/path icons on hex tiles. Only at detailed zoom to reduce noise. */

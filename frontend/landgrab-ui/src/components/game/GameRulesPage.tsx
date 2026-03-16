@@ -9,95 +9,143 @@ interface GameRulesPageProps {
 
 export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRulesPageProps) {
   const { t } = useTranslation();
-  const d = gameState.dynamics;
+  const dynamics = gameState.dynamics;
+  const hasActiveCopresence = (dynamics.activeCopresenceModes ?? []).some((mode) => mode !== 'None');
+
+  const claimModeText =
+    gameState.claimMode === 'PresenceOnly'
+      ? t('rules.claiming.presenceOnly')
+      : gameState.claimMode === 'PresenceWithTroop'
+        ? t('rules.claiming.presenceWithTroop')
+        : t('rules.claiming.adjacencyRequired');
+
+  const winConditionText =
+    gameState.winConditionType === 'TerritoryPercent'
+      ? t('rules.winCondition.territoryPercent', { value: gameState.winConditionValue })
+      : gameState.winConditionType === 'Elimination'
+        ? t('rules.winCondition.elimination')
+        : t('rules.winCondition.timedGame', { value: gameState.winConditionValue });
+
+  const coreRuleItems = [
+    t('rules.coreRules.adjacency'),
+    t('rules.coreRules.troops'),
+    t('rules.coreRules.homeBase'),
+    t('rules.coreRules.winCondition'),
+  ];
+
+  const matchSpecificItems: Array<{ key: string; label: string; body: string }> = [
+    { key: 'claiming', label: t('rules.claiming.title'), body: claimModeText },
+    { key: 'combat', label: t('rules.combat.title'), body: t('rules.combat.body') },
+    { key: 'win-condition', label: t('rules.winCondition.title'), body: winConditionText },
+  ];
+
+  if (dynamics.terrainEnabled) {
+    matchSpecificItems.push({
+      key: 'terrain',
+      label: t('rules.terrain.title'),
+      body: t('rules.terrain.body'),
+    });
+  }
+
+  if (dynamics.fogOfWarEnabled) {
+    matchSpecificItems.push({
+      key: 'fog-of-war',
+      label: t('rules.fogOfWar.title'),
+      body: t('rules.fogOfWar.body'),
+    });
+  }
+
+  if (dynamics.supplyLinesEnabled) {
+    matchSpecificItems.push({
+      key: 'supply-lines',
+      label: t('rules.supplyLines.title'),
+      body: t('rules.supplyLines.body'),
+    });
+  }
+
+  if (dynamics.hqEnabled) {
+    matchSpecificItems.push({
+      key: 'hq',
+      label: t('rules.hq.title'),
+      body: t('rules.hq.body'),
+    });
+  }
+
+  if (dynamics.playerRolesEnabled) {
+    matchSpecificItems.push({
+      key: 'roles',
+      label: t('rules.roles.title'),
+      body: t('rules.roles.body'),
+    });
+  }
+
+  if (hasActiveCopresence) {
+    matchSpecificItems.push({
+      key: 'copresence',
+      label: t('rules.copresence.title'),
+      body: t('rules.copresence.body'),
+    });
+  }
+
+  if (dynamics.timedEscalationEnabled) {
+    matchSpecificItems.push({
+      key: 'timed-escalation',
+      label: t('rules.timedEscalation.title'),
+      body: t('rules.timedEscalation.body'),
+    });
+  }
+
+  if (dynamics.underdogPactEnabled) {
+    matchSpecificItems.push({
+      key: 'underdog-pact',
+      label: t('rules.underdogPact.title'),
+      body: t('rules.underdogPact.body'),
+    });
+  }
 
   const content = (
     <div className="rules-content">
       {!isModal && <h2 className="rules-main-title">{t('rules.title')}</h2>}
+      <p className="rules-section-body">{t('rules.overview.body')}</p>
 
-      <div className="rules-section">
-        <h3 className="rules-section-title">🗺️ {t('rules.overview.title')}</h3>
-        <p className="rules-section-body">{t('rules.overview.body')}</p>
-      </div>
+      <section className="rules-section">
+        <h3 className="rules-section-title">🚀 {t('rules.quickStart.title')}</h3>
+        <ol className="rules-list rules-list-numbered">
+          <li className="rules-list-item">{t('rules.quickStart.step1')}</li>
+          <li className="rules-list-item">{t('rules.quickStart.step2')}</li>
+          <li className="rules-list-item">{t('rules.quickStart.step3')}</li>
+          <li className="rules-list-item">{t('rules.quickStart.step4')}</li>
+        </ol>
+      </section>
 
-      <div className="rules-section">
-        <h3 className="rules-section-title">🚩 {t('rules.claiming.title')}</h3>
-        <p className="rules-section-body">
-          {gameState.claimMode === 'PresenceOnly' && t('rules.claiming.presenceOnly')}
-          {gameState.claimMode === 'PresenceWithTroop' && t('rules.claiming.presenceWithTroop')}
-          {gameState.claimMode === 'AdjacencyRequired' && t('rules.claiming.adjacencyRequired')}
-        </p>
-      </div>
+      <section className="rules-section">
+        <h3 className="rules-section-title">📘 {t('rules.coreRules.title')}</h3>
+        <ul className="rules-list">
+          {coreRuleItems.map((item) => (
+            <li key={item} className="rules-list-item">
+              {item}
+            </li>
+          ))}
+        </ul>
 
-      <div className="rules-section">
-        <h3 className="rules-section-title">⚔️ {t('rules.combat.title')}</h3>
-        <p className="rules-section-body">{t('rules.combat.body')}</p>
-      </div>
+        <ul className="rules-list" style={{ marginTop: '1rem' }}>
+          {matchSpecificItems.map((item) => (
+            <li key={item.key} className="rules-list-item">
+              <strong>{item.label}:</strong> {item.body}
+            </li>
+          ))}
+        </ul>
+      </section>
 
-      <div className="rules-section">
-        <h3 className="rules-section-title">🏆 {t('rules.winCondition.title')}</h3>
-        <p className="rules-section-body">
-          {gameState.winConditionType === 'TerritoryPercent' && t('rules.winCondition.territoryPercent', { value: gameState.winConditionValue })}
-          {gameState.winConditionType === 'Elimination' && t('rules.winCondition.elimination')}
-          {gameState.winConditionType === 'TimedGame' && t('rules.winCondition.timedGame', { value: gameState.winConditionValue })}
-        </p>
-      </div>
-
-      {d?.terrainEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🌲 {t('rules.terrain.title')}</h3>
-          <p className="rules-section-body">{t('rules.terrain.body')}</p>
-        </div>
-      )}
-
-      {d?.fogOfWarEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🌫️ {t('rules.fogOfWar.title')}</h3>
-          <p className="rules-section-body">{t('rules.fogOfWar.body')}</p>
-        </div>
-      )}
-
-      {d?.supplyLinesEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">📦 {t('rules.supplyLines.title')}</h3>
-          <p className="rules-section-body">{t('rules.supplyLines.body')}</p>
-        </div>
-      )}
-
-      {d?.hqEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🏰 {t('rules.hq.title')}</h3>
-          <p className="rules-section-body">{t('rules.hq.body')}</p>
-        </div>
-      )}
-
-      {d?.playerRolesEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🎭 {t('rules.roles.title')}</h3>
-          <p className="rules-section-body">{t('rules.roles.body')}</p>
-        </div>
-      )}
-
-      {d?.activeCopresenceModes && d.activeCopresenceModes.length > 0 && !d.activeCopresenceModes.includes('None') && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">👥 {t('rules.copresence.title')}</h3>
-          <p className="rules-section-body">{t('rules.copresence.body')}</p>
-        </div>
-      )}
-
-      {d?.timedEscalationEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">⏱️ {t('rules.timedEscalation.title')}</h3>
-          <p className="rules-section-body">{t('rules.timedEscalation.body')}</p>
-        </div>
-      )}
-
-      {d?.underdogPactEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🤝 {t('rules.underdogPact.title')}</h3>
-          <p className="rules-section-body">{t('rules.underdogPact.body')}</p>
-        </div>
-      )}
+      <section className="rules-section">
+        <h3 className="rules-section-title">🧠 {t('rules.advanced.title')}</h3>
+        <ul className="rules-list">
+          <li className="rules-list-item">{t('rules.advanced.observer')}</li>
+          {hasActiveCopresence && (
+            <li className="rules-list-item">{t('rules.advanced.closeEncounters')}</li>
+          )}
+        </ul>
+      </section>
 
       {!isModal && <div className="rules-spacer" />}
     </div>

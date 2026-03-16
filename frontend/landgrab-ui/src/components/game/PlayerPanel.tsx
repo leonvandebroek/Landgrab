@@ -230,7 +230,7 @@ export function PlayerPanel({
       {locationError && <p className="error-msg">{locationError}</p>}
       {error && <p className="error-msg">{error}</p>}
 
-      <GameEventLog events={state.eventLog} />
+      <GameEventLog events={state.eventLog} players={state.players} />
 
       <div className="scoreboard">
         <h4>{t('game.territories')}</h4>
@@ -254,7 +254,7 @@ export function ScoreRow({
   language,
   t
 }: {
-  player: Pick<Player, 'id' | 'name' | 'color' | 'territoryCount'> & { color?: string };
+  player: Pick<Player, 'id' | 'name' | 'color' | 'territoryCount'> & { color?: string; emoji?: string };
   totalHexes: number;
   language?: string;
   t: TFunction;
@@ -264,7 +264,10 @@ export function ScoreRow({
   return (
     <div className="score-row">
       <span className="score-dot" style={{ background: player.color ?? '#95a5a6' }} />
-      <span className="score-name">{player.name}</span>
+      <span className="score-name">
+        {player.emoji && <span aria-hidden="true" style={{ display: 'inline', marginRight: '0.2em' }}>{player.emoji}</span>}
+        {player.name}
+      </span>
       <span className="score-count">
         {t('game.territoryProgress', {
           count: player.territoryCount,

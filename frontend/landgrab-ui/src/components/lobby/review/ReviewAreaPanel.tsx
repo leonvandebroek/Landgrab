@@ -10,6 +10,8 @@ interface Props {
     selectedPattern: GameAreaPattern;
     savedAreaSummary: string;
     areaStatsText: string;
+    /** Pre-formatted max footprint string (e.g. "1 km"). */
+    maxFootprintText: string;
     /** Pre-formatted max tile size string (e.g. "120 m"). */
     maxTileSizeText: string;
     patternFitsFootprint: boolean;
@@ -50,6 +52,7 @@ export function ReviewAreaPanel({
     selectedPattern,
     savedAreaSummary,
     areaStatsText,
+    maxFootprintText,
     maxTileSizeText,
     patternFitsFootprint,
     drawnCells,
@@ -94,12 +97,19 @@ export function ReviewAreaPanel({
                 </div>
                 <div className="wizard-area-chip-stack">
                     <span className="wizard-area-saved-chip">{savedAreaSummary}</span>
-                    <span className="wizard-area-footprint-chip">{t('wizard.areaFootprintLimit')}</span>
+                    <span className="wizard-area-footprint-chip">
+                        {t('wizard.maximumAllowedFootprint' as never, { defaultValue: 'Maximum allowed footprint' })}
+                    </span>
                 </div>
             </div>
 
             <div className="wizard-area-stats-row">
-                <span className="wizard-area-stat">{areaStatsText}</span>
+                <span className="wizard-area-stat">
+                    {t('wizard.currentPlayAreaFootprint' as never, { defaultValue: 'Current play area footprint' })}: {areaStatsText}
+                </span>
+                <span className="wizard-area-stat">
+                    {t('wizard.maximumAllowedFootprint' as never, { defaultValue: 'Maximum allowed footprint' })}: {maxFootprintText}
+                </span>
                 <span className="wizard-area-stat">{t('wizard.rulesTileSizeLimit', { max: maxTileSizeText })}</span>
             </div>
 

@@ -177,6 +177,7 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             RoomCode = fullSnapshot.RoomCode,
             Phase = fullSnapshot.Phase,
             GameMode = fullSnapshot.GameMode,
+            CurrentWizardStep = fullSnapshot.CurrentWizardStep,
             Players = fullSnapshot.Players,
             Alliances = fullSnapshot.Alliances,
             EventLog = fullSnapshot.EventLog,
@@ -204,6 +205,7 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             MaxFootprintMetersOverride = fullSnapshot.MaxFootprintMetersOverride,
             HostObserverMode = fullSnapshot.HostObserverMode,
             IsPaused = fullSnapshot.IsPaused,
+            IsRushHour = fullSnapshot.IsRushHour,
         };
     }
 

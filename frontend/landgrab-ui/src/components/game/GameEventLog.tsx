@@ -1,17 +1,19 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameEventLogEntry } from '../../types/game';
+import type { GameEventLogEntry, Player } from '../../types/game';
 import { formatGameLogEntry } from './gameLogFormat';
 
 interface Props {
   events?: GameEventLogEntry[] | null;
+  players?: Player[];
 }
 
 type GameLogTone = 'neutral' | 'info' | 'setup' | 'action' | 'victory';
 
-export function GameEventLog({ events }: Props) {
+export function GameEventLog({ events, players }: Props) {
   const { i18n, t } = useTranslation();
   const hasEventLog = Array.isArray(events);
+  const playerDirectory = useMemo(() => players ?? [], [players]);
 
   const sortedEvents = useMemo(
     () => (Array.isArray(events) ? [...events] : []).sort(
@@ -35,6 +37,19 @@ export function GameEventLog({ events }: Props) {
         <div className="game-log-list">
           {sortedEvents.map(event => {
             const tone = getGameLogTone(event.type);
+            const playerName = formatPlayerLabel(
+              resolvePlayer(playerDirectory, event.playerId, event.playerName),
+              event.playerName,
+            );
+            const targetPlayerName = formatPlayerLabel(
+              resolvePlayer(playerDirectory, event.targetPlayerId, event.targetPlayerName),
+              event.targetPlayerName,
+            );
+            const winnerName = formatPlayerLabel(
+              resolvePlayer(playerDirectory, event.winnerId, event.winnerName),
+              event.winnerName,
+            );
+
             return (
               <article
                 key={`${event.createdAt}-${event.type}-${event.playerId ?? 'unknown'}-${event.q ?? 'x'}-${event.r ?? 'y'}`}
@@ -45,7 +60,11 @@ export function GameEventLog({ events }: Props) {
                   <time className="game-log-time" dateTime={event.createdAt}>
                     {formatEventTimestamp(event.createdAt, i18n.resolvedLanguage)}
                   </time>
-                  <p className="game-log-message">{formatGameLogEntry(event, t)}</p>
+                  <p className="game-log-message">{formatGameLogEntry(event, t, {
+                    playerName,
+                    targetPlayerName,
+                    winnerName,
+                  })}</p>
                 </div>
               </article>
             );
@@ -110,4 +129,30 @@ function formatEventTimestamp(createdAt: string, language?: string): string {
     hour: '2-digit',
     minute: '2-digit'
   }).format(timestamp);
+}
+
+function resolvePlayer(players: Player[], playerId?: string, playerName?: string): Player | undefined {
+  if (playerId) {
+    const playerById = players.find(player => player.id === playerId);
+    if (playerById) {
+      return playerById;
+    }
+  }
+
+  if (playerName) {
+    const normalizedName = playerName.trim().toLocaleLowerCase();
+    return players.find(player => player.name.trim().toLocaleLowerCase() === normalizedName);
+  }
+
+  return undefined;
+}
+
+function formatPlayerLabel(player: Player | undefined, fallbackName?: string): string | undefined {
+  const name = fallbackName?.trim() || player?.name?.trim();
+  if (!name) {
+    return undefined;
+  }
+
+  const emoji = player?.emoji?.trim();
+  return emoji ? `${emoji} ${name}` : name;
 }

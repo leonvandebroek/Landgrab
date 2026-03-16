@@ -1,23 +1,31 @@
 import type { TFunction } from 'i18next';
 import type { GameEventLogEntry } from '../../types/game';
 
-export function formatGameLogEntry(event: GameEventLogEntry, t: TFunction): string {
+interface GameLogPlayerNameOverrides {
+  playerName?: string;
+  targetPlayerName?: string;
+  winnerName?: string;
+}
+
+export function formatGameLogEntry(
+  event: GameEventLogEntry,
+  t: TFunction,
+  overrides: GameLogPlayerNameOverrides = {},
+): string {
+  const playerName = overrides.playerName ?? event.playerName ?? t('gameLog.unknownPlayer');
+  const targetPlayerName = overrides.targetPlayerName ?? event.targetPlayerName ?? t('gameLog.unknownPlayer');
+  const winnerName = overrides.winnerName ?? event.winnerName;
+
   switch (event.type) {
     case 'PlayerJoined':
-      return t('gameLog.events.PlayerJoined', {
-        playerName: event.playerName ?? t('gameLog.unknownPlayer')
-      });
+      return t('gameLog.events.PlayerJoined', { playerName });
     case 'PlayerLeft':
-      return t('gameLog.events.PlayerLeft', {
-        playerName: event.playerName ?? t('gameLog.unknownPlayer')
-      });
+      return t('gameLog.events.PlayerLeft', { playerName });
     case 'PlayerReturnedToLobby':
-      return t('gameLog.events.PlayerReturnedToLobby', {
-        playerName: event.playerName ?? t('gameLog.unknownPlayer')
-      });
+      return t('gameLog.events.PlayerReturnedToLobby', { playerName });
     case 'AllianceChanged':
       return t('gameLog.events.AllianceChanged', {
-        playerName: event.playerName ?? t('gameLog.unknownPlayer'),
+        playerName,
         allianceName: event.allianceName ?? t('gameLog.unknownAlliance')
       });
     case 'MasterTileAssigned':
@@ -27,32 +35,32 @@ export function formatGameLogEntry(event: GameEventLogEntry, t: TFunction): stri
       });
     case 'StartingTileAssigned':
       return t('gameLog.events.StartingTileAssigned', {
-        targetPlayerName: event.targetPlayerName ?? t('gameLog.unknownPlayer'),
+        targetPlayerName,
         q: event.q ?? '?',
         r: event.r ?? '?'
       });
     case 'TileCaptured':
       if (event.targetPlayerName) {
         return t('gameLog.events.TileCapturedFrom', {
-          playerName: event.playerName ?? t('gameLog.unknownPlayer'),
-          targetPlayerName: event.targetPlayerName,
+          playerName,
+          targetPlayerName,
           q: event.q ?? '?',
           r: event.r ?? '?'
         });
       }
 
       return t('gameLog.events.TileCaptured', {
-        playerName: event.playerName ?? t('gameLog.unknownPlayer'),
+        playerName,
         q: event.q ?? '?',
         r: event.r ?? '?'
       });
     case 'GameStarted':
       return t('gameLog.events.GameStarted');
     case 'GameOver':
-      if (event.winnerName) {
+      if (winnerName) {
         return event.isAllianceVictory
-          ? t('gameLog.events.GameOverAlliance', { winnerName: event.winnerName })
-          : t('gameLog.events.GameOverPlayer', { winnerName: event.winnerName });
+          ? t('gameLog.events.GameOverAlliance', { winnerName })
+          : t('gameLog.events.GameOverPlayer', { winnerName });
       }
 
       return t('gameLog.events.GameOver');

@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, Player } from '../../types/game';
 import { RoleSelector } from './RoleSelector';
 
-// Ordered for maximum perceptual contrast between sequential indices (matches backend)
 const ALLIANCE_COLORS = ['#ef4444', '#06b6d4', '#f59e0b', '#a855f7', '#10b981', '#ec4899', '#e67e22', '#34495e'];
 const MAX_ALLIANCES = 8;
 
@@ -23,7 +22,35 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
 
     const me = gameState.players.find(p => p.id === myUserId);
     const myAllianceId = me?.allianceId;
-    const allHaveAlliance = gameState.players.length >= 2 && gameState.players.every(p => p.allianceId);
+    const connectedPlayers = useMemo(
+        () => gameState.players.filter(player => player.isConnected),
+        [gameState.players],
+    );
+    const playersWaitingForAllianceCount = useMemo(
+        () => connectedPlayers.filter(player => !player.allianceId).length,
+        [connectedPlayers],
+    );
+
+    const readinessMessage = useMemo(() => {
+        if (playersWaitingForAllianceCount > 0) {
+            return {
+                className: 'wizard-hint',
+                message: t('wizard.teamsWaitingAssignment', { count: playersWaitingForAllianceCount }),
+            };
+        }
+
+        if (connectedPlayers.length >= 2 && connectedPlayers.length === gameState.players.length) {
+            return {
+                className: 'wizard-success-chip',
+                message: t('wizard.teamsAllReady'),
+            };
+        }
+
+        return {
+            className: 'wizard-hint',
+            message: t('wizard.teamsConnected', { count: connectedPlayers.length }),
+        };
+    }, [connectedPlayers.length, gameState.players.length, playersWaitingForAllianceCount, t]);
 
     const copyCode = () => {
         navigator.clipboard.writeText(gameState.roomCode).then(() => {
@@ -40,7 +67,6 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
             </div>
 
             <div className="wizard-step-body">
-                {/* Room code */}
                 <div className="wizard-room-code-card">
                     <span className="wizard-room-code-label">{t('wizard.teamsRoomCode')}</span>
                     <div className="wizard-room-code-row">
@@ -78,7 +104,6 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
                     />
                 )}
 
-                {/* Player list */}
                 <div className="wizard-players-section">
                     <h3>{t('wizard.teamsPlayersTitle')}</h3>
                     <div className="players-list players-list-detailed">
@@ -86,11 +111,7 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
                             <PlayerRow key={player.id} player={player} isMe={player.id === myUserId} />
                         ))}
                     </div>
-                    {allHaveAlliance ? (
-                        <p className="wizard-success-chip">{t('wizard.teamsReady')}</p>
-                    ) : (
-                        <p className="wizard-hint">{t('wizard.teamsWaiting')}</p>
-                    )}
+                    <p className={readinessMessage.className}>{readinessMessage.message}</p>
                 </div>
 
                 {gameState.dynamics?.playerRolesEnabled && onSetPlayerRole && (
@@ -104,8 +125,6 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
     );
 }
 
-// ── Host: Alliance Builder ───────────────────────────────────────
-
 function HostAllianceBuilder({
     gameState,
     onConfigureAlliances,
@@ -118,11 +137,9 @@ function HostAllianceBuilder({
     const { t } = useTranslation();
     const [newName, setNewName] = useState('');
     const [allianceNames, setAllianceNames] = useState<string[]>(() =>
-        gameState.alliances.map(a => a.name)
+        gameState.alliances.map(a => a.name),
     );
 
-    // Sync local state when server alliances change (render-time pattern per React docs:
-    // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
     const [prevAlliances, setPrevAlliances] = useState(gameState.alliances);
     if (prevAlliances !== gameState.alliances) {
         setPrevAlliances(gameState.alliances);
@@ -189,7 +206,6 @@ function HostAllianceBuilder({
             {allianceNames.length > 0 && (
                 <div className="alliances-row">
                     {allianceNames.map((name, index) => {
-                        // Use server color if available, otherwise preview color
                         const serverAlliance = gameState.alliances.find(a => a.name === name);
                         const color = serverAlliance?.color ?? ALLIANCE_COLORS[index % ALLIANCE_COLORS.length];
 
@@ -226,8 +242,6 @@ function HostAllianceBuilder({
         </div>
     );
 }
-
-// ── Shared: Alliance Picker ──────────────────────────────────────
 
 function AlliancePickerSection({
     title,
@@ -272,8 +286,6 @@ function AlliancePickerSection({
         </div>
     );
 }
-
-// ── Shared: Player Row ───────────────────────────────────────────
 
 function PlayerRow({ player, isMe }: { player: Player; isMe: boolean }) {
     const { t } = useTranslation();

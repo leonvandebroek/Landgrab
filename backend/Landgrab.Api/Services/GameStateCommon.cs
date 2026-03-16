@@ -17,6 +17,9 @@ internal static class GameStateCommon
     internal static readonly string[] AllianceColors =
         ["#ef4444", "#06b6d4", "#f59e0b", "#a855f7", "#10b981", "#ec4899", "#e67e22", "#34495e"];
 
+    internal static readonly string[] PlayerEmojis =
+        ["🐺", "🦊", "🐻", "🦁", "🐯", "🐸", "🦅", "🐬", "🦝", "🦨"];
+
     internal static readonly Dictionary<string, List<CopresenceMode>> CopresencePresets = new()
     {
         ["Klassiek"] = [],
@@ -40,11 +43,13 @@ internal static class GameStateCommon
             RoomCode = state.RoomCode,
             Phase = state.Phase,
             GameMode = state.GameMode,
+            CurrentWizardStep = state.CurrentWizardStep,
             Players = state.Players.Select(player => new PlayerDto
             {
                 Id = player.Id,
                 Name = player.Name,
                 Color = player.Color,
+                Emoji = player.Emoji,
                 AllianceId = player.AllianceId,
                 AllianceName = player.AllianceName,
                 AllianceColor = player.AllianceColor,
@@ -203,11 +208,11 @@ internal static class GameStateCommon
             cell.IsMasterTile = false;
         }
 
-        foreach (var player in state.Players)
-        {
-            GameplayService.ResetCarriedTroops(player);
-            player.TerritoryCount = 0;
-        }
+            foreach (var player in state.Players)
+            {
+                GameplayService.ResetCarriedTroops(player);
+                player.TerritoryCount = 0;
+            }
 
         foreach (var alliance in state.Alliances)
             alliance.TerritoryCount = 0;

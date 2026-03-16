@@ -278,6 +278,7 @@ export function getHexPolygonClassName({
     cell.ownerId ? 'is-owned' : 'is-neutral',
     isMine ? 'is-mine' : '',
     isCurrentHex ? 'is-current' : '',
+    isCurrentHex ? 'is-current-player-hex' : '',
     isSelected ? 'is-selected' : '',
     isInactive ? 'is-inactive' : '',
     cell.isFortified ? 'is-fortified' : '',

@@ -4,6 +4,8 @@ namespace Landgrab.Api.Services;
 
 public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameStateService)
 {
+    private const int StartingTroopCount = 3;
+
     internal static int DefaultGridRadius => GameStateCommon.DefaultGridRadius;
     internal static int DefaultTileSizeMeters => GameStateCommon.DefaultTileSizeMeters;
     internal static int MaxFootprintMeters => GameStateCommon.MaxFootprintMeters;
@@ -46,6 +48,29 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
         }
     }
 
+    public (GameState? state, string? error) SetWizardStep(string roomCode, string userId, int step)
+    {
+        if (step < 0)
+            return (null, "Wizard step must be 0 or greater.");
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, userId))
+                return (null, "Only the host can change the wizard step.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Wizard step can only be changed during lobby.");
+
+            room.State.CurrentWizardStep = step;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) AssignStartingTile(string roomCode, string userId, int q, int r, string targetPlayerId)
     {
         var room = GetRoom(roomCode);
@@ -73,7 +98,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "This hex is already assigned.");
 
             SetCellOwner(cell, player);
-            cell.Troops = 3;
+            cell.Troops = StartingTroopCount;
             RefreshTerritoryCount(room.State);
 
             var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
@@ -117,17 +142,15 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "The game area must have enough tiles for the master tile and every player.");
 
             AutoAssignTiles(room);
+            RefreshTerritoryCount(room.State);
+            GrantStartingTroops(room.State);
 
             if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
                 return (null, "The master tile must be set before starting the game.");
 
-            RefreshTerritoryCount(room.State);
-            if (room.State.Players.Any(player =>
-                player.TerritoryCount <= 0 &&
-                (player.AllianceId == null || room.State.Alliances.FirstOrDefault(a => a.Id == player.AllianceId)?.TerritoryCount <= 0)))
-            {
-                return (null, "Every player needs at least one starting tile before the game can start.");
-            }
+            var startingAccessError = ValidateStartingAccess(room.State);
+            if (startingAccessError != null)
+                return (null, startingAccessError);
 
             room.State.Phase = GamePhase.Playing;
             room.State.GameStartedAt = DateTime.UtcNow;
@@ -219,7 +242,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             cell.OwnerAllianceId = alliance.Id;
             cell.OwnerName = firstMember.Name;
             cell.OwnerColor = alliance.Color;
-            cell.Troops = 3;
+            cell.Troops = StartingTroopCount;
             AppendEventLog(room.State, new GameEventLogEntry
             {
                 Type = "AllianceStartingTileAssigned",
@@ -253,7 +276,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             var (q, r) = available[i];
             var cell = room.State.Grid[HexService.Key(q, r)];
             SetCellOwner(cell, player);
-            cell.Troops = 3;
+            cell.Troops = StartingTroopCount;
             AppendEventLog(room.State, new GameEventLogEntry
             {
                 Type = "StartingTileAssigned",
@@ -294,5 +317,43 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
             .Select(cell => (cell.Q, cell.R))
             .ToList();
+    }
+
+    private static void GrantStartingTroops(GameState state)
+    {
+        foreach (var player in state.Players)
+            GameplayService.ResetCarriedTroops(player);
+
+        foreach (var player in state.Players)
+        {
+            var allianceTerritoryCount = player.AllianceId == null
+                ? 0
+                : state.Alliances.FirstOrDefault(alliance => alliance.Id == player.AllianceId)?.TerritoryCount ?? 0;
+
+            if (player.TerritoryCount > 0 || allianceTerritoryCount > 0)
+                player.CarriedTroops = StartingTroopCount;
+        }
+    }
+
+    private static string? ValidateStartingAccess(GameState state)
+    {
+        var blockedPlayers = state.Players
+            .Where(player =>
+            {
+                var allianceTerritoryCount = player.AllianceId == null
+                    ? 0
+                    : state.Alliances.FirstOrDefault(alliance => alliance.Id == player.AllianceId)?.TerritoryCount ?? 0;
+
+                return player.CarriedTroops <= 0 &&
+                       player.TerritoryCount <= 0 &&
+                       allianceTerritoryCount <= 0;
+            })
+            .Select(player => player.Name)
+            .ToList();
+
+        if (blockedPlayers.Count == 0)
+            return null;
+
+        return $"Cannot start the game because these players would begin with 0 troops and no territory access: {string.Join(", ", blockedPlayers)}.";
     }
 }

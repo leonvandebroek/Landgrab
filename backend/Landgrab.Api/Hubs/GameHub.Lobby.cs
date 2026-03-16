@@ -495,6 +495,31 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task SetWizardStep(int step)
+    {
+        if (step < 0)
+        {
+            await SendError(InvalidRequestCode, "Wizard step must be 0 or greater.");
+            return;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetWizardStep(room.Code, UserId, step);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     public async Task SetAllianceHQ(int q, int r, string allianceId)
     {
         if (!ValidateCoordRange(q, r) || !ValidateIdentifier(allianceId))

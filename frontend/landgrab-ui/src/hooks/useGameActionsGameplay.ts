@@ -349,10 +349,6 @@ export function useGameActionsGameplay({
         setPickupCount(1);
         break;
       }
-      case 'ignore':
-        setSelectedHex(null);
-        setMapFeedback(null);
-        break;
     }
   }, [
     gameState,
@@ -362,12 +358,10 @@ export function useGameActionsGameplay({
     selectedHex,
     setAttackCount,
     setAttackPrompt,
-    setMapFeedback,
     setPickupCount,
     setPickupPrompt,
     setReinforceCount,
     setReinforcePrompt,
-    setSelectedHex,
   ]);
 
   const handleCurrentHexAction = useCallback((actionType: TileActionType): void => {
@@ -413,9 +407,6 @@ export function useGameActionsGameplay({
         setPickupCount(1);
         break;
       }
-      case 'ignore':
-        setMapFeedback(null);
-        break;
     }
   }, [
     currentHex,
@@ -425,7 +416,6 @@ export function useGameActionsGameplay({
     placeTroopsAction,
     setAttackCount,
     setAttackPrompt,
-    setMapFeedback,
     setPickupCount,
     setPickupPrompt,
     setReinforceCount,

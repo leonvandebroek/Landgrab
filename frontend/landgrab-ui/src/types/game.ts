@@ -80,6 +80,7 @@ export interface Player {
   id: string;
   name: string;
   color: string;
+  emoji?: string;
   allianceId?: string;
   allianceName?: string;
   allianceColor?: string;
@@ -147,6 +148,7 @@ export interface GameState {
   mapLat: number | null;
   mapLng: number | null;
   hasMapLocation: boolean;
+  currentWizardStep?: number;
   gridRadius: number;
   gameAreaMode: GameAreaMode;
   gameAreaPattern: GameAreaPattern | null;

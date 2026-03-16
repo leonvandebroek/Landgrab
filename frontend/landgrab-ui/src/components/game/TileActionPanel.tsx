@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { HexCell, Player } from '../../types/game';
+import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { terrainDefendBonus } from '../../utils/terrainColors';
 
@@ -28,6 +29,8 @@ export function TileActionPanel({
   onDismiss,
 }: TileActionPanelProps) {
   const { t } = useTranslation();
+  const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);
+  const disabledReasonText = getTileActionDisabledReasonText(t, firstDisabledAction?.disabledReason);
 
   if (actions.length === 0) return null;
 
@@ -45,7 +48,6 @@ export function TileActionPanel({
         padding: '0.75rem',
       }}
     >
-      {/* ── Tile info header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
           <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
@@ -98,41 +100,35 @@ export function TileActionPanel({
         </div>
       </div>
 
-      {/* ── Action buttons ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-        {actions.map((action) => {
-          const isIgnore = action.type === 'ignore';
-
-          return (
-            <button
-              key={action.type}
-              className={`hud-btn ${action.tone}`}
-              disabled={!action.enabled}
-              onClick={() => onAction(action.type)}
-              style={{
-                minHeight: isIgnore ? '36px' : '48px',
-                fontSize: isIgnore ? '0.85rem' : '1rem',
-                opacity: action.enabled ? 1 : 0.5,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                width: '100%',
-                backgroundColor: action.enabled ? toneColors[action.tone] : undefined,
-                cursor: action.enabled ? 'pointer' : 'not-allowed',
-              }}
-            >
-              <span>{action.icon}</span>
-              <span>{t(action.label as never)}</span>
-            </button>
-          );
-        })}
+        {actions.map((action) => (
+          <button
+            key={action.type}
+            className={`hud-btn ${action.tone}`}
+            disabled={!action.enabled}
+            onClick={() => onAction(action.type)}
+            style={{
+              minHeight: '48px',
+              fontSize: '1rem',
+              opacity: action.enabled ? 1 : 0.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              width: '100%',
+              backgroundColor: action.enabled ? toneColors[action.tone] : undefined,
+              cursor: action.enabled ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <span>{action.icon}</span>
+            <span>{t(action.label as never)}</span>
+          </button>
+        ))}
       </div>
 
-      {/* ── Disabled reason (show for first disabled action) ── */}
-      {actions.some((a) => !a.enabled && a.disabledReason) && (
+      {disabledReasonText && (
         <div style={{ fontSize: '0.75rem', opacity: 0.7, textAlign: 'center' }}>
-          {t(actions.find((a) => !a.enabled && a.disabledReason)!.disabledReason! as never)}
+          {disabledReasonText}
         </div>
       )}
     </div>

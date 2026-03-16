@@ -106,6 +106,7 @@ public class PlayerDto
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string Color { get; set; } = "";
+    public string Emoji { get; set; } = "";
     public string? AllianceId { get; set; }
     public string? AllianceName { get; set; }
     public string? AllianceColor { get; set; }
@@ -174,6 +175,7 @@ public class GameState
     public string RoomCode { get; set; } = "";
     public GamePhase Phase { get; set; } = GamePhase.Lobby;
     public GameMode GameMode { get; set; } = GameMode.Alliances;
+    public int CurrentWizardStep { get; set; }
     public List<PlayerDto> Players { get; set; } = [];
     public List<AllianceDto> Alliances { get; set; } = [];
     public List<GameEventLogEntry> EventLog { get; set; } = [];

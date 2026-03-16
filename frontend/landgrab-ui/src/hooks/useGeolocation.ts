@@ -23,26 +23,49 @@ export function useGeolocation(enabled = true): GeoState {
       return;
     }
 
-    const watchId = navigator.geolocation.watchPosition(
-      position => {
-        setPosition({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-        setError(null);
-      },
-      error => {
-        setError(error.message || i18n.t('errors.locationDenied'));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 5000
+    let watchId = -1;
+
+    const startWatch = () => {
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          setPosition({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
+          setError(null);
+        },
+        err => {
+          setError(err.message || i18n.t('errors.locationDenied'));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5000
+        }
+      );
+    };
+
+    const stopWatch = () => {
+      if (watchId !== -1) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = -1;
       }
-    );
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopWatch();
+      } else {
+        startWatch();
+      }
+    };
+
+    startWatch();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      navigator.geolocation.clearWatch(watchId);
+      stopWatch();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [enabled, supported]);
 

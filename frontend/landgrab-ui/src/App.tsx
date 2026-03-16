@@ -158,9 +158,6 @@ export default function App() {
     return liveLocation;
   }, [debugLocation, liveLocation, usingDebugLocation]);
 
-  const effectiveLocationError = usingDebugLocation ? null : location.error;
-  const effectiveLocationLoading = usingDebugLocation ? false : location.loading;
-
   const mapCenterLocation = useMemo<LocationPoint | null>(() => {
     if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
     return { lat: gameState.mapLat, lng: gameState.mapLng };
@@ -215,6 +212,8 @@ export default function App() {
   }, [auth, gameState]);
 
   const isHostBypass = Boolean(gameState?.hostBypassGps && myPlayer?.isHost);
+  const effectiveLocationError = usingDebugLocation || isHostBypass ? null : location.error;
+  const effectiveLocationLoading = usingDebugLocation || isHostBypass ? false : location.loading;
 
   const currentHex = useMemo(() => {
     if (!gameState || !currentLocation || gameState.mapLat == null || gameState.mapLng == null) {

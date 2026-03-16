@@ -70,7 +70,7 @@ export function AreaModeSelector({
                             className="btn-secondary"
                             onClick={onApplyCentered}
                         >
-                            {t('wizard.areaApplyCentered')}
+                            {t('wizard.centerPlayArea' as never, { defaultValue: 'Center the play area' })}
                         </button>
                     </div>
                 </div>

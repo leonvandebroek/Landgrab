@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -37,6 +37,16 @@ interface Props {
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const GRID_FIT_PADDING = L.point(24, 24);
 const DEFAULT_MAP_ZOOM = 16;
+const SHOW_HEX_DEBUG_OVERLAY = import.meta.env.DEV;
+type BasemapLayer = L.TileLayer | L.TileLayer.WMS;
+
+function formatDebugCoordinate(value: number | null | undefined): string {
+  return Number.isFinite(value ?? Number.NaN) ? Number(value).toFixed(6) : '—';
+}
+
+function formatDebugHex(hex: [number, number] | null): string {
+  return hex ? `(${hex[0]}, ${hex[1]})` : '—';
+}
 
 export function GameMap({
   state,
@@ -59,10 +69,16 @@ export function GameMap({
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
   const [layerPrefs, setLayerPrefs] = useState<MapLayerPreferences>(() => ({ ...DEFAULT_MAP_LAYER_PREFS }));
+  const [basemapError, setBasemapError] = useState(false);
+  const [basemapDismissed, setBasemapDismissed] = useState(false);
+  const basemapErrorRef = useRef(false);
+  const basemapDismissedRef = useRef(false);
   const followedLocationKeyRef = useRef('');
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const animLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
+  const activeBaseLayerRef = useRef<BasemapLayer | null>(null);
+  const basemapLayersRef = useRef<BasemapLayer[]>([]);
   const geometryKeyRef = useRef('');
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const prevGridRef = useRef<Record<string, HexCell>>({});
@@ -90,9 +106,31 @@ export function GameMap({
       state.tileSizeMeters,
     );
   }, [currentLocation, state.mapLat, state.mapLng, state.tileSizeMeters]);
+  const myPlayer = useMemo(
+    () => state.players.find(player => player.id === myUserId) ?? null,
+    [myUserId, state.players],
+  );
 
   const renderedGrid = gridOverride ?? state.grid;
   const inactiveHexKeySet = useMemo(() => new Set(inactiveHexKeys), [inactiveHexKeys]);
+
+  const applyBasemapError = useCallback((nextValue: boolean) => {
+    if (basemapErrorRef.current === nextValue) {
+      return;
+    }
+
+    basemapErrorRef.current = nextValue;
+    setBasemapError(nextValue);
+  }, []);
+
+  const applyBasemapDismissed = useCallback((nextValue: boolean) => {
+    if (basemapDismissedRef.current === nextValue) {
+      return;
+    }
+
+    basemapDismissedRef.current = nextValue;
+    setBasemapDismissed(nextValue);
+  }, []);
 
   function handleZoomToLocation() {
     const map = mapRef.current;
@@ -115,7 +153,64 @@ export function GameMap({
     });
 
     const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
+    const basemapLayers: BasemapLayer[] = [top25, brtStandard, brtGray];
+    basemapLayersRef.current = basemapLayers;
     top25.addTo(map);
+    activeBaseLayerRef.current = top25;
+
+    const basemapResetTimeoutId = basemapErrorRef.current || basemapDismissedRef.current
+      ? window.setTimeout(() => {
+          applyBasemapError(false);
+          applyBasemapDismissed(false);
+        }, 0)
+      : null;
+
+    const basemapEntries = [
+      { key: t('map.layerTopo'), label: 'topo', layer: top25 },
+      { key: t('map.layerStandard'), label: 'standard', layer: brtStandard },
+      { key: t('map.layerGray'), label: 'gray', layer: brtGray },
+    ] as const;
+
+    const tileErrorHandlers = basemapEntries.map(({ label, layer }) => {
+      const handleTileError = (event: L.TileErrorEvent) => {
+        if (!map.hasLayer(layer)) {
+          return;
+        }
+
+        console.warn('[GameMap] basemap tile failed to load', {
+          coords: event.coords,
+          layer: label,
+          src: event.tile.getAttribute('src'),
+        });
+        applyBasemapError(true);
+        applyBasemapDismissed(false);
+      };
+
+      layer.on('tileerror', handleTileError);
+      return { handleTileError, layer };
+    });
+
+    const loadHandlers = basemapEntries.map(({ label, layer }) => {
+      const handleLoad = () => {
+        if (!map.hasLayer(layer)) {
+          return;
+        }
+
+        console.info('[GameMap] basemap tiles loaded', { layer: label });
+        applyBasemapError(false);
+      };
+
+      layer.on('load', handleLoad);
+      return { handleLoad, layer };
+    });
+
+    const handleBaseLayerChange = (event: L.LayersControlEvent) => {
+      activeBaseLayerRef.current = event.layer as BasemapLayer;
+      applyBasemapError(false);
+      applyBasemapDismissed(false);
+    };
+    map.on('baselayerchange', handleBaseLayerChange);
+
     baseLayerControlRef.current = L.control.layers({
       [t('map.layerTopo')]: top25,
       [t('map.layerStandard')]: brtStandard,
@@ -141,8 +236,20 @@ export function GameMap({
     }, { passive: true });
 
     return () => {
+      if (basemapResetTimeoutId !== null) {
+        window.clearTimeout(basemapResetTimeoutId);
+      }
+      tileErrorHandlers.forEach(({ handleTileError, layer }) => {
+        layer.off('tileerror', handleTileError);
+      });
+      loadHandlers.forEach(({ handleLoad, layer }) => {
+        layer.off('load', handleLoad);
+      });
+      map.off('baselayerchange', handleBaseLayerChange);
       baseLayerControlRef.current?.remove();
       baseLayerControlRef.current = null;
+      activeBaseLayerRef.current = null;
+      basemapLayersRef.current = [];
       map.stop();
       map.off();
       map.remove();
@@ -154,7 +261,7 @@ export function GameMap({
         navigateRef.current = null;
       }
     };
-  }, [constrainViewportToGrid, navigateRef, t]);
+  }, [applyBasemapDismissed, applyBasemapError, constrainViewportToGrid, navigateRef, t]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -339,10 +446,65 @@ export function GameMap({
     renderTroopAnimations(troopMovements, layerGroup, state.mapLat, state.mapLng, state.tileSizeMeters, layerPrefs);
   }, [troopMovements, state.mapLat, state.mapLng, state.tileSizeMeters, currentZoom, layerPrefs]);
 
+  function handleBasemapRetry() {
+    const layer = activeBaseLayerRef.current;
+    console.info('[GameMap] retrying basemap tiles', {
+      activeLayerLoaded: Boolean(layer),
+    });
+
+    if (!layer) {
+      return;
+    }
+
+    applyBasemapDismissed(false);
+    applyBasemapError(false);
+    basemapLayersRef.current.forEach(baseLayer => {
+      if (baseLayer === layer) {
+        baseLayer.redraw();
+      }
+    });
+  }
+
   return (
     <div className={`game-map-container time-${timePeriod}`}>
       <div ref={containerRef} className="leaflet-map" />
       {layerPrefs.timeOverlay && <TimeOverlay timePeriod={timePeriod} />}
+      {basemapError && !basemapDismissed && (
+        <div className="basemap-error-banner" role="status" aria-live="polite">
+          <span className="basemap-error-banner__msg">{t('map.basemapUnavailable')}</span>
+          <div className="basemap-error-banner__actions">
+            <button
+              type="button"
+              className="basemap-error-banner__retry"
+              onClick={handleBasemapRetry}
+            >
+              {t('map.basemapRetry')}
+            </button>
+              <button
+                type="button"
+                className="basemap-error-banner__dismiss"
+                aria-label={t('game.close')}
+                onClick={() => applyBasemapDismissed(true)}
+              >
+                ✕
+              </button>
+          </div>
+        </div>
+      )}
+      {SHOW_HEX_DEBUG_OVERLAY && (
+        <aside className="game-map-dev-overlay" aria-live="polite">
+          <strong>Hex debug</strong>
+          <span>
+            Raw lat/lng: {currentLocation
+              ? `${formatDebugCoordinate(currentLocation.lat)}, ${formatDebugCoordinate(currentLocation.lng)}`
+              : '—'}
+          </span>
+          <span>Detected (Q, R): {formatDebugHex(currentHex)}</span>
+          <span>
+            Game state lat/lng: {formatDebugCoordinate(myPlayer?.currentLat)}, {formatDebugCoordinate(myPlayer?.currentLng)}
+          </span>
+        </aside>
+      )}
       <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
         <button
           type="button"
@@ -369,4 +531,3 @@ export function GameMap({
     </div>
   );
 }
-

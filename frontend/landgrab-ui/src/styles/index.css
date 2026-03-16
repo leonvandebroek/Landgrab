@@ -695,6 +695,74 @@ input:focus {
   overflow: hidden;
 }
 
+/* ── Basemap error / fallback banner (BUG-10) ───────────────────────────── */
+/* Positioned at the top of the map, non-blocking — game grid remains usable */
+.basemap-error-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: min(calc(100% - 24px), 560px);
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(244, 114, 182, 0.3);
+  background: rgba(15, 25, 35, 0.9);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 0.82rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.basemap-error-banner__msg {
+  flex: 1;
+  line-height: 1.3;
+}
+
+.basemap-error-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.basemap-error-banner__retry {
+  background: rgba(59, 130, 246, 0.24);
+  color: #fff;
+  border: 1px solid rgba(147, 197, 253, 0.4);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.basemap-error-banner__retry:hover {
+  background: rgba(59, 130, 246, 0.38);
+}
+
+.basemap-error-banner__dismiss {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  border: none;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  line-height: 1;
+  border-radius: 3px;
+  transition: color 0.15s;
+}
+
+.basemap-error-banner__dismiss:hover {
+  color: #fff;
+}
+
 .leaflet-map {
   width: 100%;
   height: 100%;
@@ -1562,6 +1630,11 @@ input:focus {
   filter: drop-shadow(0 2px 8px rgba(5, 10, 18, 0.45));
 }
 
+.hex-polygon.is-current-player-hex {
+  stroke: var(--hex-player-highlight-color, #4f8cff);
+  filter: drop-shadow(0 0 8px var(--hex-player-highlight-color, #4f8cff)) drop-shadow(0 2px 8px rgba(5, 10, 18, 0.45));
+}
+
 .hex-polygon.is-inactive {
   filter: none;
 }
@@ -2162,6 +2235,26 @@ input:focus {
   box-shadow: 0 2px 12px rgba(52, 152, 219, 0.5);
 }
 
+.game-map-dev-overlay {
+  position: absolute;
+  left: 0.9rem;
+  bottom: calc(var(--player-hud-h, 170px) + 0.9rem);
+  z-index: 700;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.6rem;
+  max-width: min(260px, calc(100% - 1.8rem));
+  border: 1px solid rgba(120, 170, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(8, 14, 24, 0.78);
+  backdrop-filter: blur(10px);
+  color: rgba(230, 238, 252, 0.92);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  pointer-events: none;
+}
+
 .guidance-card {
   border: 1px solid rgba(88, 112, 145, 0.28);
 }
@@ -2668,6 +2761,23 @@ input:focus {
 .wizard-review-value {
   font-size: 0.9rem;
   font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* Helper hint displayed below a review value (UX-06) */
+.wizard-review-helper {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted, #999);
+  font-style: italic;
+}
+
+.wizard-review-helper-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .wizard-map-preview {
@@ -4090,6 +4200,49 @@ input:checked + .display-settings-slider:before {
   font-weight: 400;
 }
 
+.rules-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rules-list-numbered {
+  padding-left: 1.5rem;
+}
+
+.rules-list-item {
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.rules-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.rules-detail-card {
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rules-detail-card:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.rules-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.35rem;
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
 .rules-sticky-footer {
   position: fixed;
   bottom: 0;
@@ -4181,6 +4334,28 @@ input:checked + .display-settings-slider:before {
 }
 .hex-polygon.is-master {
   animation: master-shimmer 3s ease-in-out infinite;
+}
+
+@keyframes current-player-hex-pulse {
+  0%, 100% {
+    stroke-opacity: 0.92;
+    stroke-width: 4px;
+    fill-opacity: 0.1;
+    filter: drop-shadow(0 0 8px var(--hex-player-highlight-color, #4f8cff)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.18));
+  }
+  50% {
+    stroke-opacity: 1;
+    stroke-width: 6px;
+    fill-opacity: 0.24;
+    filter: drop-shadow(0 0 12px var(--hex-player-highlight-color, #4f8cff)) drop-shadow(0 0 18px var(--hex-player-highlight-color, #4f8cff));
+  }
+}
+
+.hex-active-player {
+  stroke: var(--hex-player-highlight-color, #4f8cff);
+  fill: var(--hex-player-highlight-color, #4f8cff);
+  pointer-events: none;
+  animation: current-player-hex-pulse 1.6s ease-in-out infinite;
 }
 
 /* 5. Troop Badge Styles */
@@ -5279,9 +5454,14 @@ input:checked + .display-settings-slider:before {
   border: 1px solid rgba(255, 255, 255, 0.15);
   overflow: hidden;
   z-index: 1050;
-  pointer-events: auto;
+  pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   background: #0f1923;
+  opacity: 0.7;
+}
+
+.minimap--decorative {
+  pointer-events: none;
 }
 
 .mini-map-toggle {

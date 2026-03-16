@@ -70,6 +70,26 @@
   white-space: nowrap;
 }
 
+.top-warning-bar--dismissible {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.top-warning-bar--dismissible button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.troop-pulse {
+  animation: troopRegen 0.6s ease-out;
+}
+
 .hud-stats-flat .stat-value.primary { color: #3b82f6; } /* blue-500 */
 .hud-stats-flat .stat-value.secondary { color: #10b981; } /* emerald-500 */
 
@@ -379,6 +399,25 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.5; }
+}
+
+/* ── Troop regeneration pulse — triggered when carried troop count increases ── */
+@keyframes troopRegen {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+  40%  { transform: scale(1.12); box-shadow: 0 0 0 6px rgba(46, 204, 113, 0);  }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);   }
+}
+
+.player-hud__carried--pulse {
+  animation: troopRegen 0.6s ease-out forwards;
+}
+
+/* Small inline label text inside troop badges (e.g. "Carried", "On tile") */
+.player-hud__troop-label {
+  font-size: 0.75em;
+  font-weight: 400;
+  opacity: 0.8;
+  letter-spacing: 0.01em;
 }
 
 .hud-toast { animation: fadeSlideIn 0.3s ease-out; }

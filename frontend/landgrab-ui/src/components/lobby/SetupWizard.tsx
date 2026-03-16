@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, WinConditionType } from '../../types/game';
 import { LocationStep } from './LocationStep';
@@ -47,6 +47,10 @@ interface Props {
 
 const TOTAL_STEPS = 5;
 
+function clampWizardStep(step: number) {
+    return Math.max(0, Math.min(TOTAL_STEPS - 1, step));
+}
+
 export function SetupWizard({
     gameState,
     myUserId,
@@ -86,33 +90,79 @@ export function SetupWizard({
     const stepComplete = useMemo(() => ({
         location: gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
         teams: gameState.alliances.length > 0 && gameState.players.length >= 2 && gameState.players.every(p => p.allianceId),
-        rules: true, // rules always have defaults
-        dynamics: true, // dynamics always have defaults (Klassiek preset)
-        review: false, // review step is never "complete" — it terminates the wizard
+        rules: true,
+        dynamics: true,
+        review: false,
     }), [gameState]);
 
-    // Derive the initial wizard step from game state (for reconnects)
     const deriveStep = useCallback((): number => {
         if (!stepComplete.location) return 0;
         if (!stepComplete.teams) return 1;
-        return 2; // default to rules; user can navigate to review
+        return 2;
     }, [stepComplete]);
 
-    const [step, setStep] = useState(deriveStep);
+    const serverWizardStep = useMemo(() => {
+        if (typeof gameState.currentWizardStep !== 'number') {
+            return null;
+        }
 
-    // Wrap onSetMapLocation to auto-advance from location step
+        return clampWizardStep(gameState.currentWizardStep);
+    }, [gameState.currentWizardStep]);
+
+    const [step, setStep] = useState(() => serverWizardStep ?? deriveStep());
+
+    useEffect(() => {
+        if (serverWizardStep == null) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setStep(prev => (prev !== serverWizardStep ? serverWizardStep : prev));
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [serverWizardStep]);
+
+    const syncWizardStep = useCallback(async (nextStep: number) => {
+        const normalizedStep = clampWizardStep(nextStep);
+        setStep(normalizedStep);
+
+        if (!invoke) {
+            return;
+        }
+
+        try {
+            await invoke('SetWizardStep', normalizedStep);
+        } catch (wizardStepError) {
+            console.error('Failed to sync wizard step with the server.', {
+                normalizedStep,
+                wizardStepError,
+            });
+        }
+    }, [invoke]);
+
     const handleSetMapLocation = useCallback((lat: number, lng: number) => {
         onSetMapLocation(lat, lng);
-        if (step === 0) setStep(1);
-    }, [onSetMapLocation, step]);
+
+        if (step === 0) {
+            void syncWizardStep(1);
+        }
+    }, [onSetMapLocation, step, syncWizardStep]);
 
     const canGoNext = useMemo(() => {
         switch (step) {
-            case 0: return stepComplete.location;
-            case 1: return stepComplete.teams;
-            case 2: return true; // rules always valid (have defaults)
-            case 3: return true; // dynamics always valid (have defaults)
-            default: return false;
+            case 0:
+                return stepComplete.location;
+            case 1:
+                return stepComplete.teams;
+            case 2:
+                return true;
+            case 3:
+                return true;
+            default:
+                return false;
         }
     }, [step, stepComplete]);
 
@@ -120,25 +170,35 @@ export function SetupWizard({
         return gameState.players.length >= 2
             && gameState.hasMapLocation
             && gameState.players.every(p => p.allianceId);
-        // master tile + starting tiles are auto-assigned on StartGame by backend
     }, [gameState]);
 
-    const goNext = () => {
-        if (step < TOTAL_STEPS - 1 && canGoNext) {
-            setStep(step + 1);
+    const goNext = useCallback(() => {
+        if (step >= TOTAL_STEPS - 1 || !canGoNext) {
+            return;
         }
-    };
 
-    const goBack = () => {
-        if (step > 0) {
-            setStep(step - 1);
+        void syncWizardStep(step + 1);
+    }, [canGoNext, step, syncWizardStep]);
+
+    const goBack = useCallback(() => {
+        if (step <= 0) {
+            return;
         }
-    };
+
+        void syncWizardStep(step - 1);
+    }, [step, syncWizardStep]);
+
+    const goToStep = useCallback((nextStep: number) => {
+        if (nextStep > step + 1 || (nextStep === step + 1 && !canGoNext)) {
+            return;
+        }
+
+        void syncWizardStep(nextStep);
+    }, [canGoNext, step, syncWizardStep]);
 
     return (
         <div className="wizard-page">
             <div className="wizard-container" data-testid="setup-wizard">
-                {/* Observer mode toggle for host */}
                 {isHost && onSetObserverMode && (
                     <div className="observer-mode-toggle">
                         <span className="observer-mode-label">{t('observer.modeToggle' as never)}</span>
@@ -161,7 +221,6 @@ export function SetupWizard({
                     </div>
                 )}
 
-                {/* Header with step indicator */}
                 <div className="wizard-header">
                     <div className="wizard-header-left">
                         <span className="room-code" data-testid="wizard-room-code">{gameState.roomCode}</span>
@@ -174,10 +233,7 @@ export function SetupWizard({
                                 key={i}
                                 type="button"
                                 className={`wizard-dot${i === step ? ' is-active' : ''}${i < step ? ' is-done' : ''}`}
-                                onClick={() => {
-                                    // Allow clicking completed steps or current step
-                                    if (i <= step || (i === step + 1 && canGoNext)) setStep(i);
-                                }}
+                                onClick={() => goToStep(i)}
                                 aria-label={`Step ${i + 1}`}
                             />
                         ))}
@@ -187,7 +243,6 @@ export function SetupWizard({
                     </div>
                 </div>
 
-                {/* Step content */}
                 <div className="wizard-content" data-testid="wizard-step-content">
                     {step === 0 && (
                         <LocationStep
@@ -250,7 +305,6 @@ export function SetupWizard({
                     )}
                 </div>
 
-                {/* Navigation footer */}
                 <div className="wizard-footer">
                     <div className="wizard-footer-left">
                         {step > 0 ? (

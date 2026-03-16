@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
+import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
 import { terrainDefendBonus } from '../../utils/terrainColors';
@@ -105,6 +106,8 @@ export function PlayerHUD({
   }, [hasActiveCountdown]);
 
   const hasActions = actions.length > 0;
+  const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);
+  const disabledReasonText = getTileActionDisabledReasonText(t, firstDisabledAction?.disabledReason);
   const emptyReason: 'noLocation' | 'outsideGrid' | 'noActions' = !hasLocation
     ? 'noLocation'
     : !currentHex
@@ -198,9 +201,9 @@ export function PlayerHUD({
         </div>
       )}
 
-      {hasActions && actions.some((action) => !action.enabled && action.disabledReason) && (
+      {hasActions && disabledReasonText && (
         <div className="player-hud__disabled-reason">
-          {t(actions.find((action) => !action.enabled && action.disabledReason)!.disabledReason! as never)}
+          {disabledReasonText}
         </div>
       )}
 

@@ -167,6 +167,7 @@ export function ReviewStep({
         count: activeAreaCells.length,
         footprint: formatDistance(Math.round(previewMetrics.maxDimensionMeters)),
     });
+    const maxFootprintText = formatDistance(Math.round(maxFootprint));
 
     // ── Draft helpers ─────────────────────────────────────────────────────────
     const clearAreaDraft = useCallback(() => {
@@ -320,6 +321,7 @@ export function ReviewStep({
                         selectedPattern={selectedPattern}
                         savedAreaSummary={savedAreaSummary}
                         areaStatsText={areaStatsText}
+                        maxFootprintText={maxFootprintText}
                         maxTileSizeText={formatDistance(previewMaxTileSize)}
                         patternFitsFootprint={patternFitsFootprint}
                         drawnCells={drawnCells}

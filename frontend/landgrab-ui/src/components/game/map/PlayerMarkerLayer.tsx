@@ -60,7 +60,11 @@ export function renderPlayerMarkers({
   const myPlayer = state.players.find(player => player.id === myUserId);
 
   for (const player of state.players) {
-    if (player.currentLat == null || player.currentLng == null) {
+    const isMe = player.id === myUserId;
+    const effectiveLat = isMe && currentLocation ? currentLocation.lat : player.currentLat;
+    const effectiveLng = isMe && currentLocation ? currentLocation.lng : player.currentLng;
+
+    if (effectiveLat == null || effectiveLng == null) {
       continue;
     }
 
@@ -69,8 +73,8 @@ export function renderPlayerMarkers({
     if (shouldShowPlayerMarkers) {
       const { layer: marker, tooltipOffset } = createPlayerMarkerLayer({
         color: markerColor,
-        lat: player.currentLat,
-        lng: player.currentLng,
+        lat: effectiveLat,
+        lng: effectiveLng,
         markerSizeMultiplier: playerMarkerSizeMultiplier,
         markerStyle: effectivePlayerDisplayPrefs.markerStyle,
         myUserId,
@@ -79,7 +83,15 @@ export function renderPlayerMarkers({
       });
 
       marker.addTo(layerGroup);
-      marker.bindTooltip(player.id === myUserId ? `${player.name}${i18n.t('map.youSuffix')}` : player.name, {
+
+      const displayName = player.id === myUserId
+        ? `${player.name}${i18n.t('map.youSuffix')}`
+        : player.name;
+      const tooltipContent = player.emoji?.trim()
+        ? `${player.emoji.trim()} ${displayName}`
+        : displayName;
+
+      marker.bindTooltip(tooltipContent, {
         permanent: effectivePlayerDisplayPrefs.showNameLabel,
         direction: 'top',
         offset: tooltipOffset,
@@ -87,8 +99,8 @@ export function renderPlayerMarkers({
       });
     }
 
-    if (shouldShowPlayerRadius && player.id === myUserId) {
-      L.circleMarker([player.currentLat, player.currentLng], {
+    if (shouldShowPlayerRadius && isMe) {
+      L.circleMarker([effectiveLat, effectiveLng], {
         radius: 20 * markerZoomScale,
         color: markerColor,
         weight: 2,
@@ -158,6 +170,7 @@ function createPlayerMarkerLayer({
   const isCurrentPlayer = player.id === myUserId;
   const selfBoost = isCurrentPlayer ? 1.15 : 1;
   const scale = markerSizeMultiplier * zoomScale * selfBoost;
+  const emoji = normalizeEmoji(player.emoji);
 
   if (markerStyle === 'pin') {
     const width = Math.round(24 * scale);
@@ -166,7 +179,7 @@ function createPlayerMarkerLayer({
       layer: L.marker([lat, lng], {
         icon: L.divIcon({
           className: 'player-marker-icon player-marker-pin-wrapper',
-          html: buildPinMarkerHtml(color, width, height),
+          html: buildPinMarkerHtml(color, width, height, emoji),
           iconSize: [width, height],
           iconAnchor: [Math.round(width / 2), Math.max(1, height - 2)],
           tooltipAnchor: [0, -Math.round(height * 0.72)],
@@ -184,7 +197,7 @@ function createPlayerMarkerLayer({
       layer: L.marker([lat, lng], {
         icon: L.divIcon({
           className: 'player-marker-icon player-marker-avatar-wrapper',
-          html: buildAvatarMarkerHtml(color, getPlayerInitial(player.name), size),
+          html: buildAvatarMarkerHtml(color, getPlayerInitial(player.name), size, emoji),
           iconSize: [size, size],
           iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
           tooltipAnchor: [0, -Math.round(size * 0.7)],
@@ -203,7 +216,7 @@ function createPlayerMarkerLayer({
       layer: L.marker([lat, lng], {
         icon: L.divIcon({
           className: 'player-marker-icon player-marker-flag-wrapper',
-          html: buildFlagMarkerHtml(color, width, height),
+          html: buildFlagMarkerHtml(color, width, height, emoji),
           iconSize: [width, height],
           iconAnchor: [3, Math.max(1, height - 2)],
           tooltipAnchor: [Math.round(width * 0.35), -Math.round(height * 0.8)],
@@ -216,33 +229,74 @@ function createPlayerMarkerLayer({
   }
 
   const radius = Math.max(4, Math.round((isCurrentPlayer ? 7 : 5) * markerSizeMultiplier * zoomScale));
+  const diameter = radius * 2;
+
   return {
-    layer: L.circleMarker([lat, lng], {
-      radius,
-      color: '#ffffff',
-      weight: 2,
-      fillColor: color,
-      fillOpacity: 0.95,
+    layer: L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: 'player-marker-icon player-marker-dot-wrapper',
+        html: buildDotMarkerHtml(color, diameter, emoji),
+        iconSize: [diameter, diameter],
+        iconAnchor: [radius, radius],
+        tooltipAnchor: [0, -Math.round(radius * 1.5)],
+      }),
+      keyboard: false,
+      zIndexOffset: isCurrentPlayer ? 220 : 140,
     }),
     tooltipOffset: [0, -Math.max(6, radius + 2)],
   };
 }
 
-function buildPinMarkerHtml(color: string, width: number, height: number): string {
+function buildPinMarkerHtml(color: string, width: number, height: number, emoji: string | null): string {
   const safeColor = escapeHtml(color);
-  return `<div class="player-marker-pin"><svg width="${width}" height="${height}" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" fill="${safeColor}"/><circle cx="12" cy="12" r="5" fill="white" opacity="0.5"/></svg></div>`;
+  return buildMarkerWrapperHtml(
+    `<div class="player-marker-pin"><svg width="${width}" height="${height}" viewBox="0 0 24 36" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" fill="${safeColor}"/><circle cx="12" cy="12" r="5" fill="white" opacity="0.5"/></svg></div>`,
+    buildEmojiBadgeHtml(emoji, Math.max(14, Math.round(width * 0.52)), 'right:-4px;top:-2px;'),
+  );
 }
 
-function buildAvatarMarkerHtml(color: string, letter: string, size: number): string {
+function buildAvatarMarkerHtml(color: string, letter: string, size: number, emoji: string | null): string {
   const safeColor = escapeHtml(color);
   const safeLetter = escapeHtml(letter);
   const fontSize = Math.round(size * 0.5);
-  return `<div class="player-marker-avatar" style="width:${size}px;height:${size}px;border-radius:50%;background:${safeColor};display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:${fontSize}px;border:2px solid white">${safeLetter}</div>`;
+  return buildMarkerWrapperHtml(
+    `<div class="player-marker-avatar" style="width:${size}px;height:${size}px;border-radius:50%;background:${safeColor};display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:${fontSize}px;border:2px solid white">${safeLetter}</div>`,
+    buildEmojiBadgeHtml(emoji, Math.max(14, Math.round(size * 0.6)), 'right:-5px;top:-5px;'),
+  );
 }
 
-function buildFlagMarkerHtml(color: string, width: number, height: number): string {
+function buildFlagMarkerHtml(color: string, width: number, height: number, emoji: string | null): string {
   const safeColor = escapeHtml(color);
-  return `<div class="player-marker-flag"><svg width="${width}" height="${height}" viewBox="0 0 20 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="3" y1="2" x2="3" y2="26" stroke="white" stroke-width="2"/><polygon points="5,2 20,7 5,14" fill="${safeColor}"/></svg></div>`;
+  return buildMarkerWrapperHtml(
+    `<div class="player-marker-flag"><svg width="${width}" height="${height}" viewBox="0 0 20 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="3" y1="2" x2="3" y2="26" stroke="white" stroke-width="2"/><polygon points="5,2 20,7 5,14" fill="${safeColor}"/></svg></div>`,
+    buildEmojiBadgeHtml(emoji, Math.max(14, Math.round(width * 0.7)), 'right:-7px;top:-1px;'),
+  );
+}
+
+function buildDotMarkerHtml(color: string, size: number, emoji: string | null): string {
+  const safeColor = escapeHtml(color);
+  return buildMarkerWrapperHtml(
+    `<div class="player-marker-dot" style="width:${size}px;height:${size}px;border-radius:50%;background:${safeColor};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.25)"></div>`,
+    buildEmojiBadgeHtml(emoji, Math.max(14, Math.round(size * 1.4)), 'right:-8px;top:-8px;'),
+  );
+}
+
+function buildMarkerWrapperHtml(baseHtml: string, badgeHtml: string): string {
+  return `<div style="position:relative;display:inline-flex;align-items:flex-start;justify-content:center">${baseHtml}${badgeHtml}</div>`;
+}
+
+function buildEmojiBadgeHtml(emoji: string | null, size: number, positionStyle: string): string {
+  if (!emoji) {
+    return '';
+  }
+
+  const safeEmoji = escapeHtml(emoji);
+  return `<span aria-hidden="true" style="position:absolute;${positionStyle}display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:999px;background:rgba(255,255,255,0.95);box-shadow:0 1px 3px rgba(0,0,0,0.25);font-size:${Math.max(10, Math.round(size * 0.7))}px;line-height:1">${safeEmoji}</span>`;
+}
+
+function normalizeEmoji(emoji?: string): string | null {
+  const trimmedEmoji = emoji?.trim();
+  return trimmedEmoji ? trimmedEmoji : null;
 }
 
 function getPlayerInitial(name: string): string {

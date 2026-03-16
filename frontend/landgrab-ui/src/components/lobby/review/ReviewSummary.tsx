@@ -4,15 +4,14 @@ import type { GameState } from '../../../types/game';
 
 interface Props {
     gameState: GameState;
-    /** Pre-formatted tile-size string (e.g. "50 m"). */
+    /** Pre-formatted tile-size string (e.g. "50 m") — kept for back-compat with ReviewStep. */
     tileSizeText: string;
 }
 
-export function ReviewSummary({ gameState, tileSizeText }: Props) {
+export function ReviewSummary({ gameState, tileSizeText: _tileSizeText }: Props) {
     const { t } = useTranslation();
 
     const rulesText = [
-        tileSizeText,
         t(`claimMode.${gameState.claimMode}.title`),
         t(`winCondition.${gameState.winConditionType}`),
     ].join(' · ');
@@ -29,6 +28,13 @@ export function ReviewSummary({ gameState, tileSizeText }: Props) {
             </ReviewItem>
             <ReviewItem label={t('wizard.reviewAlliances')}>
                 {gameState.alliances.map(alliance => alliance.name).join(', ') || '—'}
+            </ReviewItem>
+            <ReviewItem label={t('wizard.rulesTileSizeLabel')}>
+                {t('wizard.tileSizeDesc', { size: gameState.tileSizeMeters })}
+                <div className="wizard-review-helper-list">
+                    <span className="wizard-review-helper">{t('wizard.tileSizeSmall')}</span>
+                    <span className="wizard-review-helper">{t('wizard.tileSizeLarge')}</span>
+                </div>
             </ReviewItem>
             <ReviewItem label={t('wizard.reviewRules')}>
                 {rulesText}

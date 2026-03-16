@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState } from '../../types/game';
 import { TeamsStep } from './TeamsStep';
 import { ReviewStep } from './ReviewStep';
+import { WizardToast } from './WizardToast';
 
 interface LocationPoint {
     lat: number;
@@ -24,8 +25,22 @@ interface Props {
     error: string;
 }
 
-// Guest wizard: 3 steps — Waiting (location), Teams, Review
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 5;
+
+function clampWizardStep(step: number) {
+    return Math.max(0, Math.min(TOTAL_STEPS - 1, step));
+}
+
+function WaitingStepCard({ title, description }: { title: string; description: string }) {
+    return (
+        <div className="wizard-step wizard-step-waiting">
+            <div className="wizard-step-header">
+                <h2>{title}</h2>
+                <p className="wizard-step-desc">{description}</p>
+            </div>
+        </div>
+    );
+}
 
 export function GuestWizardView({
     gameState,
@@ -42,52 +57,59 @@ export function GuestWizardView({
     error,
 }: Props) {
     const { t } = useTranslation();
+    const hostAdvancedStepMessage = String(t('wizard.hostAdvancedStep' as never, {
+        defaultValue: 'The host moved to the next step.',
+    } as never));
     const me = useMemo(
         () => gameState.players.find(player => player.id === myUserId),
-        [gameState.players, myUserId]
+        [gameState.players, myUserId],
     );
+    const [toastSequence, setToastSequence] = useState(0);
+    const previousStepRef = useRef<number | null>(null);
 
-    const stepComplete = useMemo(() => ({
-        location: gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
-        teams: Boolean(me?.allianceId),
-        review: false,
-    }), [gameState, me?.allianceId]);
-
-    const deriveStep = useCallback((): number => {
-        if (!stepComplete.location) return 0;
-        if (!stepComplete.teams) return 1;
-        return 2;
-    }, [stepComplete]);
-
-    const [guestStep, setGuestStep] = useState(deriveStep);
-
-    const canGoNext = useMemo(() => {
-        switch (guestStep) {
-            case 0:
-                return stepComplete.location;
-            case 1:
-                return stepComplete.teams;
-            default:
-                return false;
+    const guestStep = useMemo(() => {
+        if (typeof gameState.currentWizardStep === 'number') {
+            return clampWizardStep(gameState.currentWizardStep);
         }
-    }, [guestStep, stepComplete]);
 
-    const goNext = () => {
-        if (guestStep < TOTAL_STEPS - 1 && canGoNext) {
-            setGuestStep(guestStep + 1);
+        if (!gameState.hasMapLocation || gameState.mapLat == null || gameState.mapLng == null) {
+            return 0;
         }
-    };
 
-    const goBack = () => {
-        if (guestStep > 0) {
-            setGuestStep(guestStep - 1);
+        if (!me?.allianceId) {
+            return 1;
         }
-    };
+
+        return 4;
+    }, [gameState.currentWizardStep, gameState.hasMapLocation, gameState.mapLat, gameState.mapLng, me?.allianceId]);
+
+    useEffect(() => {
+        const previousStep = previousStepRef.current;
+        previousStepRef.current = guestStep;
+
+        if (previousStep == null || guestStep <= previousStep) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setToastSequence(sequence => sequence + 1);
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [guestStep]);
 
     return (
         <div className="wizard-page">
             <div className="wizard-container" data-testid="setup-wizard">
-                {/* Header */}
+                {toastSequence > 0 && (
+                    <WizardToast
+                        key={toastSequence}
+                        message={hostAdvancedStepMessage}
+                    />
+                )}
+
                 <div className="wizard-header">
                     <div className="wizard-header-left">
                         <span className="room-code" data-testid="wizard-room-code">{gameState.roomCode}</span>
@@ -106,15 +128,12 @@ export function GuestWizardView({
                     </div>
                 </div>
 
-                {/* Content */}
                 <div className="wizard-content">
                     {guestStep === 0 && (
-                        <div className="wizard-step wizard-step-waiting">
-                            <div className="wizard-step-header">
-                                <h2>{t('wizard.locationTitle')}</h2>
-                                <p className="wizard-step-desc">{t('wizard.guestWaitingLocation')}</p>
-                            </div>
-                        </div>
+                        <WaitingStepCard
+                            title={t('wizard.locationTitle')}
+                            description={t('wizard.guestWaitingLocation')}
+                        />
                     )}
                     {guestStep === 1 && (
                         <TeamsStep
@@ -122,12 +141,24 @@ export function GuestWizardView({
                             myUserId={myUserId}
                             isHost={false}
                             onSetAlliance={onSetAlliance}
-                            onConfigureAlliances={() => { }}
-                            onDistributePlayers={() => { }}
+                            onConfigureAlliances={() => {}}
+                            onDistributePlayers={() => {}}
                             onSetPlayerRole={onSetPlayerRole}
                         />
                     )}
                     {guestStep === 2 && (
+                        <WaitingStepCard
+                            title={t('wizard.rulesTitle')}
+                            description={t('wizard.guestWaitingRules')}
+                        />
+                    )}
+                    {guestStep === 3 && (
+                        <WaitingStepCard
+                            title={t('wizard.dynamicsTitle')}
+                            description={t('lobby.waitingForHost')}
+                        />
+                    )}
+                    {guestStep === 4 && (
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}
@@ -135,9 +166,9 @@ export function GuestWizardView({
                             isHost={false}
                             currentLocation={currentLocation}
                             canStart={false}
-                            onUseCenteredGameArea={() => { }}
-                            onSetPatternGameArea={() => { }}
-                            onSetCustomGameArea={() => { }}
+                            onUseCenteredGameArea={() => {}}
+                            onSetPatternGameArea={() => {}}
+                            onSetCustomGameArea={() => {}}
                             onSetMasterTileByHex={onSetMasterTileByHex}
                             onAssignStartingTile={onAssignStartingTile}
                             onStartGame={onStartGame}
@@ -145,32 +176,13 @@ export function GuestWizardView({
                     )}
                 </div>
 
-                {/* Navigation */}
                 <div className="wizard-footer">
                     <div className="wizard-footer-left">
-                        {guestStep > 0 ? (
-                            <button type="button" className="btn-ghost" onClick={goBack}>
-                                {t('wizard.back')}
-                            </button>
-                        ) : (
-                            <button type="button" className="btn-ghost" onClick={onReturnToLobby}>
-                                {t('lobby.returnToLobby')}
-                            </button>
-                        )}
+                        <button type="button" className="btn-ghost" onClick={onReturnToLobby}>
+                            {t('lobby.returnToLobby')}
+                        </button>
                     </div>
-                    <div className="wizard-footer-right">
-                        {guestStep < TOTAL_STEPS - 1 && (
-                            <button
-                                type="button"
-                                className="btn-primary"
-                                data-testid="wizard-next-btn"
-                                onClick={goNext}
-                                disabled={!canGoNext}
-                            >
-                                {t('wizard.next')}
-                            </button>
-                        )}
-                    </div>
+                    <div className="wizard-footer-right" />
                 </div>
 
                 {error && <p className="error-msg wizard-error">{error}</p>}

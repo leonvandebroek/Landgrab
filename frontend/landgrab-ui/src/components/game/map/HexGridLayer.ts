@@ -70,6 +70,7 @@ export function renderHexGridLayers({
   const hostPlayer = state.players.find(player => player.isHost);
   const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
   const myPlayer = state.players.find(player => player.id === myUserId);
+  const currentPlayerHighlightColor = myPlayer?.allianceColor ?? myPlayer?.color ?? DEFAULT_PLAYER_MARKER_COLOR;
   const playersById = new Map(state.players.map(player => [player.id, player]));
   const shouldShowTerrainIcons = layerPrefs.terrainIcons && showTerrainIconsZoom(currentZoom);
   const shouldShowTroopBadges = layerPrefs.troopBadges && showTroopBadges(currentZoom);
@@ -100,6 +101,7 @@ export function renderHexGridLayers({
     renderHexCell({
       cell,
       currentHex,
+      currentPlayerHighlightColor,
       hostColor,
       inactiveHexKeySet,
       layerGroup,
@@ -133,6 +135,7 @@ export function renderHexGridLayers({
 interface RenderHexCellOptions {
   cell: HexCell;
   currentHex: [number, number] | null;
+  currentPlayerHighlightColor: string;
   hostColor: string;
   inactiveHexKeySet: ReadonlySet<string>;
   layerGroup: L.LayerGroup;
@@ -160,6 +163,7 @@ interface RenderHexCellOptions {
 function renderHexCell({
   cell,
   currentHex,
+  currentPlayerHighlightColor,
   hostColor,
   inactiveHexKeySet,
   layerGroup,
@@ -290,6 +294,25 @@ function renderHexCell({
   const polygonElement = polygon.getElement();
   if (polygonElement instanceof SVGElement || polygonElement instanceof HTMLElement) {
     polygonElement.style.setProperty('--hex-owner-color', ownerColor);
+    polygonElement.style.setProperty('--hex-player-highlight-color', currentPlayerHighlightColor);
+  }
+
+  if (isCurrentHex && !isInactive && !isFogHidden) {
+    const currentHexOverlay = L.polygon(corners, {
+      className: 'hex-active-player is-current-player-hex',
+      color: currentPlayerHighlightColor,
+      dashArray: '10 6',
+      weight: 5,
+      opacity: 0.95,
+      fillColor: currentPlayerHighlightColor,
+      fillOpacity: 0.16,
+      interactive: false,
+      bubblingMouseEvents: false,
+    }).addTo(layerGroup);
+    const overlayElement = currentHexOverlay.getElement();
+    if (overlayElement instanceof SVGElement || overlayElement instanceof HTMLElement) {
+      overlayElement.style.setProperty('--hex-player-highlight-color', currentPlayerHighlightColor);
+    }
   }
 
   if (supplyDisconnected.has(cellKey) && !isInactive && !isFogHidden) {

@@ -13,7 +13,7 @@ export interface MapInteractionFeedback {
 
 /* ── Explicit tile-action types (used by TileActionPanel) ── */
 
-export type TileActionType = 'claim' | 'claimAlliance' | 'claimSelf' | 'attack' | 'reinforce' | 'pickup' | 'ignore';
+export type TileActionType = 'claim' | 'claimAlliance' | 'claimSelf' | 'attack' | 'reinforce' | 'pickup';
 
 export interface TileAction {
   type: TileActionType;
@@ -22,6 +22,23 @@ export interface TileAction {
   tone: 'primary' | 'danger' | 'neutral' | 'info';
   enabled: boolean;
   disabledReason?: string; // i18n key
+}
+
+export function getTileActionDisabledReasonText(
+  t: TFunction,
+  disabledReason?: string,
+): string | null {
+  if (!disabledReason) {
+    return null;
+  }
+
+  if (disabledReason === 'guidance.adjacencyRequired') {
+    return t('guidance.adjacencyRequired' as never, {
+      defaultValue: t('rules.claiming.adjacencyRequired' as never),
+    });
+  }
+
+  return t(disabledReason as never);
 }
 
 /**
@@ -60,14 +77,6 @@ export function getTileActions({
   const isNeutral = !targetCell.ownerId;
   const isEnemy = !isNeutral && !isOwnHex && !isAlliedHex;
 
-  const ignore: TileAction = {
-    type: 'ignore',
-    label: 'game.tileAction.ignoreBtn',
-    icon: '👋',
-    tone: 'neutral',
-    enabled: true,
-  };
-
   const actions: TileAction[] = [];
 
   /* ── Neutral tile ── */
@@ -79,9 +88,8 @@ export function getTileActions({
       claimEnabled = carriedTroops > 0;
       disabledReason = claimEnabled ? undefined : 'game.tileAction.neutralNeedsTroop';
     } else if (state.claimMode === 'AdjacencyRequired') {
-      const adjacent = isAdjacentToOwnedTerritory(state.grid, targetHex, player);
-      claimEnabled = adjacent;
-      disabledReason = adjacent ? undefined : 'game.tileAction.neutralNeedsAdjacency';
+      disabledReason = getAdjacencyDisabledReason(state.grid, targetHex, player);
+      claimEnabled = !disabledReason;
     }
     // else PresenceOnly – always allowed
 
@@ -94,16 +102,6 @@ export function getTileActions({
         enabled: claimEnabled,
         disabledReason,
       });
-      if (state.allowSelfClaim !== false) {
-        actions.push({
-          type: 'claimSelf',
-          label: 'game.tileAction.claimSelfBtn',
-          icon: '🏠',
-          tone: 'neutral',
-          enabled: claimEnabled,
-          disabledReason,
-        });
-      }
     } else {
       actions.push({
         type: 'claim',
@@ -115,7 +113,6 @@ export function getTileActions({
       });
     }
 
-    actions.push(ignore);
     return actions;
   }
 
@@ -136,7 +133,6 @@ export function getTileActions({
       enabled: canAttack,
       disabledReason: canAttack ? undefined : 'game.tileAction.enemyAttackBlocked',
     });
-    actions.push(ignore);
     return actions;
   }
 
@@ -160,7 +156,6 @@ export function getTileActions({
         enabled: true,
       });
     }
-    actions.push(ignore);
     return actions;
   }
 
@@ -175,7 +170,6 @@ export function getTileActions({
         enabled: true,
       });
     }
-    actions.push(ignore);
     return actions;
   }
 
@@ -309,11 +303,15 @@ export function getTileInteractionStatus({
           };
     }
 
-    if (state.claimMode === 'AdjacencyRequired' && !isAdjacentToOwnedTerritory(state.grid, targetHex, player)) {
+    const adjacencyDisabledReason = state.claimMode === 'AdjacencyRequired'
+      ? getAdjacencyDisabledReason(state.grid, targetHex, player)
+      : undefined;
+
+    if (adjacencyDisabledReason) {
       return {
         action: 'none',
         tone: 'error',
-        message: t('game.tileAction.neutralNeedsAdjacency')
+        message: getTileActionDisabledReasonText(t, adjacencyDisabledReason) ?? t('game.tileAction.neutralNeedsAdjacency')
       };
     }
 
@@ -364,4 +362,28 @@ function isAdjacentToOwnedTerritory(
     return neighbor.ownerId === player.id
       || Boolean(player.allianceId && neighbor.ownerAllianceId === player.allianceId);
   });
+}
+
+function hasOwnedTerritory(
+  grid: GameState['grid'],
+  player: Player,
+): boolean {
+  return Object.values(grid).some((cell) => (
+    cell.ownerId === player.id
+      || Boolean(player.allianceId && cell.ownerAllianceId === player.allianceId)
+  ));
+}
+
+function getAdjacencyDisabledReason(
+  grid: GameState['grid'],
+  targetHex: [number, number],
+  player: Player,
+): string | undefined {
+  if (isAdjacentToOwnedTerritory(grid, targetHex, player)) {
+    return undefined;
+  }
+
+  return hasOwnedTerritory(grid, player)
+    ? 'guidance.adjacencyRequired'
+    : 'guidance.noFrontierYet';
 }

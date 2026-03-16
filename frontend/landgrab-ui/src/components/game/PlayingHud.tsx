@@ -29,6 +29,7 @@ interface Props {
   onConfirmReinforce: () => Promise<void>;
   onReturnToLobby: () => void;
   locationError: string | null;
+  isHostBypass?: boolean;
   currentHexActions?: TileAction[];
   onCurrentHexAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
@@ -55,6 +56,7 @@ export function PlayingHud({
   onConfirmReinforce,
   onReturnToLobby,
   locationError,
+  isHostBypass,
   currentHexActions,
   onCurrentHexAction,
   onDismissTileActions,
@@ -202,7 +204,7 @@ export function PlayingHud({
   return (
     <div className="game-layout hud-active" ref={layoutRef}>
       <div className="top-status-bar">
-        {locationError && <div className="top-warning-bar">📍 {locationError}</div>}
+        {locationError && !isHostBypass && <div className="top-warning-bar">📍 {locationError}</div>}
         {error && <div className="top-warning-bar">⚠️ {error}</div>}
         {state.isPaused && (
           <div className="top-warning-bar event-warning">
@@ -217,6 +219,26 @@ export function PlayingHud({
 
         <div className="top-stats-row">
           <div className="hud-stats-flat">
+            {currentPlayerName && (
+              <div className="stat-item">
+                <span
+                  className="stat-value primary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', maxWidth: '12rem' }}
+                >
+                  {me?.emoji && <span aria-hidden="true" style={{ lineHeight: 1 }}>{me.emoji}</span>}
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {currentPlayerName}
+                  </span>
+                </span>
+                <span className="stat-label">{t('game.you' as never, { defaultValue: 'You' })}</span>
+              </div>
+            )}
             <div className="stat-item">
               <span className="stat-value primary">{me?.territoryCount || 0}</span>
               <span className="stat-label">{t('game.hudLands')}</span>
@@ -389,7 +411,7 @@ export function PlayingHud({
           <h3>{t('game.hudActivityFeed')}</h3>
           <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
         </div>
-        <GameEventLog events={state.eventLog} />
+        <GameEventLog events={state.eventLog} players={state.players} />
       </div>
 
       <div className={`hud-modal-sheet ${activeModal === 'menu' ? 'open' : ''}`}>
@@ -418,9 +440,14 @@ export function PlayingHud({
             ⚙️ {t('settings.display.title')}
           </button>
           {isHost && onSetObserverMode && (
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => onSetObserverMode(true)}>
-              🔭 {t('observer.switchToObserver' as never)}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <button className="btn-secondary" style={{ width: '100%' }} onClick={() => onSetObserverMode(true)}>
+                🔭 {t('observer.switchToObserver' as never)}
+              </button>
+              <span className="hint" style={{ fontSize: '0.75rem', textAlign: 'center', paddingInline: '0.25rem' }}>
+                {t('observer.switchToObserverDesc' as never)}
+              </span>
+            </div>
           )}
           {debugToggle}
           <button className="btn-secondary" style={{ width: '100%', color: 'var(--danger, #e74c3c)' }} onClick={onReturnToLobby}>

@@ -11,6 +11,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
     private static int DefaultTileSizeMeters => GameStateCommon.DefaultTileSizeMeters;
     private static int MaxFootprintMeters => GameStateCommon.MaxFootprintMeters;
     private static string[] Colors => GameStateCommon.Colors;
+    private static string[] PlayerEmojis => GameStateCommon.PlayerEmojis;
     private static Dictionary<string, HexCell> BuildGridForState(GameState state) => GameStateCommon.BuildGridForState(state);
     private static int GetAllowedTileSizeMeters(IEnumerable<(int q, int r)> coordinates, int requestedMeters, int maxFootprintMeters) =>
         GameStateCommon.GetAllowedTileSizeMeters(coordinates, requestedMeters, maxFootprintMeters);
@@ -64,6 +65,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
             Id = hostUserId,
             Name = hostUsername,
             Color = Colors[0],
+            Emoji = GetPlayerEmoji(0),
             IsHost = true
         });
 
@@ -93,6 +95,8 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
 
                 room.ConnectionMap.TryAdd(connectionId, userId);
                 existingPlayer.IsConnected = true;
+                if (string.IsNullOrWhiteSpace(existingPlayer.Emoji))
+                    existingPlayer.Emoji = GetPlayerEmoji(room.State.Players.IndexOf(existingPlayer));
                 QueuePersistence(room, SnapshotState(room.State));
                 return (room, null);
             }
@@ -104,11 +108,13 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
                 return (null, "Room is full (max 30 players).");
 
             var colorIndex = room.State.Players.Count % Colors.Length;
+            var playerIndex = room.State.Players.Count;
             room.State.Players.Add(new PlayerDto
             {
                 Id = userId,
                 Name = username,
-                Color = Colors[colorIndex]
+                Color = Colors[colorIndex],
+                Emoji = GetPlayerEmoji(playerIndex)
             });
 
             room.ConnectionMap.TryAdd(connectionId, userId);
@@ -195,7 +201,11 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
                     room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters);
 
                 foreach (var player in room.State.Players)
+                {
                     player.IsConnected = false;
+                    if (string.IsNullOrWhiteSpace(player.Emoji))
+                        player.Emoji = GetPlayerEmoji(room.State.Players.IndexOf(player));
+                }
             }
 
             if (_rooms.TryAdd(normalizedCode, room))
@@ -297,5 +307,15 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
         return new string(Enumerable.Range(0, 6)
             .Select(_ => chars[Random.Shared.Next(chars.Length)])
             .ToArray());
+    }
+
+    private static string GetPlayerEmoji(int playerIndex)
+    {
+        if (playerIndex < PlayerEmojis.Length)
+            return PlayerEmojis[playerIndex];
+
+        var poolIndex = playerIndex % PlayerEmojis.Length;
+        var cycle = (playerIndex / PlayerEmojis.Length) + 1;
+        return $"{PlayerEmojis[poolIndex]}{cycle}";
     }
 }
