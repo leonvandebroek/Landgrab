@@ -1,13 +1,30 @@
 import { useTranslation } from 'react-i18next';
 import type { GameState } from '../../types/game';
+import type { CopresenceMode } from '../../types/game';
 
 interface HelpOverlayProps {
   dynamics?: GameState['dynamics'];
   onClose: () => void;
 }
 
+const copresenceIcons: Record<CopresenceMode, string> = {
+  None: '',
+  Standoff: '🚫',
+  PresenceBonus: '⚔️',
+  Rally: '🛡️',
+  Drain: '⚡',
+  Beacon: '📡',
+  FrontLine: '🎯',
+  Shepherd: '🐑',
+  CommandoRaid: '🎖️',
+};
+
 export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
   const { t } = useTranslation();
+
+  const activeModes = (dynamics?.activeCopresenceModes ?? []).filter(
+    (m): m is Exclude<CopresenceMode, 'None'> => m !== 'None',
+  );
 
   return (
     <div className="hud-modal-sheet open help-overlay" onClick={(e) => e.stopPropagation()}>
@@ -45,10 +62,50 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
           </div>
         )}
 
-        {dynamics?.activeCopresenceModes && dynamics.activeCopresenceModes.length > 0 && dynamics.activeCopresenceModes[0] !== 'None' && (
+        <div className="help-section">
+          <h4>🪖 {t('guidance.troopsTitle' as never, { defaultValue: 'Troops' })}</h4>
+          <p>{t('guidance.helpTroops' as never, { defaultValue: 'Pick up troops from your team\'s tiles and carry them in your backpack. Reinforce friendly tiles or use carried troops to attack enemies. You need more troops than the defender to capture a tile.' })}</p>
+        </div>
+
+        {activeModes.map((mode) => (
+          <div className="help-section" key={mode}>
+            <h4>{copresenceIcons[mode]} {t(`dynamics.mode.${mode}.title`)}</h4>
+            <p>{t(`dynamics.mode.${mode}.detail`)}</p>
+          </div>
+        ))}
+
+        {dynamics?.hqEnabled && (
           <div className="help-section">
-            <h4>🤝 {t('guidance.copresenceTitle')}</h4>
-            <p>{t('guidance.helpCopresence')}</p>
+            <h4>🏛️ {t('dynamics.feature.hq')}</h4>
+            <p>{t('dynamics.feature.hqDesc')}</p>
+          </div>
+        )}
+
+        {dynamics?.supplyLinesEnabled && (
+          <div className="help-section">
+            <h4>🔗 {t('dynamics.feature.supplyLines')}</h4>
+            <p>{t('dynamics.feature.supplyLinesDesc')}</p>
+          </div>
+        )}
+
+        {dynamics?.playerRolesEnabled && (
+          <div className="help-section">
+            <h4>🎭 {t('dynamics.feature.playerRoles')}</h4>
+            <p>{t('dynamics.feature.playerRolesDesc')}</p>
+          </div>
+        )}
+
+        {dynamics?.timedEscalationEnabled && (
+          <div className="help-section">
+            <h4>⏱️ {t('dynamics.feature.timedEscalation')}</h4>
+            <p>{t('dynamics.feature.timedEscalationDesc')}</p>
+          </div>
+        )}
+
+        {dynamics?.underdogPactEnabled && (
+          <div className="help-section">
+            <h4>💪 {t('dynamics.feature.underdogPact')}</h4>
+            <p>{t('dynamics.feature.underdogPactDesc')}</p>
           </div>
         )}
       </div>

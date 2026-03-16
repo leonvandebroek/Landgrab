@@ -89,6 +89,8 @@ export interface Player {
   carriedTroopsSourceR?: number | null;
   currentLat?: number | null;
   currentLng?: number | null;
+  currentHexQ?: number | null;
+  currentHexR?: number | null;
   isHost: boolean;
   isConnected: boolean;
   isWinner?: boolean;

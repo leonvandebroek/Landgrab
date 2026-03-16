@@ -195,6 +195,7 @@ export function HostControlPlane({
                       />
                       <span className="toggle-card-copy">
                         <strong>{t(`dynamics.mode.${mode}.title`)}</strong>
+                        <span>{t(`dynamics.mode.${mode}.detail`)}</span>
                       </span>
                     </label>
                   );

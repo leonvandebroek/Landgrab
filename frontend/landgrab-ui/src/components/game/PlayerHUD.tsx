@@ -24,13 +24,14 @@ interface PlayerHUDProps {
   hasLocation: boolean;
   myUserId?: string;
   myAllianceId?: string;
+  myAllianceName?: string;
   player?: Player;
   dynamics?: GameDynamics;
   onActivateBeacon: () => void;
   onDeactivateBeacon: () => void;
 }
 
-type HexRelation = 'own' | 'allied' | 'enemy' | 'neutral';
+type HexRelation = 'own' | 'team' | 'allied' | 'enemy' | 'neutral';
 
 function getHexRelation(
   cell: HexCell | undefined,
@@ -38,13 +39,14 @@ function getHexRelation(
   myAllianceId?: string,
 ): HexRelation {
   if (!cell || !cell.ownerId) return 'neutral';
+  if (myAllianceId && cell.ownerAllianceId === myAllianceId) return 'team';
   if (cell.ownerId === myUserId) return 'own';
-  if (myAllianceId && cell.ownerAllianceId === myAllianceId) return 'allied';
   return 'enemy';
 }
 
 const RELATION_ACCENT: Record<HexRelation, string> = {
   own: 'rgba(46, 204, 113, 0.6)',
+  team: 'rgba(46, 204, 113, 0.55)',
   allied: 'rgba(52, 152, 219, 0.5)',
   enemy: 'rgba(231, 76, 60, 0.6)',
   neutral: 'rgba(149, 165, 166, 0.3)',
@@ -80,6 +82,7 @@ export function PlayerHUD({
   hasLocation,
   myUserId,
   myAllianceId,
+  myAllianceName,
   player,
   dynamics,
   onActivateBeacon,
@@ -107,7 +110,11 @@ export function PlayerHUD({
 
   const hasActions = actions.length > 0;
   const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);
-  const disabledReasonText = getTileActionDisabledReasonText(t, firstDisabledAction?.disabledReason);
+  const disabledReasonText = getTileActionDisabledReasonText(
+    t,
+    firstDisabledAction?.disabledReason,
+    firstDisabledAction?.disabledReasonParams,
+  );
   const emptyReason: 'noLocation' | 'outsideGrid' | 'noActions' = !hasLocation
     ? 'noLocation'
     : !currentHex
@@ -145,7 +152,20 @@ export function PlayerHUD({
             {t(`game.dock.relation.${relation}`)}
           </span>
 
-          {targetCell?.ownerName && relation !== 'own' && (
+          {relation === 'team' && myAllianceName && (
+            <span className="player-hud__owner">
+              <span
+                className="player-hud__owner-dot"
+                style={{ background: targetCell?.ownerColor ?? 'var(--muted)' }}
+              />
+              {myAllianceName}
+              {targetCell?.ownerName && (
+                <span className="player-hud__claimer">{targetCell.ownerName}</span>
+              )}
+            </span>
+          )}
+
+          {relation === 'enemy' && targetCell?.ownerName && (
             <span className="player-hud__owner">
               <span
                 className="player-hud__owner-dot"
@@ -160,7 +180,15 @@ export function PlayerHUD({
           )}
 
           {terrainLabel && (
-            <span className="player-hud__terrain">
+            <span
+              className="player-hud__terrain"
+              title={defendBonus > 0
+                ? t('game.dock.terrainDefenceBonus' as never, {
+                  bonus: defendBonus,
+                  terrain: terrainLabel,
+                })
+                : undefined}
+            >
               {terrainIcon && <span aria-hidden>{terrainIcon}</span>}
               {terrainLabel}
               {defendBonus > 0 && (
@@ -170,10 +198,10 @@ export function PlayerHUD({
           )}
 
           {targetCell?.isFortified && (
-            <span className="player-hud__badge" title={t('game.dock.fortified')}>🛡️</span>
+            <span className="player-hud__badge" title={t('phase3.fortifiedDesc' as never)}>🛡️</span>
           )}
           {targetCell?.isFort && (
-            <span className="player-hud__badge" title={t('game.dock.fort')}>🏰</span>
+            <span className="player-hud__badge" title={t('game.dock.fort' as never)}>🏰</span>
           )}
         </div>
       )}
@@ -214,6 +242,7 @@ export function PlayerHUD({
               type="button"
               className={`player-hud__ability ${player.isBeacon ? 'player-hud__ability--active' : ''}`}
               onClick={player.isBeacon ? onDeactivateBeacon : onActivateBeacon}
+              title={t('dynamics.mode.Beacon.detail' as never)}
             >
               <span className="player-hud__ability-icon">📡</span>
               <span className="player-hud__ability-label">

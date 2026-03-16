@@ -58,6 +58,8 @@ internal static class GameStateCommon
                 CarriedTroopsSourceR = player.CarriedTroopsSourceR,
                 CurrentLat = player.CurrentLat,
                 CurrentLng = player.CurrentLng,
+                CurrentHexQ = player.CurrentHexQ,
+                CurrentHexR = player.CurrentHexR,
                 IsHost = player.IsHost,
                 IsConnected = player.IsConnected,
                 TerritoryCount = player.TerritoryCount,

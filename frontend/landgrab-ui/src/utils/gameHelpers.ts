@@ -14,11 +14,38 @@ const DEFAULT_GAME_DYNAMICS: GameDynamics = {
 };
 
 export function getErrorMessage(error: unknown): string {
+  let raw: string;
+
   if (error instanceof Error) {
-    return error.message;
+    raw = error.message;
+  } else if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string'
+  ) {
+    raw = (error as { message: string }).message;
+  } else {
+    raw = String(error);
   }
 
-  return String(error);
+  if (raw.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'message' in parsed &&
+        typeof (parsed as { message: unknown }).message === 'string'
+      ) {
+        return (parsed as { message: string }).message;
+      }
+    } catch {
+      // Not valid JSON – fall through to return raw
+    }
+  }
+
+  return raw;
 }
 
 export function normalizeGameState(state: GameState, previousState?: GameState | null): GameState {

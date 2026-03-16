@@ -18,7 +18,6 @@ export function buildHexTooltipHtml(cell: HexCell, currentHex: [number, number] 
   return `<div class="tooltip-card">
     <div class="tooltip-header">
       <span class="tooltip-terrain-icon">${terrainIcon}${terrainName ? ` ${terrainName}` : ''}</span>
-      <span class="tooltip-coords">${cell.q},${cell.r}</span>
     </div>
     <div class="tooltip-owner">
       <span class="tooltip-owner-swatch" style="background:${ownerColor}"></span>

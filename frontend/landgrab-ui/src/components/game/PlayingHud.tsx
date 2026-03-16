@@ -96,43 +96,90 @@ export function PlayingHud({
   const error = useUiStore((store) => store.error);
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
+  const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
+  const me = state?.players.find((player) => player.id === myUserId);
+  const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
 
   useEffect(() => {
     const layout = layoutRef.current;
     if (!layout) return;
 
     const hud = layout.querySelector('.player-hud') as HTMLElement | null;
-    if (!hud) return;
+    if (!hud) {
+      layout.style.removeProperty('--player-hud-h');
+      return;
+    }
+
+    const syncHudHeight = (height: number) => {
+      layout.style.setProperty('--player-hud-h', `${Math.ceil(height)}px`);
+    };
+
+    syncHudHeight(hud.getBoundingClientRect().height);
 
     const observer = new ResizeObserver(([entry]) => {
-      layout.style.setProperty('--player-hud-h', `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height)}px`);
+      syncHudHeight(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
     });
 
     observer.observe(hud);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      layout.style.removeProperty('--player-hud-h');
+    };
   }, []);
 
   useEffect(() => {
-    if (!state || !isTimedGame) return;
+    if (activeModal !== 'menu') {
+      setShowReturnConfirm(false);
+    }
+  }, [activeModal]);
 
-    const endTime = new Date(state.gameStartedAt!).getTime() + state.gameDurationMinutes! * 60 * 1000;
+  useEffect(() => {
+    if (!state) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const needsClock = Boolean(
+      isTimedGame
+      || state.dynamics?.timedEscalationEnabled
+      || (state.dynamics?.underdogPactEnabled && myAlliance?.underdogBoostUntil),
+    );
+
+    if (!needsClock) {
+      setCurrentTime(Date.now());
+      setTimeRemaining(null);
+      return;
+    }
+
     const tick = () => {
-      const remaining = Math.max(0, endTime - Date.now());
-      setTimeRemaining(remaining);
+      const now = Date.now();
+      setCurrentTime(now);
+
+      if (isTimedGame && state.gameStartedAt && state.gameDurationMinutes) {
+        const endTime = new Date(state.gameStartedAt).getTime() + state.gameDurationMinutes * 60 * 1000;
+        setTimeRemaining(Math.max(0, endTime - now));
+        return;
+      }
+
+      setTimeRemaining(null);
     };
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [isTimedGame, state]);
+  }, [
+    isTimedGame,
+    myAlliance?.underdogBoostUntil,
+    state,
+  ]);
 
   const displayTimeRemaining = isTimedGame ? timeRemaining : null;
-  const me = state?.players.find((player) => player.id === myUserId);
 
   const currentHexCell: HexCell | undefined = useMemo(() => {
     if (!state || !currentHex) {
@@ -147,15 +194,29 @@ export function PlayingHud({
   const isInOwnHex = Boolean(currentHexCell && me && currentHexCell.ownerId === me.id);
   const isHost = Boolean(me?.isHost);
 
-  const myTileTroops = useMemo(() => {
+  const allianceTileTroops = useMemo(() => {
     if (!state || !me) return 0;
+    const allianceId = me.allianceId;
+
+    if (allianceId) {
+      return Object.values(state.grid).reduce((sum, cell) => {
+        return cell.ownerAllianceId === allianceId ? sum + cell.troops : sum;
+      }, 0);
+    }
 
     return Object.values(state.grid).reduce((sum, cell) => {
       return cell.ownerId === me.id ? sum + cell.troops : sum;
     }, 0);
   }, [state, me]);
 
-  const myTotalTroops = myTileTroops + carriedTroops;
+  const allianceCarriedTroops = useMemo(() => {
+    if (!state || !me?.allianceId) return carriedTroops;
+    return state.players
+      .filter((player) => player.allianceId === me.allianceId)
+      .reduce((sum, player) => sum + (player.carriedTroops ?? 0), 0);
+  }, [state, me?.allianceId, carriedTroops]);
+
+  const allianceTotalTroops = allianceTileTroops + allianceCarriedTroops;
 
   const sortedPlayers = useMemo(() => {
     if (!state) {
@@ -169,6 +230,18 @@ export function PlayingHud({
   }, [state]);
 
   const totalHexes = useMemo(() => Object.keys(state?.grid ?? {}).length, [state]);
+  const escalationLevel = useMemo(() => {
+    if (!state?.dynamics?.timedEscalationEnabled || !state.gameStartedAt) {
+      return 0;
+    }
+
+    return Math.floor((currentTime - new Date(state.gameStartedAt).getTime()) / (30 * 60000));
+  }, [currentTime, state?.dynamics?.timedEscalationEnabled, state?.gameStartedAt]);
+  const underdogBoostActive = Boolean(
+    state?.dynamics?.underdogPactEnabled
+    && myAlliance?.underdogBoostUntil
+    && new Date(myAlliance.underdogBoostUntil).getTime() > currentTime,
+  );
 
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
@@ -202,7 +275,7 @@ export function PlayingHud({
   }
 
   return (
-    <div className="game-layout hud-active" ref={layoutRef}>
+    <div className="game-layout hud-active playing-hud-layout" ref={layoutRef}>
       <div className="top-status-bar">
         {locationError && !isHostBypass && <div className="top-warning-bar">📍 {locationError}</div>}
         {error && <div className="top-warning-bar">⚠️ {error}</div>}
@@ -239,13 +312,21 @@ export function PlayingHud({
                 <span className="stat-label">{t('game.you' as never, { defaultValue: 'You' })}</span>
               </div>
             )}
+            {me?.role && me.role !== 'None' && state.dynamics?.playerRolesEnabled && (
+              <div className="stat-item">
+                <span className="stat-value secondary" style={{ fontSize: '0.8rem' }}>
+                  {t(`roles.${me.role}.title` as never, { defaultValue: t(`phase4.role${me.role}` as never) })}
+                </span>
+                <span className="stat-label">{t('game.hudYourRole' as never)}</span>
+              </div>
+            )}
             <div className="stat-item">
-              <span className="stat-value primary">{me?.territoryCount || 0}</span>
+              <span className="stat-value primary">{myAlliance?.territoryCount ?? me?.territoryCount ?? 0}</span>
               <span className="stat-label">{t('game.hudLands')}</span>
             </div>
             <div className="stat-item">
               <span className="stat-value secondary stat-value-with-detail">
-                <span>{myTotalTroops}</span>
+                <span>{allianceTotalTroops}</span>
                 {carriedTroops > 0 && (
                   <span className="stat-value-detail" aria-label={t('game.carriedTroops')}>
                     (+{carriedTroops}🎒)
@@ -262,6 +343,20 @@ export function PlayingHud({
                 <span className="stat-label">{t('game.hudTimer')}</span>
               </div>
             )}
+            {state.dynamics?.timedEscalationEnabled && state.gameStartedAt && (
+              <div className="stat-item">
+                <span className="stat-value warning">
+                  ⚡ {escalationLevel}
+                </span>
+                <span className="stat-label">{t('game.escalationLevel' as never)}</span>
+              </div>
+            )}
+            {underdogBoostActive && (
+              <div className="stat-item">
+                <span className="stat-value" style={{ color: '#2ecc71' }}>💪</span>
+                <span className="stat-label">{t('game.underdogActive' as never)}</span>
+              </div>
+            )}
             {state.isRushHour && (
               <div className="stat-item">
                 <span className="stat-value warning">⚡</span>
@@ -275,7 +370,7 @@ export function PlayingHud({
         </div>
       </div>
 
-      <div className="map-area-wrapper">
+      <div className="map-area-wrapper map-area-wrapper--with-player-hud">
         <div className="map-container">
           {children}
         </div>
@@ -294,6 +389,7 @@ export function PlayingHud({
                 <span>1</span>
                 <input
                   type="range"
+                  data-testid="pickup-count-slider"
                   min={1}
                   max={pickupPrompt.max}
                   value={pickupCount}
@@ -303,10 +399,10 @@ export function PlayingHud({
                 />
                 <span>{pickupPrompt.max}</span>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>{pickupCount}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }} data-testid="pickup-count-display">{pickupCount}</div>
               <div className="hud-action-bar">
                 <button className="hud-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary" onClick={onConfirmPickup}>{t('game.confirm')}</button>
+                <button className="hud-btn primary" data-testid="pickup-confirm" onClick={onConfirmPickup}>{t('game.confirm')}</button>
               </div>
             </div>
           )}
@@ -318,6 +414,7 @@ export function PlayingHud({
                 <span>1</span>
                 <input
                   type="range"
+                  data-testid="reinforce-count-slider"
                   min={1}
                   max={reinforcePrompt.max}
                   value={reinforceCount}
@@ -327,10 +424,10 @@ export function PlayingHud({
                 />
                 <span>{reinforcePrompt.max}</span>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>{reinforceCount}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }} data-testid="reinforce-count-display">{reinforceCount}</div>
               <div className="hud-action-bar">
                 <button className="hud-btn" onClick={() => setReinforcePrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
+                <button className="hud-btn primary" data-testid="reinforce-confirm" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
               </div>
             </div>
           )}
@@ -343,6 +440,7 @@ export function PlayingHud({
                 <span>{attackPrompt.defenderTroops + 1}</span>
                 <input
                   type="range"
+                  data-testid="attack-count-slider"
                   min={attackPrompt.defenderTroops + 1}
                   max={attackPrompt.max}
                   value={attackCount}
@@ -352,12 +450,12 @@ export function PlayingHud({
                 />
                 <span>{attackPrompt.max}</span>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }} data-testid="attack-count-display">
                 {t('game.tileAction.deployCount', { count: attackCount })}
               </div>
               <div className="hud-action-bar">
                 <button className="hud-btn" onClick={() => setAttackPrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary" onClick={onConfirmAttack}>{t('game.confirm')}</button>
+                <button className="hud-btn primary" data-testid="attack-confirm" onClick={onConfirmAttack}>{t('game.confirm')}</button>
               </div>
             </div>
           )}
@@ -395,14 +493,47 @@ export function PlayingHud({
           <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
         </div>
         <div className="player-list">
-          {sortedPlayers.map((player) => (
-            <ScoreRow
-              key={player.id}
-              player={player}
-              totalHexes={totalHexes}
-              t={t}
-            />
-          ))}
+          {state.alliances.map((alliance) => {
+            const alliancePlayers = sortedPlayers.filter(p => p.allianceId === alliance.id);
+            if (alliancePlayers.length === 0) return null;
+            return (
+              <div key={alliance.id} style={{ marginBottom: '0.75rem' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '0.5rem 0.6rem', borderRadius: '0.4rem',
+                  background: 'rgba(255,255,255,0.06)', marginBottom: '0.25rem',
+                }}>
+                  <span style={{
+                    display: 'inline-block', width: 14, height: 14,
+                    borderRadius: '50%', background: alliance.color, flexShrink: 0,
+                  }} />
+                  <strong style={{ flex: 1 }}>{alliance.name}</strong>
+                  <span style={{ opacity: 0.7, fontSize: '0.85rem' }}>
+                    {alliance.territoryCount} {t('game.hudLands').toLowerCase()}
+                  </span>
+                </div>
+                {alliancePlayers.map(player => (
+                  <ScoreRow key={player.id} player={player} totalHexes={totalHexes} t={t} />
+                ))}
+              </div>
+            );
+          })}
+          {(() => {
+            const unallied = sortedPlayers.filter(p => !p.allianceId);
+            if (unallied.length === 0) return null;
+            return (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <div style={{
+                  padding: '0.5rem 0.6rem', opacity: 0.6, marginBottom: '0.25rem',
+                }}>
+                  <strong>{t('game.unallied' as never, { defaultValue: 'Unallied' })}</strong>
+                </div>
+                {unallied.map(player => (
+                  <ScoreRow key={player.id} player={player} totalHexes={totalHexes} t={t} />
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -420,25 +551,50 @@ export function PlayingHud({
           <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('players')}>
-            👥 {t('game.hudPlayers')}
-          </button>
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('log')}>
-            📜 {t('game.hudFeed')}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('players')}>
+              👥 {t('game.hudPlayers')}
+            </button>
+            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
+              {t('game.hudPlayersDesc' as never, { defaultValue: 'Scoreboard and player list' })}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('log')}>
+              📜 {t('game.hudActivityFeed')}
+            </button>
+            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
+              {t('game.hudFeedDesc' as never, { defaultValue: 'Game event history' })}
+            </span>
+          </div>
           <div className="menu-nav-separator" />
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={toggleSound}>
-            {soundEnabled ? '🔊' : '🔇'} {t('game.soundToggle')}
-          </button>
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('help')}>
-            ❓ {t('guidance.helpTitle')}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={toggleSound}>
+              {soundEnabled ? '🔊' : '🔇'} {t('game.soundToggle')}
+            </button>
+            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
+              {t('game.hudSoundDesc' as never, { defaultValue: 'Toggle sound effects' })}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('help')}>
+              ❓ {t('guidance.helpTitle')}
+            </button>
+            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
+              {t('game.hudHelpDesc' as never, { defaultValue: 'Rules and mechanics guide' })}
+            </span>
+          </div>
           <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('rules')}>
             📖 {t('rules.title')}
           </button>
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('displaySettings')}>
-            ⚙️ {t('settings.display.title')}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('displaySettings')}>
+              ⚙️ {t('settings.display.title')}
+            </button>
+            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
+              {t('game.hudDisplayDesc' as never, { defaultValue: 'Map layers and visual options' })}
+            </span>
+          </div>
           {isHost && onSetObserverMode && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <button className="btn-secondary" style={{ width: '100%' }} onClick={() => onSetObserverMode(true)}>
@@ -450,9 +606,27 @@ export function PlayingHud({
             </div>
           )}
           {debugToggle}
-          <button className="btn-secondary" style={{ width: '100%', color: 'var(--danger, #e74c3c)' }} onClick={onReturnToLobby}>
-            {t('game.returnToLobby')}
-          </button>
+          {!showReturnConfirm ? (
+            <button
+              className="btn-secondary"
+              style={{ width: '100%', color: 'var(--danger, #e74c3c)' }}
+              onClick={() => setShowReturnConfirm(true)}
+            >
+              {t('game.returnToLobby')}
+            </button>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.5rem', borderRadius: '0.5rem', background: 'rgba(231,76,60,0.1)' }}>
+              <span style={{ textAlign: 'center', fontWeight: 500 }}>{t('game.returnToLobbyConfirm' as never, { defaultValue: 'Leave the game? This cannot be undone.' })}</span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowReturnConfirm(false)}>
+                  {t('game.returnToLobbyConfirmNo' as never, { defaultValue: 'Stay' })}
+                </button>
+                <button className="btn-secondary" style={{ flex: 1, color: 'var(--danger, #e74c3c)' }} onClick={onReturnToLobby}>
+                  {t('game.returnToLobbyConfirmYes' as never, { defaultValue: 'Leave' })}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -493,6 +667,7 @@ export function PlayingHud({
         hasLocation={hasLocation}
         myUserId={myUserId}
         myAllianceId={me?.allianceId ?? undefined}
+        myAllianceName={myAlliance?.name}
         player={me}
         dynamics={state.dynamics}
         onActivateBeacon={onActivateBeacon ?? (() => {})}

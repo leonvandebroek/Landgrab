@@ -114,7 +114,7 @@ export function LocationStep({
                     {locationLoading || retryingGps ? t('lobby.locating') : t('wizard.locationGpsButton')}
                 </button>
 
-                {showGpsDeniedCard && (
+                {showGpsDeniedCard && !showManual && (
                     <div style={gpsDeniedCardStyle} role="alert" data-testid="location-gps-denied-card">
                         <div>
                             <h3 style={{ margin: 0 }}>{t('wizard.gpsDeniedTitle')}</h3>

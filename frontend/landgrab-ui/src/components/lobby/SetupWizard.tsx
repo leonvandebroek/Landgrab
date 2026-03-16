@@ -89,7 +89,10 @@ export function SetupWizard({
 
     const stepComplete = useMemo(() => ({
         location: gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
-        teams: gameState.alliances.length > 0 && gameState.players.length >= 2 && gameState.players.every(p => p.allianceId),
+        teams: gameState.alliances.length > 0
+            && gameState.players.length >= 2
+            && gameState.players.every(p => p.allianceId)
+            && gameState.players.every(p => p.isConnected),
         rules: true,
         dynamics: true,
         review: false,

@@ -1,5 +1,4 @@
 import type { MutableRefObject } from 'react';
-import i18n from '../../../i18n';
 import L from 'leaflet';
 import type { GameState, HexCell } from '../../../types/game';
 import type { MapLayerPreferences } from '../../../types/mapLayerPreferences';
@@ -271,10 +270,10 @@ function renderHexCell({
     fillOpacity,
   });
 
-  if (shouldShowHexTooltips) {
+  if (shouldShowHexTooltips && !isFogHidden) {
     polygon.bindTooltip(
-      isFogHidden ? i18n.t('phase7.hiddenHex') : buildHexTooltipHtml(cell, currentHex),
-      { sticky: true, className: isFogHidden ? '' : 'hex-tooltip-card' },
+      buildHexTooltipHtml(cell, currentHex),
+      { sticky: true, className: 'hex-tooltip-card' },
     );
   }
 

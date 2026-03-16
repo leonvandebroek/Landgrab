@@ -135,6 +135,8 @@ public sealed class RoomPersistenceService(
                         player.IsConnected = false;
                         player.CurrentLat = null;
                         player.CurrentLng = null;
+                        player.CurrentHexQ = null;
+                        player.CurrentHexR = null;
                     }
 
                     restoredRooms.Add(new GameRoom

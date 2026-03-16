@@ -418,7 +418,21 @@
 /* Make sure GameMap fills the remaining wrapper */
 .map-area-wrapper > .map-container {
   flex: 1;
+  min-height: 0;
   height: 100%;
+  box-sizing: border-box;
+}
+
+/* ── D3 fix: Reserve viewport space above the fixed PlayerHUD ──────────
+   See hud-updates.css for full rationale.  Mirrored here so both
+   stylesheets stay structurally consistent. */
+.map-area-wrapper--with-player-hud {
+  margin-bottom: var(--player-hud-h, 0px);
+  overflow: clip;
+}
+
+.map-area-wrapper--with-player-hud .bottom-hud-overlay {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 .bottom-hud-overlay {
@@ -455,4 +469,16 @@
 .toast-success {
   background: rgba(5, 150, 105, 0.9); /* emerald-600 */
   border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+.player-hud__relation--team {
+  background: rgba(46, 204, 113, 0.22);
+  color: #7ce7af;
+  border: 1px solid rgba(52, 152, 219, 0.38);
+}
+
+.player-hud__claimer {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  margin-left: 0.35rem;
 }

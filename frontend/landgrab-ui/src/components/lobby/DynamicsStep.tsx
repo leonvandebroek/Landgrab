@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
-import { DYNAMICS_PRESETS as PRESETS, COPRESENCE_MODES, FEATURE_KEYS, featureField } from '../../utils/dynamics';
+import { DYNAMICS_PRESETS as PRESETS, PRESET_MODES, COPRESENCE_MODES, FEATURE_KEYS, featureField } from '../../utils/dynamics';
 import type { FeatureKey } from '../../utils/dynamics';
 
 /* ── Component ────────────────────────────────────────────────────────── */
@@ -57,24 +57,30 @@ export function DynamicsStep({
                     <p className="wizard-hint">{t('dynamics.presetsDesc')}</p>
 
                     <div className="claim-mode-grid preset-grid">
-                        {PRESETS.map(preset => (
-                            <label
-                                key={preset}
-                                className={`claim-mode-option preset-option${activePreset === preset ? ' active' : ''}`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="dynamics-preset"
-                                    checked={activePreset === preset}
-                                    onChange={() => isHost && onSetCopresencePreset(preset)}
-                                    disabled={!isHost}
-                                />
-                                <span className="claim-mode-copy">
-                                    <strong>{t(`dynamics.preset.${preset}.title`)}</strong>
-                                    <span>{t(`dynamics.preset.${preset}.detail`)}</span>
-                                </span>
-                            </label>
-                        ))}
+                        {PRESETS.map(preset => {
+                            const modes = PRESET_MODES[preset];
+                            return (
+                                <label
+                                    key={preset}
+                                    className={`claim-mode-option preset-option${activePreset === preset ? ' active' : ''}`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="dynamics-preset"
+                                        checked={activePreset === preset}
+                                        onChange={() => isHost && onSetCopresencePreset(preset)}
+                                        disabled={!isHost}
+                                    />
+                                    <span className="claim-mode-copy">
+                                        <strong>{t(`dynamics.preset.${preset}.title`)}</strong>
+                                        <span>{t(`dynamics.preset.${preset}.detail`)}</span>
+                                        {modes.length > 0
+                                            ? <span className="preset-modes-preview">{t('dynamics.presetIncludes' as never)} {modes.map(mode => t(`dynamics.mode.${mode}.title` as never)).join(', ')}</span>
+                                            : <span className="preset-modes-preview">{t('dynamics.presetNoModes' as never)}</span>}
+                                    </span>
+                                </label>
+                            );
+                        })}
                     </div>
                 </div>
 

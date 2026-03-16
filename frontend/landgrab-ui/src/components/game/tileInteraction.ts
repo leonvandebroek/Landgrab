@@ -22,11 +22,13 @@ export interface TileAction {
   tone: 'primary' | 'danger' | 'neutral' | 'info';
   enabled: boolean;
   disabledReason?: string; // i18n key
+  disabledReasonParams?: Record<string, unknown>;
 }
 
 export function getTileActionDisabledReasonText(
   t: TFunction,
   disabledReason?: string,
+  params?: Record<string, unknown>,
 ): string | null {
   if (!disabledReason) {
     return null;
@@ -38,7 +40,7 @@ export function getTileActionDisabledReasonText(
     });
   }
 
-  return t(disabledReason as never);
+  return t(disabledReason as never, params);
 }
 
 /**
@@ -118,6 +120,29 @@ export function getTileActions({
 
   /* ── Enemy tile ── */
   if (isEnemy) {
+    const standoffActive = state.dynamics?.activeCopresenceModes?.includes('Standoff');
+
+    if (standoffActive) {
+      const hasEnemyPresence = state.players.some((otherPlayer) => (
+        otherPlayer.id !== player.id
+        && (!player.allianceId || otherPlayer.allianceId !== player.allianceId)
+        && otherPlayer.currentHexQ === targetHex[0]
+        && otherPlayer.currentHexR === targetHex[1]
+      ));
+
+      if (hasEnemyPresence) {
+        actions.push({
+          type: 'attack',
+          label: 'game.tileAction.attackBtn',
+          icon: '⚔️',
+          tone: 'danger',
+          enabled: false,
+          disabledReason: 'game.tileAction.standoffBlocked',
+        });
+        return actions;
+      }
+    }
+
     const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
     const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
     const rallyBonus = state.dynamics?.activeCopresenceModes?.includes('Rally') && targetCell.isFortified ? 1 : 0;
@@ -132,6 +157,7 @@ export function getTileActions({
       tone: 'danger',
       enabled: canAttack,
       disabledReason: canAttack ? undefined : 'game.tileAction.enemyAttackBlocked',
+      disabledReasonParams: canAttack ? undefined : { count: effectiveDefence },
     });
     return actions;
   }
@@ -166,6 +192,15 @@ export function getTileActions({
         type: 'reinforce',
         label: 'game.tileAction.reinforceBtn',
         icon: '🛡️',
+        tone: 'info',
+        enabled: true,
+      });
+    }
+    if (targetCell.troops > 0) {
+      actions.push({
+        type: 'pickup',
+        label: 'game.tileAction.pickupBtn',
+        icon: '🪖',
         tone: 'info',
         enabled: true,
       });
@@ -330,11 +365,29 @@ export function getTileInteractionStatus({
   const effectiveAttack = carriedTroops + attackerBonus;
   const effectiveDefence = targetCell.troops + defenderBonusVal + rallyBonus + fortBonus;
 
+  const standoffActive = state.dynamics?.activeCopresenceModes?.includes('Standoff');
+  if (standoffActive) {
+    const hasEnemyPresence = state.players.some((otherPlayer) => (
+      otherPlayer.id !== player.id
+      && (!player.allianceId || otherPlayer.allianceId !== player.allianceId)
+      && otherPlayer.currentHexQ === targetHex[0]
+      && otherPlayer.currentHexR === targetHex[1]
+    ));
+
+    if (hasEnemyPresence) {
+      return {
+        action: 'none',
+        tone: 'error',
+        message: t('game.tileAction.standoffBlocked')
+      };
+    }
+  }
+
   if (effectiveAttack <= effectiveDefence) {
     return {
       action: 'none',
       tone: 'error',
-      message: t('game.tileAction.enemyAttackBlocked', { count: targetCell.troops })
+      message: t('game.tileAction.enemyAttackBlocked', { count: effectiveDefence })
     };
   }
 

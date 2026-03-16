@@ -85,8 +85,8 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
                             onDistributePlayers={onDistributePlayers}
                         />
                         <AlliancePickerSection
-                            title={t('wizard.hostJoinAlliance')}
-                            hint={t('wizard.hostJoinAllianceDesc')}
+                            title={myAllianceId ? t('wizard.yourAllianceJoined' as never, { alliance: gameState.alliances.find(a => a.id === myAllianceId)?.name ?? '' }) : t('wizard.hostJoinAlliance')}
+                            hint={myAllianceId ? t('wizard.switchAllianceHint' as never) : t('wizard.hostJoinAllianceDesc')}
                             emptyHint={t('wizard.guestWaitingAlliances')}
                             gameState={gameState}
                             myAllianceId={myAllianceId}
@@ -95,8 +95,8 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
                     </>
                 ) : (
                     <AlliancePickerSection
-                        title={t('wizard.teamsAllianceTitle')}
-                        hint={t('wizard.guestPickAlliance')}
+                        title={myAllianceId ? t('wizard.yourAllianceJoined' as never, { alliance: gameState.alliances.find(a => a.id === myAllianceId)?.name ?? '' }) : t('wizard.teamsAllianceTitle')}
+                        hint={myAllianceId ? t('wizard.switchAllianceHint' as never) : t('wizard.guestPickAlliance')}
                         emptyHint={t('wizard.guestWaitingAlliances')}
                         gameState={gameState}
                         myAllianceId={myAllianceId}

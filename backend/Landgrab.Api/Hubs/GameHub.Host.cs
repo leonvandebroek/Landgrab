@@ -207,7 +207,8 @@ public partial class GameHub
             return;
         }
 
-        await BroadcastState(room.Code, state!);
+        await Clients.Group(room.Code).SendAsync("DynamicsChanged", state!.Dynamics);
+        await BroadcastState(room.Code, state);
     }
 
     public async Task SendHostMessage(string roomCode, string message, List<string>? targetAllianceIds)

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import type { GameState, CombatResult } from '../types/game';
+import type { GameState, CombatResult, GameDynamics } from '../types/game';
 
 const AUTO_RECONNECT_DELAYS = [0, 1000, 2000, 5000, 10000, 15000, 30000, 30000, 30000, 30000, 60000, 60000, 60000];
 const MANUAL_RECONNECT_DELAY_MS = 15000;
@@ -12,6 +12,8 @@ export interface GameEvents {
   onGameStarted?: (state: GameState) => void;
   onStateUpdated?: (state: GameState) => void;
   onCombatResult?: (result: CombatResult) => void;
+  onDrainTick?: (data: { q: number; r: number; troopsLost: number; allianceId: string | null }) => void;
+  onDynamicsChanged?: (dynamics: GameDynamics) => void;
   onGameOver?: (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => void;
   onTileLost?: (data: { Q: number; R: number; AttackerName: string }) => void;
   onGlobalHexUpdated?: (hex: unknown) => void;
@@ -131,6 +133,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('Error', (msg: string) => eventsRef.current.onError?.(msg));
     conn.on('HostMessage', (data: { message: string; fromHost: boolean }) => eventsRef.current.onHostMessage?.(data));
     conn.on('TemplateSaved', (data: { templateId: string; name: string }) => eventsRef.current.onTemplateSaved?.(data));
+    conn.on('DrainTick', (data: { q: number; r: number; troopsLost: number; allianceId: string | null }) => eventsRef.current.onDrainTick?.(data));
+    conn.on('DynamicsChanged', (dynamics: GameDynamics) => eventsRef.current.onDynamicsChanged?.(dynamics));
 
     conn.onreconnecting(() => {
       if (!disposed) {

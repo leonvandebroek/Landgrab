@@ -194,9 +194,10 @@ export function PlayerPanel({
         <div className="pickup-card">
           <h4>{t('game.pickUpTroops', { q: pickupPrompt.q, r: pickupPrompt.r })}</h4>
           <div className="range-field">
-            <span>{t('game.count')} <strong className="range-value">{pickupCount}</strong></span>
+            <span>{t('game.count')} <strong className="range-value" data-testid="pickup-count-display">{pickupCount}</strong></span>
             <input
               type="range"
+              data-testid="pickup-count-slider"
               min={1}
               max={pickupPrompt.max}
               value={pickupCount}
@@ -205,7 +206,7 @@ export function PlayerPanel({
           </div>
 
           <div className="pickup-actions">
-            <button type="button" className="btn-primary" onClick={onConfirmPickup}>{t('game.confirm')}</button>
+            <button type="button" className="btn-primary" data-testid="pickup-confirm" onClick={onConfirmPickup}>{t('game.confirm')}</button>
             <button type="button" className="btn-secondary" onClick={onCancelPickup}>{t('game.cancel')}</button>
           </div>
         </div>

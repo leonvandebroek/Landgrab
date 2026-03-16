@@ -261,6 +261,39 @@ export function useSignalRHandlers({
     onHostMessage: (data) => {
       useNotificationStore.getState().setHostMessage(data);
     },
+    onDrainTick: (data) => {
+      const { gameState: currentState, savedSession } = useGameStore.getState();
+      if (!currentState || !savedSession?.userId || !data.allianceId) {
+        return;
+      }
+
+      const myPlayer = currentState.players.find((player) => player.id === savedSession.userId);
+      if (!myPlayer?.allianceId || myPlayer.allianceId !== data.allianceId) {
+        return;
+      }
+
+      pushToast({
+        type: 'territory',
+        message: t('game.toast.drainTick' as never, { troops: data.troopsLost }),
+      });
+    },
+    onDynamicsChanged: (dynamics) => {
+      useGameStore.getState().updateGameState((currentState) => {
+        if (!currentState) {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          dynamics,
+        };
+      });
+
+      pushToast({
+        type: 'event',
+        message: t('game.dynamicsChanged' as never),
+      });
+    },
     onTemplateSaved: () => {
     },
     onReconnected: () => {

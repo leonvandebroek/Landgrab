@@ -7,6 +7,18 @@ public class GameplayService(
     GameStateService gameStateService,
     WinConditionService winConditionService)
 {
+    public sealed record DrainTickNotification(
+        int q,
+        int r,
+        int troopsLost,
+        string? allianceId,
+        string? allianceName);
+
+    public sealed record ReinforcementTickResult(
+        GameState? state,
+        string? error,
+        IReadOnlyList<DrainTickNotification> drainTicks);
+
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
@@ -34,8 +46,7 @@ public class GameplayService(
                 return (null, "Player not in room.");
 
             var previousPhase = room.State.Phase;
-            player.CurrentLat = lat;
-            player.CurrentLng = lng;
+            SetPlayerLocation(room.State, player, lat, lng);
 
             // ── Phase 3: Rally — update IsFortified for all hexes ──
             if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Rally))
@@ -211,8 +222,7 @@ public class GameplayService(
             player.CarriedTroops += count;
             player.CarriedTroopsSourceQ = q;
             player.CarriedTroopsSourceR = r;
-            player.CurrentLat = playerLat;
-            player.CurrentLng = playerLng;
+            SetPlayerLocation(room.State, player, playerLat, playerLng);
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
@@ -244,8 +254,7 @@ public class GameplayService(
             if (cell.IsMasterTile)
                 return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
-            player.CurrentLat = playerLat;
-            player.CurrentLng = playerLng;
+            SetPlayerLocation(room.State, player, playerLat, playerLng);
 
             // Silently downgrade self-claim to alliance claim when disallowed
             if (claimForSelf && !room.State.AllowSelfClaim)
@@ -499,16 +508,16 @@ public class GameplayService(
         }
     }
 
-    public (GameState? state, string? error) AddReinforcementsToAllHexes(string roomCode)
+    public ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode)
     {
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.");
+            return new ReinforcementTickResult(null, "Room not found.", []);
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Reinforcements only apply while the game is playing.");
+                return new ReinforcementTickResult(null, "Reinforcements only apply while the game is playing.", []);
 
             // Rush Hour auto-end: lasts only one regen cycle
             if (room.State.IsRushHour)
@@ -584,6 +593,8 @@ public class GameplayService(
                     connectedHexes.Add(HexService.Key(room.State.MasterTileQ.Value, room.State.MasterTileR.Value));
             }
 
+            var drainTicks = new List<DrainTickNotification>();
+
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
             {
                 // Drain: skip regen if hostile player physically present
@@ -593,7 +604,18 @@ public class GameplayService(
                     var hostilePresent = playersInHex.Any(p => p.Id != cell.OwnerId
                         && (cell.OwnerAllianceId == null || p.AllianceId != cell.OwnerAllianceId));
                     if (hostilePresent)
+                    {
+                        var affectedAlliance = cell.OwnerAllianceId == null
+                            ? null
+                            : room.State.Alliances.FirstOrDefault(alliance => alliance.Id == cell.OwnerAllianceId);
+                        drainTicks.Add(new DrainTickNotification(
+                            cell.Q,
+                            cell.R,
+                            0,
+                            affectedAlliance?.Id,
+                            affectedAlliance?.Name));
                         continue;
+                    }
                 }
 
                 // Phase 3: Shepherd — owned tile unvisited >3 min decays instead of regenerating
@@ -644,7 +666,7 @@ public class GameplayService(
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
-            return (snapshot, null);
+            return new ReinforcementTickResult(snapshot, null, drainTicks);
         }
     }
 
@@ -740,8 +762,7 @@ public class GameplayService(
         {
             var (hexLat, hexLng) = HexService.HexToLatLng(q, r,
                 state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters);
-            player.CurrentLat = hexLat;
-            player.CurrentLng = hexLng;
+            SetPlayerLocation(state, player, hexLat, hexLng);
         }
         else if (!HexService.IsPlayerInHex(playerLat, playerLng, q, r,
                 state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters))
@@ -750,17 +771,10 @@ public class GameplayService(
         return null;
     }
 
-    internal static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r)
-    {
-        if (!state.HasMapLocation)
-            return [];
-
-        return state.Players
-            .Where(player => player.CurrentLat != null && player.CurrentLng != null &&
-                             HexService.IsPlayerInHex(player.CurrentLat.Value, player.CurrentLng.Value,
-                                 q, r, state.MapLat!.Value, state.MapLng!.Value, state.TileSizeMeters))
+    internal static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r) =>
+        state.Players
+            .Where(player => player.CurrentHexQ == q && player.CurrentHexR == r)
             .ToList();
-    }
 
     internal static string? ValidateCoordinates(double lat, double lng)
     {
@@ -769,6 +783,29 @@ public class GameplayService(
         if (!double.IsFinite(lng) || lng < -180 || lng > 180)
             return "Longitude must be a finite number between -180 and 180.";
         return null;
+    }
+
+    internal static void SetPlayerLocation(GameState state, PlayerDto player, double? lat, double? lng)
+    {
+        player.CurrentLat = lat;
+        player.CurrentLng = lng;
+
+        if (!lat.HasValue || !lng.HasValue || !state.HasMapLocation)
+        {
+            player.CurrentHexQ = null;
+            player.CurrentHexR = null;
+            return;
+        }
+
+        var currentHex = HexService.LatLngToHexForRoom(
+            lat.Value,
+            lng.Value,
+            state.MapLat!.Value,
+            state.MapLng!.Value,
+            state.TileSizeMeters);
+
+        player.CurrentHexQ = currentHex.q;
+        player.CurrentHexR = currentHex.r;
     }
 
 

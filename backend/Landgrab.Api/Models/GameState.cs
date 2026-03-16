@@ -115,6 +115,8 @@ public class PlayerDto
     public int? CarriedTroopsSourceR { get; set; }
     public double? CurrentLat { get; set; }
     public double? CurrentLng { get; set; }
+    public int? CurrentHexQ { get; set; }
+    public int? CurrentHexR { get; set; }
     public bool IsHost { get; set; }
     public bool IsConnected { get; set; } = true;
     public int TerritoryCount { get; set; }

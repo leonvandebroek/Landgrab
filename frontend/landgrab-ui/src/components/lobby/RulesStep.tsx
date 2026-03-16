@@ -186,6 +186,8 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                                 className="btn-secondary"
                                 data-testid="rules-win-condition-apply-btn"
                                 onClick={applyWinCondition}
+                                disabled={winValueDraft === null}
+                                title={winValueDraft === null ? t('wizard.applyChangeHint' as never) : undefined}
                             >
                                 {t('lobby.apply')}
                             </button>
@@ -234,6 +236,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                                 data-testid="rules-max-footprint-apply-btn"
                                 onClick={applyMaxFootprint}
                                 disabled={!maxFootprintDraft}
+                                title={!maxFootprintDraft ? t('wizard.applyChangeHint' as never) : undefined}
                             >
                                 {t('lobby.apply')}
                             </button>

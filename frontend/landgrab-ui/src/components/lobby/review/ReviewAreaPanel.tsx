@@ -97,9 +97,6 @@ export function ReviewAreaPanel({
                 </div>
                 <div className="wizard-area-chip-stack">
                     <span className="wizard-area-saved-chip">{savedAreaSummary}</span>
-                    <span className="wizard-area-footprint-chip">
-                        {t('wizard.maximumAllowedFootprint' as never, { defaultValue: 'Maximum allowed footprint' })}
-                    </span>
                 </div>
             </div>
 

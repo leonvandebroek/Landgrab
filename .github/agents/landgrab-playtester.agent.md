@@ -1,6 +1,7 @@
 ---
 name: Landgrab Playtester
 description: Specialized multiplayer Landgrab playtester for deterministic gameplay validation and UX evidence collection.
+model: GPT-5.4 (copilot)
 tools:
   - shell
   - read

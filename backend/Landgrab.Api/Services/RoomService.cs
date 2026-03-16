@@ -287,6 +287,8 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
             player.IsConnected = false;
             player.CurrentLat = null;
             player.CurrentLng = null;
+            player.CurrentHexQ = null;
+            player.CurrentHexR = null;
             ReturnCarriedTroops(room.State, player);
             AppendEventLog(room.State, new GameEventLogEntry
             {

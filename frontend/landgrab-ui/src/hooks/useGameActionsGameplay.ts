@@ -49,12 +49,6 @@ export function useGameActionsGameplay({
   handleActivateCommandoRaid,
 }: UseGameActionsGameplayOptions): UseGameActionsGameplayResult {
   const selectedHex = useGameplayStore(state => state.selectedHex);
-  const pickupPrompt = useGameplayStore(state => state.pickupPrompt);
-  const pickupCount = useGameplayStore(state => state.pickupCount);
-  const reinforcePrompt = useGameplayStore(state => state.reinforcePrompt);
-  const reinforceCount = useGameplayStore(state => state.reinforceCount);
-  const attackPrompt = useGameplayStore(state => state.attackPrompt);
-  const attackCount = useGameplayStore(state => state.attackCount);
   const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
   const combatResult = useGameplayStore(state => state.combatResult);
   const setSelectedHex = useGameplayStore(state => state.setSelectedHex);
@@ -429,11 +423,14 @@ export function useGameActionsGameplay({
   }, [setMapFeedback, setSelectedHex]);
 
   const handleConfirmPickup = useCallback((): void => {
-    if (!pickupPrompt || !invoke) {
+    const currentPickupPrompt = useGameplayStore.getState().pickupPrompt;
+    const currentPickupCount = useGameplayStore.getState().pickupCount;
+
+    if (!currentPickupPrompt || !invoke) {
       return;
     }
 
-    const targetHex: [number, number] = [pickupPrompt.q, pickupPrompt.r];
+    const targetHex: [number, number] = [currentPickupPrompt.q, currentPickupPrompt.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
       return;
@@ -441,16 +438,16 @@ export function useGameActionsGameplay({
 
     clearError();
     setSelectedHex(targetHex);
-    invoke('PickUpTroops', pickupPrompt.q, pickupPrompt.r, pickupCount, coordinates.lat, coordinates.lng)
+    invoke('PickUpTroops', currentPickupPrompt.q, currentPickupPrompt.r, currentPickupCount, coordinates.lat, coordinates.lng)
       .then(() => {
         setPickupPrompt(null);
         playSound('pickup');
         setMapFeedback({
           tone: 'success',
           message: t('game.mapFeedback.pickedUp', {
-            count: pickupCount,
-            q: pickupPrompt.q,
-            r: pickupPrompt.r,
+            count: currentPickupCount,
+            q: currentPickupPrompt.q,
+            r: currentPickupPrompt.r,
           }),
           targetHex,
         });
@@ -468,8 +465,6 @@ export function useGameActionsGameplay({
     gameState,
     invoke,
     isHostBypass,
-    pickupCount,
-    pickupPrompt,
     playSound,
     setMapFeedback,
     setPickupPrompt,
@@ -478,11 +473,14 @@ export function useGameActionsGameplay({
   ]);
 
   const handleConfirmReinforce = useCallback(async (): Promise<void> => {
-    if (!reinforcePrompt || !invoke) {
+    const currentReinforcePrompt = useGameplayStore.getState().reinforcePrompt;
+    const currentReinforceCount = useGameplayStore.getState().reinforceCount;
+
+    if (!currentReinforcePrompt || !invoke) {
       return;
     }
 
-    const targetHex: [number, number] = [reinforcePrompt.q, reinforcePrompt.r];
+    const targetHex: [number, number] = [currentReinforcePrompt.q, currentReinforcePrompt.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
       return;
@@ -494,16 +492,16 @@ export function useGameActionsGameplay({
     try {
       await invoke(
         'PlaceTroops',
-        reinforcePrompt.q,
-        reinforcePrompt.r,
+        currentReinforcePrompt.q,
+        currentReinforcePrompt.r,
         coordinates.lat,
         coordinates.lng,
-        reinforceCount,
+        currentReinforceCount,
         false,
       );
       setMapFeedback({
         tone: 'success',
-        message: getPlaceSuccessMessage('reinforce', reinforcePrompt.q, reinforcePrompt.r, t),
+        message: getPlaceSuccessMessage('reinforce', currentReinforcePrompt.q, currentReinforcePrompt.r, t),
         targetHex,
       });
       playSound('reinforce');
@@ -524,8 +522,6 @@ export function useGameActionsGameplay({
     invoke,
     isHostBypass,
     playSound,
-    reinforceCount,
-    reinforcePrompt,
     setMapFeedback,
     setReinforcePrompt,
     setSelectedHex,
@@ -533,18 +529,21 @@ export function useGameActionsGameplay({
   ]);
 
   const handleConfirmAttack = useCallback(async (): Promise<void> => {
-    if (!attackPrompt || !invoke) {
+    const currentAttackPrompt = useGameplayStore.getState().attackPrompt;
+    const currentAttackCount = useGameplayStore.getState().attackCount;
+
+    if (!currentAttackPrompt || !invoke) {
       return;
     }
 
-    const targetHex: [number, number] = [attackPrompt.q, attackPrompt.r];
+    const targetHex: [number, number] = [currentAttackPrompt.q, currentAttackPrompt.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
       return;
     }
 
     try {
-      await invoke('PlaceTroops', attackPrompt.q, attackPrompt.r, coordinates.lat, coordinates.lng, attackCount, false);
+      await invoke('PlaceTroops', currentAttackPrompt.q, currentAttackPrompt.r, coordinates.lat, coordinates.lng, currentAttackCount, false);
       playSound('attack');
     } catch (error) {
       playSound('error');
@@ -552,7 +551,7 @@ export function useGameActionsGameplay({
     } finally {
       setAttackPrompt(null);
     }
-  }, [attackCount, attackPrompt, currentLocation, gameState, invoke, isHostBypass, playSound, setAttackPrompt, setMapFeedback]);
+  }, [currentLocation, gameState, invoke, isHostBypass, playSound, setAttackPrompt, setMapFeedback]);
 
   const handleCancelAttack = useCallback((): void => {
     setAttackPrompt(null);

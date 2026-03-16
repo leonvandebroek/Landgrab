@@ -26,9 +26,21 @@ public sealed class TroopRegenerationService(
                     if (room == null) continue;
                     if (room.State.IsPaused) continue;
 
-                    var (state, error) = gameService.AddReinforcementsToAllHexes(roomCode);
-                    if (error != null || state == null)
+                    var result = gameService.AddReinforcementsToAllHexes(roomCode);
+                    var state = result.state;
+                    if (result.error != null || state == null)
                         continue;
+
+                    foreach (var drainTick in result.drainTicks)
+                    {
+                        await hubContext.Clients.Group(roomCode).SendAsync("DrainTick", new
+                        {
+                            q = drainTick.q,
+                            r = drainTick.r,
+                            troopsLost = drainTick.troopsLost,
+                            allianceId = drainTick.allianceId
+                        }, stoppingToken);
+                    }
 
                     if (state.Dynamics.FogOfWarEnabled)
                     {

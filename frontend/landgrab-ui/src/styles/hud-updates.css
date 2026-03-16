@@ -129,7 +129,28 @@
 /* Make sure GameMap fills the remaining wrapper */
 .map-area-wrapper > .map-container {
   flex: 1;
+  min-height: 0;
   height: 100%;
+  box-sizing: border-box;
+}
+
+/* ── D3 fix: Reserve viewport space above the fixed PlayerHUD ──────────
+   Shrinks the wrapper via margin-bottom so the Leaflet map viewport (and
+   any beacon-pulse overflow) physically ends above the HUD bar.
+   overflow:clip creates a hard clipping boundary so scaled animations
+   (e.g. player-pulse-ring transform:scale(1.9)) cannot escape behind the
+   HUD.  Only applied in the PlayingHud context — HostControlPlane is
+   unaffected because its .map-area-wrapper does not carry this modifier. */
+.map-area-wrapper--with-player-hud {
+  margin-bottom: var(--player-hud-h, 0px);
+  overflow: clip;
+}
+
+/* Re-anchor the overlay to the new (shorter) wrapper bottom.
+   Only the safe-area inset is needed — the wrapper already accounts for
+   the HUD height so we no longer need the --player-hud-h offset here. */
+.map-area-wrapper--with-player-hud .bottom-hud-overlay {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 .bottom-hud-overlay {
