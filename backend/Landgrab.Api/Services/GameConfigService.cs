@@ -170,9 +170,6 @@ public class GameConfigService(IGameRoomProvider roomProvider, GameStateService 
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
             room.State.Dynamics.UnderdogPactEnabled = dynamics.UnderdogPactEnabled;
-            room.State.Dynamics.NeutralNPCEnabled = dynamics.NeutralNPCEnabled;
-            room.State.Dynamics.RandomEventsEnabled = dynamics.RandomEventsEnabled;
-            room.State.Dynamics.MissionSystemEnabled = dynamics.MissionSystemEnabled;
 
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);

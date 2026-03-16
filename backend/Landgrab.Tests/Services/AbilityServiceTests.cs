@@ -98,78 +98,6 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateStealth_WhenModeEnabled_SucceedsAndSnapshotHidesLocation()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Stealth)
-            .AddPlayer("p1", "Alice")
-            .WithPlayerPosition("p1", 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var beforeActivation = DateTime.UtcNow;
-
-        var result = context.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        result.error.Should().BeNull();
-        context.Player("p1").StealthUntil.Should().NotBeNull();
-        context.Player("p1").StealthCooldownUntil.Should().NotBeNull();
-        context.Player("p1").CurrentLat.Should().NotBeNull();
-        result.state!.Players.Single(player => player.Id == "p1").CurrentLat.Should().BeNull();
-        context.Player("p1").StealthUntil.Should().BeCloseTo(beforeActivation.AddMinutes(3), TimeSpan.FromSeconds(10));
-        context.Player("p1").StealthCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(8), TimeSpan.FromSeconds(10));
-    }
-
-    [Fact]
-    public void ActivateStealth_WhenModeIsDisabled_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Stealth mode is not active.");
-    }
-
-    [Fact]
-    public void ActivateStealth_WhenOnCooldown_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Stealth)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        state.Players.Single(player => player.Id == "p1").StealthCooldownUntil = DateTime.UtcNow.AddMinutes(1);
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Stealth is on cooldown.");
-    }
-
-    [Fact]
-    public void ActivateStealth_WhenAlreadyStealthed_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Stealth)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        state.Players.Single(player => player.Id == "p1").StealthUntil = DateTime.UtcNow.AddMinutes(1);
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Already stealthed.");
-    }
-
-    [Fact]
     public void ActivateCommandoRaid_OnValidTargetHex_Succeeds()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -294,58 +222,6 @@ public sealed class AbilityServiceTests
         placeResult.error.Should().BeNull();
         context.Cell(2, 0).OwnerId.Should().Be("p1");
         context.Cell(2, 0).Troops.Should().Be(1);
-    }
-
-    [Fact]
-    public void ActivateStealth_WhenCooldownIsJustBeforeExpiry_FailsAndJustAfterExpiry_Succeeds()
-    {
-        var beforeExpiryState = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Stealth)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        beforeExpiryState.Players.Single(player => player.Id == "p1").StealthCooldownUntil = DateTime.UtcNow.AddMilliseconds(200);
-        var beforeExpiryContext = new ServiceTestContext(beforeExpiryState);
-
-        var beforeExpiryResult = beforeExpiryContext.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        beforeExpiryResult.state.Should().BeNull();
-        beforeExpiryResult.error.Should().Be("Stealth is on cooldown.");
-
-        var afterExpiryState = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Stealth)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        afterExpiryState.Players.Single(player => player.Id == "p1").StealthCooldownUntil = DateTime.UtcNow.AddMilliseconds(-200);
-        var afterExpiryContext = new ServiceTestContext(afterExpiryState);
-
-        var afterExpiryResult = afterExpiryContext.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        afterExpiryResult.error.Should().BeNull();
-        afterExpiryContext.Player("p1").StealthUntil.Should().NotBeNull();
-        afterExpiryContext.Player("p1").StealthCooldownUntil.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void ActivateStealth_SetsExpectedActiveDurationAndCooldownWindow()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Stealth)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        var context = new ServiceTestContext(state);
-        var beforeActivation = DateTime.UtcNow;
-
-        var result = context.AbilityService.ActivateStealth(ServiceTestContext.RoomCode, "p1");
-
-        result.error.Should().BeNull();
-        var player = context.Player("p1");
-        player.StealthUntil.Should().NotBeNull();
-        player.StealthCooldownUntil.Should().NotBeNull();
-        player.StealthUntil!.Value.Should().BeCloseTo(beforeActivation.AddMinutes(3), TimeSpan.FromSeconds(10));
-        (player.StealthCooldownUntil!.Value - player.StealthUntil!.Value).TotalMinutes.Should().BeApproximately(5, 0.2);
     }
 
     [Fact]

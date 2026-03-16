@@ -11,9 +11,6 @@ const DEFAULT_GAME_DYNAMICS: GameDynamics = {
   hqEnabled: false,
   timedEscalationEnabled: false,
   underdogPactEnabled: false,
-  neutralNPCEnabled: false,
-  randomEventsEnabled: false,
-  missionSystemEnabled: false,
 };
 
 export function getErrorMessage(error: unknown): string {

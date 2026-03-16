@@ -5,8 +5,7 @@ namespace Landgrab.Api.Services;
 public class GameplayService(
     IGameRoomProvider roomProvider,
     GameStateService gameStateService,
-    WinConditionService winConditionService,
-    DuelService duelService)
+    WinConditionService winConditionService)
 {
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
@@ -14,30 +13,25 @@ public class GameplayService(
     private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
-    public (GameState? state, string? error, PendingDuel? newDuel,
-        (string payerId, int amount, int hexQ, int hexR)? tollPaid,
-        (string hunterId, string preyId, int reward)? preyCaught) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
-            return (null, error, null, null, null);
+            return (null, error);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.", null, null, null);
+            return (null, "Room not found.");
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Player locations are only tracked while the game is playing.", null, null, null);
+                return (null, "Player locations are only tracked while the game is playing.");
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
-                return (null, "Player not in room.", null, null, null);
-
-            (string payerId, int amount, int hexQ, int hexR)? tollPaidInfo = null;
-            (string hunterId, string preyId, int reward)? preyCaughtInfo = null;
+                return (null, "Player not in room.");
 
             var previousPhase = room.State.Phase;
             player.CurrentLat = lat;
@@ -68,62 +62,6 @@ public class GameplayService(
                         if (isTeamMember)
                             cell.LastVisitedAt = DateTime.UtcNow;
                     }
-                }
-            }
-
-            // ── Phase 3: Scout / VisitedHexes tracking — always record visited hexes for mission progress ──
-            if (room.State.HasMapLocation)
-            {
-                var currentHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var hexKey = HexService.Key(currentHex.q, currentHex.r);
-                var firstVisit = player.VisitedHexes.Add(hexKey);
-
-                // Scout bonus: first visit grants +2 troops to nearest owned tile (Scout mode only)
-                if (firstVisit && room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Scout))
-                {
-                    var nearestOwned = HexService.SpiralSearch(currentHex.q, currentHex.r, room.State.GridRadius)
-                        .Select(pos => room.State.Grid.TryGetValue(HexService.Key(pos.q, pos.r), out var c) ? c : null)
-                        .FirstOrDefault(c => c != null && (c.OwnerId == userId
-                            || (player.AllianceId != null && c.OwnerAllianceId == player.AllianceId)));
-                    if (nearestOwned != null)
-                    {
-                        nearestOwned.Troops += 2;
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "ScoutBonus",
-                            Message = $"{player.Name} scouted a new hex — +2 troops to ({nearestOwned.Q}, {nearestOwned.R}).",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            Q = nearestOwned.Q,
-                            R = nearestOwned.R
-                        });
-                    }
-                }
-            }
-
-            // Phase 4: Saboteur — on enemy hex → −1 troop (processed each location update)
-            if (room.State.Dynamics.PlayerRolesEnabled && player.Role == PlayerRole.Saboteur
-                && room.State.HasMapLocation)
-            {
-                var saboteurHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var saboteurKey = HexService.Key(saboteurHex.q, saboteurHex.r);
-                if (room.State.Grid.TryGetValue(saboteurKey, out var sabCell)
-                    && sabCell.OwnerId != null && sabCell.OwnerId != userId
-                    && (player.AllianceId == null || sabCell.OwnerAllianceId != player.AllianceId)
-                    && sabCell.Troops > 0)
-                {
-                    sabCell.Troops--;
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "SaboteurDrain",
-                        Message = $"{player.Name} (Saboteur) weakened enemy hex ({saboteurHex.q}, {saboteurHex.r}).",
-                        PlayerId = userId,
-                        PlayerName = player.Name,
-                        Q = saboteurHex.q,
-                        R = saboteurHex.r
-                    });
                 }
             }
 
@@ -159,43 +97,6 @@ public class GameplayService(
                 }
             }
 
-            // Phase 5: Toll — entering enemy-occupied hex where owner is present costs carried troops
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Toll)
-                && room.State.HasMapLocation && player.CarriedTroops > 0)
-            {
-                var tollHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var tollKey = HexService.Key(tollHex.q, tollHex.r);
-                if (room.State.Grid.TryGetValue(tollKey, out var tollCell)
-                    && tollCell.OwnerId != null && tollCell.OwnerId != userId
-                    && (player.AllianceId == null || tollCell.OwnerAllianceId != player.AllianceId))
-                {
-                    // Check if the owner is physically present
-                    var ownerPresent = GetPlayersInHex(room.State, tollHex.q, tollHex.r)
-                        .Any(p => p.Id == tollCell.OwnerId);
-                    if (ownerPresent)
-                    {
-                        var tollAmount = 1;
-                        player.CarriedTroops -= tollAmount;
-                        tollCell.Troops += tollAmount;
-                        if (player.CarriedTroops <= 0)
-                            ResetCarriedTroops(player);
-
-                        tollPaidInfo = (userId, tollAmount, tollHex.q, tollHex.r);
-
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "TollPaid",
-                            Message = $"{player.Name} paid a toll of {tollAmount} troop(s) at ({tollHex.q}, {tollHex.r}).",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            Q = tollHex.q,
-                            R = tollHex.r
-                        });
-                    }
-                }
-            }
-
             // Phase 5: Beacon auto-deactivate — if player moves >1 hex from beacon position
             if (player.IsBeacon && player.BeaconLat.HasValue && player.BeaconLng.HasValue
                 && room.State.HasMapLocation)
@@ -210,30 +111,6 @@ public class GameplayService(
                     player.IsBeacon = false;
                     player.BeaconLat = null;
                     player.BeaconLng = null;
-                }
-            }
-
-            // Phase 6: Stealth — breaks on hostile copresence
-            if (player.StealthUntil.HasValue && player.StealthUntil > DateTime.UtcNow
-                && room.State.HasMapLocation)
-            {
-                var stealthHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var playersInStealthHex = GetPlayersInHex(room.State, stealthHex.q, stealthHex.r);
-                var hostileNearby = playersInStealthHex.Any(p => p.Id != userId
-                    && (player.AllianceId == null || p.AllianceId != player.AllianceId));
-                if (hostileNearby)
-                {
-                    player.StealthUntil = null;
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "StealthBroken",
-                        Message = $"{player.Name}'s stealth was broken by hostile copresence!",
-                        PlayerId = userId,
-                        PlayerName = player.Name,
-                        Q = stealthHex.q,
-                        R = stealthHex.r
-                    });
                 }
             }
 
@@ -289,178 +166,46 @@ public class GameplayService(
                 }
             }
 
-            // Phase 6: JagerProoi — hostile enters prey's hex → penalty + rotate
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.JagerProoi)
-                && room.State.HasMapLocation)
-            {
-                var preyPlayer = room.State.Players.FirstOrDefault(p => p.IsPrey);
-                
-                // Auto-assign prey if none assigned yet
-                if (preyPlayer == null && room.State.Players.Count >= 2)
-                {
-                    preyPlayer = room.State.Players
-                        .OrderBy(p => p.TerritoryCount)
-                        .ThenBy(p => p.Id)
-                        .First();
-                    preyPlayer.IsPrey = true;
-                }
-
-                // TODO: Implement PreyEscaped event - needs escape condition design
-                // (e.g., prey stays alive for X minutes, or prey reaches a safe zone)
-                // Frontend expects: { preyId, reward }
-
-                if (preyPlayer != null && preyPlayer.Id != userId
-                    && preyPlayer.CurrentLat.HasValue && preyPlayer.CurrentLng.HasValue)
-                {
-                    var hunterHex = HexService.LatLngToHexForRoom(lat, lng,
-                        room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                    var preyHex = HexService.LatLngToHexForRoom(preyPlayer.CurrentLat.Value, preyPlayer.CurrentLng.Value,
-                        room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-
-                    if (hunterHex.q == preyHex.q && hunterHex.r == preyHex.r
-                        && (player.AllianceId == null || player.AllianceId != preyPlayer.AllianceId))
-                    {
-                        // Caught! Hunter gets +3 troops on nearest owned hex
-                        var reward = 3;
-                        var hunterNearestOwned = HexService.SpiralSearch(hunterHex.q, hunterHex.r, room.State.GridRadius)
-                            .Select(pos => room.State.Grid.TryGetValue(HexService.Key(pos.q, pos.r), out var c) ? c : null)
-                            .FirstOrDefault(c => c != null && (c.OwnerId == userId
-                                || (player.AllianceId != null && c.OwnerAllianceId == player.AllianceId)));
-                        if (hunterNearestOwned != null)
-                            hunterNearestOwned.Troops += reward;
-
-                        preyCaughtInfo = (userId, preyPlayer.Id, reward);
-
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "PreyCaught",
-                            Message = $"{player.Name} caught the prey ({preyPlayer.Name})! +{reward} bonus troops.",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            TargetPlayerId = preyPlayer.Id,
-                            TargetPlayerName = preyPlayer.Name,
-                            Q = hunterHex.q,
-                            R = hunterHex.r
-                        });
-
-                        // Rotate prey — next lowest territory player
-                        preyPlayer.IsPrey = false;
-                        var nextPrey = room.State.Players
-                            .Where(p => !p.IsPrey && p.Id != preyPlayer.Id)
-                            .OrderBy(p => p.TerritoryCount)
-                            .ThenBy(p => p.Id)
-                            .FirstOrDefault();
-                        if (nextPrey != null)
-                            nextPrey.IsPrey = true;
-                    }
-                }
-            }
-
-            // Phase 10: Duel — if hostile player just entered same hex, initiate a duel
-            PendingDuel? newDuel = null;
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Duel)
-                && room.State.HasMapLocation)
-            {
-                var duelHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var playersInDuelHex = GetPlayersInHex(room.State, duelHex.q, duelHex.r);
-                var hostileInHex = playersInDuelHex.FirstOrDefault(p => p.Id != userId
-                    && (player.AllianceId == null || p.AllianceId != player.AllianceId));
-                if (hostileInHex != null
-                    && !room.PendingDuels.Values.Any(d =>
-                        d.PlayerIds.Contains(userId) || d.PlayerIds.Contains(hostileInHex.Id)))
-                {
-                    newDuel = new PendingDuel
-                    {
-                        PlayerIds = [userId, hostileInHex.Id],
-                        TileQ = duelHex.q,
-                        TileR = duelHex.r,
-                        ExpiresAt = DateTime.UtcNow.AddSeconds(30)
-                    };
-                    room.PendingDuels[newDuel.Id] = newDuel;
-                }
-            }
-
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
-            return (snapshot, null, newDuel, tollPaidInfo, preyCaughtInfo);
+            return (snapshot, null);
         }
     }
 
-    public (GameState? state, string? error, AmbushResult? ambushResult) PickUpTroops(string roomCode, string userId,
+    public (GameState? state, string? error) PickUpTroops(string roomCode, string userId,
         int q, int r, int count, double playerLat, double playerLng)
     {
         if (count < 1)
-            return (null, "Pick-up count must be at least 1.", null);
+            return (null, "Pick-up count must be at least 1.");
 
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
-            return (null, error, null);
+            return (null, error);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.", null);
+            return (null, "Room not found.");
 
         if (room.State.IsPaused)
-            return (null, "Game is paused.", null);
+            return (null, "Game is paused.");
 
         lock (room.SyncRoot)
         {
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
-                return (null, validationError, null);
+                return (null, validationError);
             if (cell.IsMasterTile)
-                return (null, "The master tile cannot be used for troop pick-up.", null);
-            // Phase 5: Ambush — hostile presence cancels pickup and triggers troop loss
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Ambush))
-            {
-                var playersInHex = GetPlayersInHex(room.State, q, r);
-                var hostilePresent = playersInHex.FirstOrDefault(p => p.Id != userId
-                    && (player.AllianceId == null || p.AllianceId != player.AllianceId));
-                if (hostilePresent != null)
-                {
-                    // Ambush: lose 1 carried troop to the ambusher's tile
-                    var troopsLost = Math.Min(1, player.CarriedTroops);
-                    player.CarriedTroops -= troopsLost;
-                    if (player.CarriedTroops == 0)
-                        ResetCarriedTroops(player);
-
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "Ambush",
-                        Message = $"{hostilePresent.Name} ambushed {player.Name} at ({q}, {r})!",
-                        PlayerId = hostilePresent.Id,
-                        PlayerName = hostilePresent.Name,
-                        TargetPlayerId = userId,
-                        TargetPlayerName = player.Name,
-                        Q = q,
-                        R = r
-                    });
-
-                    var ambushSnapshot = SnapshotState(room.State);
-                    QueuePersistence(room, ambushSnapshot);
-                    return (ambushSnapshot, null, new AmbushResult
-                    {
-                        AttackerId = hostilePresent.Id,
-                        DefenderId = userId,
-                        Q = q,
-                        R = r,
-                        AttackerWon = true,
-                        TroopsLost = troopsLost,
-                        NewState = ambushSnapshot
-                    });
-                }
-            }
+                return (null, "The master tile cannot be used for troop pick-up.");
 
             if (cell.OwnerId != userId)
-                return (null, "You can only pick up troops from your own hexes.", null);
+                return (null, "You can only pick up troops from your own hexes.");
             if (cell.Troops < count)
-                return (null, "That hex does not have enough troops.", null);
+                return (null, "That hex does not have enough troops.");
             if (player.CarriedTroops > 0 &&
                 (player.CarriedTroopsSourceQ != q || player.CarriedTroopsSourceR != r))
-                return (null, "Place your carried troops before picking up from a different hex.", null);
+                return (null, "Place your carried troops before picking up from a different hex.");
 
             cell.Troops -= count;
             player.CarriedTroops += count;
@@ -471,7 +216,7 @@ public class GameplayService(
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
-            return (snapshot, null, null);
+            return (snapshot, null);
         }
     }
 
@@ -527,7 +272,6 @@ public class GameplayService(
 
             if (cell.OwnerId == userId || sameAllianceHex)
             {
-                // TODO: Phase 5 Relay — allow remote reinforce when ally is in adjacent hex
                 if (player.CarriedTroops <= 0)
                     return (null, "You are not carrying any troops.", null, null);
 
@@ -760,13 +504,9 @@ public class GameplayService(
             if (room.State.Phase != GamePhase.Playing)
                 return (null, "Reinforcements only apply while the game is playing.");
 
-            // Phase 8: Rush Hour auto-end after 5 minutes (simplified: check each regen tick)
-            if (room.State.IsRushHour && room.State.GameStartedAt.HasValue)
-            {
-                // Rush hour lasts ~5 minutes; reset it on any regen tick after that
-                // (RandomEventService sets it; we clear it after some ticks)
-                room.State.IsRushHour = false; // Simple: lasts only one regen cycle (~30s)
-            }
+            // Rush Hour auto-end: lasts only one regen cycle
+            if (room.State.IsRushHour)
+                room.State.IsRushHour = false;
 
             var drainEnabled = room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Drain);
             var terrainEnabled = room.State.Dynamics.TerrainEnabled;
@@ -895,71 +635,6 @@ public class GameplayService(
                 }
             }
 
-            // Phase 10: PresenceBattle — contest progress for hostile copresence
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.PresenceBattle))
-            {
-                foreach (var cell in room.State.Grid.Values.Where(c => c.OwnerId != null && !c.IsMasterTile))
-                {
-                    var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
-                    var hostilePlayers = playersInHex
-                        .Where(p => p.AllianceId != null
-                            ? p.AllianceId != (room.State.Players.FirstOrDefault(o => o.Id == cell.OwnerId)?.AllianceId)
-                            : p.Id != cell.OwnerId)
-                        .ToList();
-                    var friendlyPlayers = playersInHex
-                        .Where(p => p.Id == cell.OwnerId || (p.AllianceId != null && p.AllianceId == (room.State.Players.FirstOrDefault(o => o.Id == cell.OwnerId)?.AllianceId)))
-                        .ToList();
-
-                    if (hostilePlayers.Count > 0)
-                    {
-                        // Set contesting player if not already set
-                        cell.ContestingPlayerId ??= hostilePlayers[0].Id;
-
-                        // Shift progress: +0.1 per hostile, -0.1 per friendly, per tick
-                        var shift = (hostilePlayers.Count - friendlyPlayers.Count) * 0.1;
-                        cell.ContestProgress = Math.Clamp((cell.ContestProgress ?? 0) + shift, 0, 1.0);
-
-                        // Capture at 1.0
-                        if (cell.ContestProgress >= 1.0)
-                        {
-                            var contestor = room.State.Players.FirstOrDefault(p => p.Id == cell.ContestingPlayerId);
-                            if (contestor != null)
-                            {
-                                SetCellOwner(cell, contestor);
-                                AppendEventLog(room.State, new GameEventLogEntry
-                                {
-                                    Type = "PresenceBattle",
-                                    Message = $"{contestor.Name} captured ({cell.Q},{cell.R}) through presence!",
-                                    PlayerId = contestor.Id,
-                                    PlayerName = contestor.Name,
-                                    Q = cell.Q,
-                                    R = cell.R
-                                });
-                            }
-                            cell.ContestProgress = null;
-                            cell.ContestingPlayerId = null;
-                        }
-                    }
-                    else
-                    {
-                        // No hostile players — decay contest progress
-                        if (cell.ContestProgress.HasValue)
-                        {
-                            cell.ContestProgress = Math.Max(0, cell.ContestProgress.Value - 0.05);
-                            if (cell.ContestProgress <= 0)
-                            {
-                                cell.ContestProgress = null;
-                                cell.ContestingPlayerId = null;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Phase 10: Process hostage releases (before snapshot so changes are included)
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Hostage))
-                duelService.ProcessHostageReleases(room);
-
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
@@ -1053,10 +728,6 @@ public class GameplayService(
         if (!state.Grid.TryGetValue(HexService.Key(q, r), out var targetCell))
             return "Invalid hex.";
         cell = targetCell;
-
-        // Phase 10: Hostage — detained players cannot take actions
-        if (player.HeldByPlayerId != null)
-            return "You are detained and cannot take actions.";
 
         // GPS bypass — treat player as being at hex center when enabled
         if (player.IsHost && state.HostBypassGps)

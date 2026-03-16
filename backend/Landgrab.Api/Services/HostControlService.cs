@@ -2,9 +2,8 @@ using Landgrab.Api.Models;
 
 namespace Landgrab.Api.Services;
 
-public class HostControlService(IGameRoomProvider roomProvider, GameStateService gameStateService, ILogger<HostControlService> logger)
+public class HostControlService(IGameRoomProvider roomProvider, GameStateService gameStateService)
 {
-    private readonly ILogger<HostControlService> _logger = logger;
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
@@ -58,9 +57,6 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
             room.State.Dynamics.UnderdogPactEnabled = dynamics.UnderdogPactEnabled;
-            room.State.Dynamics.NeutralNPCEnabled = dynamics.NeutralNPCEnabled;
-            room.State.Dynamics.RandomEventsEnabled = dynamics.RandomEventsEnabled;
-            room.State.Dynamics.MissionSystemEnabled = dynamics.MissionSystemEnabled;
 
             var preset = dynamics.CopresencePreset;
             var isNamedPreset = preset != null && preset != "Aangepast";
@@ -70,12 +66,10 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             room.State.Dynamics.CopresencePreset = preset;
             if (isNamedPreset && CopresencePresets.TryGetValue(preset!, out var presetModes))
             {
-                // For named presets, derive modes from the authoritative server-side mapping
                 room.State.Dynamics.ActiveCopresenceModes = [.. presetModes];
             }
             else
             {
-                // For 'Aangepast' or unset, accept the client-provided list but reject CopresenceMode.None
                 room.State.Dynamics.ActiveCopresenceModes = [.. (dynamics.ActiveCopresenceModes ?? [])
                     .Where(m => m != CopresenceMode.None)];
             }
@@ -96,7 +90,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
         string eventType, int? targetQ, int? targetR, string? targetAllianceId)
     {
         var room = GetRoom(roomCode);
-        if (room == null)
+        if (room is null)
             return (null, "Room not found.");
 
         lock (room.SyncRoot)
@@ -118,11 +112,11 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                     }
 
                     target ??= room.State.Grid.Values
-                        .Where(c => c.OwnerId != null && !c.IsMasterTile && c.Troops > 0)
+                        .Where(c => c.OwnerId is not null && !c.IsMasterTile && c.Troops > 0)
                         .OrderBy(_ => Random.Shared.Next())
                         .FirstOrDefault();
 
-                    if (target != null)
+                    if (target is not null)
                     {
                         target.Troops = 0;
                         AppendEventLog(room.State, new GameEventLogEntry
@@ -138,11 +132,11 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
 
                 case "Epidemic":
                 {
-                    var targetAlliance = targetAllianceId != null
+                    var targetAlliance = targetAllianceId is not null
                         ? room.State.Alliances.FirstOrDefault(a => a.Id == targetAllianceId)
                         : room.State.Alliances.OrderByDescending(a => a.TerritoryCount).FirstOrDefault();
 
-                    if (targetAlliance != null)
+                    if (targetAlliance is not null)
                     {
                         var allianceHexes = room.State.Grid.Values
                             .Where(c => c.OwnerAllianceId == targetAlliance.Id && c.Troops > 0 && !c.IsMasterTile)
@@ -167,7 +161,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
 
                 case "BonusTroops":
                 {
-                    var targetAlliances = targetAllianceId != null
+                    var targetAlliances = targetAllianceId is not null
                         ? room.State.Alliances.Where(a => a.Id == targetAllianceId).ToList()
                         : room.State.Alliances.ToList();
 
@@ -175,11 +169,11 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                     {
                         var hex = room.State.Grid.Values
                             .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id && !c.IsMasterTile);
-                        if (hex != null)
+                        if (hex is not null)
                             hex.Troops += 2;
                     }
 
-                    var msg = targetAllianceId != null && targetAlliances.Count > 0
+                    var msg = targetAllianceId is not null && targetAlliances.Count > 0
                         ? $"Bonus Troops! {targetAlliances[0].Name} received +2 troops."
                         : "Bonus Troops! Every team received +2 troops.";
                     AppendEventLog(room.State, new GameEventLogEntry

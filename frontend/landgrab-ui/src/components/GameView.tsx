@@ -35,19 +35,10 @@ export interface GameViewActions {
   onCurrentHexAction: (actionType: TileActionType) => void;
   onDismissTileActions: () => void;
   onConfirmAttack: () => Promise<void>;
-  onAcceptDuel: (duelId: string) => Promise<void>;
-  onDeclineDuel: (duelId: string) => Promise<void>;
   onActivateBeacon: () => Promise<void>;
   onDeactivateBeacon: () => Promise<void>;
-  onActivateStealth: () => Promise<void>;
   onSetObserverMode: (enabled: boolean) => void;
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
-  onTriggerEvent: (
-    eventType: string,
-    targetQ?: number,
-    targetR?: number,
-    targetAllianceId?: string,
-  ) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
   onPauseGame: (paused: boolean) => void;
   onReClaimHex: (mode: ReClaimMode) => Promise<void>;
@@ -163,7 +154,6 @@ export function GameView({
             state={gameState}
             onSwitchToPlayer={() => actions.onSetObserverMode(false)}
             onUpdateDynamics={actions.onUpdateDynamicsLive}
-            onTriggerEvent={actions.onTriggerEvent}
             onSendMessage={actions.onSendHostMessage}
             onPauseGame={actions.onPauseGame}
             onReturnToLobby={actions.onReturnToLobby}
@@ -199,11 +189,8 @@ export function GameView({
           onCurrentHexAction={actions.onCurrentHexAction}
           onDismissTileActions={actions.onDismissTileActions}
           onConfirmAttack={actions.onConfirmAttack}
-          onAcceptDuel={actions.onAcceptDuel}
-          onDeclineDuel={actions.onDeclineDuel}
           onActivateBeacon={actions.onActivateBeacon}
           onDeactivateBeacon={actions.onDeactivateBeacon}
-          onActivateStealth={actions.onActivateStealth}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}

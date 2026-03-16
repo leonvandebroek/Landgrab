@@ -9,7 +9,7 @@ export function buildHexTooltipHtml(cell: HexCell, currentHex: [number, number] 
   const terrainName = terrainType !== 'None' ? escapeHtml(i18n.t(`terrain.${terrainType}` as never)) : '';
   const ownerColor = escapeHtml(cell.ownerColor ?? 'transparent');
   const fortInfo = cell.isFort ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">🏰</span>${escapeHtml(i18n.t('map.fort'))}</div>` : '';
-  const npcInfo = cell.ownerId === 'NPC' ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">🤖</span>${escapeHtml(i18n.t('map.npcLabel'))}</div>` : '';
+
   const distance = currentHex == null ? null : getHexDistance([cell.q, cell.r], currentHex);
   const distanceHtml = distance == null
     ? ''
@@ -25,7 +25,7 @@ export function buildHexTooltipHtml(cell: HexCell, currentHex: [number, number] 
       ${owner}${cell.isMasterTile ? ' 👑' : ''}
     </div>
     <div class="tooltip-stat"><span class="tooltip-stat-icon">⚔️</span>${cell.troops}</div>
-    ${fortInfo}${npcInfo}${distanceHtml}
+    ${fortInfo}${distanceHtml}
   </div>`;
 }
 

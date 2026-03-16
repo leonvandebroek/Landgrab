@@ -226,13 +226,13 @@ public sealed class GameConfigServiceTests
     {
         var (context, sut) = CreateContext();
 
-        var result = sut.SetCopresenceModes(ServiceTestContext.RoomCode, HostUserId, ["Standoff", "Ambush", "Relay"]);
+        var result = sut.SetCopresenceModes(ServiceTestContext.RoomCode, HostUserId, ["Standoff", "Rally"]);
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
-        result.state!.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Ambush, CopresenceMode.Relay);
+        result.state!.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
         result.state.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Ambush, CopresenceMode.Relay);
+        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
         context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
     }
 
@@ -272,20 +272,18 @@ public sealed class GameConfigServiceTests
     {
         var (context, sut) = CreateContext();
 
-        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Chaos");
+        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Territorium");
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
-        result.state!.Dynamics.CopresencePreset.Should().Be("Chaos");
+        result.state!.Dynamics.CopresencePreset.Should().Be("Territorium");
         result.state.Dynamics.ActiveCopresenceModes.Should().Equal(
-            CopresenceMode.JagerProoi,
-            CopresenceMode.Duel,
-            CopresenceMode.PresenceBonus);
-        context.State.Dynamics.CopresencePreset.Should().Be("Chaos");
+            CopresenceMode.Shepherd,
+            CopresenceMode.Drain);
+        context.State.Dynamics.CopresencePreset.Should().Be("Territorium");
         context.State.Dynamics.ActiveCopresenceModes.Should().Equal(
-            CopresenceMode.JagerProoi,
-            CopresenceMode.Duel,
-            CopresenceMode.PresenceBonus);
+            CopresenceMode.Shepherd,
+            CopresenceMode.Drain);
     }
 
     [Fact]
@@ -325,7 +323,7 @@ public sealed class GameConfigServiceTests
     {
         var (context, sut) = CreateContext(phase: GamePhase.Playing);
 
-        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Chaos");
+        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Territorium");
 
         result.state.Should().BeNull();
         result.error.Should().Be("Copresence preset can only be changed in the lobby.");
@@ -338,7 +336,7 @@ public sealed class GameConfigServiceTests
     {
         var (context, sut) = CreateContext(builder =>
         {
-            builder.WithCopresenceModes(CopresenceMode.Standoff, CopresenceMode.Relay);
+            builder.WithCopresenceModes(CopresenceMode.Standoff, CopresenceMode.Rally);
         });
         context.State.Dynamics.CopresencePreset = "Aangepast";
 
@@ -351,11 +349,8 @@ public sealed class GameConfigServiceTests
             HQEnabled = true,
             TimedEscalationEnabled = false,
             UnderdogPactEnabled = true,
-            NeutralNPCEnabled = false,
-            RandomEventsEnabled = true,
-            MissionSystemEnabled = false,
-            ActiveCopresenceModes = [CopresenceMode.Ambush],
-            CopresencePreset = "Chaos"
+            ActiveCopresenceModes = [CopresenceMode.Standoff],
+            CopresencePreset = "Territorium"
         };
 
         var result = sut.SetGameDynamics(ServiceTestContext.RoomCode, HostUserId, dynamics);
@@ -369,12 +364,9 @@ public sealed class GameConfigServiceTests
         result.state.Dynamics.HQEnabled.Should().BeTrue();
         result.state.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         result.state.Dynamics.UnderdogPactEnabled.Should().BeTrue();
-        result.state.Dynamics.NeutralNPCEnabled.Should().BeFalse();
-        result.state.Dynamics.RandomEventsEnabled.Should().BeTrue();
-        result.state.Dynamics.MissionSystemEnabled.Should().BeFalse();
-        result.state.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Relay);
+        result.state.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
         result.state.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Relay);
+        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
         context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
     }
 
@@ -391,10 +383,7 @@ public sealed class GameConfigServiceTests
             SupplyLinesEnabled = true,
             HQEnabled = true,
             TimedEscalationEnabled = true,
-            UnderdogPactEnabled = true,
-            NeutralNPCEnabled = true,
-            RandomEventsEnabled = true,
-            MissionSystemEnabled = true
+            UnderdogPactEnabled = true
         });
 
         result.state.Should().BeNull();
@@ -406,9 +395,6 @@ public sealed class GameConfigServiceTests
         context.State.Dynamics.HQEnabled.Should().BeFalse();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeFalse();
-        context.State.Dynamics.NeutralNPCEnabled.Should().BeFalse();
-        context.State.Dynamics.RandomEventsEnabled.Should().BeFalse();
-        context.State.Dynamics.MissionSystemEnabled.Should().BeFalse();
     }
 
     [Fact]

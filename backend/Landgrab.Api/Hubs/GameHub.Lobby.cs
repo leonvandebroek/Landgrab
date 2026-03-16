@@ -384,8 +384,8 @@ public partial class GameHub
     {
         if (modes == null ||
             modes.Count > MaxModesCount ||
-            modes.Any(mode => !ValidateEnumString<CopresenceMode>(mode) ||
-                Enum.Parse<CopresenceMode>(mode, true) == CopresenceMode.None))
+            modes.Any(mode => !IsRecognizedCopresenceMode(mode) ||
+                string.Equals(mode, nameof(CopresenceMode.None), StringComparison.OrdinalIgnoreCase)))
         {
             await SendError(InvalidRequestCode, "Invalid copresence modes.");
             return;
@@ -398,7 +398,12 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.SetCopresenceModes(room.Code, UserId, modes);
+        var supportedModes = modes
+            .Where(IsSupportedCopresenceMode)
+            .Select(mode => Enum.Parse<CopresenceMode>(mode, true))
+            .ToList();
+
+        var (state, error) = gameService.SetCopresenceModes(room.Code, UserId, supportedModes.Select(mode => mode.ToString()).ToList());
         if (error != null)
         {
             await SendError(error);
@@ -435,7 +440,14 @@ public partial class GameHub
 
     public async Task SetGameDynamics(GameDynamics dynamics)
     {
-        if (!ValidateGameDynamics(dynamics))
+        if (dynamics == null)
+        {
+            await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
+            return;
+        }
+
+        var sanitizedDynamics = SanitizeGameDynamics(dynamics);
+        if (!ValidateGameDynamics(sanitizedDynamics))
         {
             await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
             return;
@@ -448,7 +460,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.SetGameDynamics(room.Code, UserId, dynamics);
+        var (state, error) = gameService.SetGameDynamics(room.Code, UserId, sanitizedDynamics);
         if (error != null)
         {
             await SendError(error);
@@ -460,7 +472,7 @@ public partial class GameHub
 
     public async Task SetPlayerRole(string role)
     {
-        if (!ValidateEnumString<PlayerRole>(role))
+        if (!IsSupportedPlayerRole(role))
         {
             await SendError(InvalidRequestCode, "Invalid player role.");
             return;

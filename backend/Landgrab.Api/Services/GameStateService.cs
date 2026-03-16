@@ -67,10 +67,8 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
                 || (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId);
             if (!isOwned) continue;
 
-            // The owned hex itself is visible
             visible.Add(HexService.Key(cell.Q, cell.R));
 
-            // Add neighbors up to scoutExtension rings
             foreach (var neighbor in HexService.SpiralSearch(cell.Q, cell.R, scoutExtension))
             {
                 var nKey = HexService.Key(neighbor.q, neighbor.r);
@@ -79,7 +77,6 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             }
         }
 
-        // Player's current hex is always visible
         if (player.CurrentLat.HasValue && player.CurrentLng.HasValue && state.HasMapLocation)
         {
             var currentHex = HexService.LatLngToHexForRoom(player.CurrentLat.Value, player.CurrentLng.Value,
@@ -141,9 +138,7 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
                 : CreateHiddenFogCell(cell);
         }
 
-        var playerSnapshot = CreateSnapshotEnvelope(fullSnapshot, fogGrid);
-        playerSnapshot.Missions = GetVisibleMissions(fullSnapshot, userId);
-        return playerSnapshot;
+        return CreateSnapshotEnvelope(fullSnapshot, fogGrid);
     }
 
     public IReadOnlyDictionary<string, HexCell> CreateHiddenFogCellsForBroadcast(GameState fullSnapshot)
@@ -205,28 +200,12 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             WinnerName = fullSnapshot.WinnerName,
             IsAllianceVictory = fullSnapshot.IsAllianceVictory,
             Achievements = fullSnapshot.Achievements,
-            Missions = fullSnapshot.Missions,
             HostBypassGps = fullSnapshot.HostBypassGps,
             MaxFootprintMetersOverride = fullSnapshot.MaxFootprintMetersOverride,
             HostObserverMode = fullSnapshot.HostObserverMode,
             IsPaused = fullSnapshot.IsPaused,
-            PreyTargetQ = fullSnapshot.PreyTargetQ,
-            PreyTargetR = fullSnapshot.PreyTargetR,
-            IsRushHour = fullSnapshot.IsRushHour,
         };
     }
-
-    private static List<Mission> GetVisibleMissions(GameState fullSnapshot, string userId)
-    {
-        var player = fullSnapshot.Players.FirstOrDefault(p => p.Id == userId);
-
-        return fullSnapshot.Missions
-            .Where(m => m.Scope == "Main" || m.Scope == "Interim"
-                || (m.Scope == "Team" && m.TargetTeamId == player?.AllianceId)
-                || (m.Scope == "Personal" && m.TargetPlayerId == userId))
-            .ToList();
-    }
-
 
     /// <summary>Returns the list of player connection IDs that belong to the given alliance IDs.</summary>
     public List<string> GetAllianceConnectionIds(GameRoom room, List<string> allianceIds)

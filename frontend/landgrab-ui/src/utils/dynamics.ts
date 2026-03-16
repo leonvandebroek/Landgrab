@@ -1,8 +1,7 @@
 import type { CopresenceMode, GameDynamics } from '../types/game';
 
 export const DYNAMICS_PRESETS = [
-  'Klassiek', 'Territorium', 'Formatie', 'Logistiek',
-  'Infiltratie', 'Chaos', 'Tolweg', 'Aangepast',
+  'Klassiek', 'Territorium', 'Formatie', 'Aangepast',
 ] as const;
 
 export type DynamicsPreset = typeof DYNAMICS_PRESETS[number];
@@ -12,23 +11,17 @@ export const PRESET_MODES = {
   Klassiek: [],
   Territorium: ['Shepherd', 'Drain'],
   Formatie: ['FrontLine', 'Rally'],
-  Logistiek: ['Shepherd', 'Relay', 'FrontLine'],
-  Infiltratie: ['Stealth', 'CommandoRaid', 'Scout'],
-  Chaos: ['JagerProoi', 'Duel', 'PresenceBonus'],
-  Tolweg: ['Beacon', 'Toll', 'Drain'],
   Aangepast: [],
 } satisfies Record<DynamicsPreset, CopresenceMode[]>;
 
 export const COPRESENCE_MODES = [
-  'Standoff', 'PresenceBattle', 'PresenceBonus',
-  'Ambush', 'Toll', 'Duel', 'Rally', 'Drain',
-  'Stealth', 'Hostage', 'Scout', 'Beacon',
-  'FrontLine', 'Relay', 'JagerProoi', 'Shepherd', 'CommandoRaid',
+  'Standoff', 'PresenceBonus', 'Rally', 'Drain',
+  'Beacon', 'FrontLine', 'Shepherd', 'CommandoRaid',
 ] as const;
 
 export const FEATURE_KEYS = [
   'terrain', 'playerRoles', 'fogOfWar', 'supplyLines', 'hq',
-  'timedEscalation', 'underdogPact', 'neutralNPC', 'randomEvents', 'missionSystem',
+  'timedEscalation', 'underdogPact',
 ] as const;
 
 export type FeatureKey = typeof FEATURE_KEYS[number];
@@ -36,6 +29,3 @@ export type FeatureKey = typeof FEATURE_KEYS[number];
 /** Maps a feature key to its corresponding GameDynamics boolean field. */
 export const featureField = (key: FeatureKey): keyof GameDynamics =>
   `${key}Enabled` as keyof GameDynamics;
-
-export const EVENT_TYPES = ['Calamity', 'Epidemic', 'BonusTroops', 'RushHour'] as const;
-export type EventType = typeof EVENT_TYPES[number];

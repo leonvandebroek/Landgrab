@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { HexCell, Mission } from '../../types/game';
+import type { HexCell } from '../../types/game';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
 import { hexKey } from '../map/HexMath';
 import { useSound } from '../../hooks/useSound';
@@ -32,11 +32,8 @@ interface Props {
   onCurrentHexAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
   onConfirmAttack: () => void;
-  onAcceptDuel?: (duelId: string) => void;
-  onDeclineDuel?: (duelId: string) => void;
   onActivateBeacon?: () => void;
   onDeactivateBeacon?: () => void;
-  onActivateStealth?: () => void;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -60,11 +57,8 @@ export function PlayingHud({
   onCurrentHexAction,
   onDismissTileActions,
   onConfirmAttack,
-  onAcceptDuel,
-  onDeclineDuel,
   onActivateBeacon,
   onDeactivateBeacon,
-  onActivateStealth,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   currentPlayerName,
@@ -90,52 +84,48 @@ export function PlayingHud({
   const setPickupCount = useGameplayStore((store) => store.setPickupCount);
   const setAttackCount = useGameplayStore((store) => store.setAttackCount);
   const setAttackPrompt = useGameplayStore((store) => store.setAttackPrompt);
-  const randomEvent = useNotificationStore((store) => store.randomEvent);
-  const eventWarning = useNotificationStore((store) => store.eventWarning);
-  const missionNotification = useNotificationStore((store) => store.missionNotification);
-  const pendingDuel = useNotificationStore((store) => store.pendingDuel);
   const hostMessage = useNotificationStore((store) => store.hostMessage);
   const error = useUiStore((store) => store.error);
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
-  const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'missions' | 'help' | 'rules' | 'displaySettings' | null>(null);
+  const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
 
-  // Track PlayerHUD height so overlays/minimap stay clear of it
   useEffect(() => {
     const layout = layoutRef.current;
     if (!layout) return;
+
     const hud = layout.querySelector('.player-hud') as HTMLElement | null;
     if (!hud) return;
+
     const observer = new ResizeObserver(([entry]) => {
       layout.style.setProperty('--player-hud-h', `${Math.ceil(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height)}px`);
     });
+
     observer.observe(hud);
     return () => observer.disconnect();
   }, []);
 
-  // Game countdown timer for TimedGame win condition
   useEffect(() => {
     if (!state || !isTimedGame) return;
 
     const endTime = new Date(state.gameStartedAt!).getTime() + state.gameDurationMinutes! * 60 * 1000;
-
     const tick = () => {
       const remaining = Math.max(0, endTime - Date.now());
       setTimeRemaining(remaining);
     };
+
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [isTimedGame, state]);
 
-  // Derive displayed time — null when not a timed game
   const displayTimeRemaining = isTimedGame ? timeRemaining : null;
+  const me = state?.players.find((player) => player.id === myUserId);
 
-  const me = state?.players.find((p) => p.id === myUserId);
   const currentHexCell: HexCell | undefined = useMemo(() => {
     if (!state || !currentHex) {
       return undefined;
@@ -143,22 +133,17 @@ export function PlayingHud({
 
     return state.grid[hexKey(currentHex[0], currentHex[1])] ?? undefined;
   }, [currentHex, state]);
+
   const playerColor = me?.allianceColor ?? me?.color ?? '#4f8cff';
   const carriedTroops = me?.carriedTroops ?? 0;
   const isInOwnHex = Boolean(currentHexCell && me && currentHexCell.ownerId === me.id);
   const isHost = Boolean(me?.isHost);
 
-  const myMissions = useMemo(() => {
-    if (!state?.missions) return [];
-    return state.missions.filter(m => m.status === 'Active' || m.status === 'Completed');
-  }, [state]);
-
-  const activeMissionCount = myMissions.filter(m => m.status === 'Active').length;
-
   const myTotalTroops = useMemo(() => {
     if (!state || !me) return 0;
-    return Object.values(state.grid).reduce((sum, h) => {
-      return h.ownerId === me.id ? sum + h.troops : sum;
+
+    return Object.values(state.grid).reduce((sum, cell) => {
+      return cell.ownerId === me.id ? sum + cell.troops : sum;
     }, 0);
   }, [state, me]);
 
@@ -177,56 +162,30 @@ export function PlayingHud({
 
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt) return null;
-    const targetCell = selectedHex ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined : undefined;
+
+    const targetCell = selectedHex
+      ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
+      : undefined;
+
     return getTileInteractionStatus({
       state,
       player: me ?? null,
       targetHex: selectedHex,
       targetCell,
       currentHex,
-      t
+      t,
     });
-  }, [state, me, currentHex, selectedHex, t, pickupPrompt]);
+  }, [currentHex, me, pickupPrompt, selectedHex, state, t]);
 
-  // Resolve the target cell for TileInfoCard from selectedHex
   const selectedCell: HexCell | undefined = state && selectedHex
     ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
     : undefined;
 
   const showRemoteTileInfoCard = Boolean(
-    selectedHex &&
-    !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1]) &&
-    onDismissTileActions
+    selectedHex
+      && !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1])
+      && onDismissTileActions,
   );
-
-  const localizeMissionText = (key: string | undefined, defaultValue: string) => {
-    if (!key) {
-      return defaultValue;
-    }
-
-    const translated = String(t(key as never, { defaultValue }));
-    return translated.includes('{{') && translated.includes('}}') ? defaultValue : translated;
-  };
-
-  const getMissionTitle = (mission: Mission) => localizeMissionText(
-    mission.titleKey ? `missions.title.${mission.titleKey}` : undefined,
-    mission.title
-  );
-
-  const getMissionDescription = (mission: Mission) => localizeMissionText(
-    mission.descriptionKey || mission.titleKey
-      ? `missions.desc.${mission.descriptionKey || mission.titleKey}`
-      : undefined,
-    mission.description
-  );
-
-  const getMissionReward = (mission: Mission) => localizeMissionText(
-    mission.rewardKey ? `missions.reward.${mission.rewardKey}` : undefined,
-    mission.reward
-  );
-
-  const getMissionScope = (mission: Mission) => t(`missions.scope.${mission.scope}` as never, { defaultValue: mission.scope });
-  const getMissionStatus = (mission: Mission) => t(`missions.status.${mission.status}` as never, { defaultValue: mission.status });
 
   if (!state) {
     return null;
@@ -237,16 +196,6 @@ export function PlayingHud({
       <div className="top-status-bar">
         {locationError && <div className="top-warning-bar">📍 {locationError}</div>}
         {error && <div className="top-warning-bar">⚠️ {error}</div>}
-        {eventWarning && (
-          <div className="top-warning-bar event-warning">
-            ⚠️ {t('phase8.eventWarning' as never, { type: t(`phase8.eventType.${eventWarning.type}` as never) })}
-          </div>
-        )}
-        {randomEvent && (
-          <div className="top-warning-bar random-event">
-            🎲 {t(`phase8.eventType.${randomEvent.type}` as never)} — {randomEvent.description}
-          </div>
-        )}
         {state.isPaused && (
           <div className="top-warning-bar event-warning">
             ⏸ {t('observer.gamePaused' as never)}
@@ -257,12 +206,7 @@ export function PlayingHud({
             📢 {hostMessage.message}
           </div>
         )}
-        {me?.heldByPlayerId && (
-          <div className="top-warning-bar">
-            🔒 {t('phase10.detained' as never)}
-          </div>
-        )}
-        
+
         <div className="top-stats-row">
           <div className="hud-stats-flat">
             <div className="stat-item">
@@ -318,11 +262,11 @@ export function PlayingHud({
                   value={pickupCount}
                   aria-label={t('game.pickupPrompt')}
                   title={t('game.pickupPrompt')}
-                  onChange={(e) => setPickupCount(Number(e.target.value))}
+                  onChange={(event) => setPickupCount(Number(event.target.value))}
                 />
                 <span>{pickupPrompt.max}</span>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem'}}>{pickupCount}</div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>{pickupCount}</div>
               <div className="hud-action-bar">
                 <button className="hud-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
                 <button className="hud-btn primary" onClick={onConfirmPickup}>{t('game.confirm')}</button>
@@ -342,7 +286,7 @@ export function PlayingHud({
                   value={attackCount}
                   aria-label={t('game.tileAction.attackPrompt')}
                   title={t('game.tileAction.attackPrompt')}
-                  onChange={(e) => setAttackCount(Number(e.target.value))}
+                  onChange={(event) => setAttackCount(Number(event.target.value))}
                 />
                 <span>{attackPrompt.max}</span>
               </div>
@@ -372,23 +316,14 @@ export function PlayingHud({
           )}
 
           {interactionFeedback && !pickupPrompt && !attackPrompt && (
-             <div className={`hud-toast toast-${interactionFeedback.tone === 'error' ? 'danger' : interactionFeedback.tone === 'success' ? 'success' : 'info'}`}>
-               {interactionFeedback.message}
-             </div>
-          )}
-
-          {missionNotification && (
-            <div className={`hud-toast toast-${missionNotification.type === 'completed' ? 'success' : missionNotification.type === 'failed' ? 'danger' : 'info'}`}>
-              {missionNotification.type === 'assigned' && `📋 ${t('phase9.missionAssigned' as never)}: ${getMissionTitle(missionNotification.mission)}`}
-              {missionNotification.type === 'completed' && `✅ ${t('phase9.missionCompleted' as never)}: ${getMissionTitle(missionNotification.mission)}`}
-              {missionNotification.type === 'failed' && `❌ ${t('phase9.missionFailed' as never)}: ${getMissionTitle(missionNotification.mission)}`}
+            <div className={`hud-toast toast-${interactionFeedback.tone === 'error' ? 'danger' : interactionFeedback.tone === 'success' ? 'success' : 'info'}`}>
+              {interactionFeedback.message}
             </div>
           )}
 
           {toasts && onDismissToast && (
             <ToastManager toasts={toasts} onDismiss={onDismissToast} />
           )}
-
         </div>
       </div>
 
@@ -399,12 +334,12 @@ export function PlayingHud({
         </div>
         <div className="player-list">
           {sortedPlayers.map((player) => (
-             <ScoreRow
-               key={player.id}
-               player={player}
-               totalHexes={totalHexes}
-               t={t}
-             />
+            <ScoreRow
+              key={player.id}
+              player={player}
+              totalHexes={totalHexes}
+              t={t}
+            />
           ))}
         </div>
       </div>
@@ -426,11 +361,6 @@ export function PlayingHud({
           <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('players')}>
             👥 {t('game.hudPlayers')}
           </button>
-          {state.dynamics?.missionSystemEnabled && (
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('missions')}>
-              ✅ {t('phase9.missions' as never)}{activeMissionCount > 0 ? ` (${activeMissionCount})` : ''}
-            </button>
-          )}
           <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('log')}>
             📜 {t('game.hudFeed')}
           </button>
@@ -453,54 +383,12 @@ export function PlayingHud({
             </button>
           )}
           {debugToggle}
-          <button className="btn-secondary" style={{width: '100%', color: 'var(--danger, #e74c3c)'}} onClick={onReturnToLobby}>
+          <button className="btn-secondary" style={{ width: '100%', color: 'var(--danger, #e74c3c)' }} onClick={onReturnToLobby}>
             {t('game.returnToLobby')}
           </button>
         </div>
       </div>
 
-      <div className={`hud-modal-sheet ${activeModal === 'missions' ? 'open' : ''}`}>
-        <div className="hud-modal-header">
-          <h3>{t('phase9.missions' as never)}</h3>
-          <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
-          {myMissions.length === 0 ? (
-            <div style={{ textAlign: 'center', opacity: 0.6, padding: '1rem' }}>
-              {t('phase9.noMissions' as never)}
-            </div>
-          ) : (
-            myMissions.map(mission => (
-              <div key={mission.id} className="glass-panel" style={{ padding: '0.75rem', opacity: mission.status === 'Completed' ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                  <strong>{getMissionTitle(mission)}</strong>
-                  <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                    {mission.scope === 'Personal' ? '👤' : mission.scope === 'Team' ? '👥' : '🌍'} {getMissionScope(mission)}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.85rem', opacity: 0.8, marginBottom: '0.5rem' }}>{getMissionDescription(mission)}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', fontSize: '0.75rem', opacity: 0.7, marginBottom: '0.5rem' }}>
-                  <span>{getMissionScope(mission)}</span>
-                  <span>{getMissionStatus(mission)}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.15)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(100, mission.progress * 100)}%`, height: '100%', background: mission.status === 'Completed' ? '#2ecc71' : '#3498db', borderRadius: '3px', transition: 'width 0.3s' }} />
-                  </div>
-                  <span style={{ fontSize: '0.75rem', minWidth: '2.5rem', textAlign: 'right' }}>
-                    {mission.status === 'Completed' ? '✅' : `${Math.round(mission.progress * 100)}%`}
-                  </span>
-                </div>
-                {mission.reward && (
-                  <div style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.25rem' }}>
-                    🎁 {getMissionReward(mission)}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
       {activeModal === 'help' && (
         <HelpOverlay dynamics={state.dynamics} onClose={() => setActiveModal(null)} />
       )}
@@ -525,28 +413,9 @@ export function PlayingHud({
           </div>
         </div>
       )}
-      {pendingDuel && onAcceptDuel && onDeclineDuel && (
-        <div className="hud-modal-sheet open">
-          <div className="hud-modal-header">
-            <h3>⚔️ {t('phase10.duelChallenge' as never)}</h3>
-          </div>
-          <div style={{ padding: '1rem', textAlign: 'center' }}>
-            <p>{t('phase10.duelDescription' as never)}</p>
-            <p style={{ fontSize: '0.85rem', opacity: 0.7 }}>
-              {t('phase10.duelLocation' as never, { q: pendingDuel.tileQ, r: pendingDuel.tileR })}
-            </p>
-            <div className="hud-action-bar" style={{ marginTop: '1rem', justifyContent: 'center' }}>
-              <button className="hud-btn" onClick={() => onDeclineDuel(pendingDuel.id)}>
-                {t('phase10.declineDuel' as never)}
-              </button>
-              <button className="hud-btn primary" onClick={() => onAcceptDuel(pendingDuel.id)}>
-                {t('phase10.acceptDuel' as never)}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
       {debugPanel}
+
       <PlayerHUD
         actions={currentHexActions ?? []}
         onAction={onCurrentHexAction ?? (() => {})}
@@ -561,8 +430,8 @@ export function PlayingHud({
         dynamics={state.dynamics}
         onActivateBeacon={onActivateBeacon ?? (() => {})}
         onDeactivateBeacon={onDeactivateBeacon ?? (() => {})}
-        onActivateStealth={onActivateStealth ?? (() => {})}
       />
+
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (
         <MiniMap
           grid={state.grid}

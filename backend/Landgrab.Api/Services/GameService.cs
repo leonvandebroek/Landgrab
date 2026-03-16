@@ -11,7 +11,6 @@ public class GameService(
     GameConfigService gameConfigService,
     GameplayService gameplayService,
     AbilityService abilityService,
-    DuelService duelService,
     HostControlService hostControlService,
     GameStateService gameStateService,
     WinConditionService winConditionService)
@@ -68,18 +67,20 @@ public class GameService(
 
     public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId) => abilityService.ActivateBeacon(roomCode, userId);
     public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => abilityService.DeactivateBeacon(roomCode, userId);
-    public (GameState? state, string? error) ActivateStealth(string roomCode, string userId) => abilityService.ActivateStealth(roomCode, userId);
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
-    public (GameState? state, string? error, PendingDuel? newDuel, (string payerId, int amount, int hexQ, int hexR)? tollPaid, (string hunterId, string preyId, int reward)? preyCaught) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng) => gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);
-    public (GameState? state, string? error, AmbushResult? ambushResult) PickUpTroops(string roomCode, string userId, int q, int r, int count, double playerLat, double playerLng) => gameplayService.PickUpTroops(roomCode, userId, q, r, count, playerLat, playerLng);
+    public (GameState? state, string? error) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)
+    {
+        return gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);
+    }
+
+    public (GameState? state, string? error) PickUpTroops(string roomCode, string userId, int q, int r, int count, double playerLat, double playerLng)
+    {
+        return gameplayService.PickUpTroops(roomCode, userId, q, r, count, playerLat, playerLng);
+    }
+
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null, bool claimForSelf = false) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount, claimForSelf);
     public (GameState? state, string? error) ReClaimHex(string roomCode, string userId, int q, int r, ReClaimMode mode) => gameplayService.ReClaimHex(roomCode, userId, q, r, mode);
     public (GameState? state, string? error) AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
-    public PendingDuel? InitiateDuel(string roomCode, string challengerId, string targetId, int q, int r) => duelService.InitiateDuel(roomCode, challengerId, targetId, q, r);
-    public (bool success, string? winnerId, string? loserId) ResolveDuel(string roomCode, string duelId, bool accepted) => duelService.ResolveDuel(roomCode, duelId, accepted);
-    public (GameState? state, string? error) DetainPlayer(string roomCode, string detainerId, string targetId) => duelService.DetainPlayer(roomCode, detainerId, targetId);
-    public void ProcessHostageReleases(GameRoom room) => duelService.ProcessHostageReleases(room);
-    public void ProcessDuelExpiry(GameRoom room) => duelService.ProcessDuelExpiry(room);
 
     public void AppendEventLogPublic(GameState state, GameEventLogEntry entry) => gameStateService.AppendEventLog(state, entry);
     public GameState SnapshotStatePublic(GameState state) => gameStateService.SnapshotState(state);
@@ -89,7 +90,6 @@ public class GameService(
 
     public (GameState? state, string? error) SetHostObserverMode(string roomCode, string userId, bool enabled) => hostControlService.SetHostObserverMode(roomCode, userId, enabled);
     public (GameState? state, string? error) UpdateGameDynamicsLive(string roomCode, string userId, GameDynamics dynamics) => hostControlService.UpdateGameDynamicsLive(roomCode, userId, dynamics);
-    public (GameState? state, string? error) TriggerGameEvent(string roomCode, string userId, string eventType, int? targetQ, int? targetR, string? targetAllianceId) => hostControlService.TriggerGameEvent(roomCode, userId, eventType, targetQ, targetR, targetAllianceId);
     public (GameState? state, string? error) SendHostMessage(string roomCode, string userId, string message, List<string>? targetAllianceIds) => hostControlService.SendHostMessage(roomCode, userId, message, targetAllianceIds);
     public (GameState? state, string? error) PauseGame(string roomCode, string userId, bool paused) => hostControlService.PauseGame(roomCode, userId, paused);
 

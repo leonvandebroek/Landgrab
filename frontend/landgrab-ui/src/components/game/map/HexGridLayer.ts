@@ -305,13 +305,13 @@ function renderHexCell({
     }).addTo(layerGroup);
   }
 
-  if (shouldShowContestEffects && cell.contestProgress != null && cell.contestProgress > 0 && !isInactive && !isFogHidden) {
+  if (shouldShowContestEffects && cell.troops > 0 && cell.ownerId && isContested && !isInactive && !isFogHidden) {
     L.circle([centerLat, centerLng], {
       radius: state.tileSizeMeters * 0.3,
       color: '#e74c3c',
       weight: 3,
       fillColor: '#e74c3c',
-      fillOpacity: cell.contestProgress * 0.4,
+      fillOpacity: 0.2,
       interactive: false,
     }).addTo(layerGroup);
   }

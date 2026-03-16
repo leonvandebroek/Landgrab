@@ -32,7 +32,6 @@ builder.Services.AddSingleton<GameTemplateService>();
 builder.Services.AddSingleton<GameConfigService>();
 builder.Services.AddSingleton<LobbyService>();
 builder.Services.AddSingleton<AbilityService>();
-builder.Services.AddSingleton<DuelService>();
 builder.Services.AddSingleton<WinConditionService>();
 builder.Services.AddSingleton<GameplayService>();
 builder.Services.AddSingleton<HostControlService>();
@@ -43,8 +42,6 @@ builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
-builder.Services.AddHostedService<RandomEventService>();
-builder.Services.AddHostedService<MissionService>();
 builder.Services.AddHttpClient<TerrainFetchService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
@@ -150,12 +147,12 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)";
-    
+
     if (!app.Environment.IsDevelopment())
     {
         context.Response.Headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
     }
-    
+
     await next();
 });
 

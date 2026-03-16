@@ -2,7 +2,6 @@ using FluentAssertions;
 using Landgrab.Api.Models;
 using Landgrab.Api.Services;
 using Landgrab.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Landgrab.Tests.Services;
 
@@ -91,11 +90,8 @@ public sealed class HostControlServiceTests
             HQEnabled = true,
             TimedEscalationEnabled = true,
             UnderdogPactEnabled = true,
-            NeutralNPCEnabled = true,
-            RandomEventsEnabled = true,
-            MissionSystemEnabled = true,
             CopresencePreset = "Aangepast",
-            ActiveCopresenceModes = [CopresenceMode.None, CopresenceMode.Ambush, CopresenceMode.Duel]
+            ActiveCopresenceModes = [CopresenceMode.None, CopresenceMode.Standoff, CopresenceMode.Rally]
         };
 
         var result = service.UpdateGameDynamicsLive(ServiceTestContext.RoomCode, hostId, dynamics);
@@ -109,11 +105,8 @@ public sealed class HostControlServiceTests
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeTrue();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
-        context.State.Dynamics.NeutralNPCEnabled.Should().BeTrue();
-        context.State.Dynamics.RandomEventsEnabled.Should().BeTrue();
-        context.State.Dynamics.MissionSystemEnabled.Should().BeTrue();
         context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Ambush, CopresenceMode.Duel);
+        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
         context.State.EventLog.Should().ContainSingle(entry =>
             entry.Type == "HostAction" &&
             entry.Message == "Host updated game dynamics.");
@@ -131,19 +124,18 @@ public sealed class HostControlServiceTests
         var (context, service) = CreateService(state, hostId);
         var dynamics = new GameDynamics
         {
-            CopresencePreset = "Chaos",
-            ActiveCopresenceModes = [CopresenceMode.Relay]
+            CopresencePreset = "Territorium",
+            ActiveCopresenceModes = [CopresenceMode.Rally]
         };
 
         var result = service.UpdateGameDynamicsLive(ServiceTestContext.RoomCode, hostId, dynamics);
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
-        context.State.Dynamics.CopresencePreset.Should().Be("Chaos");
+        context.State.Dynamics.CopresencePreset.Should().Be("Territorium");
         context.State.Dynamics.ActiveCopresenceModes.Should().Equal(
-            CopresenceMode.JagerProoi,
-            CopresenceMode.Duel,
-            CopresenceMode.PresenceBonus);
+            CopresenceMode.Shepherd,
+            CopresenceMode.Drain);
     }
 
     [Fact]
@@ -205,175 +197,6 @@ public sealed class HostControlServiceTests
         result.state.Should().BeNull();
         result.error.Should().Be("Unknown copresence preset: UnknownPreset");
         context.State.Dynamics.CopresencePreset.Should().BeNull();
-        context.State.EventLog.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void TriggerGameEvent_CalamityWithExplicitTarget_RemovesAllTroopsFromHex()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .OwnHex(0, 0, hostId)
-            .WithTroops(0, 0, 5)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, hostId, "Calamity", 0, 0, null);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        context.Cell(0, 0).Troops.Should().Be(0);
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "RandomEvent" &&
-            entry.Message == "Calamity! Hex (0, 0) lost all troops." &&
-            entry.Q == 0 &&
-            entry.R == 0);
-    }
-
-    [Fact]
-    public void TriggerGameEvent_EpidemicWithTargetAlliance_ReducesTroopsAndLogsAlliance()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var allyId = Guid.NewGuid().ToString();
-        var enemyId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer(hostId, "Host", allyId)
-            .WithPlayerAsHost(hostId)
-            .AddPlayer(enemyId, "Enemy", "a2")
-            .AddAlliance(allyId, "Alpha", hostId)
-            .AddAlliance("a2", "Bravo", enemyId)
-            .OwnHex(1, 0, enemyId, "a2")
-            .WithTroops(1, 0, 4)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, hostId, "Epidemic", null, null, "a2");
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        context.Cell(1, 0).Troops.Should().Be(2);
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "RandomEvent" &&
-            entry.Message == "Epidemic! Bravo lost 2 troops at (1, 0)." &&
-            entry.AllianceId == "a2" &&
-            entry.AllianceName == "Bravo" &&
-            entry.Q == 1 &&
-            entry.R == 0);
-    }
-
-    [Fact]
-    public void TriggerGameEvent_BonusTroopsWithoutTargetAlliance_AddsTroopsToEveryAlliance()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var allyId = Guid.NewGuid().ToString();
-        var enemyId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer(hostId, "Host", allyId)
-            .WithPlayerAsHost(hostId)
-            .AddPlayer(enemyId, "Enemy", "a2")
-            .AddAlliance(allyId, "Alpha", hostId)
-            .AddAlliance("a2", "Bravo", enemyId)
-            .OwnHex(0, 0, hostId, allyId)
-            .WithTroops(0, 0, 1)
-            .OwnHex(1, 0, enemyId, "a2")
-            .WithTroops(1, 0, 3)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, hostId, "BonusTroops", null, null, null);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        context.Cell(0, 0).Troops.Should().Be(3);
-        context.Cell(1, 0).Troops.Should().Be(5);
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "RandomEvent" &&
-            entry.Message == "Bonus Troops! Every team received +2 troops.");
-    }
-
-    [Fact]
-    public void TriggerGameEvent_RushHour_SetsRushHourFlag()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, hostId, "RushHour", null, null, null);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        context.State.IsRushHour.Should().BeTrue();
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "RandomEvent" &&
-            entry.Message == "Rush Hour! Claimed hexes count double for 5 minutes.");
-    }
-
-    [Fact]
-    public void TriggerGameEvent_WhenRequesterIsNotHost_Fails()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var nonHostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .AddPlayer(nonHostId, "Guest")
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, nonHostId, "RushHour", null, null, null);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Only the host can trigger events.");
-        context.State.IsRushHour.Should().BeFalse();
-        context.State.EventLog.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void TriggerGameEvent_WhenGameIsNotPlaying_Fails()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithPhase(GamePhase.Lobby)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, hostId, "RushHour", null, null, null);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Events can only be triggered during gameplay.");
-        context.State.IsRushHour.Should().BeFalse();
-    }
-
-    [Fact]
-    public void TriggerGameEvent_WithUnknownEventType_Fails()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-
-        var result = service.TriggerGameEvent(ServiceTestContext.RoomCode, hostId, "Unknown", null, null, null);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Unknown event type: Unknown");
         context.State.EventLog.Should().BeEmpty();
     }
 
@@ -589,8 +412,7 @@ public sealed class HostControlServiceTests
         context.Room.HostUserId = Guid.Parse(hostId);
         var service = new HostControlService(
             context.RoomProvider.Object,
-            context.GameStateService,
-            NullLogger<HostControlService>.Instance);
+            context.GameStateService);
         return (context, service);
     }
 }

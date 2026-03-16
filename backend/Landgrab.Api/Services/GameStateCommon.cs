@@ -22,10 +22,6 @@ internal static class GameStateCommon
         ["Klassiek"] = [],
         ["Territorium"] = [CopresenceMode.Shepherd, CopresenceMode.Drain],
         ["Formatie"] = [CopresenceMode.FrontLine, CopresenceMode.Rally],
-        ["Logistiek"] = [CopresenceMode.Shepherd, CopresenceMode.Relay, CopresenceMode.FrontLine],
-        ["Infiltratie"] = [CopresenceMode.Stealth, CopresenceMode.CommandoRaid, CopresenceMode.Scout],
-        ["Chaos"] = [CopresenceMode.JagerProoi, CopresenceMode.Duel, CopresenceMode.PresenceBonus],
-        ["Tolweg"] = [CopresenceMode.Beacon, CopresenceMode.Toll, CopresenceMode.Drain],
     };
 
     internal static void AppendEventLog(GameState state, GameEventLogEntry entry)
@@ -55,26 +51,20 @@ internal static class GameStateCommon
                 CarriedTroops = player.CarriedTroops,
                 CarriedTroopsSourceQ = player.CarriedTroopsSourceQ,
                 CarriedTroopsSourceR = player.CarriedTroopsSourceR,
-                CurrentLat = player.StealthUntil.HasValue && player.StealthUntil > DateTime.UtcNow ? null : player.CurrentLat,
-                CurrentLng = player.StealthUntil.HasValue && player.StealthUntil > DateTime.UtcNow ? null : player.CurrentLng,
+                CurrentLat = player.CurrentLat,
+                CurrentLng = player.CurrentLng,
                 IsHost = player.IsHost,
                 IsConnected = player.IsConnected,
                 TerritoryCount = player.TerritoryCount,
-                VisitedHexes = [.. player.VisitedHexes],
                 Role = player.Role,
                 IsBeacon = player.IsBeacon,
                 BeaconLat = player.BeaconLat,
                 BeaconLng = player.BeaconLng,
-                StealthUntil = player.StealthUntil,
-                StealthCooldownUntil = player.StealthCooldownUntil,
                 IsCommandoActive = player.IsCommandoActive,
                 CommandoTargetQ = player.CommandoTargetQ,
                 CommandoTargetR = player.CommandoTargetR,
                 CommandoDeadline = player.CommandoDeadline,
-                CommandoCooldownUntil = player.CommandoCooldownUntil,
-                IsPrey = player.IsPrey,
-                HeldByPlayerId = player.HeldByPlayerId,
-                HeldUntil = player.HeldUntil
+                CommandoCooldownUntil = player.CommandoCooldownUntil
             }).ToList(),
             Alliances = state.Alliances.Select(alliance => new AllianceDto
             {
@@ -122,8 +112,6 @@ internal static class GameStateCommon
                     LastVisitedAt = entry.Value.LastVisitedAt,
                     EngineerBuiltAt = entry.Value.EngineerBuiltAt,
                     IsFort = entry.Value.IsFort,
-                    ContestProgress = entry.Value.ContestProgress,
-                    ContestingPlayerId = entry.Value.ContestingPlayerId,
                 }),
             MapLat = state.MapLat,
             MapLng = state.MapLng,
@@ -146,9 +134,6 @@ internal static class GameStateCommon
                 HQEnabled = state.Dynamics.HQEnabled,
                 TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
                 UnderdogPactEnabled = state.Dynamics.UnderdogPactEnabled,
-                NeutralNPCEnabled = state.Dynamics.NeutralNPCEnabled,
-                RandomEventsEnabled = state.Dynamics.RandomEventsEnabled,
-                MissionSystemEnabled = state.Dynamics.MissionSystemEnabled,
             },
             GameDurationMinutes = state.GameDurationMinutes,
             MasterTileQ = state.MasterTileQ,
@@ -169,27 +154,7 @@ internal static class GameStateCommon
             MaxFootprintMetersOverride = state.MaxFootprintMetersOverride,
             HostObserverMode = state.HostObserverMode,
             IsPaused = state.IsPaused,
-            PreyTargetQ = state.PreyTargetQ,
-            PreyTargetR = state.PreyTargetR,
-            IsRushHour = state.IsRushHour,
-            Missions = state.Missions.Select(m => new Mission
-            {
-                Id = m.Id,
-                Type = m.Type,
-                Title = m.Title,
-                TitleKey = m.TitleKey,
-                Description = m.Description,
-                DescriptionKey = m.DescriptionKey,
-                Scope = m.Scope,
-                TargetTeamId = m.TargetTeamId,
-                TargetPlayerId = m.TargetPlayerId,
-                Objective = m.Objective,
-                Progress = m.Progress,
-                Status = m.Status,
-                ExpiresAt = m.ExpiresAt,
-                Reward = m.Reward,
-                RewardKey = m.RewardKey
-            }).ToList()
+            IsRushHour = state.IsRushHour
         };
     }
 

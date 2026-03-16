@@ -18,7 +18,6 @@ public partial class GameHub
             return;
         }
 
-        // Fetch terrain data before starting (outside the game lock)
         if (room.State.Dynamics.TerrainEnabled && room.State.HasMapLocation)
         {
             await terrainFetchService.AssignTerrainToGrid(
@@ -181,7 +180,14 @@ public partial class GameHub
 
     public async Task UpdateGameDynamicsLive(string roomCode, GameDynamics dynamics)
     {
-        if (!ValidateRoomCode(roomCode) || !ValidateGameDynamics(dynamics))
+        if (dynamics == null)
+        {
+            await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
+            return;
+        }
+
+        var sanitizedDynamics = SanitizeGameDynamics(dynamics);
+        if (!ValidateRoomCode(roomCode) || !ValidateGameDynamics(sanitizedDynamics))
         {
             await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
             return;
@@ -194,7 +200,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.UpdateGameDynamicsLive(room.Code, UserId, dynamics);
+        var (state, error) = gameService.UpdateGameDynamicsLive(room.Code, UserId, sanitizedDynamics);
         if (error != null)
         {
             await SendError(error);
@@ -202,42 +208,6 @@ public partial class GameHub
         }
 
         await BroadcastState(room.Code, state!);
-    }
-
-    public async Task TriggerGameEvent(string roomCode, string eventType,
-        int? targetQ, int? targetR, string? targetAllianceId)
-    {
-        if (!ValidateRoomCode(roomCode) ||
-            !ValidateHostEventType(eventType) ||
-            (targetQ.HasValue != targetR.HasValue) ||
-            (targetQ.HasValue && !ValidateCoordRange(targetQ.Value, targetR!.Value)) ||
-            (targetAllianceId != null && !ValidateIdentifier(targetAllianceId)))
-        {
-            await SendError(InvalidRequestCode, "Invalid event request.");
-            return;
-        }
-
-        var room = gameService.GetRoomByConnection(Context.ConnectionId);
-        if (room == null || !string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
-        {
-            await SendError("ROOM_NOT_JOINED", "Not in a room.");
-            return;
-        }
-
-        var (state, error) = gameService.TriggerGameEvent(room.Code, UserId, eventType, targetQ, targetR, targetAllianceId);
-        if (error != null)
-        {
-            await SendError(error);
-            return;
-        }
-
-        await BroadcastState(room.Code, state!);
-        await Clients.Group(room.Code).SendAsync("RandomEvent", new
-        {
-            type = eventType,
-            title = eventType,
-            description = $"The host triggered a {eventType} event!"
-        });
     }
 
     public async Task SendHostMessage(string roomCode, string message, List<string>? targetAllianceIds)

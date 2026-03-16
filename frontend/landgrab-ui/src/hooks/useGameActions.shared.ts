@@ -60,11 +60,7 @@ export interface UseGameActionsResult {
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
   handleActivateBeacon: () => Promise<void>;
   handleDeactivateBeacon: () => Promise<void>;
-  handleActivateStealth: () => Promise<void>;
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
-  handleAcceptDuel: (duelId: string) => Promise<void>;
-  handleDeclineDuel: (duelId: string) => Promise<void>;
-  handleDetainPlayer: (targetPlayerId: string) => Promise<void>;
   handleSetMasterTile: (lat: number, lng: number) => void;
   handleSetMasterTileByHex: (q: number, r: number) => void;
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;
@@ -75,7 +71,6 @@ export interface UseGameActionsResult {
   handleReturnToLobby: () => void;
   handleSetObserverMode: (enabled: boolean) => void;
   handleUpdateDynamicsLive: (dynamics: GameDynamics) => void;
-  handleTriggerEvent: (eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => void;
   handleSendHostMessage: (message: string, allianceIds?: string[]) => void;
   handlePauseGame: (paused: boolean) => void;
   handleHexClick: (q: number, r: number, cell: HexCell | undefined) => void;

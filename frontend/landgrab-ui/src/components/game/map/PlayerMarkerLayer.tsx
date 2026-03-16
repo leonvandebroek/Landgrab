@@ -85,30 +85,6 @@ export function renderPlayerMarkers({
         offset: tooltipOffset,
         className: 'player-location-label',
       });
-
-      if (player.isPrey) {
-        L.circleMarker([player.currentLat, player.currentLng], {
-          radius: 12,
-          color: '#e74c3c',
-          weight: 2,
-          dashArray: '4 4',
-          fillColor: 'transparent',
-          fillOpacity: 0,
-          interactive: false,
-        }).addTo(layerGroup);
-      }
-
-      if (player.heldByPlayerId) {
-        L.circleMarker([player.currentLat, player.currentLng], {
-          radius: 14,
-          color: '#95a5a6',
-          weight: 3,
-          dashArray: '2 4',
-          fillColor: 'transparent',
-          fillOpacity: 0,
-          interactive: false,
-        }).addTo(layerGroup);
-      }
     }
 
     if (shouldShowPlayerRadius && player.id === myUserId) {

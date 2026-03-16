@@ -131,36 +131,6 @@ export function useSignalRHandlers({
 
       useUiStore.getState().setError(localizeLobbyError(message, t));
     },
-    onRandomEvent: (event) => {
-      useNotificationStore.getState().setRandomEvent(event);
-      pushToast({
-        type: 'event',
-        message: event.title,
-      });
-    },
-    onEventWarning: (event) => {
-      useNotificationStore.getState().setEventWarning(event);
-    },
-    onMissionAssigned: (mission) => {
-      useNotificationStore.getState().setMissionNotification({ mission, type: 'assigned' });
-    },
-    onMissionCompleted: (mission) => {
-      useNotificationStore.getState().setMissionNotification({ mission, type: 'completed' });
-      pushToast({
-        type: 'mission',
-        message: mission.title,
-        icon: '✅',
-      });
-    },
-    onMissionFailed: (mission) => {
-      useNotificationStore.getState().setMissionNotification({ mission, type: 'failed' });
-    },
-    onDuelChallenge: (duel) => {
-      useNotificationStore.getState().setPendingDuel(duel);
-    },
-    onDuelResult: () => {
-      useNotificationStore.getState().setPendingDuel(null);
-    },
     onHostMessage: (data) => {
       useNotificationStore.getState().setHostMessage(data);
     },

@@ -68,44 +68,6 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
         }
     }
 
-    public (GameState? state, string? error) ActivateStealth(string roomCode, string userId)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Stealth only works during gameplay.");
-            if (!room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Stealth))
-                return (null, "Stealth mode is not active.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-            if (player.StealthCooldownUntil.HasValue && player.StealthCooldownUntil > DateTime.UtcNow)
-                return (null, "Stealth is on cooldown.");
-            if (player.StealthUntil.HasValue && player.StealthUntil > DateTime.UtcNow)
-                return (null, "Already stealthed.");
-
-            player.StealthUntil = DateTime.UtcNow.AddMinutes(3);
-            player.StealthCooldownUntil = DateTime.UtcNow.AddMinutes(8); // 3 min active + 5 min cooldown
-
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "StealthActivated",
-                Message = $"{player.Name} activated stealth.",
-                PlayerId = userId,
-                PlayerName = player.Name
-            });
-
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
-
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR)
     {
         var room = GetRoom(roomCode);
@@ -127,7 +89,6 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
             if (player.CommandoCooldownUntil.HasValue && player.CommandoCooldownUntil > DateTime.UtcNow)
                 return (null, "Commando raid is on cooldown.");
 
-            // Validate target is within 3 hex distance of player
             if (player.CurrentLat.HasValue && player.CurrentLng.HasValue && room.State.HasMapLocation)
             {
                 var playerHex = HexService.LatLngToHexForRoom(player.CurrentLat.Value, player.CurrentLng.Value,

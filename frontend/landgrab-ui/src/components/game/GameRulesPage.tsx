@@ -71,24 +71,10 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
         </div>
       )}
 
-      {d?.missionSystemEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🎯 {t('rules.missions.title')}</h3>
-          <p className="rules-section-body">{t('rules.missions.body')}</p>
-        </div>
-      )}
-
       {d?.playerRolesEnabled && (
         <div className="rules-section">
           <h3 className="rules-section-title">🎭 {t('rules.roles.title')}</h3>
           <p className="rules-section-body">{t('rules.roles.body')}</p>
-        </div>
-      )}
-
-      {d?.randomEventsEnabled && (
-        <div className="rules-section">
-          <h3 className="rules-section-title">🎲 {t('rules.randomEvents.title')}</h3>
-          <p className="rules-section-body">{t('rules.randomEvents.body')}</p>
         </div>
       )}
 
@@ -119,7 +105,7 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
 
   if (isModal) {
     return (
-      <div className="hud-modal-sheet open rules-sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="hud-modal-sheet open rules-sheet" onClick={(event) => event.stopPropagation()}>
         <div className="hud-modal-header">
           <h3>{t('rules.title')}</h3>
           <button className="hud-modal-close" onClick={onContinue}>×</button>

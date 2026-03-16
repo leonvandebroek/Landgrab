@@ -24,11 +24,6 @@ public class HexCell
     // Phase 4: Engineer — permanent fort status
     public bool IsFort { get; set; }
 
-    // Phase 10: PresenceBattle — contest progress (0.0 to 1.0)
-    public double? ContestProgress { get; set; }
-
-    // Phase 10: PresenceBattle — who is contesting
-    public string? ContestingPlayerId { get; set; }
 }
 
 public class GlobalHex

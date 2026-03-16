@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PlayerRole } from '../../types/game';
 
-const ROLES: PlayerRole[] = ['None', 'Commander', 'Scout', 'Defender', 'Saboteur', 'Engineer'];
+const ROLES: PlayerRole[] = ['None', 'Commander', 'Scout', 'Defender', 'Engineer'];
 
 const ROLE_META: Record<PlayerRole, { emoji: string; labelKey: string; descriptionKey?: string }> = {
   None: {
@@ -23,11 +23,6 @@ const ROLE_META: Record<PlayerRole, { emoji: string; labelKey: string; descripti
     emoji: '🛡️',
     labelKey: 'phase4.roleDefender',
     descriptionKey: 'phase4.roleDefenderDesc'
-  },
-  Saboteur: {
-    emoji: '🕶️',
-    labelKey: 'phase4.roleSaboteur',
-    descriptionKey: 'phase4.roleSaboteurDesc'
   },
   Engineer: {
     emoji: '🛠️',

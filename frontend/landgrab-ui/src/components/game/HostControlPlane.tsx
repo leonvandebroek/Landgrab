@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
-import { DYNAMICS_PRESETS as PRESETS, PRESET_MODES, COPRESENCE_MODES, FEATURE_KEYS, EVENT_TYPES, featureField } from '../../utils/dynamics';
+import {
+  DYNAMICS_PRESETS as PRESETS,
+  PRESET_MODES,
+  COPRESENCE_MODES,
+  FEATURE_KEYS,
+  featureField,
+} from '../../utils/dynamics';
 import type { DynamicsPreset, FeatureKey } from '../../utils/dynamics';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
-
-/* ── Props ─────────────────────────────────────────────────────────── */
 
 interface Props {
   state: GameState;
   onSwitchToPlayer: () => void;
   onUpdateDynamics: (dynamics: GameDynamics) => void;
-  onTriggerEvent: (eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => void;
   onSendMessage: (message: string, allianceIds?: string[]) => void;
   onPauseGame: (paused: boolean) => void;
   onReturnToLobby: () => void;
@@ -20,13 +23,10 @@ interface Props {
   children?: React.ReactNode;
 }
 
-/* ── Component ─────────────────────────────────────────────────────── */
-
 export function HostControlPlane({
   state,
   onSwitchToPlayer,
   onUpdateDynamics,
-  onTriggerEvent,
   onSendMessage,
   onPauseGame,
   onReturnToLobby,
@@ -34,36 +34,24 @@ export function HostControlPlane({
   children,
 }: Props) {
   const { t } = useTranslation();
-  const [activePanel, setActivePanel] = useState<'scoreboard' | 'dynamics' | 'events' | 'messaging' | 'log' | 'menu' | null>(null);
+  const [activePanel, setActivePanel] = useState<'scoreboard' | 'dynamics' | 'messaging' | 'log' | 'menu' | null>(null);
   const [messageText, setMessageText] = useState('');
   const [selectedAlliances, setSelectedAlliances] = useState<string[]>([]);
-  const [confirmEvent, setConfirmEvent] = useState<string | null>(null);
-  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { dynamics } = state;
 
-  // Clean up confirm timer on unmount
-  useEffect(() => {
-    return () => {
-      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
-    };
-  }, []);
-
-  const sortedPlayers = useMemo(() =>
-    [...state.players].sort((a, b) => b.territoryCount - a.territoryCount),
-    [state.players]
+  const sortedPlayers = useMemo(
+    () => [...state.players].sort((a, b) => b.territoryCount - a.territoryCount),
+    [state.players],
   );
 
   const totalHexes = useMemo(() => Object.keys(state.grid).length, [state.grid]);
-
-  /* ── Dynamics handlers ──────────────────────────────────────────── */
 
   const handleFeatureToggle = useCallback((key: FeatureKey, checked: boolean) => {
     onUpdateDynamics({ ...dynamics, [featureField(key)]: checked });
   }, [dynamics, onUpdateDynamics]);
 
   const handlePresetChange = useCallback((preset: DynamicsPreset) => {
-    // For 'Aangepast', preserve the current modes; for named presets derive modes from PRESET_MODES
     const modes = preset === 'Aangepast'
       ? dynamics.activeCopresenceModes
       : PRESET_MODES[preset];
@@ -73,52 +61,31 @@ export function HostControlPlane({
   const handleModeToggle = useCallback((mode: CopresenceMode, checked: boolean) => {
     const next = checked
       ? [...dynamics.activeCopresenceModes, mode]
-      : dynamics.activeCopresenceModes.filter(m => m !== mode);
+      : dynamics.activeCopresenceModes.filter((currentMode) => currentMode !== mode);
     onUpdateDynamics({ ...dynamics, activeCopresenceModes: next });
   }, [dynamics, onUpdateDynamics]);
 
-  /* ── Event handlers ─────────────────────────────────────────────── */
-
-  const handleTriggerEvent = useCallback((eventType: string) => {
-    if (confirmEvent === eventType) {
-      onTriggerEvent(eventType);
-      setConfirmEvent(null);
-      if (confirmTimerRef.current) {
-        clearTimeout(confirmTimerRef.current);
-        confirmTimerRef.current = null;
-      }
-    } else {
-      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
-      setConfirmEvent(eventType);
-      confirmTimerRef.current = setTimeout(() => {
-        setConfirmEvent(null);
-        confirmTimerRef.current = null;
-      }, 3000);
-    }
-  }, [confirmEvent, onTriggerEvent]);
-
-  /* ── Messaging ──────────────────────────────────────────────────── */
-
   const handleSendMessage = useCallback(() => {
-    if (!messageText.trim()) return;
-    onSendMessage(messageText.trim(), selectedAlliances.length > 0 ? selectedAlliances : undefined);
+    const trimmedMessage = messageText.trim();
+    if (!trimmedMessage) return;
+
+    onSendMessage(trimmedMessage, selectedAlliances.length > 0 ? selectedAlliances : undefined);
     setMessageText('');
     setSelectedAlliances([]);
-  }, [messageText, selectedAlliances, onSendMessage]);
+  }, [messageText, onSendMessage, selectedAlliances]);
 
   const toggleAllianceSelection = useCallback((id: string) => {
-    setSelectedAlliances(prev =>
-      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-    );
+    setSelectedAlliances((currentSelection) => (
+      currentSelection.includes(id)
+        ? currentSelection.filter((allianceId) => allianceId !== id)
+        : [...currentSelection, id]
+    ));
   }, []);
-
-  /* ── Render ──────────────────────────────────────────────────────── */
 
   const activePreset = dynamics.copresencePreset ?? 'Klassiek';
 
   return (
     <div className="game-layout hud-active">
-      {/* Top bar */}
       <div className="top-status-bar">
         {error && <div className="top-warning-bar">⚠️ {error}</div>}
         {state.isPaused && (
@@ -148,11 +115,9 @@ export function HostControlPlane({
         </div>
       </div>
 
-      {/* Map area */}
       <div className="map-area-wrapper">
         <div className="map-container">{children}</div>
 
-        {/* Bottom action bar */}
         <div className="bottom-hud-overlay">
           <div className="hud-action-bar" style={{ pointerEvents: 'auto' }}>
             <button className="hud-btn" onClick={() => setActivePanel('scoreboard')}>
@@ -162,10 +127,6 @@ export function HostControlPlane({
             <button className="hud-btn" onClick={() => setActivePanel('dynamics')}>
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
               <span>{t('observer.dynamics' as never)}</span>
-            </button>
-            <button className="hud-btn" onClick={() => setActivePanel('events')}>
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-              <span>{t('observer.events' as never)}</span>
             </button>
             <button className="hud-btn" onClick={() => setActivePanel('messaging')}>
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
@@ -179,31 +140,28 @@ export function HostControlPlane({
         </div>
       </div>
 
-      {/* ── Scoreboard Panel ─────────────────────────────────────────── */}
       <div className={`hud-modal-sheet ${activePanel === 'scoreboard' ? 'open' : ''}`}>
         <div className="hud-modal-header">
           <h3>{t('observer.scoreboard' as never)}</h3>
           <button className="hud-modal-close" onClick={() => setActivePanel(null)}>×</button>
         </div>
         <div className="player-list">
-          {sortedPlayers.map(player => (
+          {sortedPlayers.map((player) => (
             <ScoreRow key={player.id} player={player} totalHexes={totalHexes} t={t} />
           ))}
         </div>
       </div>
 
-      {/* ── Dynamics Panel ────────────────────────────────────────────── */}
       <div className={`hud-modal-sheet ${activePanel === 'dynamics' ? 'open' : ''}`}>
         <div className="hud-modal-header">
           <h3>{t('observer.dynamics' as never)}</h3>
           <button className="hud-modal-close" onClick={() => setActivePanel(null)}>×</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
-          {/* Preset selector */}
           <div className="wizard-rule-card" style={{ margin: 0 }}>
             <h4>{t('dynamics.presetsLabel')}</h4>
             <div className="claim-mode-grid preset-grid">
-              {PRESETS.map(preset => (
+              {PRESETS.map((preset) => (
                 <label
                   key={preset}
                   className={`claim-mode-option preset-option${activePreset === preset ? ' active' : ''}`}
@@ -222,19 +180,18 @@ export function HostControlPlane({
             </div>
           </div>
 
-          {/* Custom copresence modes */}
           {activePreset === 'Aangepast' && (
             <div className="wizard-rule-card" style={{ margin: 0 }}>
               <h4>{t('dynamics.customLabel')}</h4>
               <div className="toggle-grid">
-                {COPRESENCE_MODES.map(mode => {
+                {COPRESENCE_MODES.map((mode) => {
                   const checked = dynamics.activeCopresenceModes.includes(mode);
                   return (
                     <label key={mode} className={`toggle-card${checked ? ' active' : ''}`}>
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={e => handleModeToggle(mode, e.target.checked)}
+                        onChange={(event) => handleModeToggle(mode, event.target.checked)}
                       />
                       <span className="toggle-card-copy">
                         <strong>{t(`dynamics.mode.${mode}.title`)}</strong>
@@ -246,15 +203,14 @@ export function HostControlPlane({
             </div>
           )}
 
-          {/* Feature toggles */}
           <div className="wizard-rule-card" style={{ margin: 0 }}>
             <h4>{t('dynamics.featuresLabel')}</h4>
-            {FEATURE_KEYS.map(key => (
+            {FEATURE_KEYS.map((key) => (
               <label key={key} className="toggle-row">
                 <input
                   type="checkbox"
                   checked={!!dynamics[featureField(key)]}
-                  onChange={e => handleFeatureToggle(key, e.target.checked)}
+                  onChange={(event) => handleFeatureToggle(key, event.target.checked)}
                 />
                 <span className="toggle-row-copy">
                   <strong>{t(`dynamics.feature.${key}`)}</strong>
@@ -266,31 +222,6 @@ export function HostControlPlane({
         </div>
       </div>
 
-      {/* ── Events Panel ──────────────────────────────────────────────── */}
-      <div className={`hud-modal-sheet ${activePanel === 'events' ? 'open' : ''}`}>
-        <div className="hud-modal-header">
-          <h3>{t('observer.events' as never)}</h3>
-          <button className="hud-modal-close" onClick={() => setActivePanel(null)}>×</button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem' }}>
-          {EVENT_TYPES.map(eventType => (
-            <button
-              key={eventType}
-              className={`observer-event-btn${confirmEvent === eventType ? ' confirming' : ''}`}
-              onClick={() => handleTriggerEvent(eventType)}
-            >
-              {confirmEvent === eventType
-                ? t('observer.confirmTrigger' as never, { event: t(`observer.trigger${eventType}` as never) })
-                : t(`observer.trigger${eventType}` as never)}
-            </button>
-          ))}
-          <p className="wizard-hint" style={{ textAlign: 'center', marginTop: '0.5rem' }}>
-            {t('observer.triggerHint' as never)}
-          </p>
-        </div>
-      </div>
-
-      {/* ── Messaging Panel ───────────────────────────────────────────── */}
       <div className={`hud-modal-sheet ${activePanel === 'messaging' ? 'open' : ''}`}>
         <div className="hud-modal-header">
           <h3>{t('observer.messaging' as never)}</h3>
@@ -300,7 +231,7 @@ export function HostControlPlane({
           <textarea
             className="observer-message-input"
             value={messageText}
-            onChange={e => setMessageText(e.target.value)}
+            onChange={(event) => setMessageText(event.target.value)}
             placeholder={t('observer.messagePlaceholder' as never)}
             maxLength={500}
             rows={3}
@@ -314,7 +245,7 @@ export function HostControlPlane({
               />
               <span className="toggle-row-copy"><strong>{t('observer.sendToAll' as never)}</strong></span>
             </label>
-            {state.alliances.map(alliance => (
+            {state.alliances.map((alliance) => (
               <label key={alliance.id} className="toggle-row">
                 <input
                   type="checkbox"
@@ -328,17 +259,12 @@ export function HostControlPlane({
               </label>
             ))}
           </div>
-          <button
-            className="btn-primary"
-            onClick={handleSendMessage}
-            disabled={!messageText.trim()}
-          >
+          <button className="btn-primary" onClick={handleSendMessage} disabled={!messageText.trim()}>
             {t('observer.send' as never)}
           </button>
         </div>
       </div>
 
-      {/* ── Event Log Panel ───────────────────────────────────────────── */}
       <div className={`hud-modal-sheet ${activePanel === 'log' ? 'open' : ''}`}>
         <div className="hud-modal-header">
           <h3>{t('observer.eventLog' as never)}</h3>
@@ -347,7 +273,6 @@ export function HostControlPlane({
         <GameEventLog events={state.eventLog} />
       </div>
 
-      {/* ── Menu Panel ────────────────────────────────────────────────── */}
       <div className={`hud-modal-sheet ${activePanel === 'menu' ? 'open' : ''}`}>
         <div className="hud-modal-header">
           <h3>{t('game.hudMenu')}</h3>

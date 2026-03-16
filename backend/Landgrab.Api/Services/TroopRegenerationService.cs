@@ -30,10 +30,6 @@ public sealed class TroopRegenerationService(
                     if (error != null || state == null)
                         continue;
 
-                    // Phase 10: Process duel expiry
-                    gameService.ProcessDuelExpiry(room);
-
-                    // Phase 7: Fog of War — per-player broadcasts
                     if (state.Dynamics.FogOfWarEnabled)
                     {
                         var hostObserverUserId = state.HostObserverMode

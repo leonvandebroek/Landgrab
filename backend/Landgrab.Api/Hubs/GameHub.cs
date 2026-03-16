@@ -39,12 +39,21 @@ public partial class GameHub : Hub
     private const string CustomCopresencePreset = "Aangepast";
     private static readonly ConcurrentDictionary<string, DateTime> _lastLocationUpdate = new();
     private static readonly TimeSpan UpdatePlayerLocationInterval = TimeSpan.FromMilliseconds(500);
-    private static readonly HashSet<string> AllowedHostEventTypes = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> RemovedCopresenceModes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Calamity",
-        "Epidemic",
-        "BonusTroops",
-        "RushHour"
+        "Duel",
+        "Stealth",
+        "Hostage",
+        "JagerProoi",
+        "Ambush",
+        "Toll",
+        "Scout",
+        "Relay",
+        "PresenceBattle"
+    };
+    private static readonly HashSet<string> RemovedPlayerRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Saboteur"
     };
 
     public GameHub(
@@ -93,7 +102,6 @@ public partial class GameHub : Hub
             await Clients.Group(roomCode).SendAsync(aliasEvent, state);
         }
 
-        // Phase 7: Fog of War — per-player filtered broadcasts during gameplay
         if (state.Dynamics.FogOfWarEnabled && state.Phase == GamePhase.Playing)
         {
             var room = gameService.GetRoom(roomCode);
@@ -168,12 +176,8 @@ public partial class GameHub : Hub
     private static bool ValidateCopresencePreset(string? preset) =>
         !string.IsNullOrWhiteSpace(preset) &&
         ValidateStringLength(preset, MaxShortStringLength) &&
-        (string.Equals(preset, CustomCopresencePreset, StringComparison.Ordinal) || LobbyService.CopresencePresets.ContainsKey(preset));
-
-    private static bool ValidateHostEventType(string? eventType) =>
-        !string.IsNullOrWhiteSpace(eventType) &&
-        ValidateStringLength(eventType, MaxIdentifierLength) &&
-        AllowedHostEventTypes.Contains(eventType);
+        (string.Equals(preset, CustomCopresencePreset, StringComparison.Ordinal) ||
+         (LobbyService.CopresencePresets.ContainsKey(preset) && !PresetContainsRemovedModes(preset)));
 
     private static bool ValidateGameDynamics(GameDynamics? dynamics)
     {
@@ -194,7 +198,57 @@ public partial class GameHub : Hub
 
         return dynamics.ActiveCopresenceModes.All(mode =>
             Enum.IsDefined(mode) &&
-            mode != CopresenceMode.None);
+            mode != CopresenceMode.None &&
+            !RemovedCopresenceModes.Contains(mode.ToString()));
+    }
+
+    private static bool IsSupportedPlayerRole(string? role) =>
+        ValidateEnumString<PlayerRole>(role) && !RemovedPlayerRoles.Contains(role!);
+
+    private static bool PresetContainsRemovedModes(string preset)
+    {
+        if (!LobbyService.CopresencePresets.TryGetValue(preset, out var presetModes))
+        {
+            return false;
+        }
+
+        return presetModes.Any(mode => RemovedCopresenceModes.Contains(mode.ToString()));
+    }
+
+    private static bool IsRecognizedCopresenceMode(string? mode) =>
+        !string.IsNullOrWhiteSpace(mode) &&
+        ValidateStringLength(mode, MaxShortStringLength) &&
+        (ValidateEnumString<CopresenceMode>(mode) || RemovedCopresenceModes.Contains(mode));
+
+    private static bool IsSupportedCopresenceMode(string? mode) =>
+        ValidateEnumString<CopresenceMode>(mode) &&
+        !string.Equals(mode, nameof(CopresenceMode.None), StringComparison.OrdinalIgnoreCase) &&
+        !RemovedCopresenceModes.Contains(mode!);
+
+    private static GameDynamics SanitizeGameDynamics(GameDynamics dynamics)
+    {
+        var sanitizedModes = dynamics.ActiveCopresenceModes
+            .Where(mode => mode != CopresenceMode.None && !RemovedCopresenceModes.Contains(mode.ToString()))
+            .ToList();
+
+        var preset = dynamics.CopresencePreset;
+        if (!string.IsNullOrWhiteSpace(preset) && PresetContainsRemovedModes(preset))
+        {
+            preset = CustomCopresencePreset;
+        }
+
+        return new GameDynamics
+        {
+            ActiveCopresenceModes = sanitizedModes,
+            CopresencePreset = preset,
+            TerrainEnabled = dynamics.TerrainEnabled,
+            PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
+            FogOfWarEnabled = dynamics.FogOfWarEnabled,
+            SupplyLinesEnabled = dynamics.SupplyLinesEnabled,
+            HQEnabled = dynamics.HQEnabled,
+            TimedEscalationEnabled = dynamics.TimedEscalationEnabled,
+            UnderdogPactEnabled = dynamics.UnderdogPactEnabled,
+        };
     }
 
     private string UserId => Context.User?.FindFirstValue(ClaimTypes.NameIdentifier)

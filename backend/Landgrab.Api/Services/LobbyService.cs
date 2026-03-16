@@ -63,7 +63,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == targetPlayerId);
             if (player == null)
-                return (null, "Target player is not in the room.");
+                return (null, "Target player is not in room.");
 
             if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
                 return (null, "Invalid hex.");
@@ -131,9 +131,6 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
 
             room.State.Phase = GamePhase.Playing;
             room.State.GameStartedAt = DateTime.UtcNow;
-
-            if (room.State.Dynamics.NeutralNPCEnabled)
-                AssignNeutralNpcHexes(room.State);
 
             var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
             AppendEventLog(room.State, new GameEventLogEntry
@@ -297,36 +294,5 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
             .Select(cell => (cell.Q, cell.R))
             .ToList();
-    }
-
-    private static void AssignNeutralNpcHexes(GameState state)
-    {
-        foreach (var cell in state.Grid.Values)
-        {
-            if (cell.TerrainType == TerrainType.Building && !cell.IsMasterTile && cell.OwnerId == null)
-            {
-                cell.OwnerId = "NPC";
-                cell.OwnerName = "NPC";
-                cell.OwnerColor = "#7f8c8d";
-                cell.Troops = 3;
-            }
-        }
-
-        if (state.Grid.Values.Any(cell => cell.OwnerId == "NPC"))
-            return;
-
-        var candidates = state.Grid.Values
-            .Where(cell => !cell.IsMasterTile && cell.OwnerId == null)
-            .OrderBy(_ => Random.Shared.Next())
-            .Take(Math.Max(1, state.Grid.Count / 10))
-            .ToList();
-
-        foreach (var cell in candidates)
-        {
-            cell.OwnerId = "NPC";
-            cell.OwnerName = "NPC";
-            cell.OwnerColor = "#7f8c8d";
-            cell.Troops = 3;
-        }
     }
 }

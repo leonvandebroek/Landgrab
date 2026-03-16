@@ -6,7 +6,6 @@ import type { UseGameActionsOptions } from './useGameActions.shared';
 interface UseGameActionsHostResult {
   handleSetObserverMode: (enabled: boolean) => void;
   handleUpdateDynamicsLive: (dynamics: GameDynamics) => void;
-  handleTriggerEvent: (eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string) => void;
   handleSendHostMessage: (message: string, allianceIds?: string[]) => void;
   handlePauseGame: (paused: boolean) => void;
 }
@@ -34,15 +33,6 @@ export function useGameActionsHost({
     invoke('UpdateGameDynamicsLive', activeRoomCode, dynamics).catch(cause => setError(String(cause)));
   }, [activeRoomCode, invoke, setError]);
 
-  const handleTriggerEvent = useCallback((eventType: string, targetQ?: number, targetR?: number, targetAllianceId?: string): void => {
-    if (!invoke || !activeRoomCode) {
-      return;
-    }
-
-    invoke('TriggerGameEvent', activeRoomCode, eventType, targetQ ?? null, targetR ?? null, targetAllianceId ?? null)
-      .catch(cause => setError(String(cause)));
-  }, [activeRoomCode, invoke, setError]);
-
   const handleSendHostMessage = useCallback((message: string, allianceIds?: string[]): void => {
     if (!invoke || !activeRoomCode) {
       return;
@@ -62,7 +52,6 @@ export function useGameActionsHost({
   return {
     handleSetObserverMode,
     handleUpdateDynamicsLive,
-    handleTriggerEvent,
     handleSendHostMessage,
     handlePauseGame,
   };

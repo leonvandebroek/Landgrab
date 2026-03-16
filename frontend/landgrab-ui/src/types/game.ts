@@ -6,14 +6,12 @@ export type GameAreaMode = 'Centered' | 'Drawn' | 'Pattern';
 export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starburst';
 
 export type CopresenceMode =
-  | 'None' | 'Standoff' | 'PresenceBattle' | 'PresenceBonus'
-  | 'Ambush' | 'Toll' | 'Duel' | 'Rally' | 'Drain'
-  | 'Stealth' | 'Hostage' | 'Scout' | 'Beacon'
-  | 'FrontLine' | 'Relay' | 'JagerProoi' | 'Shepherd' | 'CommandoRaid';
+  | 'None' | 'Standoff' | 'PresenceBonus' | 'Rally' | 'Drain'
+  | 'Beacon' | 'FrontLine' | 'Shepherd' | 'CommandoRaid';
 
 export type TerrainType = 'None' | 'Water' | 'Building' | 'Road' | 'Path' | 'Forest' | 'Park' | 'Hills' | 'Steep';
 
-export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Defender' | 'Saboteur' | 'Engineer';
+export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Defender' | 'Engineer';
 
 export interface GameDynamics {
   activeCopresenceModes: CopresenceMode[];
@@ -25,9 +23,6 @@ export interface GameDynamics {
   hqEnabled: boolean;
   timedEscalationEnabled: boolean;
   underdogPactEnabled: boolean;
-  neutralNPCEnabled: boolean;
-  randomEventsEnabled: boolean;
-  missionSystemEnabled: boolean;
 }
 
 export interface HexCoordinate {
@@ -73,9 +68,6 @@ export interface HexCell {
   // Phase 4: Engineer
   engineerBuiltAt?: string;
   isFort?: boolean;
-  // Phase 10: PresenceBattle
-  contestProgress?: number;
-  contestingPlayerId?: string;
 }
 
 export interface Player {
@@ -95,26 +87,16 @@ export interface Player {
   isWinner?: boolean;
   territoryCount: number;
   role?: PlayerRole;
-  // Phase 3: Scout
-  visitedHexes?: string[];
   // Phase 5: Beacon
   isBeacon?: boolean;
   beaconLat?: number;
   beaconLng?: number;
-  // Phase 6: Stealth
-  stealthUntil?: string;
-  stealthCooldownUntil?: string;
   // Phase 6: CommandoRaid
   isCommandoActive?: boolean;
   commandoTargetQ?: number;
   commandoTargetR?: number;
   commandoDeadline?: string;
   commandoCooldownUntil?: string;
-  // Phase 6: JagerProoi
-  isPrey?: boolean;
-  // Phase 10: Hostage
-  heldByPlayerId?: string;
-  heldUntil?: string;
 }
 
 export interface AllianceDto {
@@ -176,13 +158,8 @@ export interface GameState {
   winnerName?: string;
   isAllianceVictory: boolean;
   achievements?: Achievement[];
-  // Phase 6: JagerProoi
-  preyTargetQ?: number;
-  preyTargetR?: number;
   // Phase 8: Rush Hour
   isRushHour?: boolean;
-  // Phase 9: Missions
-  missions?: Mission[];
   // Host overrides
   hostBypassGps?: boolean;
   maxFootprintMetersOverride?: number | null;
@@ -214,51 +191,6 @@ export interface CombatResult {
   attackerBonus: number;
   defenderBonus: number;
   defenderTerrainType: TerrainType | null;
-}
-
-export interface Mission {
-  id: string;
-  type: string;
-  title: string;
-  titleKey?: string;
-  description: string;
-  descriptionKey?: string;
-  scope: 'Main' | 'Interim' | 'Team' | 'Personal';
-  targetTeamId?: string;
-  targetPlayerId?: string;
-  objective: string;
-  progress: number;
-  status: 'Active' | 'Completed' | 'Failed' | 'Expired';
-  expiresAt?: string;
-  reward: string;
-  rewardKey?: string;
-}
-
-export interface AmbushResult {
-  attackerId: string;
-  defenderId: string;
-  q: number;
-  r: number;
-  attackerWon: boolean;
-  troopsLost: number;
-  newState: GameState;
-}
-
-export interface PendingDuel {
-  id: string;
-  playerIds: string[];
-  tileQ: number;
-  tileR: number;
-  expiresAt: string;
-  accepted: boolean;
-}
-
-export interface RandomEvent {
-  id: string;
-  type: 'Calamity' | 'Epidemic' | 'DiplomaticOpening' | 'BonusTroops' | 'RushHour';
-  title: string;
-  description: string;
-  affectedHexes?: { q: number; r: number }[];
 }
 
 export interface AuthState {

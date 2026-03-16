@@ -7,7 +7,6 @@ interface AbilityBarProps {
   dynamics: GameDynamics;
   onActivateBeacon: () => void;
   onDeactivateBeacon: () => void;
-  onActivateStealth: () => void;
   commandoTargetingMode: boolean;
   onStartCommandoTargeting: () => void;
   onCancelCommandoTargeting: () => void;
@@ -71,7 +70,6 @@ export function AbilityBar({
   dynamics,
   onActivateBeacon,
   onDeactivateBeacon,
-  onActivateStealth,
   commandoTargetingMode,
   onStartCommandoTargeting,
   onCancelCommandoTargeting
@@ -81,11 +79,10 @@ export function AbilityBar({
 
   const modes = dynamics.activeCopresenceModes ?? [];
   const showBeacon = modes.includes('Beacon');
-  const showStealth = modes.includes('Stealth');
   const showCommando = modes.includes('CommandoRaid');
 
   const hasActiveCountdown = Boolean(
-    player.stealthUntil || player.stealthCooldownUntil || player.commandoDeadline || player.commandoCooldownUntil
+    player.commandoDeadline || player.commandoCooldownUntil
   );
 
   useEffect(() => {
@@ -95,7 +92,7 @@ export function AbilityBar({
     return () => clearInterval(interval);
   }, [hasActiveCountdown]);
 
-  if (!showBeacon && !showStealth && !showCommando) {
+  if (!showBeacon && !showCommando) {
     return null;
   }
 
@@ -111,34 +108,6 @@ export function AbilityBar({
           <span>{player.isBeacon ? t('phase5.beaconDeactivate' as never) : t('phase5.beaconActivate' as never)}</span>
         </button>
       )}
-
-      {showStealth && (() => {
-        const activeTime = formatCountdown(player.stealthUntil);
-        const cooldownTime = formatCountdown(player.stealthCooldownUntil);
-        const isActive = activeTime !== null;
-        const isOnCooldown = !isActive && cooldownTime !== null;
-
-        return (
-          <button
-            type="button"
-            onClick={!isActive && !isOnCooldown ? onActivateStealth : undefined}
-            disabled={isActive || isOnCooldown}
-            style={getPillStyle(isActive ? 'active' : isOnCooldown ? 'disabled' : 'default')}
-          >
-            <span>👻</span>
-            <span>
-              {isActive
-                ? t('phase6.stealthActive' as never, { time: activeTime })
-                : isOnCooldown
-                  ? t('phase6.stealthCooldown' as never)
-                  : t('phase6.stealthActivate' as never)}
-            </span>
-            {isOnCooldown && cooldownTime && (
-              <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>{cooldownTime}</span>
-            )}
-          </button>
-        );
-      })()}
 
       {showCommando && (() => {
         const deadlineTime = formatCountdown(player.commandoDeadline);

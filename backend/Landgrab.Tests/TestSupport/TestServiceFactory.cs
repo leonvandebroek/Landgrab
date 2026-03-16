@@ -27,7 +27,7 @@ internal sealed class TestServiceFactory
 
     /// <summary>
     /// Registers a GameRoom with pre-built GameState.
-    /// Returns the room so tests can inspect PendingDuels, ConnectionMap, etc.
+    /// Returns the room so tests can inspect ConnectionMap, etc.
     /// </summary>
     public GameRoom RegisterRoom(GameState state, Guid? hostUserId = null)
     {
@@ -56,9 +56,6 @@ internal sealed class TestServiceFactory
 
     public WinConditionService CreateWinConditionService() => new();
 
-    public DuelService CreateDuelService()
-        => new(RoomProvider, CreateGameStateService());
-
     public AbilityService CreateAbilityService()
         => new(RoomProvider, CreateGameStateService());
 
@@ -66,7 +63,6 @@ internal sealed class TestServiceFactory
     {
         var gameStateService = CreateGameStateService();
         var winConditionService = CreateWinConditionService();
-        var duelService = new DuelService(RoomProvider, gameStateService);
-        return new GameplayService(RoomProvider, gameStateService, winConditionService, duelService);
+        return new GameplayService(RoomProvider, gameStateService, winConditionService);
     }
 }

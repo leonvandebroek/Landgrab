@@ -22,7 +22,6 @@ public sealed class GameplayServiceTests
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 3, lat, lng);
 
         result.error.Should().BeNull();
-        result.ambushResult.Should().BeNull();
         result.state.Should().NotBeNull();
         context.Cell(0, 0).Troops.Should().Be(2);
         context.Player("p1").CarriedTroops.Should().Be(3);
@@ -400,7 +399,6 @@ public sealed class GameplayServiceTests
 
         result.state.Should().BeNull();
         result.error.Should().Be("Pick-up count must be at least 1.");
-        result.ambushResult.Should().BeNull();
         context.Cell(0, 0).Troops.Should().Be(5);
         context.Player("p1").CarriedTroops.Should().Be(0);
     }
@@ -420,43 +418,7 @@ public sealed class GameplayServiceTests
 
         result.state.Should().BeNull();
         result.error.Should().Be("The master tile cannot be used for troop pick-up.");
-        result.ambushResult.Should().BeNull();
         context.Player("p1").CarriedTroops.Should().Be(0);
-    }
-
-    [Fact]
-    public void PickUpTroops_WhenAmbushedByHostilePlayer_ReturnsAmbushResult()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Ambush)
-            .AddPlayer("p1", "Alice")
-            .AddPlayer("p2", "Bob")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 5)
-            .WithCarriedTroops("p1", 2, 0, 0)
-            .WithPlayerPosition("p2", 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
-
-        var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 1, lat, lng);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.ambushResult.Should().NotBeNull();
-        result.ambushResult!.AttackerId.Should().Be("p2");
-        result.ambushResult.DefenderId.Should().Be("p1");
-        result.ambushResult.AttackerWon.Should().BeTrue();
-        result.ambushResult.TroopsLost.Should().Be(1);
-        context.Cell(0, 0).Troops.Should().Be(5);
-        context.Player("p1").CarriedTroops.Should().Be(1);
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "Ambush" &&
-            entry.PlayerId == "p2" &&
-            entry.TargetPlayerId == "p1" &&
-            entry.Q == 0 &&
-            entry.R == 0);
     }
 
     [Fact]
@@ -475,7 +437,6 @@ public sealed class GameplayServiceTests
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 3, lat, lng);
 
         result.error.Should().BeNull();
-        result.ambushResult.Should().BeNull();
         context.Cell(0, 0).Troops.Should().Be(2);
         context.Player("p1").CarriedTroops.Should().Be(5);
         context.Player("p1").CarriedTroopsSourceQ.Should().Be(0);
@@ -738,92 +699,8 @@ public sealed class GameplayServiceTests
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
-        result.newDuel.Should().BeNull();
-        result.tollPaid.Should().BeNull();
-        result.preyCaught.Should().BeNull();
         context.Player("p1").CurrentLat.Should().Be(lat);
         context.Player("p1").CurrentLng.Should().Be(lng);
     }
 
-    [Fact]
-    public void UpdatePlayerLocation_WhenEnteringEnemyHexWithOwnerPresent_PaysToll()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Toll)
-            .AddPlayer("p1", "Alice")
-            .AddPlayer("p2", "Bob")
-            .OwnHex(1, 0, "p2")
-            .WithTroops(1, 0, 3)
-            .WithCarriedTroops("p1", 2, 0, 0)
-            .WithPlayerPosition("p2", 1, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
-
-        result.error.Should().BeNull();
-        result.tollPaid.Should().Be(("p1", 1, 1, 0));
-        context.Player("p1").CarriedTroops.Should().Be(1);
-        context.Cell(1, 0).Troops.Should().Be(4);
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "TollPaid" &&
-            entry.PlayerId == "p1" &&
-            entry.Q == 1 &&
-            entry.R == 0);
-    }
-
-    [Fact]
-    public void UpdatePlayerLocation_WhenHunterCatchesPrey_GrantsRewardAndRotatesPrey()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.JagerProoi)
-            .AddPlayer("p1", "Alice")
-            .AddPlayer("p2", "Bob")
-            .AddPlayer("p3", "Cara")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 1)
-            .WithPlayerPosition("p2", 1, 0)
-            .Build();
-        state.Players.Single(player => player.Id == "p2").IsPrey = true;
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
-
-        result.error.Should().BeNull();
-        result.preyCaught.Should().Be(("p1", "p2", 3));
-        context.Cell(0, 0).Troops.Should().Be(4);
-        context.Player("p2").IsPrey.Should().BeFalse();
-        context.Player("p1").IsPrey.Should().BeTrue();
-        context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "PreyCaught" &&
-            entry.PlayerId == "p1" &&
-            entry.TargetPlayerId == "p2");
-    }
-
-    [Fact]
-    public void UpdatePlayerLocation_WhenHostilePlayersShareHex_StartsDuel()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Duel)
-            .AddPlayer("p1", "Alice")
-            .AddPlayer("p2", "Bob")
-            .WithPlayerPosition("p2", 1, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
-
-        result.error.Should().BeNull();
-        result.newDuel.Should().NotBeNull();
-        result.newDuel!.PlayerIds.Should().BeEquivalentTo(["p1", "p2"]);
-        result.newDuel.TileQ.Should().Be(1);
-        result.newDuel.TileR.Should().Be(0);
-        context.Room.PendingDuels.Should().ContainKey(result.newDuel.Id);
-    }
 }
