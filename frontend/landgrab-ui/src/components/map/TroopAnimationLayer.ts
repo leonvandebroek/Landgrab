@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import type { TroopMovement } from '../../hooks/useGridDiff';
+import type { MapLayerPreferences } from '../../types/mapLayerPreferences';
 import { roomHexToLatLng } from './HexMath';
 
 function parseKey(key: string): [number, number] {
@@ -18,8 +19,13 @@ export function renderTroopAnimations(
   mapLat: number,
   mapLng: number,
   tileSizeMeters: number,
+  layerPrefs: MapLayerPreferences,
 ): void {
   layerGroup.clearLayers();
+
+  if (!layerPrefs.troopAnimations) {
+    return;
+  }
 
   for (const movement of movements) {
     const [fromQ, fromR] = parseKey(movement.fromHex);

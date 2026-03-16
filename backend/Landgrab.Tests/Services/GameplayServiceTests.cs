@@ -383,4 +383,447 @@ public sealed class GameplayServiceTests
         result.error.Should().Be("Reinforcements only apply while the game is playing.");
         context.Cell(1, 0).Troops.Should().Be(2);
     }
+
+    [Fact]
+    public void PickUpTroops_WhenCountIsLessThanOne_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 5)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 0, lat, lng);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Pick-up count must be at least 1.");
+        result.ambushResult.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(5);
+        context.Player("p1").CarriedTroops.Should().Be(0);
+    }
+
+    [Fact]
+    public void PickUpTroops_OnMasterTile_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithMasterTile(0, 0)
+            .AddPlayer("p1", "Alice")
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 1, lat, lng);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("The master tile cannot be used for troop pick-up.");
+        result.ambushResult.Should().BeNull();
+        context.Player("p1").CarriedTroops.Should().Be(0);
+    }
+
+    [Fact]
+    public void PickUpTroops_WhenAmbushedByHostilePlayer_ReturnsAmbushResult()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithCopresenceModes(CopresenceMode.Ambush)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 5)
+            .WithCarriedTroops("p1", 2, 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 1, lat, lng);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        result.ambushResult.Should().NotBeNull();
+        result.ambushResult!.AttackerId.Should().Be("p2");
+        result.ambushResult.DefenderId.Should().Be("p1");
+        result.ambushResult.AttackerWon.Should().BeTrue();
+        result.ambushResult.TroopsLost.Should().Be(1);
+        context.Cell(0, 0).Troops.Should().Be(5);
+        context.Player("p1").CarriedTroops.Should().Be(1);
+        context.State.EventLog.Should().ContainSingle(entry =>
+            entry.Type == "Ambush" &&
+            entry.PlayerId == "p2" &&
+            entry.TargetPlayerId == "p1" &&
+            entry.Q == 0 &&
+            entry.R == 0);
+    }
+
+    [Fact]
+    public void PickUpTroops_WhenAlreadyCarryingFromSameHex_AccumulatesTroops()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 5)
+            .WithCarriedTroops("p1", 2, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 3, lat, lng);
+
+        result.error.Should().BeNull();
+        result.ambushResult.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(2);
+        context.Player("p1").CarriedTroops.Should().Be(5);
+        context.Player("p1").CarriedTroopsSourceQ.Should().Be(0);
+        context.Player("p1").CarriedTroopsSourceR.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlaceTroops_OnAllianceMembersHex_ReinforcesHex()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .OwnHex(1, 0, "p2", "a1")
+            .WithTroops(1, 0, 2)
+            .WithCarriedTroops("p1", 3, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        result.error.Should().BeNull();
+        result.previousOwnerId.Should().BeNull();
+        result.combatResult.Should().BeNull();
+        context.Cell(1, 0).OwnerId.Should().Be("p2");
+        context.Cell(1, 0).OwnerAllianceId.Should().Be("a1");
+        context.Cell(1, 0).Troops.Should().Be(5);
+        context.Player("p1").CarriedTroops.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlaceTroops_CombatAccountsForTerrainDefenseBonus()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithTerrainEnabled()
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(0, 0, "p1")
+            .OwnHex(1, 0, "p2")
+            .WithTerrain(1, 0, TerrainType.Steep)
+            .WithTroops(1, 0, 3)
+            .WithCarriedTroops("p1", 4, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("You need more effective strength to overcome the defenders.");
+        result.combatResult.Should().BeNull();
+        context.Cell(1, 0).OwnerId.Should().Be("p2");
+        context.Cell(1, 0).Troops.Should().Be(3);
+        context.Player("p1").CarriedTroops.Should().Be(4);
+    }
+
+    [Fact]
+    public void PlaceTroops_CombatAccountsForPresenceBonus()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithCopresenceModes(CopresenceMode.PresenceBonus)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(0, 0, "p1")
+            .OwnHex(1, 0, "p2")
+            .WithTroops(1, 0, 3)
+            .WithCarriedTroops("p1", 3, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        result.error.Should().BeNull();
+        result.combatResult.Should().NotBeNull();
+        result.combatResult!.AttackerBonus.Should().Be(1);
+        result.combatResult.DefenderBonus.Should().Be(0);
+        context.Cell(1, 0).OwnerId.Should().Be("p1");
+        context.Cell(1, 0).Troops.Should().Be(0);
+        context.Player("p1").CarriedTroops.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlaceTroops_InPresenceWithTroopMode_ConsumesOnlyOneCarriedTroopForNeutralClaim()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithClaimMode(ClaimMode.PresenceWithTroop)
+            .AddPlayer("p1", "Alice")
+            .OwnHex(0, 0, "p1")
+            .WithCarriedTroops("p1", 3, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        result.error.Should().BeNull();
+        result.combatResult.Should().BeNull();
+        context.Cell(1, 0).OwnerId.Should().Be("p1");
+        context.Cell(1, 0).Troops.Should().Be(1);
+        context.Player("p1").CarriedTroops.Should().Be(2);
+        context.Player("p1").CarriedTroopsSourceQ.Should().Be(0);
+        context.Player("p1").CarriedTroopsSourceR.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlaceTroops_WhenClaimingForSelfAfterCapture_ClearsAllianceOwnership()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .OwnHex(0, 0, "p1", "a1")
+            .OwnHex(1, 0, "p2", "a2")
+            .WithTroops(1, 0, 2)
+            .WithCarriedTroops("p1", 4, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var player = context.Player("p1");
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng, claimForSelf: true);
+
+        result.error.Should().BeNull();
+        result.previousOwnerId.Should().Be("p2");
+        context.Cell(1, 0).OwnerId.Should().Be("p1");
+        context.Cell(1, 0).OwnerAllianceId.Should().BeNull();
+        context.Cell(1, 0).OwnerColor.Should().Be(player.Color);
+    }
+
+    [Fact]
+    public void PlaceTroops_WhenCaptureMeetsWinCondition_EndsTheGame()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(1)
+            .WithWinCondition(WinConditionType.TerritoryPercent, 50)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(0, 0, "p1")
+            .OwnHex(-1, 0, "p1")
+            .OwnHex(0, 1, "p1")
+            .OwnHex(1, 0, "p2")
+            .WithTroops(1, 0, 1)
+            .WithCarriedTroops("p1", 2, 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        result.state!.Phase.Should().Be(GamePhase.GameOver);
+        result.state.WinnerId.Should().Be("p1");
+        result.state.WinnerName.Should().Be("Alice");
+        context.State.EventLog.Should().Contain(entry => entry.Type == "GameOver" && entry.WinnerId == "p1");
+    }
+
+    [Fact]
+    public void ReClaimHex_ToSelfClaim_ClearsAllianceOwnership()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddAlliance("a1", "Alpha", "p1")
+            .OwnHex(0, 0, "p1", "a1")
+            .WithTroops(0, 0, 3)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var player = context.Player("p1");
+
+        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Self);
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).OwnerId.Should().Be("p1");
+        context.Cell(0, 0).OwnerAllianceId.Should().BeNull();
+        context.Cell(0, 0).OwnerColor.Should().Be(player.Color);
+        context.Cell(0, 0).Troops.Should().Be(3);
+    }
+
+    [Fact]
+    public void AddReinforcementsToAllHexes_WithDrainAndHostilePresent_SkipsRegen()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithCopresenceModes(CopresenceMode.Drain)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 5)
+            .WithPlayerPosition("p2", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(5);
+    }
+
+    [Fact]
+    public void AddReinforcementsToAllHexes_OnBuildingTerrain_AddsExtraTroop()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithTerrainEnabled()
+            .AddPlayer("p1", "Alice")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 2)
+            .WithTerrain(0, 0, TerrainType.Building)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(4);
+    }
+
+    [Fact]
+    public void AddReinforcementsToAllHexes_WithTimedEscalation_AddsEscalationBonus()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 2)
+            .Build();
+        state.Dynamics.TimedEscalationEnabled = true;
+        state.GameStartedAt = DateTime.UtcNow.AddMinutes(-61);
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(5);
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_UpdatesPlayerCoordinates()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        result.newDuel.Should().BeNull();
+        result.tollPaid.Should().BeNull();
+        result.preyCaught.Should().BeNull();
+        context.Player("p1").CurrentLat.Should().Be(lat);
+        context.Player("p1").CurrentLng.Should().Be(lng);
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenEnteringEnemyHexWithOwnerPresent_PaysToll()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithCopresenceModes(CopresenceMode.Toll)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(1, 0, "p2")
+            .WithTroops(1, 0, 3)
+            .WithCarriedTroops("p1", 2, 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
+
+        result.error.Should().BeNull();
+        result.tollPaid.Should().Be(("p1", 1, 1, 0));
+        context.Player("p1").CarriedTroops.Should().Be(1);
+        context.Cell(1, 0).Troops.Should().Be(4);
+        context.State.EventLog.Should().ContainSingle(entry =>
+            entry.Type == "TollPaid" &&
+            entry.PlayerId == "p1" &&
+            entry.Q == 1 &&
+            entry.R == 0);
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenHunterCatchesPrey_GrantsRewardAndRotatesPrey()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithCopresenceModes(CopresenceMode.JagerProoi)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddPlayer("p3", "Cara")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 1)
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        state.Players.Single(player => player.Id == "p2").IsPrey = true;
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
+
+        result.error.Should().BeNull();
+        result.preyCaught.Should().Be(("p1", "p2", 3));
+        context.Cell(0, 0).Troops.Should().Be(4);
+        context.Player("p2").IsPrey.Should().BeFalse();
+        context.Player("p1").IsPrey.Should().BeTrue();
+        context.State.EventLog.Should().ContainSingle(entry =>
+            entry.Type == "PreyCaught" &&
+            entry.PlayerId == "p1" &&
+            entry.TargetPlayerId == "p2");
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenHostilePlayersShareHex_StartsDuel()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithCopresenceModes(CopresenceMode.Duel)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
+
+        result.error.Should().BeNull();
+        result.newDuel.Should().NotBeNull();
+        result.newDuel!.PlayerIds.Should().BeEquivalentTo(["p1", "p2"]);
+        result.newDuel.TileQ.Should().Be(1);
+        result.newDuel.TileR.Should().Be(0);
+        context.Room.PendingDuels.Should().ContainKey(result.newDuel.Id);
+    }
 }

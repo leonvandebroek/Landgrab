@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
+import { DEFAULT_MAP_LAYER_PREFS, type MapLayerPreferences } from '../../types/mapLayerPreferences';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
@@ -11,7 +12,7 @@ import { showTroopAnimations } from '../../utils/zoomThresholds';
 import { injectTerrainPatternSVG } from './TerrainPatternDefs';
 import { useGridDiff } from '../../hooks/useGridDiff';
 import { renderTroopAnimations } from './TroopAnimationLayer';
-import { renderHexGridLayers, renderPlayerMarkers, TimeOverlay } from '../game/map';
+import { MapLayerToggle, renderHexGridLayers, renderPlayerMarkers, TimeOverlay } from '../game/map';
 
 interface LocationPoint {
   lat: number;
@@ -57,6 +58,7 @@ export function GameMap({
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
+  const [layerPrefs, setLayerPrefs] = useState<MapLayerPreferences>(() => ({ ...DEFAULT_MAP_LAYER_PREFS }));
   const followedLocationKeyRef = useRef('');
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const animLayerGroupRef = useRef<L.LayerGroup | null>(null);
@@ -303,6 +305,7 @@ export function GameMap({
       currentZoom,
       inactiveHexKeySet,
       layerGroup,
+      layerPrefs,
       myUserId,
       onHexClickRef,
       pointerDownRef,
@@ -316,11 +319,12 @@ export function GameMap({
       currentLocation,
       currentZoom,
       layerGroup,
+      layerPrefs,
       myUserId,
       playerDisplayPrefs,
       state,
     });
-  }, [currentHex, currentLocation, currentZoom, inactiveHexKeySet, myUserId, playerDisplayPrefs, renderedGrid, selectedHex, state]);
+  }, [currentHex, currentLocation, currentZoom, inactiveHexKeySet, layerPrefs, myUserId, playerDisplayPrefs, renderedGrid, selectedHex, state]);
 
   useEffect(() => {
     const layerGroup = animLayerGroupRef.current;
@@ -332,13 +336,13 @@ export function GameMap({
       return;
     }
 
-    renderTroopAnimations(troopMovements, layerGroup, state.mapLat, state.mapLng, state.tileSizeMeters);
-  }, [troopMovements, state.mapLat, state.mapLng, state.tileSizeMeters, currentZoom]);
+    renderTroopAnimations(troopMovements, layerGroup, state.mapLat, state.mapLng, state.tileSizeMeters, layerPrefs);
+  }, [troopMovements, state.mapLat, state.mapLng, state.tileSizeMeters, currentZoom, layerPrefs]);
 
   return (
     <div className={`game-map-container time-${timePeriod}`}>
       <div ref={containerRef} className="leaflet-map" />
-      <TimeOverlay timePeriod={timePeriod} />
+      {layerPrefs.timeOverlay && <TimeOverlay timePeriod={timePeriod} />}
       <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
         <button
           type="button"
@@ -361,6 +365,7 @@ export function GameMap({
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"></circle><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 6.9 8 11.7z"></path></svg>
         </button>
       </div>
+      <MapLayerToggle prefs={layerPrefs} onPrefsChange={setLayerPrefs} />
     </div>
   );
 }

@@ -16,7 +16,10 @@ internal sealed class ServiceTestContext
     public Mock<IGameRoomProvider> RoomProvider { get; } = new();
     public Mock<ILogger<GameStateService>> GameStateLogger { get; } = new();
     public Mock<ILogger<RoomPersistenceService>> RoomPersistenceLogger { get; } = new();
+    public Mock<ILogger<HostControlService>> HostControlLogger { get; } = new();
 
+    public Guid HostUserId { get; }
+    public string HostUserIdString => HostUserId.ToString();
     public GameRoom Room { get; }
     public GameState State => Room.State;
     public GameStateService GameStateService { get; }
@@ -24,12 +27,15 @@ internal sealed class ServiceTestContext
     public DuelService DuelService { get; }
     public GameplayService GameplayService { get; }
     public AbilityService AbilityService { get; }
+    public HostControlService HostControlService { get; }
 
-    public ServiceTestContext(GameState state)
+    public ServiceTestContext(GameState state, Guid? hostUserId = null)
     {
+        HostUserId = hostUserId ?? Guid.NewGuid();
         Room = new GameRoom
         {
             Code = state.RoomCode,
+            HostUserId = HostUserId,
             State = state
         };
 
@@ -42,6 +48,7 @@ internal sealed class ServiceTestContext
         DuelService = new DuelService(RoomProvider.Object, GameStateService);
         GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, DuelService);
         AbilityService = new AbilityService(RoomProvider.Object, GameStateService);
+        HostControlService = new HostControlService(RoomProvider.Object, GameStateService, HostControlLogger.Object);
     }
 
     public PlayerDto Player(string playerId) => State.Players.Single(player => player.Id == playerId);

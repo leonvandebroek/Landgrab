@@ -50,7 +50,7 @@ export function showHexTooltips(zoom: number): boolean {
 
 /** Show supply-line overlays between owned hexes. */
 export function showSupplyLines(zoom: number): boolean {
-  return zoom >= 13;
+  return zoom >= 12;
 }
 
 /** Show animated contest effects on disputed hexes. */

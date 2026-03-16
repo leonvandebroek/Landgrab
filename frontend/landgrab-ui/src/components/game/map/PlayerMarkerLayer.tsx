@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import i18n from '../../../i18n';
 import type { GameState } from '../../../types/game';
+import type { MapLayerPreferences } from '../../../types/mapLayerPreferences';
 import {
   DEFAULT_PLAYER_PREFS,
   MARKER_SIZE_MULTIPLIER,
@@ -15,6 +16,7 @@ interface RenderPlayerMarkersOptions {
   currentLocation: { lat: number; lng: number } | null;
   currentZoom: number;
   layerGroup: L.LayerGroup;
+  layerPrefs: MapLayerPreferences;
   myUserId: string;
   playerDisplayPrefs?: PlayerDisplayPreferences;
   state: GameState;
@@ -40,10 +42,18 @@ export function renderPlayerMarkers({
   currentLocation,
   currentZoom,
   layerGroup,
+  layerPrefs,
   myUserId,
   playerDisplayPrefs,
   state,
 }: RenderPlayerMarkersOptions): void {
+  const shouldShowPlayerMarkers = layerPrefs.playerMarkers;
+  const shouldShowPlayerRadius = layerPrefs.playerRadius;
+
+  if (!shouldShowPlayerMarkers && !shouldShowPlayerRadius) {
+    return;
+  }
+
   const effectivePlayerDisplayPrefs = playerDisplayPrefs ?? DEFAULT_PLAYER_PREFS;
   const playerMarkerSizeMultiplier = MARKER_SIZE_MULTIPLIER[effectivePlayerDisplayPrefs.markerSize] ?? 1;
   const markerZoomScale = getMarkerZoomScale(currentZoom);
@@ -55,20 +65,53 @@ export function renderPlayerMarkers({
     }
 
     const markerColor = player.allianceColor ?? player.color ?? DEFAULT_PLAYER_MARKER_COLOR;
-    const { layer: marker, tooltipOffset } = createPlayerMarkerLayer({
-      color: markerColor,
-      lat: player.currentLat,
-      lng: player.currentLng,
-      markerSizeMultiplier: playerMarkerSizeMultiplier,
-      markerStyle: effectivePlayerDisplayPrefs.markerStyle,
-      myUserId,
-      player,
-      zoomScale: markerZoomScale,
-    });
 
-    marker.addTo(layerGroup);
+    if (shouldShowPlayerMarkers) {
+      const { layer: marker, tooltipOffset } = createPlayerMarkerLayer({
+        color: markerColor,
+        lat: player.currentLat,
+        lng: player.currentLng,
+        markerSizeMultiplier: playerMarkerSizeMultiplier,
+        markerStyle: effectivePlayerDisplayPrefs.markerStyle,
+        myUserId,
+        player,
+        zoomScale: markerZoomScale,
+      });
 
-    if (player.id === myUserId) {
+      marker.addTo(layerGroup);
+      marker.bindTooltip(player.id === myUserId ? `${player.name}${i18n.t('map.youSuffix')}` : player.name, {
+        permanent: effectivePlayerDisplayPrefs.showNameLabel,
+        direction: 'top',
+        offset: tooltipOffset,
+        className: 'player-location-label',
+      });
+
+      if (player.isPrey) {
+        L.circleMarker([player.currentLat, player.currentLng], {
+          radius: 12,
+          color: '#e74c3c',
+          weight: 2,
+          dashArray: '4 4',
+          fillColor: 'transparent',
+          fillOpacity: 0,
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+
+      if (player.heldByPlayerId) {
+        L.circleMarker([player.currentLat, player.currentLng], {
+          radius: 14,
+          color: '#95a5a6',
+          weight: 3,
+          dashArray: '2 4',
+          fillColor: 'transparent',
+          fillOpacity: 0,
+          interactive: false,
+        }).addTo(layerGroup);
+      }
+    }
+
+    if (shouldShowPlayerRadius && player.id === myUserId) {
       L.circleMarker([player.currentLat, player.currentLng], {
         radius: 20 * markerZoomScale,
         color: markerColor,
@@ -93,26 +136,7 @@ export function renderPlayerMarkers({
       }
     }
 
-    marker.bindTooltip(player.id === myUserId ? `${player.name}${i18n.t('map.youSuffix')}` : player.name, {
-      permanent: effectivePlayerDisplayPrefs.showNameLabel,
-      direction: 'top',
-      offset: tooltipOffset,
-      className: 'player-location-label',
-    });
-
-    if (player.isPrey) {
-      L.circleMarker([player.currentLat, player.currentLng], {
-        radius: 12,
-        color: '#e74c3c',
-        weight: 2,
-        dashArray: '4 4',
-        fillColor: 'transparent',
-        fillOpacity: 0,
-        interactive: false,
-      }).addTo(layerGroup);
-    }
-
-    if (player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
+    if (shouldShowPlayerRadius && player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
       L.circle([player.beaconLat, player.beaconLng], {
         radius: state.tileSizeMeters * 2.5,
         color: player.allianceColor ?? player.color,
@@ -123,21 +147,9 @@ export function renderPlayerMarkers({
         interactive: false,
       }).addTo(layerGroup);
     }
-
-    if (player.heldByPlayerId) {
-      L.circleMarker([player.currentLat, player.currentLng], {
-        radius: 14,
-        color: '#95a5a6',
-        weight: 3,
-        dashArray: '2 4',
-        fillColor: 'transparent',
-        fillOpacity: 0,
-        interactive: false,
-      }).addTo(layerGroup);
-    }
   }
 
-  if (myPlayer?.isCommandoActive && myPlayer.commandoTargetQ != null && myPlayer.commandoTargetR != null) {
+  if (shouldShowPlayerMarkers && myPlayer?.isCommandoActive && myPlayer.commandoTargetQ != null && myPlayer.commandoTargetR != null) {
     const [targetLat, targetLng] = roomHexToLatLng(
       myPlayer.commandoTargetQ,
       myPlayer.commandoTargetR,

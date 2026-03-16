@@ -2,6 +2,7 @@ import type { MutableRefObject } from 'react';
 import i18n from '../../../i18n';
 import L from 'leaflet';
 import type { GameState, HexCell } from '../../../types/game';
+import type { MapLayerPreferences } from '../../../types/mapLayerPreferences';
 import { terrainIcons } from '../../../utils/terrainIcons';
 import {
   showBorderEffects,
@@ -36,6 +37,7 @@ interface RenderHexGridLayerOptions {
   currentZoom: number;
   inactiveHexKeySet: ReadonlySet<string>;
   layerGroup: L.LayerGroup;
+  layerPrefs: MapLayerPreferences;
   myUserId: string;
   onHexClickRef: MutableRefObject<((q: number, r: number, cell: HexCell | undefined) => void) | undefined>;
   pointerDownRef: MutableRefObject<{ x: number; y: number } | null>;
@@ -50,6 +52,7 @@ export function renderHexGridLayers({
   currentZoom,
   inactiveHexKeySet,
   layerGroup,
+  layerPrefs,
   myUserId,
   onHexClickRef,
   pointerDownRef,
@@ -59,20 +62,23 @@ export function renderHexGridLayers({
   state,
 }: RenderHexGridLayerOptions): void {
   layerGroup.clearLayers();
-  renderWorldDimMask(layerGroup, Object.values(renderedGrid), state.mapLat!, state.mapLng!, state.tileSizeMeters);
+  if (layerPrefs.worldDimMask) {
+    renderWorldDimMask(layerGroup, Object.values(renderedGrid), state.mapLat!, state.mapLng!, state.tileSizeMeters);
+  }
 
   const { newlyClaimedKeys, newlyRevealedKeys } = getChangedHexKeys(prevGridRef.current, renderedGrid);
   const hostPlayer = state.players.find(player => player.isHost);
   const hostColor = hostPlayer?.allianceColor ?? hostPlayer?.color ?? '#f1c40f';
   const myPlayer = state.players.find(player => player.id === myUserId);
   const playersById = new Map(state.players.map(player => [player.id, player]));
-  const shouldShowTerrainIcons = showTerrainIconsZoom(currentZoom);
-  const shouldShowTroopBadges = showTroopBadges(currentZoom);
-  const shouldShowBorderEffects = showBorderEffects(currentZoom);
-  const shouldShowBuildingIcons = showBuildingIcons(currentZoom);
+  const shouldShowTerrainIcons = layerPrefs.terrainIcons && showTerrainIconsZoom(currentZoom);
+  const shouldShowTroopBadges = layerPrefs.troopBadges && showTroopBadges(currentZoom);
+  const shouldShowBorderEffects = layerPrefs.borderEffects && showBorderEffects(currentZoom);
+  const shouldShowBuildingIcons = layerPrefs.buildingIcons && showBuildingIcons(currentZoom);
   const shouldShowHexTooltips = showHexTooltips(currentZoom);
-  const shouldShowContestEffects = showContestEffects(currentZoom);
-  const shouldShowSupplyLines = showSupplyLines(currentZoom);
+  const shouldShowContestEffects = layerPrefs.contestedEdges && showContestEffects(currentZoom);
+  const shouldShowSupplyLines = layerPrefs.supplyLines && showSupplyLines(currentZoom);
+  const shouldApplyFogOfWar = layerPrefs.fogOfWar;
 
   const supplyDisconnected = new Set<string>();
   let supplyEdges: Array<{ fromCenter: L.LatLngExpression; toCenter: L.LatLngExpression; teamColor: string }> = [];
@@ -106,6 +112,8 @@ export function renderHexGridLayers({
       pointerDownRef,
       renderedGrid,
       selectedHex,
+      shouldApplyFogOfWar,
+      shouldShowContestEffects,
       shouldShowBorderEffects,
       shouldShowBuildingIcons,
       shouldShowHexTooltips,
@@ -137,6 +145,8 @@ interface RenderHexCellOptions {
   pointerDownRef: MutableRefObject<{ x: number; y: number } | null>;
   renderedGrid: Record<string, HexCell>;
   selectedHex: [number, number] | null;
+  shouldApplyFogOfWar: boolean;
+  shouldShowContestEffects: boolean;
   shouldShowBorderEffects: boolean;
   shouldShowBuildingIcons: boolean;
   shouldShowHexTooltips: boolean;
@@ -162,6 +172,8 @@ function renderHexCell({
   pointerDownRef,
   renderedGrid,
   selectedHex,
+  shouldApplyFogOfWar,
+  shouldShowContestEffects,
   shouldShowBorderEffects,
   shouldShowBuildingIcons,
   shouldShowHexTooltips,
@@ -184,7 +196,7 @@ function renderHexCell({
   const ownerColor = getHexOwnerColor(cell, playersById, DEFAULT_PLAYER_MARKER_COLOR);
   const isFriendlyAllianceCell = Boolean(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
   const { isFrontier, isContested } = getHexTerritoryStatus(cell, renderedGrid, isFriendlyAllianceCell);
-  const isFogHidden = isFogHiddenHex(cell, isInactive, state.dynamics?.fogOfWarEnabled);
+  const isFogHidden = shouldApplyFogOfWar && isFogHiddenHex(cell, isInactive, state.dynamics?.fogOfWarEnabled);
   const hasTerrain = Boolean(state.dynamics?.terrainEnabled && terrainType !== 'None');
   const { fillColor, fillOpacity } = getHexFillStyle({
     cell,
@@ -199,6 +211,7 @@ function renderHexCell({
     cell,
     isCurrentHex,
     isFogHidden,
+    isHQ: isHQHex,
     isInactive,
     isSelected,
   });
@@ -233,6 +246,7 @@ function renderHexCell({
       cellKey,
       isCurrentHex,
       isFrontier,
+      isHQ: isHQHex,
       isInactive,
       isMine,
       isSelected,
@@ -278,7 +292,20 @@ function renderHexCell({
     polygonElement.style.setProperty('--hex-owner-color', ownerColor);
   }
 
-  if (cell.contestProgress != null && cell.contestProgress > 0 && !isInactive && !isFogHidden) {
+  if (supplyDisconnected.has(cellKey) && !isInactive && !isFogHidden) {
+    L.polygon(corners, {
+      className: 'hex-disconnected-overlay',
+      color: 'rgba(214, 225, 240, 0.72)',
+      dashArray: '6 5',
+      weight: 2,
+      opacity: 0.9,
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      interactive: false,
+    }).addTo(layerGroup);
+  }
+
+  if (shouldShowContestEffects && cell.contestProgress != null && cell.contestProgress > 0 && !isInactive && !isFogHidden) {
     L.circle([centerLat, centerLng], {
       radius: state.tileSizeMeters * 0.3,
       color: '#e74c3c',
@@ -298,6 +325,7 @@ function renderHexCell({
     });
     const troopLabel = isForestBlind ? '?' : String(cell.troops);
     const { badgeSize, html } = getTroopBadgeDescriptor({
+      isFort: Boolean(cell.isFort),
       isForestBlind,
       isHQ: isHQHex,
       isMasterTile: cell.isMasterTile,
@@ -318,6 +346,19 @@ function renderHexCell({
   }
 
   if (shouldShowBuildingIcons) {
+    if (cell.isMasterTile && !isInactive && !isFogHidden) {
+      L.marker([centerLat, centerLng], {
+        icon: L.divIcon({
+          className: 'hex-building-icon',
+          html: '<div class="building master">✦</div>',
+          iconSize: [28, 28],
+          iconAnchor: [14, 28],
+        }),
+        interactive: false,
+        zIndexOffset: -12,
+      }).addTo(layerGroup);
+    }
+
     if (cell.isFort && !isInactive && !isFogHidden) {
       L.marker([centerLat, centerLng], {
         icon: L.divIcon({

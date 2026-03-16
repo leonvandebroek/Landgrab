@@ -42,6 +42,7 @@ interface HexBorderStyleOptions {
   cell: HexCell;
   isCurrentHex: boolean;
   isFogHidden: boolean;
+  isHQ: boolean;
   isInactive: boolean;
   isSelected: boolean;
 }
@@ -66,6 +67,7 @@ interface ForestBlindOptions {
 }
 
 interface TroopBadgeDescriptorOptions {
+  isFort: boolean;
   isForestBlind: boolean;
   isHQ: boolean;
   isMasterTile: boolean;
@@ -79,6 +81,7 @@ interface PolygonClassNameOptions {
   cellKey: string;
   isCurrentHex: boolean;
   isFrontier: boolean;
+  isHQ: boolean;
   isInactive: boolean;
   isMine: boolean;
   isSelected: boolean;
@@ -207,6 +210,7 @@ export function getHexBorderStyle({
   cell,
   isCurrentHex,
   isFogHidden,
+  isHQ,
   isInactive,
   isSelected,
 }: HexBorderStyleOptions): HexBorderStyle {
@@ -239,6 +243,10 @@ export function getHexBorderStyle({
     borderColor = '#8e44ad';
     borderWeight = Math.max(borderWeight, 3.5);
   }
+  if (isHQ && !isInactive) {
+    borderColor = '#f1c40f';
+    borderWeight = Math.max(borderWeight, 4);
+  }
   if (isInactive) {
     dashArray = '6 6';
   }
@@ -251,6 +259,7 @@ export function getHexPolygonClassName({
   cellKey,
   isCurrentHex,
   isFrontier,
+  isHQ,
   isInactive,
   isMine,
   isSelected,
@@ -272,6 +281,8 @@ export function getHexPolygonClassName({
     isSelected ? 'is-selected' : '',
     isInactive ? 'is-inactive' : '',
     cell.isFortified ? 'is-fortified' : '',
+    cell.isFort ? 'is-fort' : '',
+    isHQ ? 'is-hq' : '',
     newlyRevealedKeys.has(cellKey) ? 'is-revealing' : '',
     newlyClaimedKeys.has(cellKey) ? 'is-just-claimed' : '',
     shouldShowBorderEffects && isFrontier ? 'is-frontier' : '',
@@ -321,6 +332,7 @@ export function shouldHideTroopCountInForest({
 }
 
 export function getTroopBadgeDescriptor({
+  isFort,
   isForestBlind,
   isHQ,
   isMasterTile,
@@ -329,6 +341,10 @@ export function getTroopBadgeDescriptor({
   troops,
 }: TroopBadgeDescriptorOptions): { badgeSize: number; html: string } {
   const badgeSize = Math.round(Math.min(38, Math.max(20, 22 + Math.log2(Math.max(1, troops)) * 3)));
+  const troopCountLength = troopLabel.length;
+  const countFontSize = troopCountLength >= 3
+    ? Math.max(10, Math.round(badgeSize * 0.34))
+    : Math.max(11, Math.round(badgeSize * 0.4));
   const ringPct = Math.min(100, troops * 2);
   const prefix = isMasterTile ? '👑' : (isHQ ? '🏛️' : '');
   const { h: badgeHue, s: badgeSaturation } = hexToHSL(ownerColor);
@@ -337,10 +353,17 @@ export function getTroopBadgeDescriptor({
   const badgeGlow = troops >= 20
     ? `0 0 12px hsla(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,50%,0.50),0 2px 6px rgba(0,0,0,0.4)`
     : '0 2px 8px rgba(0,0,0,0.45)';
+  const badgeClass = [
+    'hex-troop-badge',
+    isForestBlind ? 'forest-blind' : '',
+    isMasterTile ? 'master-badge' : '',
+    isHQ ? 'hq-badge' : '',
+    isFort ? 'fort-badge' : '',
+  ].filter(Boolean).join(' ');
 
   return {
     badgeSize,
-    html: `<div class="hex-troop-badge${isForestBlind ? ' forest-blind' : ''}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border-color:${badgeBorderColor};box-shadow:${badgeGlow}">
+    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border-color:${badgeBorderColor};box-shadow:${badgeGlow};--troop-count-size:${countFontSize}px">
   <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true">
     <circle cx="18" cy="18" r="16" fill="none" stroke="${ownerColor}" stroke-width="2.5"
             stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.6" />

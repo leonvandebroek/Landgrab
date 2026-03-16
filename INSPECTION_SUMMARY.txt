@@ -1,0 +1,647 @@
+================================================================================
+LANDGRAB BACKGROUND SERVICES - INSPECTION SUMMARY
+================================================================================
+
+SCOPE: Analyzed 3 background services + supporting GameService methods
+       No code modifications made - read-only inspection
+
+FILES ANALYZED:
+  1. TroopRegenerationService.cs (78 lines)
+  2. MissionService.cs (572 lines)
+  3. RandomEventService.cs (163 lines)
+  4. GameService.cs (97 lines - facade)
+  5. GameplayService.cs (1146 lines - main reinforcement logic)
+  6. DuelService.cs (210 lines - duel management)
+  7. Existing test infrastructure (GameStateBuilder, ServiceTestContext)
+
+================================================================================
+ARCHITECTURE (Common Pattern for All 3 Services)
+================================================================================
+
+while (!cancellationToken.IsCancellationRequested && await timer.WaitForNextTickAsync())
+{
+    foreach (var roomCode in gameService.GetPlayingRoomCodes())
+    {
+        var room = gameService.GetRoom(roomCode);
+        if (room == null || !featureFlag) continue;
+        if (room.State.IsPaused) continue;
+        
+        lock (room.SyncRoot)
+        {
+            // Apply core logic
+            // Modify game state
+            // Log events
+        }
+        
+        // Broadcast updates via SignalR (outside lock)
+        await hubContext.Clients.Group(roomCode).SendAsync(...);
+    }
+}
+
+KEY CHARACTERISTICS:
+✓ All sealed classes inheriting BackgroundService
+✓ Injected: IServiceScopeFactory, IHubContext<GameHub>, ILogger<T>
+✓ Core logic executes synchronously inside lock (no concurrency concerns for testing)
+✓ Feature flags are GameState properties (testable via GameStateBuilder)
+✓ SignalR broadcasts happen outside lock (mockable)
+
+================================================================================
+1. TROOP REGENERATION SERVICE
+================================================================================
+
+TIMER: 30 seconds (PeriodicTimer)
+FREQUENCY: ~720 execution attempts per hour per room
+
+FEATURE GATE: None explicit - Always runs if room.Phase == GamePhase.Playing && !IsPaused
+
+CORE BUSINESS LOGIC PHASES (GameplayService.AddReinforcementsToAllHexes):
+
+┌─ Phase 1-2: Rush Hour & Escalation (lines 764-782)
+│  └─ IsRushHour reset to false (simplified: lasts 1 tick, not 5 min)
+│  └─ TimedEscalationEnabled: +1 bonus per 30 min elapsed
+│
+├─ Phase 3-9: Per-Hex Reinforcement Rules (lines 841-896)
+│  ├─ Base Regen: +1 troop every owned/master hex (line 879)
+│  ├─ Drain Mode: Skip if hostile player copresent (843-850)
+│  ├─ Shepherd Mode: -1 decay if unvisited >3min; skip normal regen (854-868)
+│  ├─ Supply Lines: Skip isolated hexes (BFS from alliance territory) (784-838, 872-876)
+│  ├─ Terrain Bonus: +1 if Building terrain (885-886)
+│  ├─ Defender Bonus: +1 if Defender role present (889-894)
+│  └─ PresenceBattle: Contest progress ±0.1; capture at 1.0 (899-956)
+│
+├─ Phase 10: Duel & Hostage Management (lines 959-961)
+│  ├─ ProcessDuelExpiry: Remove duels with ExpiresAt < now
+│  └─ ProcessHostageReleases: Auto-release if timer/ally copresent
+│
+└─ Phase 11: Win Condition Check & Broadcast (lines 963-965)
+   ├─ Apply win condition logic
+   └─ Snapshot state for persistence & broadcast
+
+FEATURE FLAGS THAT AFFECT REINFORCEMENT:
+  └─ room.State.Dynamics
+     ├─ ActiveCopresenceModes[] → Drain, Shepherd, PresenceBattle, Hostage
+     ├─ TerrainEnabled → Building bonus
+     ├─ PlayerRolesEnabled → Defender bonus
+     ├─ SupplyLinesEnabled → Isolation check (BFS)
+     └─ TimedEscalationEnabled → Escalation bonus
+
+PRIVATE METHODS TO EXTRACT/TEST:
+  └─ GetPlayersInHex(state, q, r) [GameplayService:1076]
+  └─ SetCellOwner(cell, player) [GameplayService:1098]
+  └─ Supply lines BFS [GameplayService:784-838]
+
+TESTING SEAMS (Avoid Timer):
+  1. Do NOT instantiate TroopRegenerationService directly
+  2. Do NOT mock PeriodicTimer
+  3. Instead: Call gameplayService.AddReinforcementsToAllHexes() directly
+  4. Use GameStateBuilder to set feature flags
+  5. Verify troop deltas in game state
+  
+  Example:
+    var state = ServiceTestContext.CreateBuilder()
+        .WithGrid(2)
+        .WithTerrainEnabled()
+        .WithSupplyLinesEnabled()
+        .WithCopresenceModes(CopresenceMode.Drain)
+        .AddPlayer("p1", "Alice")
+        .OwnHex(0, 0, "p1")
+        .WithTroops(0, 0, 5)
+        .Build();
+    
+    var (resultState, error) = gameplayService.AddReinforcementsToAllHexes(roomCode);
+    
+    Assert.Equal(expectedTroops, resultState.Grid[...].Troops);
+
+CRITICAL ISSUES IDENTIFIED:
+  ⚠ RUSH HOUR DURATION: IsRushHour is set to false every 30s (line 768)
+    Intended behavior: 5-minute duration
+    Fix: Track ExpiresAt timestamp instead of boolean reset
+
+================================================================================
+2. MISSION SERVICE
+================================================================================
+
+TIMER: 5 minutes (PeriodicTimer)
+FREQUENCY: ~288 execution attempts per hour per room
+FEATURE GATE: room.State.Dynamics.MissionSystemEnabled (line 70)
+
+CORE BUSINESS LOGIC:
+
+Process:
+  1. Check feature gate & pause state
+  2. Generate initial missions (once per game if none exist)
+  3. Generate interim missions (every ~30 min)
+  4. Evaluate progress on all active missions (9 objective types)
+  5. Apply rewards & update status
+  6. Broadcast via SignalR
+
+MISSION GENERATION:
+
+Initial (Once per Game - line 99):
+  • 1x Main Mission
+    └─ "Hold the Hill" - Control center hex for 10 min
+       Progress: +0.5 per 5min tick (1.0 in 2 ticks)
+       Reward: +5 troops random hex
+  
+  • Nx Team Missions (1 per alliance - random from 3)
+    ├─ "Divide and Conquer" - Own hexes in 3+ quadrants (progress: quadrants/3)
+    │  Reward: +3 troops random
+    ├─ "Encirclement" - Surround enemy hex on all 6 sides (progress: 0 or 1.0)
+    │  Reward: +5 troops random
+    └─ "Territory Rush" - Claim 5 hexes (progress: ownedCount/5)
+       Reward: +3 troops random
+  
+  • Nx Personal Missions (1 per player - random from 3)
+    ├─ "Scout Patrol" - Visit 8 hexes (progress: visitedCount/8)
+    │  Reward: +2 troops ALL hexes
+    ├─ "Frontline Fighter" - Win 2 attacks (progress: ownedCount/2, PROXY)
+    │  Reward: +3 troops random
+    └─ "Fortifier" - Reinforce 3 hexes to 5+ troops (progress: fortifiedCount/3)
+       Reward: +3 troops random
+
+Interim (Every ~30 min - line 108-116):
+  • 1x Room-wide from 2 options
+    ├─ "Flag Planting" (10min duration) - Claim 3 neutral hexes (progress: claimed/3, ROUGH)
+    │  Reward: +3 troops random
+    └─ "Last Defender" (5min duration) - Don't lose hexes for 5 min (progress: 1.0 if territory stable)
+       Reward: +5 troops random
+  
+  • Nx Personal Refreshes (per player without active personal)
+    └─ Generate new personal mission if player has none active
+
+PROGRESS EVALUATION (9 Objective Types - Lines 291-471):
+
+Objective          | Formula                          | Implementation | Test Cases
+───────────────────────────────────────────────────────────────────────────────
+HoldCenter         | +0.5/tick if owned              | Increment      | Owner vs non-owner
+OwnQuadrants       | quadrants / 3                   | LINQ distinct  | 0-3 quadrants
+SurroundEnemy      | Check 6 neighbors OR ratio      | BFS neighbors  | No enemy, full surround
+ClaimCount:N       | ownedCount / N                  | Count filter   | 0, partial, full
+VisitHexes:N       | visitedCount / N                | Player.VisitedHexes | Empty, full
+WinAttacks:N       | ownedCount / N (PROXY)          | Territory proxy | ⚠ INACCURATE
+FortifyHexes:N     | fortifiedCount / N              | Count troops≥5 | 0-N, >N
+ClaimNeutral:N     | totalOwned / N (ROUGH)          | Total grid     | ⚠ INACCURATE
+NoLosses           | 1.0 initially; reset on drop   | Territory chck | ⚠ SIMPLIFIED
+
+REWARD APPLICATION (Lines 482-537):
+
+Reward Type        | Target Hexes                    | Distribution Logic
+─────────────────────────────────────────────────────────────────────────────
+Personal Scope     | All by TargetPlayerId          | "to all hexes" → add all
+                   |                                 | "to random" → add one random
+Team Scope         | All by TargetTeamId            | Same distribution
+Main/Interim Scope | All with any owner             | Same distribution
+
+Troop Parsing:
+  • Extract: "+" prefix → parse number → apply
+  • Fallback: 3 if parse fails
+  • Format: "+5 troops to random hex" → extracts "5"
+
+STATUS TRANSITIONS (Lines 119-135):
+
+Active → Completed (line 124):
+  Condition: progress >= 1.0
+  Action:    ApplyMissionReward() → broadcast "MissionCompleted" → log
+
+Active → Expired (line 130):
+  Condition: ExpiresAt.HasValue && now > ExpiresAt
+  Action:    NO REWARD → broadcast "MissionFailed" → log
+
+New → Active (line 140-142):
+  Action: Broadcast "MissionAssigned" to target clients
+
+PRIVATE METHODS TO EXTRACT/TEST:
+  └─ EvaluateMissionProgress(state, mission) [Line 291]
+  └─ EvaluateHoldCenter/OwnQuadrants/Surround/etc [Lines 337-470]
+  └─ ApplyMissionReward(state, mission) [Line 482]
+  └─ GetRewardTargetHexes(state, mission) [Line 506]
+  └─ ParseRewardTroops(reward) [Line 528]
+  └─ GenerateTeamMission(alliance) [Line 198]
+  └─ GeneratePersonalMission(player) [Line 204]
+
+TESTING SEAMS (Avoid Timer):
+  1. Do NOT instantiate MissionService
+  2. Do NOT mock PeriodicTimer
+  3. Instead: Create GameState with missions
+  4. Call evaluation methods directly (use reflection or extract)
+  5. Verify progress values & state transitions
+  6. Test each objective type independently
+  
+  Example:
+    var mission = new Mission 
+    { 
+        Objective = "OwnQuadrants", 
+        TargetTeamId = "a1" 
+    };
+    
+    // Construct state with specific ownership
+    var state = ServiceTestContext.CreateBuilder()
+        .OwnHex(1, 1, "p1", "a1")    // Quadrant (+,+)
+        .OwnHex(-1, 1, "p1", "a1")   // Quadrant (-,+)
+        .OwnHex(1, -1, "p1", "a1")   // Quadrant (+,-)
+        .Build();
+    
+    EvaluateMissionProgress(state, mission);
+    Assert.Equal(1.0, mission.Progress);
+
+CRITICAL ISSUES IDENTIFIED:
+  ⚠ WinAttacks PROXY: Approximates via ownedCount, not actual combat wins
+    Better: Track combat events via event log
+  ⚠ ClaimNeutral PROXY: Rough total owned, not neutral-specific
+    Better: Track claimed-from-neutral in event log
+  ⚠ NoLosses SIMPLIFIED: Checks territory drop, not per-tick deltas
+    Better: Track hex ownership changes per tick
+
+================================================================================
+3. RANDOM EVENT SERVICE
+================================================================================
+
+TIMER: 10 minutes (PeriodicTimer)
+FREQUENCY: ~144 execution attempts per hour per room
+FIRE RATE: 33% chance per tick → ~every 30 min on average (Poisson)
+FEATURE GATE: room.State.Dynamics.RandomEventsEnabled (line 32)
+
+CORE BUSINESS LOGIC:
+
+Event Selection: Uniform random from 4 types
+  └─ EventTypes = ["Calamity", "Epidemic", "BonusTroops", "RushHour"]
+  └─ Selection: Random.Shared.Next(4) [Line 54]
+
+EVENT EFFECTS (Lines 64-142):
+
+EVENT: Calamity (25% probability)
+  Trigger:  Random owned hex with troops > 0 (line 67-69)
+  Effect:   target.Troops = 0 (line 73)
+  Log:      "Calamity! Hex ({Q},{R}) lost all troops."
+  Test:     Create owned hex → apply event → verify troops = 0
+
+EVENT: Epidemic (25% probability)
+  Trigger:  Largest alliance by TerritoryCount (line 88-90)
+  Target:   Random owned non-master hex from that alliance (line 93-95)
+  Effect:   hex.Troops = Math.Max(0, hex.Troops - 2) (line 99)
+  Log:      "Epidemic! {AllianceName} lost 2 troops at ({Q},{R})."
+  Test:     2 alliances, different sizes → larger loses troops
+
+EVENT: BonusTroops (25% probability)
+  Trigger:  All alliances with ≥1 hex (line 117-123)
+  Effect:   Each alliance's random hex: +2 troops
+  Log:      "Bonus Troops! Every team received +2 troops."
+  Test:     2 alliances → both get +2 to their hex
+
+EVENT: RushHour (25% probability)
+  Trigger:  Global flag (line 134)
+  Effect:   IsRushHour = true (line 134)
+  Duration: Currently 1 tick (~30s); Intent: 5 min
+  Logic:    Claimed hexes count double in AddReinforcementsToAllHexes
+  Log:      "Rush Hour! Claimed hexes count double for 5 minutes."
+  Test:     Set IsRushHour → verify flag propagates to regen logic
+
+BROADCAST (Lines 146-162):
+  1. StateUpdated: Full state snapshot via hubContext.Clients.Group(roomCode)
+  2. RandomEvent: { type, title, description } event
+
+TESTING SEAMS (Avoid Timer):
+  1. Do NOT instantiate RandomEventService
+  2. Do NOT mock PeriodicTimer
+  3. Mock Random.Shared OR inject random source
+  4. Call ApplyRandomEvent() directly with specific event type (line 52, private)
+  5. Create game states with specific alliances/ownership
+  6. Verify state mutations (troops, flags) & event log
+  
+  Example:
+    var state = ServiceTestContext.CreateBuilder()
+        .AddAlliance("a1", "Team A", "p1")
+        .AddAlliance("a2", "Team B", "p2")
+        .OwnHex(0, 0, "p1", "a1", troops: 5)
+        .OwnHex(1, 0, "p2", "a2", troops: 5)
+        .Build();
+    
+    // Need to extract or reflect call ApplyRandomEvent(gameService, room, "BonusTroops")
+    // Verify: state.Grid[HexService.Key(0,0)].Troops == 7 && state.Grid[...].Troops == 7
+
+CRITICAL ISSUES:
+  ⚠ Random NOT INJECTABLE: Uses Random.Shared.Next() directly
+    Fix: Inject IRandomSource or mock Random via reflection
+  ⚠ Event Type Fixed: No variation in event types between fires
+    Observation: 4 types defined; each ~25% probability (uniform)
+
+================================================================================
+4. SUPPORTING GAME SERVICE METHODS
+================================================================================
+
+GameService.cs (97 lines) is a FACADE with public methods delegating to sub-services:
+
+Key Delegates Used by Background Services:
+
+Method                              | Delegates To           | Purpose
+──────────────────────────────────────────────────────────────────────────────
+GetPlayingRoomCodes()               | roomService            | List active rooms
+GetRoom(code)                       | roomService            | Fetch room
+AddReinforcementsToAllHexes(code)   | gameplayService        | ★ Troop regen logic
+ProcessDuelExpiry(room)             | duelService            | Expire old duels
+SnapshotStatePublic(state)          | gameStateService       | Serialize state
+AppendEventLogPublic(state, entry)  | gameStateService       | Add event
+CreateHiddenFogCellsForBroadcast()  | gameStateService       | Fog of war filter
+GetPlayerSnapshot(state, userId,...)| gameStateService       | Per-player state
+
+★ MOST COMPLEX: AddReinforcementsToAllHexes()
+  Location: GameplayService.cs:752-966 (215 lines)
+  Complexity: 11 reinforcement phases with 8+ feature flags
+  Testing: Extract individual phase logic into testable methods
+
+PRIMARY TESTING TARGET:
+  └─ gameplayService.AddReinforcementsToAllHexes(roomCode)
+     This encapsulates all reinforcement rules for TroopRegenerationService
+     Test via: Create state → call method → verify troop deltas
+
+================================================================================
+EXISTING TEST PATTERNS
+================================================================================
+
+Location: backend/Landgrab.Tests/
+
+Test Infrastructure:
+  └─ ServiceTestContext (TestSupport/)
+     • Mocks IGameRoomProvider, loggers
+     • Provides GameStateService, GameplayService, DuelService, AbilityService
+     • Helpers: Player(id), Cell(q,r), HexCenter(q,r)
+
+  └─ GameStateBuilder (TestSupport/)
+     • Fluent API for test state construction
+     • Methods: WithGrid(), WithPhase(), WithCopresenceModes(), AddPlayer(), 
+       AddAlliance(), OwnHex(), WithPlayerPosition(), WithTerrainEnabled(), etc.
+     • EXTEND with: WithMissionSystemEnabled(), WithRandomEventsEnabled(), 
+       WithMissions(), WithLastMissionGeneration()
+
+Test Examples:
+  └─ GameplayServiceTests.cs - State mutation pattern
+  └─ DuelServiceTests.cs - Feature flag testing pattern
+  └─ Using FluentAssertions (Should() API)
+  └─ xUnit Fact/Theory pattern
+  └─ No async/await needed for unit tests
+
+Test Assertions Pattern:
+  result.Should().NotBeNull();
+  result.error.Should().Be("expected");
+  context.Cell(q, r).Troops.Should().Be(expected);
+  context.Room.PendingDuels.Should().ContainKey(id);
+
+================================================================================
+FEATURE FLAGS INVENTORY
+================================================================================
+
+All feature flags live in GameState.Dynamics (GameState.cs:95-108):
+
+Copresence Modes (CopresenceMode enum):
+  └─ ActiveCopresenceModes[] (List<CopresenceMode>)
+     ├─ Duel - Player-vs-player 1v1 duels
+     ├─ Ambush - Surprise attacks with stealth
+     ├─ Hostage - Capture & hold mechanics
+     ├─ Drain - Hostile copresence blocks regen
+     ├─ Shepherd - Unvisited hex decay
+     ├─ PresenceBattle - Contest progress via copresence
+     └─ (others)
+
+Feature Booleans:
+  ├─ TerrainEnabled - Building terrain +1 regen bonus
+  ├─ PlayerRolesEnabled - Defender role double regen
+  ├─ FogOfWarEnabled - Per-player vision filtering
+  ├─ SupplyLinesEnabled - BFS isolation check
+  ├─ HQEnabled - Alliance HQ mechanics
+  ├─ TimedEscalationEnabled - +1 bonus per 30min
+  ├─ UnderdogPactEnabled - (not used in analyzed services)
+  ├─ NeutralNPCEnabled - (not used in analyzed services)
+  ├─ RandomEventsEnabled - RandomEventService gate
+  └─ MissionSystemEnabled - MissionService gate
+
+Global State Flags:
+  ├─ IsPaused - Checked by all 3 services (pause/resume game)
+  └─ IsRushHour - Set by RandomEventService, reset in AddReinforcementsToAllHexes
+
+================================================================================
+TESTING STRATEGY BY SERVICE
+================================================================================
+
+TROOP REGENERATION:
+  What to Test:
+    ✓ Base reinforcement: +1 per owned hex
+    ✓ Each of 8 feature-gated rules (Drain, Shepherd, SupplyLines, etc.)
+    ✓ Duel expiry removal
+    ✓ Game over broadcast
+  
+  How to Test (without timer):
+    1. Extract ProcessReinforcementTick() as testable method
+    2. Create GameState with specific features & ownership
+    3. Call gameplayService.AddReinforcementsToAllHexes() directly
+    4. Verify troop deltas match expected formula
+    5. Test each feature independently
+
+  Example Test:
+    ```csharp
+    [Fact]
+    public void AddReinforcementsToAllHexes_WithDrainMode_SkipsRegenIfHostilePresent()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithCopresenceModes(CopresenceMode.Drain)
+            .AddPlayer("p1", "Alice")
+            .AddPlayer("p2", "Bob")
+            .OwnHex(0, 0, "p1")
+            .WithPlayerPosition("p2", 0, 0)  // Hostile in hex
+            .WithTroops(0, 0, 5)
+            .Build();
+        var context = new ServiceTestContext(state);
+        
+        gameplayService.AddReinforcementsToAllHexes(roomCode);
+        
+        context.Cell(0, 0).Troops.Should().Be(5);  // No regen
+    }
+    ```
+
+MISSION SERVICE:
+  What to Test:
+    ✓ Initial mission generation (1 main + N team + N personal)
+    ✓ Interim generation schedule (every ~30min)
+    ✓ Each of 9 progress objective types
+    ✓ Progress calculations with edge cases
+    ✓ Reward application (correct hexes, troop counts)
+    ✓ Status transitions (Active → Completed/Expired)
+    ✓ SignalR broadcasts
+  
+  How to Test (without timer):
+    1. Extend GameStateBuilder with mission setup methods
+    2. Extract private evaluation methods (use reflection or create statics)
+    3. Call methods directly with constructed game states
+    4. Verify Progress values before/after evaluation
+    5. Verify status transitions & reward application
+  
+  Example Test:
+    ```csharp
+    [Fact]
+    public void EvaluateMissionProgress_OwnQuadrants_ProgressCalculates()
+    {
+        var mission = new Mission 
+        { 
+            Objective = "OwnQuadrants", 
+            TargetTeamId = "a1",
+            Progress = 0
+        };
+        
+        var state = ServiceTestContext.CreateBuilder()
+            .AddAlliance("a1", "Team A", "p1")
+            .OwnHex(1, 1, "p1", "a1")     // Q+,R+ quadrant
+            .OwnHex(-1, 1, "p1", "a1")    // Q-,R+ quadrant
+            .OwnHex(1, -1, "p1", "a1")    // Q+,R- quadrant
+            .Build();
+        
+        MissionService.EvaluateMissionProgress(state, mission);  // Reflect call
+        
+        mission.Progress.Should().Be(1.0);  // 3 quadrants / 3
+    }
+    ```
+
+RANDOM EVENT SERVICE:
+  What to Test:
+    ✓ Each of 4 event types (Calamity, Epidemic, BonusTroops, RushHour)
+    ✓ Correct state mutations per event
+    ✓ Event logging
+    ✓ SignalR broadcasts
+    ✓ Largest alliance detection (Epidemic)
+  
+  How to Test (without timer):
+    1. Mock Random.Shared or inject random source
+    2. Extract ApplyRandomEvent() as static testable method
+    3. Create game states with specific alliances/ownership
+    4. Call with specific event type
+    5. Verify state mutations & event log
+  
+  Example Test:
+    ```csharp
+    [Fact]
+    public void ApplyRandomEvent_Epidemic_ReducesTroopsForLargestAlliance()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .AddAlliance("a1", "Team A", "p1")
+            .AddAlliance("a2", "Team B", "p2")
+            .OwnHex(0, 0, "p1", "a1")
+            .OwnHex(1, 0, "p1", "a1")   // Team A: 2 hexes (largest)
+            .OwnHex(2, 0, "p2", "a2")   // Team B: 1 hex
+            .WithTroops(0, 0, 10)
+            .WithTroops(1, 0, 10)
+            .WithTroops(2, 0, 10)
+            .Build();
+        
+        ApplyRandomEvent(gameService, room, "Epidemic");  // Reflect/extract call
+        
+        // Verify Team A's hex lost 2 troops
+        var affected = state.EventLog.Last();
+        affected.Message.Should().Contain("Team A");
+        affected.Message.Should().Contain("2 troops");
+    }
+    ```
+
+================================================================================
+COMMON TEST UTILITIES NEEDED
+================================================================================
+
+Extend GameStateBuilder with:
+  └─ .WithMissionSystemEnabled(bool enabled = true)
+  └─ .WithRandomEventsEnabled(bool enabled = true)
+  └─ .WithFogOfWarEnabled(bool enabled = true)
+  └─ .WithMissions(List<Mission> missions)
+  └─ .WithLastMissionGeneration(string roomCode, DateTime lastGen)
+  └─ .WithEventLogEntries(List<GameEventLogEntry> entries)
+  └─ .WithPendingDuels(Dictionary<string, PendingDuel> duels)
+  └─ .WithRushHour(bool isRushHour = true)
+
+Extract to Testable Static Methods:
+  └─ MissionEvaluators.EvaluateHoldCenter(GameState, Mission)
+  └─ MissionEvaluators.EvaluateOwnQuadrants(GameState, Mission)
+  └─ MissionEvaluators.EvaluateClaimCount(GameState, Mission, string objective)
+  └─ (etc. for all 9 types)
+  └─ ReinforcementPhases.ApplyBaseRegen(HexCell)
+  └─ ReinforcementPhases.ApplyTerrainBonus(HexCell, bool terrainEnabled)
+  └─ (etc. for each phase)
+  └─ RandomEventAppliers.ApplyCalamity(GameRoom, Random random)
+  └─ RandomEventAppliers.ApplyEpidemic(GameRoom, Random random)
+  └─ (etc. for each event)
+
+Mock Dependencies:
+  └─ IServiceScopeFactory - Mock to return mock GameService
+  └─ IHubContext<GameHub> - Mock to verify broadcasts
+  └─ ILogger<T> - Mock or use NoOp
+  └─ Random - Mock or inject via static method
+
+================================================================================
+KEY INSIGHTS
+================================================================================
+
+1. LOCKS ARE ATOMIC FOR TESTING
+   • Tests don't need concurrent access handling
+   • State mutations inside lock are synchronous
+   • Just call methods in sequence; verify final state
+
+2. FEATURE FLAGS ARE SIMPLE BOOLEANS
+   • Set via GameStateBuilder fluent API
+   • No complex gate logic needed
+   • Easy to test combinations
+
+3. NO TIMER IN TESTS
+   • NEVER instantiate service class directly
+   • NEVER mock PeriodicTimer
+   • Extract core logic into static testable methods
+   • Call GameService delegates directly
+
+4. RANDOM IS NOT INJECTABLE
+   • MissionService: Random.Shared.Next() for template selection
+   • RandomEventService: Random.Shared.Next() for event selection
+   • Fix: Inject IRandomSource or use reflection mocking
+
+5. APPROXIMATIONS IN MISSION PROGRESS
+   • WinAttacks: Uses owned hex count, not actual combat
+   • ClaimNeutral: Uses total owned, not neutral-specific
+   • NoLosses: Checks territory drop, not per-tick delta
+   • These are known limitations documented in code
+
+6. RUSH HOUR DESIGN BUG
+   • Currently resets every 30s
+   • Intended: 5-minute duration
+   • Fix: Add ExpiresAt timestamp like interim missions
+
+7. SIGNALR BROADCASTS OUTSIDE LOCK
+   • Can mock IHubContext<GameHub> for testing
+   • Don't need to verify broadcasts in unit tests
+   • Focus on state mutations inside lock
+
+================================================================================
+DELIVERABLES CREATED (READ-ONLY)
+================================================================================
+
+✓ BACKGROUND_SERVICES_TEST_GUIDE.md (407 lines)
+  └─ Detailed analysis of all 3 services
+  └─ Core business logic per service
+  └─ Private methods to test
+  └─ Testing seams & patterns
+  └─ GameService delegates
+  └─ Existing test patterns
+  └─ Unit testing approach
+
+✓ SERVICES_TEST_QUICK_REFERENCE.md (337 lines)
+  └─ Overview tables (service, timer, features)
+  └─ Reinforcement phases & rules
+  └─ Mission types & objectives
+  └─ Event effects & triggers
+  └─ Testing infrastructure
+  └─ Testing patterns & examples
+  └─ Key test targets checklist
+
+✓ INSPECTION_SUMMARY.txt (this file)
+  └─ Executive summary
+  └─ Architecture overview
+  └─ Service-by-service breakdown
+  └─ Feature flags inventory
+  └─ Testing strategy
+  └─ Key insights & recommendations
+
+ALL FILES: /Users/leonvandebroek/Projects/Github/Landgrab/
+
+================================================================================
