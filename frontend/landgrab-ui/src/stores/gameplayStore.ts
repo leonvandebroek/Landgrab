@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { AttackPrompt, CombatResult, MapInteractionFeedback, PickupPrompt } from '../types/game';
+import type {
+  AttackPrompt,
+  CombatResult,
+  MapInteractionFeedback,
+  PickupPrompt,
+  ReinforcePrompt,
+} from '../types/game';
 
 const MAP_FEEDBACK_TIMEOUT_MS = 3500;
 
@@ -8,6 +14,8 @@ interface GameplayStore {
   mapFeedback: MapInteractionFeedback | null;
   pickupPrompt: PickupPrompt | null;
   pickupCount: number;
+  reinforcePrompt: ReinforcePrompt | null;
+  reinforceCount: number;
   attackPrompt: AttackPrompt | null;
   attackCount: number;
   combatResult: CombatResult | null;
@@ -16,6 +24,8 @@ interface GameplayStore {
   setMapFeedback: (feedback: MapInteractionFeedback | null) => void;
   setPickupPrompt: (prompt: PickupPrompt | null) => void;
   setPickupCount: (count: number) => void;
+  setReinforcePrompt: (prompt: ReinforcePrompt | null) => void;
+  setReinforceCount: (count: number) => void;
   setAttackPrompt: (prompt: AttackPrompt | null) => void;
   setAttackCount: (count: number) => void;
   setCombatResult: (result: CombatResult | null) => void;
@@ -40,6 +50,8 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
   mapFeedback: null,
   pickupPrompt: null,
   pickupCount: 1,
+  reinforcePrompt: null,
+  reinforceCount: 1,
   attackPrompt: null,
   attackCount: 1,
   combatResult: null,
@@ -60,6 +72,8 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
   },
   setPickupPrompt: (pickupPrompt) => set({ pickupPrompt }),
   setPickupCount: (pickupCount) => set({ pickupCount }),
+  setReinforcePrompt: (reinforcePrompt) => set({ reinforcePrompt }),
+  setReinforceCount: (reinforceCount) => set({ reinforceCount }),
   setAttackPrompt: (attackPrompt) => set({ attackPrompt }),
   setAttackCount: (attackCount) => set({ attackCount }),
   setCombatResult: (combatResult) => set({ combatResult }),
@@ -71,6 +85,8 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
       mapFeedback: null,
       pickupPrompt: null,
       pickupCount: 1,
+      reinforcePrompt: null,
+      reinforceCount: 1,
       attackPrompt: null,
       attackCount: 1,
       combatResult: null,

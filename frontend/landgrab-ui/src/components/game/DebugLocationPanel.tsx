@@ -40,10 +40,15 @@ export function DebugLocationPanel({
   }
 
   return (
-    <aside className={`debug-gps-panel compact${enabled ? ' is-active' : ''}`} aria-labelledby="debug-gps-title">
+    <aside
+      className={`debug-gps-panel compact${enabled ? ' is-active' : ''}`}
+      data-testid="debug-gps-panel"
+      aria-labelledby="debug-gps-title"
+    >
       <button
         type="button"
         className={`btn-secondary small${enabled ? ' is-active' : ''}`}
+        data-testid="debug-gps-toggle"
         onClick={handleToggle}
         disabled={!enabled && !mapCenter}
       >
@@ -52,19 +57,43 @@ export function DebugLocationPanel({
 
       <div className="debug-gps-step-grid compact">
         <span className="debug-gps-step-spacer" />
-        <button type="button" className="btn-ghost small" onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[0].dq, HEX_STEP_DIRECTIONS[0].dr)} disabled={!canStepByHex}>
+        <button
+          type="button"
+          className="btn-ghost small"
+          data-testid="debug-gps-step-north"
+          onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[0].dq, HEX_STEP_DIRECTIONS[0].dr)}
+          disabled={!canStepByHex}
+        >
           {t('debugGps.stepNorth')}
         </button>
         <span className="debug-gps-step-spacer" />
-        <button type="button" className="btn-ghost small" onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[1].dq, HEX_STEP_DIRECTIONS[1].dr)} disabled={!canStepByHex}>
+        <button
+          type="button"
+          className="btn-ghost small"
+          data-testid="debug-gps-step-west"
+          onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[1].dq, HEX_STEP_DIRECTIONS[1].dr)}
+          disabled={!canStepByHex}
+        >
           {t('debugGps.stepWest')}
         </button>
         <span className="debug-gps-step-center">{t('debugGps.stepCenter')}</span>
-        <button type="button" className="btn-ghost small" onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[2].dq, HEX_STEP_DIRECTIONS[2].dr)} disabled={!canStepByHex}>
+        <button
+          type="button"
+          className="btn-ghost small"
+          data-testid="debug-gps-step-east"
+          onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[2].dq, HEX_STEP_DIRECTIONS[2].dr)}
+          disabled={!canStepByHex}
+        >
           {t('debugGps.stepEast')}
         </button>
         <span className="debug-gps-step-spacer" />
-        <button type="button" className="btn-ghost small" onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[3].dq, HEX_STEP_DIRECTIONS[3].dr)} disabled={!canStepByHex}>
+        <button
+          type="button"
+          className="btn-ghost small"
+          data-testid="debug-gps-step-south"
+          onClick={() => onStepByHex(HEX_STEP_DIRECTIONS[3].dq, HEX_STEP_DIRECTIONS[3].dr)}
+          disabled={!canStepByHex}
+        >
           {t('debugGps.stepSouth')}
         </button>
         <span className="debug-gps-step-spacer" />

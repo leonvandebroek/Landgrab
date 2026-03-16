@@ -154,6 +154,7 @@ export function LobbyView({
         <button
           type="button"
           className="btn-secondary map-editor-toggle"
+          data-testid="lobby-map-editor-toggle"
           onClick={() => setView('mapEditor')}
         >
           🗺️ {t('mapEditor.title')}

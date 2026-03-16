@@ -126,8 +126,8 @@ builder.Services.AddRateLimiter(options =>
             ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                Window = TimeSpan.FromMinutes(1),
-                PermitLimit = 10
+                Window = TimeSpan.FromSeconds(1),
+                PermitLimit = 60
             }));
 });
 

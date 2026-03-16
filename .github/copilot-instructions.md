@@ -85,3 +85,15 @@ Required env/config values:
 | `App:BaseUrl` | Frontend URL used in password-reset emails |
 | `Azure:SignalR:ConnectionString` | Optional; omit to use local SignalR |
 | `AzureCommunicationServices:ConnectionString` | Optional; omit to skip email sending (logged instead) |
+
+## Agent Playtester
+
+The repository includes an automated playtesting stack for AI-driven gameplay testing.
+
+- **MCP Server**: `tools/landgrab-agent-mcp/` — Playwright-based browser automation exposed as MCP tools
+- **Agent**: `.github/agents/landgrab-playtester.agent.md` — Copilot agent for playtesting
+- **Skills**: `.github/skills/landgrab-*/SKILL.md` — Workflow skills for hosting, joining, playing, and UX review
+- **Playwright Harness**: `frontend/landgrab-ui/e2e/` — Fixtures and helpers for multiplayer gameplay tests
+- **Docs**: `docs/agent-playtester.md` — Full architecture and usage documentation
+
+Key data-testid selectors are documented in `docs/agent-playtester.md`. The playtester operates through the real browser UI and never bypasses SignalR hub methods.

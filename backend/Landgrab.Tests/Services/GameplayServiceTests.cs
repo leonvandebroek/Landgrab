@@ -173,6 +173,29 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
+    public void PlaceTroops_OnOwnHex_WithSpecificTroopCount_ReinforcesPartially()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 4)
+            .WithCarriedTroops("p1", 3, 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 0, 0, lat, lng, 2);
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(6);
+        context.Player("p1").CarriedTroops.Should().Be(1);
+        context.Player("p1").CarriedTroopsSourceQ.Should().Be(1);
+        context.Player("p1").CarriedTroopsSourceR.Should().Be(0);
+        result.state!.Grid[HexService.Key(0, 0)].Troops.Should().Be(6);
+    }
+
+    [Fact]
     public void PlaceTroops_OnOwnHexWithoutCarriedTroops_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()

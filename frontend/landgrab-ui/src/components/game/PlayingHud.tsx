@@ -26,6 +26,7 @@ interface Props {
   myUserId: string;
   currentHex: [number, number] | null;
   onConfirmPickup: () => void;
+  onConfirmReinforce: () => Promise<void>;
   onReturnToLobby: () => void;
   locationError: string | null;
   currentHexActions?: TileAction[];
@@ -51,6 +52,7 @@ export function PlayingHud({
   myUserId,
   currentHex,
   onConfirmPickup,
+  onConfirmReinforce,
   onReturnToLobby,
   locationError,
   currentHexActions,
@@ -78,10 +80,14 @@ export function PlayingHud({
   const interactionFeedback = useGameplayStore((store) => store.mapFeedback);
   const pickupPrompt = useGameplayStore((store) => store.pickupPrompt);
   const pickupCount = useGameplayStore((store) => store.pickupCount);
+  const reinforcePrompt = useGameplayStore((store) => store.reinforcePrompt);
+  const reinforceCount = useGameplayStore((store) => store.reinforceCount);
   const attackPrompt = useGameplayStore((store) => store.attackPrompt);
   const attackCount = useGameplayStore((store) => store.attackCount);
   const setPickupPrompt = useGameplayStore((store) => store.setPickupPrompt);
   const setPickupCount = useGameplayStore((store) => store.setPickupCount);
+  const setReinforcePrompt = useGameplayStore((store) => store.setReinforcePrompt);
+  const setReinforceCount = useGameplayStore((store) => store.setReinforceCount);
   const setAttackCount = useGameplayStore((store) => store.setAttackCount);
   const setAttackPrompt = useGameplayStore((store) => store.setAttackPrompt);
   const hostMessage = useNotificationStore((store) => store.hostMessage);
@@ -139,13 +145,15 @@ export function PlayingHud({
   const isInOwnHex = Boolean(currentHexCell && me && currentHexCell.ownerId === me.id);
   const isHost = Boolean(me?.isHost);
 
-  const myTotalTroops = useMemo(() => {
+  const myTileTroops = useMemo(() => {
     if (!state || !me) return 0;
 
     return Object.values(state.grid).reduce((sum, cell) => {
       return cell.ownerId === me.id ? sum + cell.troops : sum;
     }, 0);
   }, [state, me]);
+
+  const myTotalTroops = myTileTroops + carriedTroops;
 
   const sortedPlayers = useMemo(() => {
     if (!state) {
@@ -161,7 +169,7 @@ export function PlayingHud({
   const totalHexes = useMemo(() => Object.keys(state?.grid ?? {}).length, [state]);
 
   const interactionStatus = useMemo(() => {
-    if (!state || pickupPrompt) return null;
+    if (!state || pickupPrompt || reinforcePrompt) return null;
 
     const targetCell = selectedHex
       ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
@@ -175,7 +183,7 @@ export function PlayingHud({
       currentHex,
       t,
     });
-  }, [currentHex, me, pickupPrompt, selectedHex, state, t]);
+  }, [currentHex, me, pickupPrompt, reinforcePrompt, selectedHex, state, t]);
 
   const selectedCell: HexCell | undefined = state && selectedHex
     ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
@@ -214,7 +222,14 @@ export function PlayingHud({
               <span className="stat-label">{t('game.hudLands')}</span>
             </div>
             <div className="stat-item">
-              <span className="stat-value secondary">{myTotalTroops}</span>
+              <span className="stat-value secondary stat-value-with-detail">
+                <span>{myTotalTroops}</span>
+                {carriedTroops > 0 && (
+                  <span className="stat-value-detail" aria-label={t('game.carriedTroops')}>
+                    (+{carriedTroops}🎒)
+                  </span>
+                )}
+              </span>
               <span className="stat-label">{t('game.hudTroops')}</span>
             </div>
             {displayTimeRemaining !== null && (
@@ -274,9 +289,34 @@ export function PlayingHud({
             </div>
           )}
 
+          {reinforcePrompt && (
+            <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
+              <div>{t('game.reinforcePrompt')} (1 - {reinforcePrompt.max})</div>
+              <div className="pickup-controls">
+                <span>1</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={reinforcePrompt.max}
+                  value={reinforceCount}
+                  aria-label={t('game.reinforcePrompt')}
+                  title={t('game.reinforcePrompt')}
+                  onChange={(event) => setReinforceCount(Number(event.target.value))}
+                />
+                <span>{reinforcePrompt.max}</span>
+              </div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }}>{reinforceCount}</div>
+              <div className="hud-action-bar">
+                <button className="hud-btn" onClick={() => setReinforcePrompt(null)}>{t('game.cancel')}</button>
+                <button className="hud-btn primary" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
+              </div>
+            </div>
+          )}
+
           {attackPrompt && (
             <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
               <div>{t('game.tileAction.defenderTroops', { count: attackPrompt.defenderTroops })}</div>
+              <div>{t('game.tileAction.attackMinimumExplanation', { count: attackPrompt.defenderTroops })}</div>
               <div className="pickup-controls">
                 <span>{attackPrompt.defenderTroops + 1}</span>
                 <input
@@ -308,14 +348,14 @@ export function PlayingHud({
             />
           )}
 
-          {!pickupPrompt && !attackPrompt && !showRemoteTileInfoCard && interactionStatus && interactionStatus.action !== 'none' && (
+          {!pickupPrompt && !reinforcePrompt && !attackPrompt && !showRemoteTileInfoCard && interactionStatus && interactionStatus.action !== 'none' && (
             <div className={`glass-panel hud-context-pill context-${interactionStatus.tone === 'error' ? 'danger' : 'info'}`}>
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
               {interactionStatus.message}
             </div>
           )}
 
-          {interactionFeedback && !pickupPrompt && !attackPrompt && (
+          {interactionFeedback && !pickupPrompt && !reinforcePrompt && !attackPrompt && (
             <div className={`hud-toast toast-${interactionFeedback.tone === 'error' ? 'danger' : interactionFeedback.tone === 'success' ? 'success' : 'info'}`}>
               {interactionFeedback.message}
             </div>

@@ -155,7 +155,7 @@ export function getTileActions({
       actions.push({
         type: 'pickup',
         label: 'game.tileAction.pickupBtn',
-        icon: '📦',
+        icon: '🪖',
         tone: 'info',
         enabled: true,
       });

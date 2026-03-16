@@ -137,7 +137,7 @@ export function SetupWizard({
 
     return (
         <div className="wizard-page">
-            <div className="wizard-container">
+            <div className="wizard-container" data-testid="setup-wizard">
                 {/* Observer mode toggle for host */}
                 {isHost && onSetObserverMode && (
                     <div className="observer-mode-toggle">
@@ -164,7 +164,7 @@ export function SetupWizard({
                 {/* Header with step indicator */}
                 <div className="wizard-header">
                     <div className="wizard-header-left">
-                        <span className="room-code">{gameState.roomCode}</span>
+                        <span className="room-code" data-testid="wizard-room-code">{gameState.roomCode}</span>
                         {!isHost && <span className="phase-badge">{t('lobby.guestRole')}</span>}
                         {isHost && gameState.hostObserverMode && <span className="phase-badge">{t('observer.observerBadge' as never)}</span>}
                     </div>
@@ -188,7 +188,7 @@ export function SetupWizard({
                 </div>
 
                 {/* Step content */}
-                <div className="wizard-content">
+                <div className="wizard-content" data-testid="wizard-step-content">
                     {step === 0 && (
                         <LocationStep
                             currentLocation={currentLocation}
@@ -254,11 +254,11 @@ export function SetupWizard({
                 <div className="wizard-footer">
                     <div className="wizard-footer-left">
                         {step > 0 ? (
-                            <button type="button" className="btn-ghost" onClick={goBack}>
+                            <button type="button" className="btn-ghost" data-testid="wizard-back-btn" onClick={goBack}>
                                 {t('wizard.back')}
                             </button>
                         ) : (
-                            <button type="button" className="btn-ghost" onClick={onReturnToLobby}>
+                            <button type="button" className="btn-ghost" data-testid="wizard-return-lobby-btn" onClick={onReturnToLobby}>
                                 {t('lobby.returnToLobby')}
                             </button>
                         )}
@@ -269,6 +269,7 @@ export function SetupWizard({
                             <button
                                 type="button"
                                 className="btn-primary"
+                                data-testid="wizard-next-btn"
                                 onClick={goNext}
                                 disabled={!canGoNext}
                             >

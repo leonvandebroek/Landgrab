@@ -365,6 +365,20 @@
   font-weight: 700;
 }
 
+.hud-stats-flat .stat-value-with-detail {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.hud-stats-flat .stat-value-detail {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #93c5fd;
+  white-space: nowrap;
+}
+
 .hud-stats-flat .stat-value.primary { color: #3b82f6; } /* blue-500 */
 .hud-stats-flat .stat-value.secondary { color: #10b981; } /* emerald-500 */
 

@@ -12,6 +12,7 @@ export function GameStartButton({ canStart, onStartGame }: Props) {
         <button
             type="button"
             className="btn-primary big wizard-start-button"
+            data-testid="wizard-start-game-btn"
             onClick={onStartGame}
             disabled={!canStart}
         >

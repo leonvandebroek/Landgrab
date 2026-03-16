@@ -44,6 +44,12 @@ export interface PickupPrompt {
   max: number;
 }
 
+export interface ReinforcePrompt {
+  q: number;
+  r: number;
+  max: number;
+}
+
 export interface AttackPrompt {
   q: number;
   r: number;

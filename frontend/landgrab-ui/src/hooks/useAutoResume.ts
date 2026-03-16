@@ -106,7 +106,7 @@ export function useAutoResume({
       savedSessionRef.current = next;
       useGameStore.getState().setSavedSession(next);
     },
-    [auth?.userId, savedSessionRef],
+    [auth, savedSessionRef],
   );
 
   const clearSession = useCallback(() => {
@@ -273,7 +273,23 @@ export function useAutoResume({
       });
       setAutoResuming(false);
     };
-  }, [auth, clearGameplayUi, clearPendingResume, clearSession, connected, invoke, runResumeAction, t]);
+  }, [
+    auth,
+    clearError,
+    clearGameplayUi,
+    clearPendingResume,
+    clearSession,
+    connected,
+    invoke,
+    runResumeAction,
+    savedSessionRef,
+    setAutoResuming,
+    setError,
+    setGameState,
+    setPickupPrompt,
+    setView,
+    t,
+  ]);
 
   return {
     saveSession,

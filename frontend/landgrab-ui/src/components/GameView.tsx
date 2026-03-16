@@ -30,6 +30,7 @@ interface LocationPoint {
 export interface GameViewActions {
   onHexClick: (q: number, r: number, cell: HexCell | undefined) => void;
   onConfirmPickup: () => void;
+  onConfirmReinforce: () => Promise<void>;
   onReturnToLobby: () => void;
   currentHexActions: TileAction[];
   onCurrentHexAction: (actionType: TileActionType) => void;
@@ -183,6 +184,7 @@ export function GameView({
           myUserId={userId}
           currentHex={currentHex}
           onConfirmPickup={actions.onConfirmPickup}
+          onConfirmReinforce={actions.onConfirmReinforce}
           onReturnToLobby={actions.onReturnToLobby}
           locationError={effectiveLocationError}
           currentHexActions={actions.currentHexActions}

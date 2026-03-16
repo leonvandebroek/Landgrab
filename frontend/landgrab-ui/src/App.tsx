@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './hooks/useAuth';
 import { useAutoResume } from './hooks/useAutoResume';
@@ -25,6 +25,11 @@ import type { SavedSession } from './stores/gameStore';
 import { useGameplayStore } from './stores/gameplayStore';
 import { useUiStore } from './stores/uiStore';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
+import {
+  clearPersistedDebugLocation,
+  persistDebugLocation,
+  readPersistedDebugLocation,
+} from './utils/debugLocationSession';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
@@ -83,8 +88,8 @@ export default function App() {
   //     that always delegate through it.  useSignalRHandlers uses only the
   //     stable wrappers, so its useMemo never stales on callback identity.
   //  3. Call useSignalRHandlers → useSignalR → useAutoResume in that order.
-  //  4. After useAutoResume returns, populate autoResumeRef.current
-  //     synchronously (safe ref mutation during render, before effects fire).
+  //  4. After useAutoResume returns, populate the shared refs in layout effects
+  //     so handlers see the latest callbacks without mutating refs during render.
 
   const invokeRef = useRef<SignalRInvoke | null>(null);
 
@@ -128,16 +133,17 @@ export default function App() {
   });
 
   const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, signalRHandlers);
-  // Update stable ref so handlers always call the latest invoke.
-  invokeRef.current = invoke;
+  useLayoutEffect(() => {
+    invokeRef.current = invoke;
+  });
 
   // Now we have connected + invoke — call useAutoResume.
   const { saveSession, clearSession, resolveResumeFromState, resolveResumeFromError, pendingResumeRef } =
     useAutoResume({ auth, connected, invoke, t, savedSessionRef });
 
-  // Wire stable wrappers to the real callbacks (synchronous ref mutation,
-  // safe during render — effects haven't run yet at this point).
-  autoResumeRef.current = { saveSession, resolveResumeFromState, resolveResumeFromError };
+  useLayoutEffect(() => {
+    autoResumeRef.current = { saveSession, resolveResumeFromState, resolveResumeFromError };
+  });
 
   // ── Location ─────────────────────────────────────────────────────────────
   const liveLocation = useMemo<LocationPoint | null>(() => {
@@ -159,6 +165,48 @@ export default function App() {
     if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
     return { lat: gameState.mapLat, lng: gameState.mapLng };
   }, [gameState]);
+  const activeRoomCode = gameState?.roomCode ?? null;
+
+  useEffect(() => {
+    if (!DEBUG_GPS_AVAILABLE || !activeRoomCode) {
+      return;
+    }
+
+    if (debugLocationEnabled && debugLocation !== null) {
+      return;
+    }
+
+    const persistedDebugLocation = readPersistedDebugLocation(activeRoomCode);
+    if (!persistedDebugLocation) {
+      return;
+    }
+
+    setDebugLocation(persistedDebugLocation);
+    setDebugLocationEnabled(true);
+  }, [
+    activeRoomCode,
+    debugLocation,
+    debugLocationEnabled,
+    setDebugLocation,
+    setDebugLocationEnabled,
+  ]);
+
+  useEffect(() => {
+    if (
+      !DEBUG_GPS_AVAILABLE
+      || !activeRoomCode
+      || !debugLocationEnabled
+      || debugLocation === null
+    ) {
+      return;
+    }
+
+    persistDebugLocation(activeRoomCode, debugLocation);
+  }, [
+    activeRoomCode,
+    debugLocation,
+    debugLocationEnabled,
+  ]);
 
   // ── Player / game derived values ─────────────────────────────────────────
   const myPlayer = useMemo(() => {
@@ -218,11 +266,12 @@ export default function App() {
      handleHexClick,
     currentHexActions,
     handleCurrentHexAction,
-    handleDismissTileActions,
-    handleConfirmPickup,
-    handleConfirmAttack,
-    handleReClaimHex,
-    handlePlayAgain,
+     handleDismissTileActions,
+     handleConfirmPickup,
+     handleConfirmReinforce,
+     handleConfirmAttack,
+     handleReClaimHex,
+     handlePlayAgain,
   } = useGameActions({
     invoke,
     auth,
@@ -253,7 +302,7 @@ export default function App() {
       });
 
     return () => { cancelled = true; };
-  }, [auth, autoResuming, connected, gameState, invoke, t]);
+  }, [auth, autoResuming, connected, gameState, invoke, setError, setMyRooms, t]);
 
   // ── Debug GPS helpers ────────────────────────────────────────────────────
   const canStepDebugByHex = Boolean(
@@ -263,16 +312,20 @@ export default function App() {
   );
 
   const applyDebugLocation = useCallback((lat: number, lng: number) => {
+    if (activeRoomCode) {
+      persistDebugLocation(activeRoomCode, { lat, lng });
+    }
     setDebugLocation({ lat, lng });
     setDebugLocationEnabled(true);
     setError('');
-  }, [setDebugLocation, setDebugLocationEnabled, setError]);
+  }, [activeRoomCode, setDebugLocation, setDebugLocationEnabled, setError]);
 
   const disableDebugLocation = useCallback(() => {
+    clearPersistedDebugLocation(activeRoomCode);
     setDebugLocationEnabled(false);
     setDebugLocation(null);
     setError('');
-  }, [setDebugLocationEnabled, setDebugLocation, setError]);
+  }, [activeRoomCode, setDebugLocationEnabled, setDebugLocation, setError]);
 
   const stepDebugLocationByHex = useCallback((dq: number, dr: number): LocationPoint | null => {
     if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
@@ -356,11 +409,12 @@ export default function App() {
 
   // ── Action groupings for child views ─────────────────────────────────────
   const gameViewActions = useMemo<GameViewActions>(() => ({
-    onHexClick: handleHexClick,
-    onConfirmPickup: handleConfirmPickup,
-    onReturnToLobby: handleReturnToLobby,
-    currentHexActions,
-     onCurrentHexAction: handleCurrentHexAction,
+     onHexClick: handleHexClick,
+     onConfirmPickup: handleConfirmPickup,
+     onConfirmReinforce: handleConfirmReinforce,
+     onReturnToLobby: handleReturnToLobby,
+     currentHexActions,
+      onCurrentHexAction: handleCurrentHexAction,
      onDismissTileActions: handleDismissTileActions,
      onConfirmAttack: handleConfirmAttack,
      onActivateBeacon: handleActivateBeacon,
@@ -371,11 +425,11 @@ export default function App() {
      onPauseGame: handlePauseGame,
      onReClaimHex: handleReClaimHex,
   }), [
-     handleHexClick, handleConfirmPickup, handleReturnToLobby, currentHexActions,
-     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
-     handleActivateBeacon, handleDeactivateBeacon, handleSetObserverMode,
-     handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleReClaimHex,
-   ]);
+      handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
+      handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
+      handleActivateBeacon, handleDeactivateBeacon, handleSetObserverMode,
+      handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleReClaimHex,
+    ]);
 
   const lobbyViewActions = useMemo<LobbyViewActions>(() => ({
     onCreateRoom: handleCreateRoom,

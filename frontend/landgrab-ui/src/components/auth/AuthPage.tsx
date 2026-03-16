@@ -78,6 +78,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
           <div className="auth-tabs">
             <button
               type="button"
+              data-testid="auth-sign-in-tab"
               className={mode === 'login' ? 'active' : ''}
               onClick={() => {
                 setMode('login');
@@ -89,6 +90,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
             </button>
             <button
               type="button"
+              data-testid="auth-sign-up-tab"
               className={mode === 'register' ? 'active' : ''}
               onClick={() => {
                 setMode('register');
@@ -110,6 +112,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
               <label>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.username')}</label>
               <input
                 type="text"
+                data-testid="auth-username-input"
                 value={username}
                 onChange={e => {
                   setUsername(e.target.value);
@@ -127,6 +130,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
                 <label>{t('auth.email')}</label>
                 <input
                   type="email"
+                  data-testid="auth-email-input"
                   value={email}
                   onChange={e => {
                     setEmail(e.target.value);
@@ -144,6 +148,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
               <label>{t('auth.password')}</label>
               <input
                 type="password"
+                data-testid="auth-password-input"
                 value={password}
                 onChange={e => {
                   setPassword(e.target.value);
@@ -159,7 +164,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
 
             {error && <p className="error-msg">{error}</p>}
 
-            <button type="submit" className="btn-primary auth-submit" disabled={loading}>
+            <button type="submit" className="btn-primary auth-submit" data-testid="auth-submit-btn" disabled={loading}>
               {loading ? t('auth.pleaseWait') : mode === 'login' ? t('auth.signIn') : t('auth.createAccount')}
             </button>
           </form>

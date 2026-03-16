@@ -63,7 +63,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == targetPlayerId);
             if (player == null)
-                return (null, "Target player is not in room.");
+                return (null, "Target player is not in the room.");
 
             if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
                 return (null, "Invalid hex.");

@@ -9,8 +9,10 @@ import { useUiStore } from '../stores/uiStore';
 import type { SoundName } from './useSound';
 import type { GameToast } from './useToastQueue';
 import type { GameEvents } from './useSignalR';
+import type { AttackPrompt, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
+import { readPersistedDebugLocation } from '../utils/debugLocationSession';
 
 type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
@@ -23,6 +25,98 @@ interface UseSignalRHandlersOptions {
   t: TFunction;
   playSound: (name: SoundName) => void;
   pushToast: (toast: Omit<GameToast, 'id'>) => void;
+}
+
+function getHex(state: GameState | null, q: number, r: number) {
+  if (!state) {
+    return null;
+  }
+
+  return state.grid[`${q},${r}`] ?? null;
+}
+
+function shouldClearPickupPrompt(
+  prompt: PickupPrompt | null,
+  previousState: GameState | null,
+  nextState: GameState
+): boolean {
+  if (!prompt) {
+    return false;
+  }
+
+  const previousHex = getHex(previousState, prompt.q, prompt.r);
+  const nextHex = getHex(nextState, prompt.q, prompt.r);
+
+  if (!nextHex) {
+    return true;
+  }
+
+  if (nextHex.troops <= 0) {
+    return true;
+  }
+
+  if (!previousHex) {
+    return false;
+  }
+
+  return previousHex.ownerId !== nextHex.ownerId;
+}
+
+function shouldClearAttackPrompt(
+  prompt: AttackPrompt | null,
+  previousState: GameState | null,
+  nextState: GameState
+): boolean {
+  if (!prompt) {
+    return false;
+  }
+
+  const previousHex = getHex(previousState, prompt.q, prompt.r);
+  const nextHex = getHex(nextState, prompt.q, prompt.r);
+
+  if (!nextHex) {
+    return true;
+  }
+
+  if (!previousHex) {
+    return false;
+  }
+
+  return previousHex.ownerId !== nextHex.ownerId;
+}
+
+function shouldClearReinforcePrompt(
+  prompt: ReinforcePrompt | null,
+  previousState: GameState | null,
+  nextState: GameState
+): boolean {
+  if (!prompt) {
+    return false;
+  }
+
+  const previousHex = getHex(previousState, prompt.q, prompt.r);
+  const nextHex = getHex(nextState, prompt.q, prompt.r);
+
+  if (!nextHex) {
+    return true;
+  }
+
+  if (!previousHex) {
+    return false;
+  }
+
+  return previousHex.ownerId !== nextHex.ownerId || previousHex.ownerAllianceId !== nextHex.ownerAllianceId;
+}
+
+function restorePersistedDebugLocation(roomCode: string | null | undefined): void {
+  const persistedDebugLocation = readPersistedDebugLocation(roomCode);
+  if (!persistedDebugLocation) {
+    return;
+  }
+
+  const uiState = useUiStore.getState();
+  uiState.setDebugLocation(persistedDebugLocation);
+  uiState.setDebugLocationEnabled(true);
 }
 
 export function useSignalRHandlers({
@@ -45,6 +139,7 @@ export function useSignalRHandlers({
       resolveResumeFromState(normalizedState);
       useGameStore.getState().setGameState(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
+      useGameplayStore.getState().setReinforcePrompt(null);
       useUiStore.getState().setView('lobby');
       useGameplayStore.getState().clearGameplayUi();
       useUiStore.getState().clearError();
@@ -57,10 +152,12 @@ export function useSignalRHandlers({
       }
       useGameStore.getState().setGameState(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
+      useGameplayStore.getState().setReinforcePrompt(null);
       if (state.phase === 'Lobby') {
         useUiStore.getState().setView('lobby');
         useGameplayStore.getState().clearGameplayUi();
       } else if (normalizedState.phase === 'Playing') {
+        restorePersistedDebugLocation(normalizedState.roomCode);
         useUiStore.getState().setView('game');
       } else if (normalizedState.phase === 'GameOver') {
         useUiStore.getState().setView('gameover');
@@ -75,18 +172,48 @@ export function useSignalRHandlers({
       }
       useGameStore.getState().setGameState(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
+      useGameplayStore.getState().setReinforcePrompt(null);
+      restorePersistedDebugLocation(normalizedState.roomCode);
       useUiStore.getState().setView('game');
       useUiStore.getState().clearError();
     },
     onStateUpdated: (state) => {
       const normalizedState = normalizeGameState(state, gameState);
+      const gameplayState = useGameplayStore.getState();
+      const shouldClearPickup = shouldClearPickupPrompt(
+        gameplayState.pickupPrompt,
+        gameState,
+        normalizedState
+      );
+      const shouldClearAttack = shouldClearAttackPrompt(
+        gameplayState.attackPrompt,
+        gameState,
+        normalizedState
+      );
+      const shouldClearReinforce = shouldClearReinforcePrompt(
+        gameplayState.reinforcePrompt,
+        gameState,
+        normalizedState
+      );
+
       resolveResumeFromState(normalizedState);
       if (normalizedState.roomCode) {
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
-      useGameplayStore.getState().setPickupPrompt(null);
+      if (shouldClearPickup) {
+        gameplayState.setPickupPrompt(null);
+      }
+      if (shouldClearAttack) {
+        gameplayState.setAttackPrompt(null);
+      }
+      if (shouldClearReinforce) {
+        gameplayState.setReinforcePrompt(null);
+      }
       if (normalizedState.phase === 'Playing') {
+        if (gameState?.phase !== 'Playing') {
+          restorePersistedDebugLocation(normalizedState.roomCode);
+        }
         useUiStore.getState().setView('game');
       } else if (normalizedState.phase === 'GameOver') {
         useUiStore.getState().setView('gameover');

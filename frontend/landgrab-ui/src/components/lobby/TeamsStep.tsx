@@ -22,6 +22,7 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
     const [copied, setCopied] = useState(false);
 
     const me = gameState.players.find(p => p.id === myUserId);
+    const myAllianceId = me?.allianceId;
     const allHaveAlliance = gameState.players.length >= 2 && gameState.players.every(p => p.allianceId);
 
     const copyCode = () => {
@@ -51,15 +52,28 @@ export function TeamsStep({ gameState, myUserId, isHost, onSetAlliance, onConfig
                 </div>
 
                 {isHost ? (
-                    <HostAllianceBuilder
-                        gameState={gameState}
-                        onConfigureAlliances={onConfigureAlliances}
-                        onDistributePlayers={onDistributePlayers}
-                    />
+                    <>
+                        <HostAllianceBuilder
+                            gameState={gameState}
+                            onConfigureAlliances={onConfigureAlliances}
+                            onDistributePlayers={onDistributePlayers}
+                        />
+                        <AlliancePickerSection
+                            title={t('wizard.hostJoinAlliance')}
+                            hint={t('wizard.hostJoinAllianceDesc')}
+                            emptyHint={t('wizard.guestWaitingAlliances')}
+                            gameState={gameState}
+                            myAllianceId={myAllianceId}
+                            onSetAlliance={onSetAlliance}
+                        />
+                    </>
                 ) : (
-                    <GuestAlliancePicker
+                    <AlliancePickerSection
+                        title={t('wizard.teamsAllianceTitle')}
+                        hint={t('wizard.guestPickAlliance')}
+                        emptyHint={t('wizard.guestWaitingAlliances')}
                         gameState={gameState}
-                        myAllianceId={me?.allianceId}
+                        myAllianceId={myAllianceId}
                         onSetAlliance={onSetAlliance}
                     />
                 )}
@@ -213,26 +227,30 @@ function HostAllianceBuilder({
     );
 }
 
-// ── Guest: Alliance Picker ───────────────────────────────────────
+// ── Shared: Alliance Picker ──────────────────────────────────────
 
-function GuestAlliancePicker({
+function AlliancePickerSection({
+    title,
+    hint,
+    emptyHint,
     gameState,
     myAllianceId,
     onSetAlliance,
 }: {
+    title: string;
+    hint: string;
+    emptyHint: string;
     gameState: GameState;
     myAllianceId: string | undefined;
     onSetAlliance: (name: string) => void;
 }) {
-    const { t } = useTranslation();
-
     return (
         <div className="wizard-alliance-section">
-            <h3>{t('wizard.teamsAllianceTitle')}</h3>
+            <h3>{title}</h3>
 
             {gameState.alliances.length > 0 ? (
                 <>
-                    <p className="wizard-hint">{t('wizard.guestPickAlliance')}</p>
+                    <p className="wizard-hint">{hint}</p>
                     <div className="alliances-row">
                         {gameState.alliances.map(alliance => (
                             <button
@@ -249,7 +267,7 @@ function GuestAlliancePicker({
                     </div>
                 </>
             ) : (
-                <p className="wizard-hint">{t('wizard.guestWaitingAlliances')}</p>
+                <p className="wizard-hint">{emptyHint}</p>
             )}
         </div>
     );

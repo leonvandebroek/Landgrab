@@ -110,6 +110,7 @@ export function useAuth() {
         try {
           await refreshAuthCookie();
         } catch {
+          // Ignore transient refresh failures; a later refresh or auth action will recover.
         }
       });
     }, AUTH_REFRESH_INTERVAL_MS);

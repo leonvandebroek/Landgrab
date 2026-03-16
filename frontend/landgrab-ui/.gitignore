@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright auth state (contains session cookies — never commit)
+e2e/.auth/

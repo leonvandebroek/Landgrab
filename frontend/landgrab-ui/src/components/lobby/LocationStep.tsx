@@ -78,15 +78,17 @@ export function LocationStep({
                 <button
                     type="button"
                     className="btn-ghost small"
+                    data-testid="location-manual-toggle"
                     onClick={() => setShowManual(v => !v)}
                 >
                     {showManual ? t('wizard.locationManualHide') : t('wizard.locationManualToggle')}
                 </button>
 
                 {showManual && (
-                    <div className="wizard-manual-location">
+                    <div className="wizard-manual-location" data-testid="location-manual-form">
                         <input
                             type="number"
+                            data-testid="location-manual-lat"
                             value={manualLat}
                             onChange={e => setManualLat(e.target.value)}
                             placeholder={t('lobby.latitude')}
@@ -94,6 +96,7 @@ export function LocationStep({
                         />
                         <input
                             type="number"
+                            data-testid="location-manual-lng"
                             value={manualLng}
                             onChange={e => setManualLng(e.target.value)}
                             placeholder={t('lobby.longitude')}
@@ -101,6 +104,7 @@ export function LocationStep({
                         />
                         <button
                             type="button"
+                            data-testid="location-manual-apply"
                             className="btn-secondary"
                             onClick={applyManual}
                             disabled={!Number.isFinite(Number(manualLat)) || !Number.isFinite(Number(manualLng)) || manualLat === '' || manualLng === ''}

@@ -97,7 +97,7 @@ export function GameLobby({
   // ── No room: entry screen ──────────────────────────────────────
   if (!gameState) {
     return (
-      <div className="lobby-page">
+      <div className="lobby-page" data-testid="lobby-entry">
         <div className="lobby-card is-entry">
           <div className="lobby-entry-hero">
             <div className="lobby-entry-copy">
@@ -112,7 +112,7 @@ export function GameLobby({
                 <span>{connected ? t('lobby.roomStatusConnected') : t('lobby.connectingToServer')}</span>
               </div>
               <div className="entry-highlight-card">
-                <span className="room-code">6</span>
+                <span className="room-code" data-testid="lobby-room-code">6</span>
                 <div>
                   <strong>{t('lobby.joinRoomTitle')}</strong>
                   <span>{t('lobby.joinRoomDetail')}</span>
@@ -135,7 +135,13 @@ export function GameLobby({
                   </span>
                 </div>
 
-                <button type="button" className="btn-primary big" onClick={onCreateRoom} disabled={!connected}>
+                <button
+                  type="button"
+                  className="btn-primary big"
+                  data-testid="lobby-create-room-btn"
+                  onClick={onCreateRoom}
+                  disabled={!connected}
+                >
                   {t('lobby.createRoom')}
                 </button>
               </div>
@@ -152,6 +158,7 @@ export function GameLobby({
                 <div className="join-form entry-join-form">
                   <input
                     type="text"
+                    data-testid="lobby-join-code-input"
                     value={joinCode}
                     onChange={event => setJoinCode(event.target.value.toUpperCase())}
                     placeholder={t('lobby.roomCodePlaceholder')}
@@ -160,6 +167,7 @@ export function GameLobby({
                   <button
                     type="button"
                     className="btn-secondary"
+                    data-testid="lobby-join-btn"
                     onClick={() => onJoinRoom(joinCode)}
                     disabled={!canSubmitJoinCode}
                     title={getJoinDisabledReason(joinCode, connected, t) ?? undefined}
@@ -217,7 +225,7 @@ export function GameLobby({
               <div className="entry-footer-actions">
                 {error && <p className="error-msg">{error}</p>}
                 {!connected && <p className="info-msg">{t('lobby.connectingToServer')}</p>}
-                <button type="button" className="btn-ghost" onClick={onLogout}>{t('lobby.signOut')}</button>
+                <button type="button" className="btn-ghost" data-testid="lobby-sign-out-btn" onClick={onLogout}>{t('lobby.signOut')}</button>
               </div>
             </div>
           </div>

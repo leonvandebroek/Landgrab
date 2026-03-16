@@ -275,8 +275,14 @@ public class GameplayService(
                 if (player.CarriedTroops <= 0)
                     return (null, "You are not carrying any troops.", null, null);
 
-                cell.Troops += player.CarriedTroops;
-                ResetCarriedTroops(player);
+                var reinforcedTroops = troopCount ?? player.CarriedTroops;
+                if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
+                    return (null, "Troop count must be between 1 and your carried troops.", null, null);
+
+                cell.Troops += reinforcedTroops;
+                player.CarriedTroops -= reinforcedTroops;
+                if (player.CarriedTroops == 0)
+                    ResetCarriedTroops(player);
                 winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);

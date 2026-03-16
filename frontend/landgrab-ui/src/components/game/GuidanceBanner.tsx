@@ -17,6 +17,7 @@ export function GuidanceBanner({
   const { t } = useTranslation();
   const gameState = useGameStore((state) => state.gameState);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
+  const isCarryingTroops = carriedTroops > 0;
   const selectedHexExists = useMemo(
     () => Boolean(gameState && selectedHexKey && gameState.grid[selectedHexKey]),
     [gameState, selectedHexKey]
@@ -26,7 +27,7 @@ export function GuidanceBanner({
       return t('guidance.enableLocation');
     }
 
-    if (carriedTroops > 0) {
+    if (isCarryingTroops) {
       return t('guidance.carryingTroops', {
         count: carriedTroops,
       });
@@ -41,7 +42,7 @@ export function GuidanceBanner({
     }
 
     return t('guidance.walkToClaim');
-  }, [carriedTroops, hasLocation, isInOwnHex, selectedHexExists, t]);
+  }, [carriedTroops, hasLocation, isCarryingTroops, isInOwnHex, selectedHexExists, t]);
   const [hint, setHint] = useState<string>(computedHint);
   const [isVisible, setIsVisible] = useState<boolean>(true);
 
@@ -60,17 +61,21 @@ export function GuidanceBanner({
         setIsVisible(true);
       }, 300);
 
-      hideTimeout = window.setTimeout(() => {
-        setIsVisible(false);
-      }, 5300);
+      if (!isCarryingTroops) {
+        hideTimeout = window.setTimeout(() => {
+          setIsVisible(false);
+        }, 5300);
+      }
     } else {
       showTimeout = window.setTimeout(() => {
         setIsVisible(true);
       }, 0);
 
-      hideTimeout = window.setTimeout(() => {
-        setIsVisible(false);
-      }, 5000);
+      if (!isCarryingTroops) {
+        hideTimeout = window.setTimeout(() => {
+          setIsVisible(false);
+        }, 5000);
+      }
     }
 
     return () => {
@@ -86,7 +91,7 @@ export function GuidanceBanner({
         window.clearTimeout(hideTimeout);
       }
     };
-  }, [computedHint, hint]);
+  }, [computedHint, hint, isCarryingTroops]);
 
   return (
     <div className={`guidance-banner ${isVisible ? 'visible' : ''}`}>

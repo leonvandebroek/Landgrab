@@ -82,7 +82,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
             setReconnecting(false);
             eventsRef.current.onReconnected?.();
           }
-        } catch (err) {
+        } catch {
           if (!isDisposed() && connectionRef.current === conn && manualReconnectAttemptsRef.current < MANUAL_RECONNECT_MAX_ATTEMPTS) {
             manualReconnectTimerRef.current = window.setTimeout(attemptReconnect, MANUAL_RECONNECT_DELAY_MS);
           } else if (!isDisposed()) {

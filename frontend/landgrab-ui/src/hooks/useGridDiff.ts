@@ -67,6 +67,7 @@ export function useGridDiff(grid: Record<string, HexCell>): TroopMovement[] {
 
   useEffect(() => {
     const prev = prevGridRef.current;
+    let movementUpdateTimeoutId: number | null = null;
 
     // First render or empty grid — just store and skip
     if (Object.keys(prev).length === 0 || Object.keys(grid).length === 0) {
@@ -147,7 +148,9 @@ export function useGridDiff(grid: Record<string, HexCell>): TroopMovement[] {
 
     if (detected.length > 0) {
       // Merge with existing, keep only newest MAX_MOVEMENTS
-      setMovements((prev) => [...prev, ...detected].slice(-MAX_MOVEMENTS));
+      movementUpdateTimeoutId = window.setTimeout(() => {
+        setMovements((prev) => [...prev, ...detected].slice(-MAX_MOVEMENTS));
+      }, 0);
 
       if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
       clearTimerRef.current = setTimeout(() => {
@@ -157,6 +160,11 @@ export function useGridDiff(grid: Record<string, HexCell>): TroopMovement[] {
     }
 
     prevGridRef.current = { ...grid };
+    return () => {
+      if (movementUpdateTimeoutId !== null) {
+        window.clearTimeout(movementUpdateTimeoutId);
+      }
+    };
   }, [grid]);
 
   // Clean up timer on unmount

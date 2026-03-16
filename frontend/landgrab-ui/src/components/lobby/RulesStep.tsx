@@ -96,6 +96,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         <span><strong className="range-value">{formatDistance(displayedTileSizeMeters)}</strong></span>
                         <input
                             type="range"
+                            data-testid="rules-tile-size-input"
                             min={15}
                             max={maxTileSizeMeters}
                             step={1}
@@ -116,6 +117,11 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                             <label key={mode} className={`claim-mode-option${gameState.claimMode === mode ? ' active' : ''}`}>
                                 <input
                                     type="radio"
+                                    data-testid={mode === 'PresenceOnly'
+                                        ? 'rules-claim-mode-presence-only'
+                                        : mode === 'PresenceWithTroop'
+                                            ? 'rules-claim-mode-presence-with-troop'
+                                            : 'rules-claim-mode-adjacency-required'}
                                     name="wizard-claim-mode"
                                     checked={gameState.claimMode === mode}
                                     onChange={() => isHost && onSetClaimMode(mode)}
@@ -138,6 +144,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         <label className="toggle-row">
                             <input
                                 type="checkbox"
+                                data-testid="rules-allow-self-claim-toggle"
                                 checked={gameState.allowSelfClaim !== false}
                                 onChange={e => isHost && onSetAllowSelfClaim(e.target.checked)}
                                 disabled={!isHost}
@@ -164,6 +171,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         {gameState.winConditionType !== 'Elimination' && (
                             <input
                                 type="number"
+                                data-testid="rules-win-condition-input"
                                 min={1}
                                 max={gameState.winConditionType === 'TerritoryPercent' ? 100 : undefined}
                                 value={effectiveWinValue}
@@ -173,7 +181,12 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                             />
                         )}
                         {isHost && gameState.winConditionType !== 'Elimination' && (
-                            <button type="button" className="btn-secondary" onClick={applyWinCondition}>
+                            <button
+                                type="button"
+                                className="btn-secondary"
+                                data-testid="rules-win-condition-apply-btn"
+                                onClick={applyWinCondition}
+                            >
                                 {t('lobby.apply')}
                             </button>
                         )}
@@ -190,6 +203,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         <label className="toggle-row">
                             <input
                                 type="checkbox"
+                                data-testid="rules-host-gps-bypass-toggle"
                                 checked={gameState.hostBypassGps === true}
                                 onChange={e => {
                                     invoke?.('SetHostBypassGps', gameState.roomCode, e.target.checked);
@@ -205,6 +219,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                                 <span>{t('mapEditor.maxFootprint')}</span>
                                 <input
                                     type="number"
+                                    data-testid="rules-max-footprint-input"
                                     min={100}
                                     max={50000}
                                     step={100}
@@ -216,6 +231,7 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                             <button
                                 type="button"
                                 className="btn-secondary"
+                                data-testid="rules-max-footprint-apply-btn"
                                 onClick={applyMaxFootprint}
                                 disabled={!maxFootprintDraft}
                             >

@@ -54,6 +54,7 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleCurrentHexAction: gameplayActions.handleCurrentHexAction,
     handleDismissTileActions: gameplayActions.handleDismissTileActions,
     handleConfirmPickup: gameplayActions.handleConfirmPickup,
+    handleConfirmReinforce: gameplayActions.handleConfirmReinforce,
     handleConfirmAttack: gameplayActions.handleConfirmAttack,
     handleCancelAttack: gameplayActions.handleCancelAttack,
     handleReClaimHex: gameplayActions.handleReClaimHex,

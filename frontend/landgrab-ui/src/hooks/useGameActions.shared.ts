@@ -81,6 +81,7 @@ export interface UseGameActionsResult {
   handleCurrentHexAction: (actionType: TileActionType) => void;
   handleDismissTileActions: () => void;
   handleConfirmPickup: () => void;
+  handleConfirmReinforce: () => Promise<void>;
   handleConfirmAttack: () => Promise<void>;
   handleCancelAttack: () => void;
   handleReClaimHex: (mode: ReClaimMode) => Promise<void>;

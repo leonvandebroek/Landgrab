@@ -29,6 +29,7 @@ interface UseGameActionsGameplayResult {
   handleCurrentHexAction: (actionType: TileActionType) => void;
   handleDismissTileActions: () => void;
   handleConfirmPickup: () => void;
+  handleConfirmReinforce: () => Promise<void>;
   handleConfirmAttack: () => Promise<void>;
   handleCancelAttack: () => void;
   handleReClaimHex: (mode: ReClaimMode) => Promise<void>;
@@ -50,6 +51,8 @@ export function useGameActionsGameplay({
   const selectedHex = useGameplayStore(state => state.selectedHex);
   const pickupPrompt = useGameplayStore(state => state.pickupPrompt);
   const pickupCount = useGameplayStore(state => state.pickupCount);
+  const reinforcePrompt = useGameplayStore(state => state.reinforcePrompt);
+  const reinforceCount = useGameplayStore(state => state.reinforceCount);
   const attackPrompt = useGameplayStore(state => state.attackPrompt);
   const attackCount = useGameplayStore(state => state.attackCount);
   const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
@@ -58,6 +61,8 @@ export function useGameActionsGameplay({
   const setMapFeedback = useGameplayStore(state => state.setMapFeedback);
   const setPickupPrompt = useGameplayStore(state => state.setPickupPrompt);
   const setPickupCount = useGameplayStore(state => state.setPickupCount);
+  const setReinforcePrompt = useGameplayStore(state => state.setReinforcePrompt);
+  const setReinforceCount = useGameplayStore(state => state.setReinforceCount);
   const setAttackPrompt = useGameplayStore(state => state.setAttackPrompt);
   const setAttackCount = useGameplayStore(state => state.setAttackCount);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
@@ -160,8 +165,9 @@ export function useGameActionsGameplay({
     setSelectedHex(currentHex);
     setMapFeedback(null);
     setPickupPrompt(null);
+    setReinforcePrompt(null);
     setAttackPrompt(null);
-  }, [currentHex, gameState?.phase, setAttackPrompt, setMapFeedback, setPickupPrompt, setSelectedHex]);
+  }, [currentHex, gameState?.phase, setAttackPrompt, setMapFeedback, setPickupPrompt, setReinforcePrompt, setSelectedHex]);
 
   const placeTroopsAction = useCallback((targetHex: [number, number], actionType: ClaimTileActionType): void => {
     if (!invoke) {
@@ -179,6 +185,8 @@ export function useGameActionsGameplay({
     invoke('PlaceTroops', q, r, coordinates.lat, coordinates.lng, null, claimForSelf)
       .then(() => {
         setPickupPrompt(null);
+        setReinforcePrompt(null);
+        setAttackPrompt(null);
         playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
         if (actionType !== 'reinforce') {
           vibrate(HAPTIC.claim);
@@ -193,7 +201,18 @@ export function useGameActionsGameplay({
         playSound('error');
         setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex });
       });
-  }, [currentLocation, gameState, invoke, isHostBypass, playSound, setMapFeedback, setPickupPrompt, t]);
+  }, [
+    currentLocation,
+    gameState,
+    invoke,
+    isHostBypass,
+    playSound,
+    setAttackPrompt,
+    setMapFeedback,
+    setPickupPrompt,
+    setReinforcePrompt,
+    t,
+  ]);
 
   const tileActions = useMemo<TileAction[]>(() => {
     if (!gameState || gameState.phase !== 'Playing' || !selectedHex) {
@@ -249,6 +268,8 @@ export function useGameActionsGameplay({
     const targetHex: [number, number] = [q, r];
     setSelectedHex(targetHex);
     setPickupPrompt(null);
+    setReinforcePrompt(null);
+    setAttackPrompt(null);
     clearError();
 
     if (!isHostBypass && (!currentHex || currentHex[0] !== q || currentHex[1] !== r)) {
@@ -282,7 +303,9 @@ export function useGameActionsGameplay({
     setCommandoTargetingMode,
     setMapFeedback,
     setPickupPrompt,
+    setReinforcePrompt,
     setSelectedHex,
+    setAttackPrompt,
     t,
   ]);
 
@@ -295,13 +318,22 @@ export function useGameActionsGameplay({
 
     switch (actionType) {
       case 'claim':
-      case 'reinforce':
       case 'claimAlliance':
       case 'claimSelf': {
         placeTroopsAction(selectedHex, actionType);
         break;
       }
+      case 'reinforce': {
+        setPickupPrompt(null);
+        setAttackPrompt(null);
+        const maxTroops = myPlayer?.carriedTroops ?? 1;
+        setReinforcePrompt({ q, r, max: maxTroops });
+        setReinforceCount(1);
+        break;
+      }
       case 'attack': {
+        setPickupPrompt(null);
+        setReinforcePrompt(null);
         const cell = gameState.grid[`${q},${r}`];
         const defenderTroops = cell?.troops ?? 0;
         const maxTroops = myPlayer?.carriedTroops ?? 0;
@@ -310,6 +342,8 @@ export function useGameActionsGameplay({
         break;
       }
       case 'pickup': {
+        setReinforcePrompt(null);
+        setAttackPrompt(null);
         const cell = gameState.grid[`${q},${r}`];
         setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
         setPickupCount(1);
@@ -331,6 +365,8 @@ export function useGameActionsGameplay({
     setMapFeedback,
     setPickupCount,
     setPickupPrompt,
+    setReinforceCount,
+    setReinforcePrompt,
     setSelectedHex,
   ]);
 
@@ -343,14 +379,24 @@ export function useGameActionsGameplay({
 
     switch (actionType) {
       case 'claim':
-      case 'reinforce':
       case 'claimAlliance':
       case 'claimSelf': {
         placeTroopsAction(currentHex, actionType);
         break;
       }
+      case 'reinforce': {
+        setSelectedHex(currentHex);
+        setPickupPrompt(null);
+        setAttackPrompt(null);
+        const maxTroops = myPlayer?.carriedTroops ?? 1;
+        setReinforcePrompt({ q, r, max: maxTroops });
+        setReinforceCount(1);
+        break;
+      }
       case 'attack': {
         setSelectedHex(currentHex);
+        setPickupPrompt(null);
+        setReinforcePrompt(null);
         const cell = gameState.grid[`${q},${r}`];
         const defenderTroops = cell?.troops ?? 0;
         const maxTroops = myPlayer?.carriedTroops ?? 0;
@@ -360,6 +406,8 @@ export function useGameActionsGameplay({
       }
       case 'pickup': {
         setSelectedHex(currentHex);
+        setReinforcePrompt(null);
+        setAttackPrompt(null);
         const cell = gameState.grid[`${q},${r}`];
         setPickupPrompt({ q, r, max: cell?.troops ?? 1 });
         setPickupCount(1);
@@ -380,6 +428,8 @@ export function useGameActionsGameplay({
     setMapFeedback,
     setPickupCount,
     setPickupPrompt,
+    setReinforceCount,
+    setReinforcePrompt,
     setSelectedHex,
   ]);
 
@@ -433,6 +483,61 @@ export function useGameActionsGameplay({
     playSound,
     setMapFeedback,
     setPickupPrompt,
+    setSelectedHex,
+    t,
+  ]);
+
+  const handleConfirmReinforce = useCallback(async (): Promise<void> => {
+    if (!reinforcePrompt || !invoke) {
+      return;
+    }
+
+    const targetHex: [number, number] = [reinforcePrompt.q, reinforcePrompt.r];
+    const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
+    if (!coordinates) {
+      return;
+    }
+
+    clearError();
+    setSelectedHex(targetHex);
+
+    try {
+      await invoke(
+        'PlaceTroops',
+        reinforcePrompt.q,
+        reinforcePrompt.r,
+        coordinates.lat,
+        coordinates.lng,
+        reinforceCount,
+        false,
+      );
+      setMapFeedback({
+        tone: 'success',
+        message: getPlaceSuccessMessage('reinforce', reinforcePrompt.q, reinforcePrompt.r, t),
+        targetHex,
+      });
+      playSound('reinforce');
+    } catch (error) {
+      playSound('error');
+      setMapFeedback({
+        tone: 'error',
+        message: getErrorMessage(error),
+        targetHex,
+      });
+    } finally {
+      setReinforcePrompt(null);
+    }
+  }, [
+    clearError,
+    currentLocation,
+    gameState,
+    invoke,
+    isHostBypass,
+    playSound,
+    reinforceCount,
+    reinforcePrompt,
+    setMapFeedback,
+    setReinforcePrompt,
     setSelectedHex,
     t,
   ]);
@@ -496,6 +601,7 @@ export function useGameActionsGameplay({
     handleCurrentHexAction,
     handleDismissTileActions,
     handleConfirmPickup,
+    handleConfirmReinforce,
     handleConfirmAttack,
     handleCancelAttack,
     handleReClaimHex,
