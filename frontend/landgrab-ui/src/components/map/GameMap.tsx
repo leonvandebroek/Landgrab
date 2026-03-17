@@ -13,7 +13,7 @@ import { injectTerrainPatternSVG } from './TerrainPatternDefs';
 import { useGridDiff } from '../../hooks/useGridDiff';
 import { renderTroopAnimations } from './TroopAnimationLayer';
 import { TroopSplashLayer } from './TroopSplashLayer';
-import { MapLayerToggle, renderHexGridLayers, renderPlayerMarkers, TimeOverlay } from '../game/map';
+import { MapLayerToggle, renderHexGridLayers, renderPlayerMarkers, TimeOverlay, updateProgressOverlays } from '../game/map';
 
 interface LocationPoint {
   lat: number;
@@ -89,7 +89,6 @@ export function GameMap({
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
-  const [mapOverlayTick, setMapOverlayTick] = useState(0);
   const [layerPrefs, setLayerPrefs] = useState<MapLayerPreferences>(() => ({ ...DEFAULT_MAP_LAYER_PREFS }));
   const [basemapError, setBasemapError] = useState(false);
   const [basemapDismissed, setBasemapDismissed] = useState(false);
@@ -374,7 +373,9 @@ export function GameMap({
     }
 
     const intervalId = window.setInterval(() => {
-      setMapOverlayTick(tick => tick + 1);
+      if (containerRef.current) {
+        updateProgressOverlays(containerRef.current);
+      }
     }, 1_000);
 
     return () => window.clearInterval(intervalId);
@@ -484,7 +485,6 @@ export function GameMap({
     currentZoom,
     inactiveHexKeySet,
     layerPrefs,
-    mapOverlayTick,
     myUserId,
     renderedGrid,
     selectedHex,

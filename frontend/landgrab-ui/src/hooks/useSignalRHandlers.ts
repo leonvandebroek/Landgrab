@@ -14,6 +14,18 @@ import { vibrate, HAPTIC } from '../utils/haptics';
 import { localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
 
+// Event types that should display a game-event toast in the info ledge.
+// Using a Set gives O(1) lookup and avoids a long if-chain in onStateUpdated.
+const GAME_EVENT_TOAST_TYPES = new Set<string>([
+  'CommandoRaidStarted',
+  'CommandoRaidSuccess',
+  'CommandoRaidFailed',
+  'RallyPointActivated',
+  'RallyPointResolved',
+  'SabotageStarted',
+  'SabotageComplete',
+] as const);
+
 type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
 interface UseSignalRHandlersOptions {
@@ -159,8 +171,7 @@ export function useSignalRHandlers({
       saveSession(roomCode);
       resolveResumeFromState(normalizedState);
       useGameStore.getState().setGameState(normalizedState);
-      useGameplayStore.getState().setPickupPrompt(null);
-      useGameplayStore.getState().setReinforcePrompt(null);
+      useGameplayStore.setState({ pickupPrompt: null, reinforcePrompt: null });
       useUiStore.getState().setView('lobby');
       useGameplayStore.getState().clearGameplayUi();
       useUiStore.getState().clearError();
@@ -172,8 +183,7 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
-      useGameplayStore.getState().setPickupPrompt(null);
-      useGameplayStore.getState().setReinforcePrompt(null);
+      useGameplayStore.setState({ pickupPrompt: null, reinforcePrompt: null });
       if (state.phase === 'Lobby') {
         useUiStore.getState().setView('lobby');
         useGameplayStore.getState().clearGameplayUi();
@@ -192,8 +202,7 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
-      useGameplayStore.getState().setPickupPrompt(null);
-      useGameplayStore.getState().setReinforcePrompt(null);
+      useGameplayStore.setState({ pickupPrompt: null, reinforcePrompt: null });
       restorePersistedDebugLocation(normalizedState.roomCode);
       useUiStore.getState().setView('game');
       useUiStore.getState().clearError();
@@ -227,18 +236,29 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+
+      const gameplayUpdates: Partial<
+        Pick<
+          ReturnType<typeof useGameplayStore.getState>,
+          'pickupPrompt' | 'attackPrompt' | 'combatPreview' | 'reinforcePrompt'
+        >
+      > = {};
       if (shouldClearPickup) {
-        gameplayState.setPickupPrompt(null);
+        gameplayUpdates.pickupPrompt = null;
       }
       if (shouldClearAttack) {
-        gameplayState.setAttackPrompt(null);
+        gameplayUpdates.attackPrompt = null;
       }
       if (shouldClearPreview) {
-        gameplayState.setCombatPreview(null);
+        gameplayUpdates.combatPreview = null;
       }
       if (shouldClearReinforce) {
-        gameplayState.setReinforcePrompt(null);
+        gameplayUpdates.reinforcePrompt = null;
       }
+      if (Object.keys(gameplayUpdates).length > 0) {
+        useGameplayStore.setState(gameplayUpdates);
+      }
+
       if (normalizedState.phase === 'Playing') {
         if (gameState?.phase !== 'Playing') {
           restorePersistedDebugLocation(normalizedState.roomCode);
@@ -256,7 +276,7 @@ export function useSignalRHandlers({
       if (newLog.length > prevLog.length) {
         const newEntries = newLog.slice(prevLog.length);
         for (const entry of newEntries) {
-          if (entry.type === 'CommandoRaidStarted' || entry.type === 'CommandoRaidSuccess' || entry.type === 'CommandoRaidFailed' || entry.type === 'RallyPointActivated' || entry.type === 'RallyPointResolved' || entry.type === 'SabotageStarted' || entry.type === 'SabotageComplete') {
+          if (GAME_EVENT_TOAST_TYPES.has(entry.type)) {
             useInfoLedgeStore.getState().push({
               severity: 'gameEvent',
               source: 'gameToast',
