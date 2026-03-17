@@ -15,7 +15,7 @@ import {
 } from '../../../utils/zoomThresholds';
 import { findContestedEdges } from '../../../utils/contestedEdges';
 import { computeSupplyNetwork } from '../../../utils/supplyNetwork';
-import { latLngToRoomHex, roomHexCornerLatLngs } from '../../map/HexMath';
+import { roomHexCornerLatLngs } from '../../map/HexMath';
 import { buildHexTooltipHtml } from './HexTooltip';
 import {
   getHexBorderStyle,
@@ -60,25 +60,6 @@ function getTimedProgress(startedAt: string | undefined, durationMs: number): nu
   return Math.max(0, Math.min(1, (Date.now() - startedAtMs) / durationMs));
 }
 
-function getPlayerHexKey(player: GameState['players'][number], state: GameState): string | null {
-  if (player.currentHexQ != null && player.currentHexR != null) {
-    return `${player.currentHexQ},${player.currentHexR}`;
-  }
-
-  if (player.currentLat == null || player.currentLng == null || state.mapLat == null || state.mapLng == null) {
-    return null;
-  }
-
-  const [q, r] = latLngToRoomHex(
-    player.currentLat,
-    player.currentLng,
-    state.mapLat,
-    state.mapLng,
-    state.tileSizeMeters,
-  );
-
-  return `${q},${r}`;
-}
 
 interface RenderHexGridLayerOptions {
   currentHex: [number, number] | null;
@@ -128,11 +109,8 @@ export function renderHexGridLayers({
   const shouldShowContestEffects = layerPrefs.contestedEdges && showContestEffects(currentZoom);
   const shouldShowSupplyLines = layerPrefs.supplyLines && showSupplyLines(currentZoom);
   const shouldApplyFogOfWar = layerPrefs.fogOfWar;
-  const shieldWallHexKeys = new Set(
-    state.players
-      .filter((player) => player.shieldWallActive)
-      .map((player) => getPlayerHexKey(player, state))
-      .filter((key): key is string => key != null),
+  const activeRaidHexKeys = new Set(
+    (state.activeRaids ?? []).map((raid) => `${raid.targetQ}:${raid.targetR}`),
   );
   const demolishProgressByHexKey = new Map<string, number>();
 
@@ -183,7 +161,7 @@ export function renderHexGridLayers({
       pointerDownRef,
       renderedGrid,
       selectedHex,
-      shieldWallHexKeys,
+      activeRaidHexKeys,
       shouldApplyFogOfWar,
       shouldShowContestEffects,
       shouldShowBorderEffects,
@@ -219,7 +197,7 @@ interface RenderHexCellOptions {
   pointerDownRef: MutableRefObject<{ x: number; y: number } | null>;
   renderedGrid: Record<string, HexCell>;
   selectedHex: [number, number] | null;
-  shieldWallHexKeys: ReadonlySet<string>;
+  activeRaidHexKeys: ReadonlySet<string>;
   shouldApplyFogOfWar: boolean;
   shouldShowContestEffects: boolean;
   shouldShowBorderEffects: boolean;
@@ -249,7 +227,7 @@ function renderHexCell({
   pointerDownRef,
   renderedGrid,
   selectedHex,
-  shieldWallHexKeys,
+  activeRaidHexKeys,
   shouldApplyFogOfWar,
   shouldShowContestEffects,
   shouldShowBorderEffects,
@@ -282,7 +260,7 @@ function renderHexCell({
   );
   const { isFrontier, isContested } = getHexTerritoryStatus(cell, renderedGrid, isFriendlyAllianceCell);
   const isFogHidden = shouldApplyFogOfWar && isFogHiddenHex(cell, isInactive, state.dynamics?.fogOfWarEnabled);
-  const hasShieldWall = shieldWallHexKeys.has(cellKey);
+  const hasActiveRaid = activeRaidHexKeys.has(cellKey);
   const demolishProgress = demolishProgressByHexKey.get(cellKey) ?? null;
   const hasTerrain = Boolean(state.dynamics?.terrainEnabled && terrainType !== 'None');
   const { fillColor, fillOpacity } = getHexFillStyle({
@@ -412,22 +390,22 @@ function renderHexCell({
     }).addTo(layerGroup);
   }
 
-  if (hasShieldWall && !isInactive) {
+  if (hasActiveRaid && !isInactive) {
     L.polygon(corners, {
-      className: 'hex-shield-wall-overlay',
-      color: '#3b82f6',
+      className: 'hex-commando-raid-overlay',
+      color: '#ef4444',
       weight: 3,
       opacity: 0.95,
-      fillColor: '#3b82f6',
-      fillOpacity: 0.12,
+      fillColor: '#ef4444',
+      fillOpacity: 0.15,
       interactive: false,
       bubblingMouseEvents: false,
     }).addTo(layerGroup);
 
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
-        className: 'hex-shield-wall-marker',
-        html: iconHtml('shieldWall'),
+        className: 'hex-commando-raid-marker',
+        html: iconHtml('archeryTarget'),
         iconSize: [26, 26],
         iconAnchor: [13, 13],
       }),

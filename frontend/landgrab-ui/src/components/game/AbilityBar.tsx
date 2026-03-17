@@ -78,10 +78,10 @@ export function AbilityBar({
   const [, setTick] = useState(0);
 
   const showBeacon = dynamics.beaconEnabled;
-  const showCommando = dynamics.playerRolesEnabled && player.role === 'Scout';
+  const showCommando = dynamics.playerRolesEnabled && player.role === 'Commander';
 
   const hasActiveCountdown = Boolean(
-    player.commandoDeadline || player.commandoCooldownUntil
+    player.commandoRaidCooldownUntil
   );
 
   useSecondTick(() => {
@@ -110,10 +110,9 @@ export function AbilityBar({
       )}
 
       {showCommando && (() => {
-        const deadlineTime = formatCountdown(player.commandoDeadline);
-        const cooldownTime = formatCountdown(player.commandoCooldownUntil);
-        const isActive = player.isCommandoActive && deadlineTime !== null;
-        const isOnCooldown = !isActive && cooldownTime !== null;
+        const cooldownTime = formatCountdown(player.commandoRaidCooldownUntil);
+        const isActive = false;
+        const isOnCooldown = cooldownTime !== null;
 
         if (commandoTargetingMode) {
           return (
@@ -138,7 +137,7 @@ export function AbilityBar({
             <span><GameIcon name="contested" /></span>
             <span>
               {isActive
-                ? t('phase6.commandoActive' as never, { time: deadlineTime })
+                ? t('phase6.commandoActive' as never, { time: '' })
                 : isOnCooldown
                   ? t('phase6.commandoCooldown' as never)
                   : t('phase6.commandoActivate' as never)}

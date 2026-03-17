@@ -7,7 +7,6 @@ import {
   MARKER_SIZE_MULTIPLIER,
   type PlayerDisplayPreferences,
 } from '../../../types/playerPreferences';
-import { roomHexToLatLng } from '../../map/HexMath';
 import { escapeHtml } from './HexTooltip';
 
 const DEFAULT_PLAYER_MARKER_COLOR = '#4f8cff';
@@ -152,34 +151,6 @@ export function renderPlayerMarkers({
       }).addTo(layerGroup);
     }
 
-    if (player.isCommandoActive && player.commandoTargetQ != null && player.commandoTargetR != null) {
-      const [targetLat, targetLng] = roomHexToLatLng(
-        player.commandoTargetQ,
-        player.commandoTargetR,
-        state.mapLat!,
-        state.mapLng!,
-        state.tileSizeMeters,
-      );
-
-      L.polyline([[effectiveLat, effectiveLng], [targetLat, targetLng]], {
-        color: '#ff5a4f',
-        weight: 3,
-        opacity: 0.9,
-        dashArray: '8 8',
-        interactive: false,
-        className: 'commando-raid-path',
-      }).addTo(layerGroup);
-
-      L.circleMarker([targetLat, targetLng], {
-        radius: 11,
-        color: '#ff5a4f',
-        weight: 3,
-        fillColor: '#ff5a4f',
-        fillOpacity: 0.16,
-        interactive: false,
-        className: 'commando-target-ring',
-      }).addTo(layerGroup);
-    }
   }
 }
 

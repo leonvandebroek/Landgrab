@@ -123,20 +123,22 @@ export interface Player {
   isBeacon?: boolean;
   beaconLat?: number;
   beaconLng?: number;
-  // Phase 6: CommandoRaid
-  isCommandoActive?: boolean;
-  commandoTargetQ?: number;
-  commandoTargetR?: number;
-  commandoDeadline?: string;
-  commandoCooldownUntil?: string;
+  // Commander abilities
+  commandoRaidCooldownUntil?: string;
   tacticalStrikeActive?: boolean;
   tacticalStrikeExpiry?: string;
   tacticalStrikeCooldownUntil?: string;
-  reinforceCooldownUntil?: string;
-  shieldWallActive?: boolean;
-  shieldWallExpiry?: string;
-  shieldWallCooldownUntil?: string;
-  emergencyRepairCooldownUntil?: string;
+  rallyPointActive?: boolean;
+  rallyPointDeadline?: string;
+  rallyPointCooldownUntil?: string;
+  rallyPointQ?: number;
+  rallyPointR?: number;
+  // Engineer abilities
+  sabotageActive?: boolean;
+  sabotageStartedAt?: string;
+  sabotageTargetQ?: number;
+  sabotageTargetR?: number;
+  sabotageCooldownUntil?: string;
   demolishActive?: boolean;
   demolishTargetKey?: string;
   demolishStartedAt?: string;
@@ -191,7 +193,6 @@ export interface GameState {
   gameAreaPattern: GameAreaPattern | null;
   tileSizeMeters: number;
   claimMode: ClaimMode;
-  allowSelfClaim?: boolean;
   dynamics: GameDynamics;
   winConditionType: WinConditionType;
   winConditionValue: number;
@@ -208,6 +209,18 @@ export interface GameState {
   maxFootprintMetersOverride?: number | null;
   hostObserverMode?: boolean;
   isPaused?: boolean;
+  activeRaids?: ActiveCommandoRaid[];
+}
+
+export interface ActiveCommandoRaid {
+  id: string;
+  targetQ: number;
+  targetR: number;
+  initiatorAllianceId: string;
+  initiatorPlayerId: string;
+  initiatorPlayerName: string;
+  deadline: string;
+  isHQRaid: boolean;
 }
 
 export interface Achievement {
