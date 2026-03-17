@@ -458,11 +458,13 @@ export function PlayingHud({
 
           {!pickupPrompt && !reinforcePrompt && !showRemoteTileInfoCard && (
             <div className="hud-context-area">
-              <GuidanceBanner
-                carriedTroops={carriedTroops}
-                isInOwnHex={isInOwnHex}
-                hasLocation={hasLocation}
-              />
+              {!(interactionStatus && interactionStatus.action !== 'none') && (
+                <GuidanceBanner
+                  carriedTroops={carriedTroops}
+                  isInOwnHex={isInOwnHex}
+                  hasLocation={hasLocation}
+                />
+              )}
               {interactionStatus && interactionStatus.action !== 'none' && (
                 <div className={`context-item action-prompt enter-active ${interactionStatus.tone === 'error' ? 'context-danger' : ''}`}>
                   <span className="context-icon" aria-hidden="true">
