@@ -60,19 +60,20 @@ internal static class GameStateCommon
                 IsBeacon = player.IsBeacon,
                 BeaconLat = player.BeaconLat,
                 BeaconLng = player.BeaconLng,
-                IsCommandoActive = player.IsCommandoActive,
-                CommandoTargetQ = player.CommandoTargetQ,
-                CommandoTargetR = player.CommandoTargetR,
-                CommandoDeadline = player.CommandoDeadline,
-                CommandoCooldownUntil = player.CommandoCooldownUntil,
+                CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
                 TacticalStrikeActive = player.TacticalStrikeActive,
                 TacticalStrikeExpiry = player.TacticalStrikeExpiry,
                 TacticalStrikeCooldownUntil = player.TacticalStrikeCooldownUntil,
-                ReinforceCooldownUntil = player.ReinforceCooldownUntil,
-                ShieldWallActive = player.ShieldWallActive,
-                ShieldWallExpiry = player.ShieldWallExpiry,
-                ShieldWallCooldownUntil = player.ShieldWallCooldownUntil,
-                EmergencyRepairCooldownUntil = player.EmergencyRepairCooldownUntil,
+                RallyPointActive = player.RallyPointActive,
+                RallyPointDeadline = player.RallyPointDeadline,
+                RallyPointCooldownUntil = player.RallyPointCooldownUntil,
+                RallyPointQ = player.RallyPointQ,
+                RallyPointR = player.RallyPointR,
+                SabotageActive = player.SabotageActive,
+                SabotageStartedAt = player.SabotageStartedAt,
+                SabotageTargetQ = player.SabotageTargetQ,
+                SabotageTargetR = player.SabotageTargetR,
+                SabotageCooldownUntil = player.SabotageCooldownUntil,
                 DemolishActive = player.DemolishActive,
                 DemolishTargetKey = player.DemolishTargetKey,
                 DemolishStartedAt = player.DemolishStartedAt,
@@ -124,6 +125,7 @@ internal static class GameStateCommon
                     LastVisitedAt = entry.Value.LastVisitedAt,
                     EngineerBuiltAt = entry.Value.EngineerBuiltAt,
                     IsFort = entry.Value.IsFort,
+                    SabotagedUntil = entry.Value.SabotagedUntil,
                 }),
             MapLat = state.MapLat,
             MapLng = state.MapLng,
@@ -134,7 +136,6 @@ internal static class GameStateCommon
             ClaimMode = state.ClaimMode,
             WinConditionType = state.WinConditionType,
             WinConditionValue = state.WinConditionValue,
-            AllowSelfClaim = state.AllowSelfClaim,
             Dynamics = new GameDynamics
             {
                 BeaconEnabled = state.Dynamics.BeaconEnabled,
@@ -143,7 +144,6 @@ internal static class GameStateCommon
                 CombatMode = state.Dynamics.CombatMode,
                 PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
                 FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
-                SupplyLinesEnabled = state.Dynamics.SupplyLinesEnabled,
                 HQEnabled = state.Dynamics.HQEnabled,
                 HQAutoAssign = state.Dynamics.HQAutoAssign,
                 TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
@@ -168,7 +168,17 @@ internal static class GameStateCommon
             MaxFootprintMetersOverride = state.MaxFootprintMetersOverride,
             HostObserverMode = state.HostObserverMode,
             IsPaused = state.IsPaused,
-            IsRushHour = state.IsRushHour
+            ActiveRaids = state.ActiveRaids.Select(r => new ActiveCommandoRaid
+            {
+                Id = r.Id,
+                TargetQ = r.TargetQ,
+                TargetR = r.TargetR,
+                InitiatorAllianceId = r.InitiatorAllianceId,
+                InitiatorPlayerId = r.InitiatorPlayerId,
+                InitiatorPlayerName = r.InitiatorPlayerName,
+                Deadline = r.Deadline,
+                IsHQRaid = r.IsHQRaid
+            }).ToList()
         };
     }
 

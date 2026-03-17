@@ -38,7 +38,6 @@ interface Props {
   onDeactivateBeacon?: () => void;
   onActivateTacticalStrike?: () => void;
   onActivateReinforce?: () => void;
-  onActivateShieldWall?: () => void;
   onActivateEmergencyRepair?: () => void;
   onStartDemolish?: () => void;
   playerDisplayPrefs: PlayerDisplayPreferences;
@@ -67,7 +66,6 @@ export function PlayingHud({
   onDeactivateBeacon,
   onActivateTacticalStrike,
   onActivateReinforce,
-  onActivateShieldWall,
   onActivateEmergencyRepair,
   onStartDemolish,
   playerDisplayPrefs,
@@ -379,12 +377,6 @@ export function PlayingHud({
                 <span className="stat-label">{t('game.underdogActive' as never)}</span>
               </div>
             )}
-            {state.isRushHour && (
-              <div className="stat-item">
-                <span className="stat-value warning"><GameIcon name="lightning" size="sm" /></span>
-                <span className="stat-label">{t('phase8.rushHour' as never)}</span>
-              </div>
-            )}
           </div>
           <button className="hud-menu-btn-flat" onClick={() => setActiveModal('menu')} aria-label={t('game.hudMenu')}>
             <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
@@ -454,6 +446,14 @@ export function PlayingHud({
               targetCell={selectedCell}
               targetHex={selectedHex}
               onDismiss={onDismissTileActions!}
+              isPresenceBoosted={Boolean(
+                selectedCell?.ownerId
+                && me
+                && (selectedCell.ownerId === me.id || (me.allianceId && selectedCell.ownerAllianceId === me.allianceId))
+                && currentHex
+                && selectedHex[0] === currentHex[0]
+                && selectedHex[1] === currentHex[1]
+              )}
             />
           )}
 
@@ -666,7 +666,6 @@ export function PlayingHud({
         onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
         onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
         onActivateReinforce={onActivateReinforce ?? (() => { })}
-        onActivateShieldWall={onActivateShieldWall ?? (() => { })}
         onActivateEmergencyRepair={onActivateEmergencyRepair ?? (() => { })}
         onStartDemolish={onStartDemolish ?? (() => { })}
       />

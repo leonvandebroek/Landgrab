@@ -31,7 +31,6 @@ interface UseGameActionsLobbyResult {
   handleSetPatternGameArea: (pattern: GameAreaPattern) => void;
   handleSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   handleSetClaimMode: (mode: ClaimMode) => void;
-  handleSetAllowSelfClaim: (allow: boolean) => Promise<void>;
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
   handleSetBeaconEnabled: (enabled: boolean) => void;
   handleSetTileDecayEnabled: (enabled: boolean) => void;
@@ -208,14 +207,6 @@ export function useGameActionsLobby({
     invoke('SetClaimMode', mode).catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
-  const handleSetAllowSelfClaim = useCallback(async (allow: boolean): Promise<void> => {
-    if (!invoke) {
-      return;
-    }
-
-    await invoke('SetAllowSelfClaim', allow);
-  }, [invoke]);
-
   const handleSetWinCondition = useCallback((type: WinConditionType, value: number): void => {
     if (!invoke) {
       return;
@@ -384,7 +375,6 @@ export function useGameActionsLobby({
     handleSetPatternGameArea,
     handleSetCustomGameArea,
     handleSetClaimMode,
-    handleSetAllowSelfClaim,
     handleSetWinCondition,
     handleSetBeaconEnabled,
     handleSetTileDecayEnabled,

@@ -11,6 +11,13 @@ public sealed class GameConfigServiceTests
     private static readonly string HostUserId = HostGuid.ToString();
     private static readonly string GuestUserId = Guid.Parse("00000000-0000-0000-0000-000000000002").ToString();
 
+    [Fact]
+    public void NewGame_DefaultClaimMode_IsPresenceOnly()
+    {
+        var state = new GameState();
+        state.ClaimMode.Should().Be(ClaimMode.PresenceOnly);
+    }
+
     [Theory]
     [InlineData("PresenceOnly", ClaimMode.PresenceOnly)]
     [InlineData("presencewithtroop", ClaimMode.PresenceWithTroop)]
@@ -62,56 +69,6 @@ public sealed class GameConfigServiceTests
         result.state.Should().BeNull();
         result.error.Should().Be("Claim mode can only be changed in the lobby.");
         context.State.ClaimMode.Should().Be(ClaimMode.AdjacencyRequired);
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_SetToFalse_UpdatesState()
-    {
-        var (context, sut) = CreateContext(builder => builder.WithAllowSelfClaim(true));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, HostUserId, false);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.AllowSelfClaim.Should().BeFalse();
-        context.State.AllowSelfClaim.Should().BeFalse();
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_SetToTrue_UpdatesState()
-    {
-        var (context, sut) = CreateContext(builder => builder.WithAllowSelfClaim(false));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, HostUserId, true);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.AllowSelfClaim.Should().BeTrue();
-        context.State.AllowSelfClaim.Should().BeTrue();
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_NonHost_ReturnsError()
-    {
-        var (context, sut) = CreateContext(builder => builder.WithAllowSelfClaim(true));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, GuestUserId, false);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Only the host can change self-claim settings.");
-        context.State.AllowSelfClaim.Should().BeTrue();
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_WhenNotInLobby_ReturnsError()
-    {
-        var (context, sut) = CreateContext(phase: GamePhase.Playing, configure: builder => builder.WithAllowSelfClaim(true));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, HostUserId, false);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Self-claim settings can only be changed in the lobby.");
-        context.State.AllowSelfClaim.Should().BeTrue();
     }
 
     [Fact]
@@ -231,7 +188,6 @@ public sealed class GameConfigServiceTests
             TerrainEnabled = true,
             PlayerRolesEnabled = false,
             FogOfWarEnabled = true,
-            SupplyLinesEnabled = false,
             HQEnabled = true,
             HQAutoAssign = true,
             TimedEscalationEnabled = false,
@@ -245,7 +201,6 @@ public sealed class GameConfigServiceTests
         result.state!.Dynamics.TerrainEnabled.Should().BeTrue();
         result.state.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         result.state.Dynamics.FogOfWarEnabled.Should().BeTrue();
-        result.state.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         result.state.Dynamics.HQEnabled.Should().BeTrue();
         result.state.Dynamics.HQAutoAssign.Should().BeTrue();
         result.state.Dynamics.TimedEscalationEnabled.Should().BeFalse();
@@ -253,7 +208,6 @@ public sealed class GameConfigServiceTests
         context.State.Dynamics.TerrainEnabled.Should().BeTrue();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
-        context.State.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.HQAutoAssign.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
@@ -270,7 +224,6 @@ public sealed class GameConfigServiceTests
             TerrainEnabled = true,
             PlayerRolesEnabled = true,
             FogOfWarEnabled = true,
-            SupplyLinesEnabled = true,
             HQEnabled = true,
             TimedEscalationEnabled = true,
             UnderdogPactEnabled = true
@@ -281,7 +234,6 @@ public sealed class GameConfigServiceTests
         context.State.Dynamics.TerrainEnabled.Should().BeFalse();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         context.State.Dynamics.FogOfWarEnabled.Should().BeFalse();
-        context.State.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         context.State.Dynamics.HQEnabled.Should().BeFalse();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeFalse();

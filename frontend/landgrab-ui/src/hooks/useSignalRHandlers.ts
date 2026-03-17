@@ -249,6 +249,24 @@ export function useSignalRHandlers({
         useGameplayStore.getState().clearGameplayUi();
       }
       useUiStore.getState().clearError();
+
+      // Show toasts for new event log entries
+      const prevLog = gameState?.eventLog ?? [];
+      const newLog = normalizedState.eventLog ?? [];
+      if (newLog.length > prevLog.length) {
+        const newEntries = newLog.slice(prevLog.length);
+        for (const entry of newEntries) {
+          if (entry.type === 'CommandoRaidStarted' || entry.type === 'CommandoRaidSuccess' || entry.type === 'CommandoRaidFailed' || entry.type === 'RallyPointActivated' || entry.type === 'RallyPointResolved' || entry.type === 'SabotageStarted' || entry.type === 'SabotageComplete') {
+            useInfoLedgeStore.getState().push({
+              severity: 'gameEvent',
+              source: 'gameToast',
+              persistent: false,
+              icon: 'archeryTarget',
+              message: entry.message,
+            });
+          }
+        }
+      }
     },
     onPlayersMoved: (players) => {
       useGameStore.getState().updateGameState((currentState) => {

@@ -170,60 +170,6 @@ public class GameplayService(
                 }
             }
 
-            // Phase 6: CommandoRaid — check if player arrived at target
-            if (player.IsCommandoActive && player.CommandoTargetQ.HasValue && player.CommandoTargetR.HasValue
-                && room.State.HasMapLocation)
-            {
-                var commandoCurrentHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                if (commandoCurrentHex.q == player.CommandoTargetQ && commandoCurrentHex.r == player.CommandoTargetR)
-                {
-                    // Arrived at target — claim hex bypassing adjacency
-                    var targetKey = HexService.Key(player.CommandoTargetQ.Value, player.CommandoTargetR.Value);
-                    if (room.State.Grid.TryGetValue(targetKey, out var targetCell)
-                        && targetCell.OwnerId == null && !targetCell.IsMasterTile)
-                    {
-                        SetCellOwner(targetCell, player);
-                        targetCell.Troops = Math.Max(1, player.CarriedTroops);
-                        gridChanged = true;
-                        ResetCarriedTroops(player);
-                        winConditionService.RefreshTerritoryCount(room.State);
-
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "CommandoRaidSuccess",
-                            Message = $"{player.Name} completed a commando raid at ({player.CommandoTargetQ}, {player.CommandoTargetR})!",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            Q = player.CommandoTargetQ.Value,
-                            R = player.CommandoTargetR.Value
-                        });
-                    }
-
-                    player.IsCommandoActive = false;
-                    player.CommandoTargetQ = null;
-                    player.CommandoTargetR = null;
-                    player.CommandoDeadline = null;
-                }
-                else if (player.CommandoDeadline.HasValue && DateTime.UtcNow > player.CommandoDeadline.Value)
-                {
-                    // Deadline expired — raid failed
-                    player.IsCommandoActive = false;
-                    player.CommandoTargetQ = null;
-                    player.CommandoTargetR = null;
-                    player.CommandoDeadline = null;
-
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "CommandoRaidFailed",
-                        Message = $"{player.Name}'s commando raid expired.",
-                        PlayerId = userId,
-                        PlayerName = player.Name
-                    });
-                    gridChanged = true;
-                }
-            }
-
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
@@ -320,7 +266,7 @@ public class GameplayService(
 
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(
         string roomCode, string userId, int q, int r, double playerLat, double playerLng,
-        int? troopCount = null, bool claimForSelf = false)
+        int? troopCount = null)
     {
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
@@ -343,10 +289,6 @@ public class GameplayService(
                 return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
             SetPlayerLocation(room.State, player, playerLat, playerLng);
-
-            // Silently downgrade self-claim to alliance claim when disallowed
-            if (claimForSelf && !room.State.AllowSelfClaim)
-                claimForSelf = false;
 
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
 
@@ -386,7 +328,7 @@ public class GameplayService(
 
             if (cell.OwnerId == null)
             {
-                var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r, claimForSelf);
+                var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r);
                 if (neutralClaimError != null)
                     return (null, neutralClaimError, null, null);
 
@@ -399,6 +341,14 @@ public class GameplayService(
 
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
                 return (null, "You cannot attack an allied hex.", null, null);
+
+            // HQ tiles are immune to normal combat — must be captured via CommandoRaid
+            if (room.State.Dynamics.HQEnabled)
+            {
+                var isHQHex = room.State.Alliances.Any(a => a.HQHexQ == q && a.HQHexR == r);
+                if (isHQHex)
+                    return (null, "This is an HQ hex — it can only be captured via a CommandoRaid.", null, null);
+            }
 
             var deployedTroops = troopCount ?? player.CarriedTroops;
             if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
@@ -425,10 +375,7 @@ public class GameplayService(
 
             if (combatResolution.AttackerWon)
             {
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
 
                 // The winner carries all surviving troops and chooses later how many to drop.
                 cell.Troops = 0;
@@ -590,15 +537,6 @@ public class GameplayService(
             if (commanderPresent)
                 AddBonus(attackerBonuses, "Commander", 1);
 
-            var shieldWallActive = state.Players.Any(defender =>
-                defender.Role == PlayerRole.Defender &&
-                defender.ShieldWallActive &&
-                TryGetCurrentHex(state, defender, out var defenderQ, out var defenderR) &&
-                defenderQ == q &&
-                defenderR == r &&
-                IsFriendlyCell(defender, cell));
-            if (shieldWallActive)
-                AddBonus(defenderBonuses, "Shield Wall", 2);
         }
 
         if (state.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
@@ -759,58 +697,180 @@ public class GameplayService(
         };
     }
 
-    public (GameState? state, string? error) ReClaimHex(string roomCode, string userId,
-        int q, int r, ReClaimMode mode)
+
+    public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode)
     {
         var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        if (room.State.IsPaused)
-            return (null, "Game is paused.");
+        if (room == null) return (null, "Room not found.");
 
         lock (room.SyncRoot)
         {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "This action is only available while the game is playing.");
+            var now = DateTime.UtcNow;
+            var expired = room.State.ActiveRaids.Where(r => r.Deadline <= now).ToList();
+            if (expired.Count == 0) return (null, null);
 
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-
-            if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
-                return (null, "Invalid hex.");
-
-            if (cell.OwnerId != userId)
-                return (null, "You can only reclaim your own hexes.");
-
-            if (mode == ReClaimMode.Self && !room.State.AllowSelfClaim)
-                return (null, "Self-claiming is not allowed in this game.");
-
-            switch (mode)
+            foreach (var raid in expired)
             {
-                case ReClaimMode.Alliance:
-                    cell.OwnerAllianceId = player.AllianceId;
-                    cell.OwnerColor = player.AllianceColor ?? player.Color;
-                    break;
-                case ReClaimMode.Self:
-                    cell.OwnerAllianceId = null;
-                    cell.OwnerColor = player.Color;
-                    break;
-                case ReClaimMode.Abandon:
-                    cell.OwnerId = null;
-                    cell.OwnerName = null;
-                    cell.OwnerAllianceId = null;
-                    cell.OwnerColor = null;
-                    cell.Troops = 0;
-                    break;
+                ResolveRaid(room.State, raid, now);
+                room.State.ActiveRaids.Remove(raid);
             }
 
             winConditionService.RefreshTerritoryCount(room.State);
-            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.ApplyWinConditionAndLog(room.State, now);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
+        }
+    }
+
+    private static void ResolveRaid(GameState state, ActiveCommandoRaid raid, DateTime now)
+    {
+        var key = HexService.Key(raid.TargetQ, raid.TargetR);
+        if (!state.Grid.TryGetValue(key, out var cell)) return;
+
+        var attackers = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
+            .Where(p => p.AllianceId == raid.InitiatorAllianceId)
+            .ToList();
+        var defenders = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
+            .Where(p => p.AllianceId != raid.InitiatorAllianceId)
+            .ToList();
+
+        var attackerWins = attackers.Count >= 2 && attackers.Count > defenders.Count;
+
+        if (attackerWins)
+        {
+            var spoils = cell.Troops;
+            var newOwner = attackers.First();
+
+            cell.OwnerId = newOwner.Id;
+            cell.OwnerName = newOwner.Name;
+            cell.OwnerAllianceId = raid.InitiatorAllianceId;
+            cell.OwnerColor = newOwner.AllianceColor ?? newOwner.Color;
+            cell.Troops = spoils;
+
+            if (raid.IsHQRaid)
+            {
+                var losingAlliance = state.Alliances.FirstOrDefault(a =>
+                    a.HQHexQ == raid.TargetQ && a.HQHexR == raid.TargetR);
+                if (losingAlliance != null)
+                    losingAlliance.ClaimFrozenUntil = now.AddMinutes(5);
+            }
+
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "CommandoRaidSuccess",
+                Message = $"Commando raid succeeded! {raid.InitiatorPlayerName}'s team captured ({raid.TargetQ}, {raid.TargetR}) and took {spoils} troops!",
+                AllianceId = raid.InitiatorAllianceId,
+                Q = raid.TargetQ,
+                R = raid.TargetR
+            });
+        }
+        else
+        {
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "CommandoRaidFailed",
+                Message = $"Commando raid failed at ({raid.TargetQ}, {raid.TargetR}) — defenders held their ground.",
+                Q = raid.TargetQ,
+                R = raid.TargetR
+            });
+        }
+    }
+
+    public void ResolveActiveSabotages(string roomCode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null) return;
+
+        lock (room.SyncRoot)
+        {
+            var now = DateTime.UtcNow;
+            var engineers = room.State.Players
+                .Where(p => p.SabotageActive && p.SabotageTargetQ.HasValue)
+                .ToList();
+
+            foreach (var engineer in engineers)
+            {
+                var key = HexService.Key(engineer.SabotageTargetQ!.Value, engineer.SabotageTargetR!.Value);
+                if (!room.State.Grid.TryGetValue(key, out var cell)) { engineer.SabotageActive = false; continue; }
+
+                var stillPresent = TryGetCurrentHex(room.State, engineer, out var eq, out var er)
+                    && eq == engineer.SabotageTargetQ && er == engineer.SabotageTargetR;
+
+                if (!stillPresent)
+                {
+                    engineer.SabotageActive = false;
+                    engineer.SabotageStartedAt = null;
+                    AppendEventLog(room.State, new GameEventLogEntry
+                    {
+                        Type = "SabotageCancelled",
+                        Message = $"{engineer.Name}'s sabotage was interrupted.",
+                        Q = engineer.SabotageTargetQ, R = engineer.SabotageTargetR
+                    });
+                    continue;
+                }
+
+                if (engineer.SabotageStartedAt.HasValue &&
+                    (now - engineer.SabotageStartedAt.Value).TotalMinutes >= 1)
+                {
+                    cell.SabotagedUntil = now.AddMinutes(10);
+                    engineer.SabotageActive = false;
+                    engineer.SabotageStartedAt = null;
+                    engineer.SabotageTargetQ = null;
+                    engineer.SabotageTargetR = null;
+
+                    AppendEventLog(room.State, new GameEventLogEntry
+                    {
+                        Type = "SabotageComplete",
+                        Message = $"Sabotage complete! ({cell.Q}, {cell.R}) will not regenerate troops for 10 minutes.",
+                        Q = cell.Q, R = cell.R
+                    });
+                }
+            }
+        }
+    }
+
+    public void ResolveExpiredRallyPoints(string roomCode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null) return;
+
+        lock (room.SyncRoot)
+        {
+            var now = DateTime.UtcNow;
+            var commanders = room.State.Players
+                .Where(p => p.RallyPointActive && p.RallyPointDeadline <= now)
+                .ToList();
+
+            foreach (var commander in commanders)
+            {
+                if (commander.RallyPointQ == null || commander.RallyPointR == null) continue;
+                var key = HexService.Key(commander.RallyPointQ.Value, commander.RallyPointR.Value);
+                if (!room.State.Grid.TryGetValue(key, out var cell)) continue;
+
+                var alliance = room.State.Alliances.FirstOrDefault(a => a.Id == commander.AllianceId);
+                var platoonSize = alliance?.MemberIds.Count ?? 1;
+                var maxTroops = platoonSize * 2;
+
+                var alliesAtRally = GetPlayersInHex(room.State, commander.RallyPointQ.Value, commander.RallyPointR.Value)
+                    .Where(p => p.AllianceId == commander.AllianceId)
+                    .ToList();
+
+                var troopsToAdd = Math.Min(alliesAtRally.Count * 2, maxTroops);
+                cell.Troops += troopsToAdd;
+
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "RallyPointResolved",
+                    Message = $"Rally Point complete — {alliesAtRally.Count} scouts arrived, +{troopsToAdd} troops at ({commander.RallyPointQ}, {commander.RallyPointR}).",
+                    Q = commander.RallyPointQ, R = commander.RallyPointR
+                });
+
+                commander.RallyPointActive = false;
+                commander.RallyPointDeadline = null;
+                commander.RallyPointQ = null;
+                commander.RallyPointR = null;
+            }
         }
     }
 
@@ -827,10 +887,6 @@ public class GameplayService(
 
             ExpireTimedAbilities(room.State, DateTime.UtcNow);
 
-            // Rush Hour auto-end: lasts only one regen cycle
-            if (room.State.IsRushHour)
-                room.State.IsRushHour = false;
-
             var terrainEnabled = room.State.Dynamics.TerrainEnabled;
 
             // Phase 8: Timed Escalation — increase regen after time thresholds
@@ -839,65 +895,6 @@ public class GameplayService(
             {
                 var elapsed = DateTime.UtcNow - room.State.GameStartedAt.Value;
                 escalationBonus = (int)(elapsed.TotalMinutes / 30); // +1 per 30 min
-            }
-
-            // Phase 7: Supply Lines — find connected hexes via BFS from starting tiles
-            HashSet<string>? connectedHexes = null;
-            if (room.State.Dynamics.SupplyLinesEnabled)
-            {
-                connectedHexes = new HashSet<string>();
-                // BFS from master tile and all starting positions
-                var seedHexes = new List<(int q, int r)>();
-                if (room.State.MasterTileQ.HasValue && room.State.MasterTileR.HasValue)
-                    seedHexes.Add((room.State.MasterTileQ.Value, room.State.MasterTileR.Value));
-
-                // Group by alliance — each alliance's territory must connect to their starting tile
-                var allianceSeeds = new Dictionary<string, List<(int q, int r)>>();
-                foreach (var alliance in room.State.Alliances)
-                {
-                    // Find any hex owned by this alliance to use as seed
-                    var firstOwned = room.State.Grid.Values
-                        .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id);
-                    if (firstOwned != null)
-                    {
-                        if (!allianceSeeds.ContainsKey(alliance.Id))
-                            allianceSeeds[alliance.Id] = [];
-                        allianceSeeds[alliance.Id].Add((firstOwned.Q, firstOwned.R));
-                    }
-                }
-
-                // BFS per alliance
-                foreach (var (allianceId, seeds) in allianceSeeds)
-                {
-                    var visited = new HashSet<string>();
-                    var queue = new Queue<(int q, int r)>();
-                    foreach (var seed in seeds)
-                    {
-                        var seedKey = HexService.Key(seed.q, seed.r);
-                        if (visited.Add(seedKey))
-                            queue.Enqueue(seed);
-                    }
-
-                    while (queue.Count > 0)
-                    {
-                        var (cq, cr) = queue.Dequeue();
-                        connectedHexes.Add(HexService.Key(cq, cr));
-
-                        foreach (var (nq, nr) in HexService.Neighbors(cq, cr))
-                        {
-                            var nk = HexService.Key(nq, nr);
-                            if (visited.Contains(nk)) continue;
-                            if (!room.State.Grid.TryGetValue(nk, out var nc)) continue;
-                            if (nc.OwnerAllianceId != allianceId) continue;
-                            visited.Add(nk);
-                            queue.Enqueue((nq, nr));
-                        }
-                    }
-                }
-
-                // Also add master tile
-                if (room.State.MasterTileQ.HasValue && room.State.MasterTileR.HasValue)
-                    connectedHexes.Add(HexService.Key(room.State.MasterTileQ.Value, room.State.MasterTileR.Value));
             }
 
             var drainTicks = new List<DrainTickNotification>();
@@ -943,15 +940,19 @@ public class GameplayService(
                     }
                 }
 
-                // Phase 7: Supply Lines — isolated hexes get no regen
-                if (connectedHexes != null && cell.OwnerId != null && !cell.IsMasterTile)
+                // Phase: Sabotage — sabotaged hexes skip regen
+                if (cell.SabotagedUntil.HasValue)
                 {
-                    var cellKey = HexService.Key(cell.Q, cell.R);
-                    if (!connectedHexes.Contains(cellKey))
-                        continue; // skip regen for isolated hexes
+                    if (cell.SabotagedUntil > DateTime.UtcNow)
+                        continue;
+                    cell.SabotagedUntil = null;
                 }
 
-                cell.Troops++;
+                // Presence bonus: 3× regen if a friendly player is physically on this hex
+                var friendlyPresent = GetPlayersInHex(room.State, cell.Q, cell.R)
+                    .Any(p => IsFriendlyCell(p, cell));
+                var presenceMultiplier = friendlyPresent ? 3 : 1;
+                cell.Troops += presenceMultiplier;
 
                 // Phase 8: Timed Escalation bonus
                 cell.Troops += escalationBonus;
@@ -960,14 +961,6 @@ public class GameplayService(
                 if (terrainEnabled && cell.TerrainType == TerrainType.Building)
                     cell.Troops++;
 
-                // Phase 4: Defender role — double regen when Defender is physically present
-                if (room.State.Dynamics.PlayerRolesEnabled && cell.OwnerId != null && !cell.IsMasterTile)
-                {
-                    var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
-                    if (playersInCell.Any(p => p.Role == PlayerRole.Defender
-                        && (cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId)))
-                        cell.Troops++; // extra regen (doubles the +1 from normal regen)
-                }
             }
 
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
@@ -977,8 +970,7 @@ public class GameplayService(
         }
     }
 
-    private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r,
-        bool claimForSelf = false)
+    private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r)
     {
         // Phase 4: HQ claim freeze check
         if (state.Dynamics.HQEnabled && player.AllianceId != null)
@@ -991,20 +983,14 @@ public class GameplayService(
         switch (state.ClaimMode)
         {
             case ClaimMode.PresenceOnly:
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
                 cell.Troops = 0;
                 return null;
             case ClaimMode.PresenceWithTroop:
                 if (player.CarriedTroops < 1)
                     return "You must be carrying at least 1 troop to claim a neutral hex in this room.";
 
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
                 cell.Troops = 1;
                 player.CarriedTroops -= 1;
                 if (player.CarriedTroops == 0)
@@ -1029,10 +1015,7 @@ public class GameplayService(
                 if (!isAdjacent)
                     return "This room requires neutral claims to border your territory.";
 
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
                 cell.Troops = 0;
                 return null;
             default:
@@ -1194,11 +1177,6 @@ public class GameplayService(
                 player.TacticalStrikeExpiry = null;
             }
 
-            if (player.ShieldWallActive && player.ShieldWallExpiry <= now)
-            {
-                player.ShieldWallActive = false;
-                player.ShieldWallExpiry = null;
-            }
         }
     }
 
@@ -1209,14 +1187,6 @@ public class GameplayService(
         cell.OwnerAllianceId = player.AllianceId;
         cell.OwnerName = player.Name;
         cell.OwnerColor = player.AllianceColor ?? player.Color;
-    }
-
-    internal static void SetCellOwnerForSelf(HexCell cell, PlayerDto player)
-    {
-        cell.OwnerId = player.Id;
-        cell.OwnerName = player.Name;
-        cell.OwnerColor = player.Color;
-        cell.OwnerAllianceId = null;
     }
 
     internal static void ResetCarriedTroops(PlayerDto player)

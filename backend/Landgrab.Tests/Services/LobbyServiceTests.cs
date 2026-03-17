@@ -51,24 +51,6 @@ public sealed class LobbyServiceTests
     }
 
     [Fact]
-    public void SetPlayerRole_ValidDefenderRole_UpdatesPlayerRole()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithPhase(GamePhase.Lobby)
-            .WithGrid(2)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .Build();
-        var context = new ServiceTestContext(state);
-        var sut = CreateLobbyService(context);
-
-        var (result, error) = sut.SetPlayerRole(ServiceTestContext.RoomCode, "p1", "Defender");
-
-        error.Should().BeNull();
-        context.Player("p1").Role.Should().Be(PlayerRole.Defender);
-    }
-
-    [Fact]
     public void SetPlayerRole_InvalidRoleString_ReturnsError()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -249,10 +231,9 @@ public sealed class LobbyServiceTests
         result.Should().NotBeNull();
 
         var assignedRoles = context.State.Players.Select(player => player.Role).ToList();
-        assignedRoles.Count(role => role == PlayerRole.None).Should().Be(1);
+        assignedRoles.Count(role => role == PlayerRole.None).Should().Be(2);
         assignedRoles.Should().Contain(PlayerRole.Commander);
         assignedRoles.Should().Contain(PlayerRole.Scout);
-        assignedRoles.Should().Contain(PlayerRole.Defender);
         assignedRoles.Should().Contain(PlayerRole.Engineer);
     }
 

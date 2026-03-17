@@ -142,6 +142,7 @@ public sealed class GameplayServiceTests
             .AddPlayer("p1", "Alice")
             .OwnHex(0, 0, "p1")
             .WithCarriedTroops("p1", 2, 0, 0)
+            .WithClaimMode(ClaimMode.AdjacencyRequired)
             .Build();
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(2, 0);
@@ -291,85 +292,6 @@ public sealed class GameplayServiceTests
 
         result.error.Should().Be("You must be carrying at least 1 troop to claim a neutral hex in this room.");
         context.Cell(1, 0).OwnerId.Should().BeNull();
-    }
-
-    [Fact]
-    public void ReClaimHex_ToAllianceClaim_Succeeds()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 3)
-            .Build();
-        state.Grid[HexService.Key(0, 0)].OwnerAllianceId = null;
-        state.Grid[HexService.Key(0, 0)].OwnerColor = state.Players.Single(player => player.Id == "p1").Color;
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Alliance);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).OwnerAllianceId.Should().Be("a1");
-        context.Cell(0, 0).OwnerColor.Should().Be("#a1");
-    }
-
-    [Fact]
-    public void ReClaimHex_WhenHexIsNotOwnedByPlayer_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Alliance);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("You can only reclaim your own hexes.");
-    }
-
-    [Fact]
-    public void ReClaimHex_SelfClaimDisallowed_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .WithAllowSelfClaim(false)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .OwnHex(0, 0, "p1", "a1")
-            .WithTroops(0, 0, 3)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Self);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Self-claiming is not allowed in this game.");
-        context.Cell(0, 0).OwnerAllianceId.Should().Be("a1");
-    }
-
-    [Fact]
-    public void ReClaimHex_Abandon_ClearsOwnershipAndTroops()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 5)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Abandon);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).OwnerId.Should().BeNull();
-        context.Cell(0, 0).OwnerName.Should().BeNull();
-        context.Cell(0, 0).OwnerAllianceId.Should().BeNull();
-        context.Cell(0, 0).OwnerColor.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(0);
     }
 
     [Fact]
@@ -588,34 +510,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PlaceTroops_WhenClaimingForSelfAfterCapture_ClearsAllianceOwnership()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddPlayer("p2", "Bob", "a2")
-            .AddAlliance("a1", "Alpha", "p1")
-            .AddAlliance("a2", "Beta", "p2")
-            .OwnHex(0, 0, "p1", "a1")
-            .OwnHex(1, 0, "p2", "a2")
-            .WithTroops(1, 0, 2)
-            .WithCarriedTroops("p1", 4, 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var player = context.Player("p1");
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng, claimForSelf: true);
-
-        result.error.Should().BeNull();
-        result.previousOwnerId.Should().Be("p2");
-        context.Cell(1, 0).OwnerId.Should().Be("p1");
-        context.Cell(1, 0).OwnerAllianceId.Should().BeNull();
-        context.Cell(1, 0).OwnerColor.Should().Be(player.Color);
-    }
-
-    [Fact]
     public void PlaceTroops_WhenCaptureMeetsWinCondition_EndsTheGame()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -641,29 +535,6 @@ public sealed class GameplayServiceTests
         result.state.WinnerId.Should().Be("p1");
         result.state.WinnerName.Should().Be("Alice");
         context.State.EventLog.Should().Contain(entry => entry.Type == "GameOver" && entry.WinnerId == "p1");
-    }
-
-    [Fact]
-    public void ReClaimHex_ToSelfClaim_ClearsAllianceOwnership()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .OwnHex(0, 0, "p1", "a1")
-            .WithTroops(0, 0, 3)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var player = context.Player("p1");
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Self);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).OwnerId.Should().Be("p1");
-        context.Cell(0, 0).OwnerAllianceId.Should().BeNull();
-        context.Cell(0, 0).OwnerColor.Should().Be(player.Color);
-        context.Cell(0, 0).Troops.Should().Be(3);
     }
 
     [Fact]
@@ -773,40 +644,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PlaceTroops_WhenShieldWallDefenderIsOnTargetHex_AddsDefenseBonus()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice", "a1")
-            .AddPlayer("p2", "Bob", "a2")
-            .AddAlliance("a1", "Alpha", "p1")
-            .AddAlliance("a2", "Beta", "p2")
-            .OwnHex(0, 0, "p1", "a1")
-            .OwnHex(1, 0, "p2", "a2")
-            .WithTroops(1, 0, 2)
-            .WithCarriedTroops("p1", 3, 0, 0)
-            .WithPlayerPosition("p2", 1, 0)
-            .Build();
-        state.Dynamics.CombatMode = CombatMode.Classic;
-        state.Players.Single(player => player.Id == "p2").Role = PlayerRole.Defender;
-        state.Players.Single(player => player.Id == "p2").ShieldWallActive = true;
-        state.Players.Single(player => player.Id == "p2").ShieldWallExpiry = DateTime.UtcNow.AddMinutes(5);
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
-
-        result.state.Should().NotBeNull();
-        result.error.Should().BeNull();
-        result.combatResult.Should().NotBeNull();
-        result.combatResult!.AttackerWon.Should().BeFalse();
-        result.combatResult.DefenderBonus.Should().Be(2);
-        context.Cell(1, 0).OwnerId.Should().Be("p2");
-        context.Player("p1").CarriedTroops.Should().Be(1);
-    }
-
-    [Fact]
     public void UpdatePlayerLocation_WhenDemolishChannelCompletes_RemovesFortAndClearsState()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -849,8 +686,6 @@ public sealed class GameplayServiceTests
             .Build();
         state.Players.Single(player => player.Id == "p1").TacticalStrikeActive = true;
         state.Players.Single(player => player.Id == "p1").TacticalStrikeExpiry = DateTime.UtcNow.AddMinutes(-1);
-        state.Players.Single(player => player.Id == "p1").ShieldWallActive = true;
-        state.Players.Single(player => player.Id == "p1").ShieldWallExpiry = DateTime.UtcNow.AddMinutes(-1);
         var context = new ServiceTestContext(state);
 
         var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
@@ -858,8 +693,190 @@ public sealed class GameplayServiceTests
         result.error.Should().BeNull();
         context.Player("p1").TacticalStrikeActive.Should().BeFalse();
         context.Player("p1").TacticalStrikeExpiry.Should().BeNull();
-        context.Player("p1").ShieldWallActive.Should().BeFalse();
-        context.Player("p1").ShieldWallExpiry.Should().BeNull();
+    }
+
+    [Fact]
+    public void PlaceTroops_OnEnemyHQHex_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 5)
+            .OwnHex(1, 0, "p2", allianceId: "a2")
+            .WithTroops(1, 0, 2)
+            .WithCarriedTroops("p1", 5, 0, 0)
+            .Build();
+        state.Alliances.Add(new AllianceDto { Id = "a2", HQHexQ = 1, HQHexR = 0 });
+        state.Dynamics.HQEnabled = true;
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var (result, error, _, _) = context.GameplayService.PlaceTroops(
+            ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        error.Should().Contain("CommandoRaid");
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveSabotage_EngineerStaysOneMinute_DisablesHexRegen()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Engineer)
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .OwnHex(1, 0, "p2", allianceId: "a2")
+            .WithTroops(1, 0, 3)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+        var engineer = state.Players.First(p => p.Id == "p1");
+        engineer.CurrentLat = lat;
+        engineer.CurrentLng = lng;
+        engineer.SabotageActive = true;
+        engineer.SabotageStartedAt = DateTime.UtcNow.AddMinutes(-1).AddSeconds(-1);
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.ResolveActiveSabotages(ServiceTestContext.RoomCode);
+
+        context.Cell(1, 0).SabotagedUntil.Should().NotBeNull();
+        context.Cell(1, 0).SabotagedUntil!.Value.Should().BeCloseTo(
+            DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(10));
+        engineer.SabotageActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ResolveRallyPoint_AlliesArrive_AddTroopsScaledToPlatoon()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddPlayer("p3", "Carol", allianceId: "a1")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 2)
+            .Build();
+        state.Alliances.Add(new AllianceDto { Id = "a1", MemberIds = ["p1", "p2", "p3"] });
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+        foreach (var p in state.Players) { p.CurrentLat = lat; p.CurrentLng = lng; }
+        state.Players.First(p => p.Id == "p1").RallyPointActive = true;
+        state.Players.First(p => p.Id == "p1").RallyPointQ = 0;
+        state.Players.First(p => p.Id == "p1").RallyPointR = 0;
+        state.Players.First(p => p.Id == "p1").RallyPointDeadline = DateTime.UtcNow.AddSeconds(-1);
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.ResolveExpiredRallyPoints(ServiceTestContext.RoomCode);
+
+        context.Cell(0, 0).Troops.Should().Be(8); // 2 base + 6 rally (3 allies × 2)
+    }
+
+    [Fact]
+    public void ResolveCommandoRaid_AttackersWinWithTwoPlusPresence_CapturesHexAndTransfersTroops()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddPlayer("p3", "Charlie", allianceId: "a2")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .OwnHex(2, 0, "p3", allianceId: "a2")
+            .WithTroops(2, 0, 6)
+            .WithCarriedTroops("p1", 0)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(2, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        state.Players.First(p => p.Id == "p2").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p2").CurrentLng = lng;
+        state.ActiveRaids.Add(new ActiveCommandoRaid
+        {
+            TargetQ = 2, TargetR = 0,
+            InitiatorAllianceId = "a1",
+            InitiatorPlayerId = "p1",
+            InitiatorPlayerName = "Alice",
+            Deadline = DateTime.UtcNow.AddSeconds(-1)
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.ResolveExpiredCommandoRaids(ServiceTestContext.RoomCode);
+
+        result.state.Should().NotBeNull();
+        result.state!.Grid[HexService.Key(2, 0)].OwnerAllianceId.Should().Be("a1");
+        result.state.Grid[HexService.Key(2, 0)].Troops.Should().BeGreaterThan(0);
+        result.state.ActiveRaids.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ResolveCommandoRaid_AttackersHaveOnlyOnePresence_RaidFails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .AddPlayer("p3", "Charlie", allianceId: "a2")
+            .OwnHex(2, 0, "p3", allianceId: "a2")
+            .WithTroops(2, 0, 6)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(2, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        state.ActiveRaids.Add(new ActiveCommandoRaid
+        {
+            TargetQ = 2, TargetR = 0,
+            InitiatorAllianceId = "a1",
+            InitiatorPlayerId = "p1",
+            InitiatorPlayerName = "Alice",
+            Deadline = DateTime.UtcNow.AddSeconds(-1)
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.ResolveExpiredCommandoRaids(ServiceTestContext.RoomCode);
+
+        result.state!.Grid[HexService.Key(2, 0)].OwnerAllianceId.Should().Be("a2");
+        result.state.ActiveRaids.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddReinforcements_HexWithFriendlyPresence_RegeneratesAtTripleRate()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 3)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        // Base regen is 1, presence multiplier is 3x → expect 3 added = total 6
+        context.Cell(0, 0).Troops.Should().Be(6);
+    }
+
+    [Fact]
+    public void AddReinforcements_HexWithoutPresence_RegeneratesAtBaseRate()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 3)
+            .Build();
+        // p1 has no location set
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        context.Cell(0, 0).Troops.Should().Be(4); // base +1
     }
 
 }

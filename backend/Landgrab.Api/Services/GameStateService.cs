@@ -91,6 +91,31 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             }
         }
 
+        // Beacon: Scout alliance members reveal hexes around active beacons
+        if (state.Dynamics.BeaconEnabled && state.Dynamics.FogOfWarEnabled)
+        {
+            var activeBeacons = state.Players
+                .Where(p => p.IsBeacon
+                    && p.AllianceId == player.AllianceId
+                    && p.BeaconLat.HasValue && p.BeaconLng.HasValue
+                    && state.HasMapLocation)
+                .ToList();
+
+            foreach (var beacon in activeBeacons)
+            {
+                var beaconHex = HexService.LatLngToHexForRoom(
+                    beacon.BeaconLat!.Value, beacon.BeaconLng!.Value,
+                    state.MapLat!.Value, state.MapLng!.Value, state.TileSizeMeters);
+
+                foreach (var neighbor in HexService.SpiralSearch(beaconHex.q, beaconHex.r, 3))
+                {
+                    var nKey = HexService.Key(neighbor.q, neighbor.r);
+                    if (state.Grid.ContainsKey(nKey))
+                        visible.Add(nKey);
+                }
+            }
+        }
+
         return visible;
     }
 
@@ -191,7 +216,6 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             ClaimMode = fullSnapshot.ClaimMode,
             WinConditionType = fullSnapshot.WinConditionType,
             WinConditionValue = fullSnapshot.WinConditionValue,
-            AllowSelfClaim = fullSnapshot.AllowSelfClaim,
             Dynamics = fullSnapshot.Dynamics,
             GameDurationMinutes = fullSnapshot.GameDurationMinutes,
             MasterTileQ = fullSnapshot.MasterTileQ,
@@ -205,7 +229,7 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             MaxFootprintMetersOverride = fullSnapshot.MaxFootprintMetersOverride,
             HostObserverMode = fullSnapshot.HostObserverMode,
             IsPaused = fullSnapshot.IsPaused,
-            IsRushHour = fullSnapshot.IsRushHour,
+            ActiveRaids = fullSnapshot.ActiveRaids,
         };
     }
 

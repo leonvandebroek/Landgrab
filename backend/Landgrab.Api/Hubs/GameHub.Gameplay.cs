@@ -264,7 +264,7 @@ public partial class GameHub
     }
 
     public async Task PlaceTroops(int q, int r, double playerLat, double playerLng,
-        int? troopCount = null, bool claimForSelf = false)
+        int? troopCount = null)
     {
         if (!ValidateCoordRange(q, r) ||
             !ValidateLatLng(playerLat, playerLng) ||
@@ -286,7 +286,7 @@ public partial class GameHub
             && existingCell.OwnerId == null;
 
         var (state, error, previousOwnerId, combatResult) = gameService.PlaceTroops(
-            room.Code, UserId, q, r, playerLat, playerLng, troopCount, claimForSelf);
+            room.Code, UserId, q, r, playerLat, playerLng, troopCount);
         if (error != null)
         {
             await SendError(error);
@@ -327,36 +327,6 @@ public partial class GameHub
         }
     }
 
-    public async Task ReClaimHex(int q, int r, string mode)
-    {
-        if (!ValidateCoordRange(q, r) || !ValidateEnumString<ReClaimMode>(mode))
-        {
-            await SendError(InvalidRequestCode, "Invalid reclaim request.");
-            return;
-        }
-
-        var room = gameService.GetRoomByConnection(Context.ConnectionId);
-        if (room == null)
-        {
-            await SendError("ROOM_NOT_JOINED", "Not in a room.");
-            return;
-        }
-
-        if (!Enum.TryParse<ReClaimMode>(mode, true, out var parsedMode))
-        {
-            await SendError("Invalid reclaim mode.");
-            return;
-        }
-
-        var (state, error) = gameService.ReClaimHex(room.Code, UserId, q, r, parsedMode);
-        if (error != null)
-        {
-            await SendError(error);
-            return;
-        }
-
-        await BroadcastState(room.Code, state!);
-    }
 
     public async Task AttackGlobalHex(int fromQ, int fromR, int toQ, int toR)
     {

@@ -90,7 +90,6 @@ public sealed class GameStateCommonTests
             .Build();
         state.HostBypassGps = true;
         state.HostObserverMode = true;
-        state.IsRushHour = true;
 
         var snapshot = GameStateCommon.SnapshotState(state);
 
@@ -103,7 +102,6 @@ public sealed class GameStateCommonTests
         snapshot.IsPaused.Should().BeTrue();
         snapshot.HostBypassGps.Should().BeTrue();
         snapshot.HostObserverMode.Should().BeTrue();
-        snapshot.IsRushHour.Should().BeTrue();
     }
 
 

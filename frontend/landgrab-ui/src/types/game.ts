@@ -8,7 +8,7 @@ export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starbu
 
 export type TerrainType = 'None' | 'Water' | 'Building' | 'Road' | 'Path' | 'Forest' | 'Park' | 'Hills' | 'Steep';
 
-export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Defender' | 'Engineer';
+export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Engineer';
 
 export interface GameDynamics {
   terrainEnabled: boolean;
@@ -123,20 +123,22 @@ export interface Player {
   isBeacon?: boolean;
   beaconLat?: number;
   beaconLng?: number;
-  // Phase 6: CommandoRaid
-  isCommandoActive?: boolean;
-  commandoTargetQ?: number;
-  commandoTargetR?: number;
-  commandoDeadline?: string;
-  commandoCooldownUntil?: string;
+  // Commander abilities
+  commandoRaidCooldownUntil?: string;
   tacticalStrikeActive?: boolean;
   tacticalStrikeExpiry?: string;
   tacticalStrikeCooldownUntil?: string;
-  reinforceCooldownUntil?: string;
-  shieldWallActive?: boolean;
-  shieldWallExpiry?: string;
-  shieldWallCooldownUntil?: string;
-  emergencyRepairCooldownUntil?: string;
+  rallyPointActive?: boolean;
+  rallyPointDeadline?: string;
+  rallyPointCooldownUntil?: string;
+  rallyPointQ?: number;
+  rallyPointR?: number;
+  // Engineer abilities
+  sabotageActive?: boolean;
+  sabotageStartedAt?: string;
+  sabotageTargetQ?: number;
+  sabotageTargetR?: number;
+  sabotageCooldownUntil?: string;
   demolishActive?: boolean;
   demolishTargetKey?: string;
   demolishStartedAt?: string;
@@ -191,7 +193,6 @@ export interface GameState {
   gameAreaPattern: GameAreaPattern | null;
   tileSizeMeters: number;
   claimMode: ClaimMode;
-  allowSelfClaim?: boolean;
   dynamics: GameDynamics;
   winConditionType: WinConditionType;
   winConditionValue: number;
@@ -203,13 +204,23 @@ export interface GameState {
   winnerName?: string;
   isAllianceVictory: boolean;
   achievements?: Achievement[];
-  // Phase 8: Rush Hour
-  isRushHour?: boolean;
   // Host overrides
   hostBypassGps?: boolean;
   maxFootprintMetersOverride?: number | null;
   hostObserverMode?: boolean;
   isPaused?: boolean;
+  activeRaids?: ActiveCommandoRaid[];
+}
+
+export interface ActiveCommandoRaid {
+  id: string;
+  targetQ: number;
+  targetR: number;
+  initiatorAllianceId: string;
+  initiatorPlayerId: string;
+  initiatorPlayerName: string;
+  deadline: string;
+  isHQRaid: boolean;
 }
 
 export interface Achievement {
@@ -219,8 +230,6 @@ export interface Achievement {
   titleKey: string;
   value?: string;
 }
-
-export type ReClaimMode = 'Alliance' | 'Self' | 'Abandon';
 
 export interface CombatResult {
   attackDice: number[];

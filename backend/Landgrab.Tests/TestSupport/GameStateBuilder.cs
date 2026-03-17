@@ -80,13 +80,7 @@ internal sealed class GameStateBuilder
         return this;
     }
 
-    public GameStateBuilder WithAllowSelfClaim(bool allowSelfClaim)
-    {
-        _state.AllowSelfClaim = allowSelfClaim;
-        return this;
-    }
-
-    public GameStateBuilder WithPaused(bool isPaused = true)
+public GameStateBuilder WithPaused(bool isPaused = true)
     {
         _state.IsPaused = isPaused;
         return this;
@@ -116,13 +110,7 @@ internal sealed class GameStateBuilder
         return this;
     }
 
-    public GameStateBuilder WithSupplyLinesEnabled(bool enabled = true)
-    {
-        _state.Dynamics.SupplyLinesEnabled = enabled;
-        return this;
-    }
-
-    public GameStateBuilder AddPlayer(string id, string name, string? allianceId = null)
+public GameStateBuilder AddPlayer(string id, string name, string? allianceId = null, PlayerRole role = PlayerRole.None)
     {
         var alliance = allianceId == null
             ? null
@@ -135,7 +123,8 @@ internal sealed class GameStateBuilder
             AllianceId = allianceId,
             AllianceName = alliance?.Name,
             AllianceColor = alliance?.Color,
-            Color = $"#{id}"
+            Color = $"#{id}",
+            Role = role
         });
 
         return this;

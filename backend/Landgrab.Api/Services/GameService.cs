@@ -53,8 +53,7 @@ public class GameService(
     public (GameState? state, string? error) SetPatternGameArea(string roomCode, string userId, string pattern) => mapAreaService.SetPatternGameArea(roomCode, userId, pattern);
     public (GameState? state, string? error) SetCustomGameArea(string roomCode, string userId, IReadOnlyList<HexCoordinateDto> coordinates) => mapAreaService.SetCustomGameArea(roomCode, userId, coordinates);
     public (GameState? state, string? error) SetClaimMode(string roomCode, string userId, string claimMode) => gameConfigService.SetClaimMode(roomCode, userId, claimMode);
-    public (GameState? state, string? error) SetAllowSelfClaim(string roomCode, string userId, bool allow) => gameConfigService.SetAllowSelfClaim(roomCode, userId, allow);
-    public (GameState? state, string? error) SetWinCondition(string roomCode, string userId, string winConditionType, int value) => gameConfigService.SetWinCondition(roomCode, userId, winConditionType, value);
+public (GameState? state, string? error) SetWinCondition(string roomCode, string userId, string winConditionType, int value) => gameConfigService.SetWinCondition(roomCode, userId, winConditionType, value);
     public (GameState? state, string? error) SetBeaconEnabled(string roomCode, string userId, bool enabled) => gameConfigService.SetBeaconEnabled(roomCode, userId, enabled);
     public (GameState? state, string? error) SetTileDecayEnabled(string roomCode, string userId, bool enabled) => gameConfigService.SetTileDecayEnabled(roomCode, userId, enabled);
     public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics) => gameConfigService.SetGameDynamics(roomCode, userId, dynamics);
@@ -91,9 +90,11 @@ public class GameService(
         return gameplayService.GetCombatPreview(roomCode, userId, q, r);
     }
 
-    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null, bool claimForSelf = false) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount, claimForSelf);
-    public (GameState? state, string? error) ReClaimHex(string roomCode, string userId, int q, int r, ReClaimMode mode) => gameplayService.ReClaimHex(roomCode, userId, q, r, mode);
+    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount);
     public GameplayService.ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
+    public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode) => gameplayService.ResolveExpiredCommandoRaids(roomCode);
+    public void ResolveExpiredRallyPoints(string roomCode) => gameplayService.ResolveExpiredRallyPoints(roomCode);
+    public void ResolveActiveSabotages(string roomCode) => gameplayService.ResolveActiveSabotages(roomCode);
 
     public void AppendEventLogPublic(GameState state, GameEventLogEntry entry) => gameStateService.AppendEventLog(state, entry);
     public GameState SnapshotStatePublic(GameState state) => gameStateService.SnapshotState(state);

@@ -174,7 +174,6 @@ public partial class GameHub : Hub
             CombatMode = Enum.IsDefined(dynamics.CombatMode) ? dynamics.CombatMode : CombatMode.Balanced,
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
             FogOfWarEnabled = dynamics.FogOfWarEnabled,
-            SupplyLinesEnabled = dynamics.SupplyLinesEnabled,
             HQEnabled = dynamics.HQEnabled,
             HQAutoAssign = dynamics.HQAutoAssign,
             TimedEscalationEnabled = dynamics.TimedEscalationEnabled,

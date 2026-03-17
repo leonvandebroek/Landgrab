@@ -100,7 +100,6 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             {
                 PlayerRole.Commander,
                 PlayerRole.Scout,
-                PlayerRole.Defender,
                 PlayerRole.Engineer
             };
 

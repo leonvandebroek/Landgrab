@@ -40,7 +40,6 @@ export interface GameViewActions {
   onDeactivateBeacon: () => Promise<void>;
   onActivateTacticalStrike: () => Promise<void>;
   onActivateReinforce: () => Promise<void>;
-  onActivateShieldWall: () => Promise<void>;
   onActivateEmergencyRepair: () => Promise<void>;
   onStartDemolish: () => Promise<void>;
   onSetObserverMode: (enabled: boolean) => void;
@@ -200,7 +199,6 @@ export function GameView({
           onDeactivateBeacon={actions.onDeactivateBeacon}
           onActivateTacticalStrike={actions.onActivateTacticalStrike}
           onActivateReinforce={actions.onActivateReinforce}
-          onActivateShieldWall={actions.onActivateShieldWall}
           onActivateEmergencyRepair={actions.onActivateEmergencyRepair}
           onStartDemolish={actions.onStartDemolish}
           playerDisplayPrefs={playerDisplayPrefs}

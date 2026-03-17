@@ -40,7 +40,6 @@ export interface LobbyViewActions {
   onSetPatternGameArea: (pattern: GameAreaPattern) => void;
   onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   onSetClaimMode: (mode: ClaimMode) => void;
-  onSetAllowSelfClaim: (allow: boolean) => Promise<void>;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetBeaconEnabled: (enabled: boolean) => void;
   onSetTileDecayEnabled: (enabled: boolean) => void;
@@ -131,7 +130,6 @@ export function LobbyView({
           onSetPatternGameArea={actions.onSetPatternGameArea}
           onSetCustomGameArea={actions.onSetCustomGameArea}
           onSetClaimMode={actions.onSetClaimMode}
-          onSetAllowSelfClaim={actions.onSetAllowSelfClaim}
           onSetWinCondition={actions.onSetWinCondition}
           onSetBeaconEnabled={actions.onSetBeaconEnabled}
           onSetTileDecayEnabled={actions.onSetTileDecayEnabled}

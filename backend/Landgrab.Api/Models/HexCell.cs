@@ -24,6 +24,9 @@ public class HexCell
     // Phase 4: Engineer — permanent fort status
     public bool IsFort { get; set; }
 
+    // Sabotage — troop regen disabled until this time
+    public DateTime? SabotagedUntil { get; set; }
+
 }
 
 public class GlobalHex

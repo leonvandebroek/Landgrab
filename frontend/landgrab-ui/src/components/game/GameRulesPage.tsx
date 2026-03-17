@@ -14,7 +14,6 @@ interface GameRulesPageProps {
 const roleIconNames: Record<RoleModalRole, GameIconName> = {
   Commander: 'helmet',
   Scout: 'compass',
-  Defender: 'shieldWall',
   Engineer: 'gearHammer',
 };
 
@@ -25,9 +24,6 @@ const roleAbilityIconNames: Record<string, GameIconName> = {
   extendedVision: 'compass',
   firstStrike: 'archeryTarget',
   commandoRaid: 'crossbow',
-  presenceShield: 'shield',
-  shieldWall: 'shieldWall',
-  lastStand: 'biceps',
   fortConstruction: 'gearHammer',
   emergencyRepair: 'wrench',
   demolish: 'fist',

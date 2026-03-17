@@ -12,12 +12,11 @@ interface Props {
     isHost: boolean;
     onSetTileSize: (meters: number) => void;
     onSetClaimMode: (mode: ClaimMode) => void;
-    onSetAllowSelfClaim: (allow: boolean) => void;
     onSetWinCondition: (type: WinConditionType, value: number) => void;
     invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
-export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, onSetAllowSelfClaim, onSetWinCondition, invoke }: Props) {
+export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, onSetWinCondition, invoke }: Props) {
     const { t } = useTranslation();
     const [winValueDraft, setWinValueDraft] = useState<string | null>(null);
     const [tileSizeDraft, setTileSizeDraft] = useState<number | null>(null);
@@ -135,24 +134,6 @@ export function RulesStep({ gameState, isHost, onSetTileSize, onSetClaimMode, on
                         ))}
                     </div>
                 </div>
-
-                {/* Allow self-claiming (Alliances only) */}
-                {gameState.gameMode === 'Alliances' && (
-                    <div className="wizard-rule-card">
-                        <h3>{t('wizard.rulesAllowSelfClaim')}</h3>
-                        <p className="wizard-hint">{t('wizard.rulesAllowSelfClaimDesc')}</p>
-                        <label className="toggle-row">
-                            <input
-                                type="checkbox"
-                                data-testid="rules-allow-self-claim-toggle"
-                                checked={gameState.allowSelfClaim !== false}
-                                onChange={e => isHost && onSetAllowSelfClaim(e.target.checked)}
-                                disabled={!isHost}
-                            />
-                            <span>{t('wizard.rulesAllowSelfClaim')}</span>
-                        </label>
-                    </div>
-                )}
 
                 {/* Win condition */}
                 <div className="wizard-rule-card">

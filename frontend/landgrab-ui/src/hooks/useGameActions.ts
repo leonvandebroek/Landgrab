@@ -26,7 +26,6 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleSetPatternGameArea: lobbyActions.handleSetPatternGameArea,
     handleSetCustomGameArea: lobbyActions.handleSetCustomGameArea,
     handleSetClaimMode: lobbyActions.handleSetClaimMode,
-    handleSetAllowSelfClaim: lobbyActions.handleSetAllowSelfClaim,
     handleSetWinCondition: lobbyActions.handleSetWinCondition,
     handleSetBeaconEnabled: lobbyActions.handleSetBeaconEnabled,
     handleSetTileDecayEnabled: lobbyActions.handleSetTileDecayEnabled,
@@ -38,7 +37,6 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleActivateCommandoRaid: abilityActions.handleActivateCommandoRaid,
     handleActivateTacticalStrike: abilityActions.handleActivateTacticalStrike,
     handleActivateReinforce: abilityActions.handleActivateReinforce,
-    handleActivateShieldWall: abilityActions.handleActivateShieldWall,
     handleActivateEmergencyRepair: abilityActions.handleActivateEmergencyRepair,
     handleStartDemolish: abilityActions.handleStartDemolish,
     handleSetMasterTile: lobbyActions.handleSetMasterTile,
@@ -66,7 +64,6 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleDeployCombatTroops: gameplayActions.handleDeployCombatTroops,
     handleDeployNeutralClaimTroops: gameplayActions.handleDeployNeutralClaimTroops,
     handleCancelAttack: gameplayActions.handleCancelAttack,
-    handleReClaimHex: gameplayActions.handleReClaimHex,
     handlePlayAgain: lobbyActions.handlePlayAgain,
   };
 }

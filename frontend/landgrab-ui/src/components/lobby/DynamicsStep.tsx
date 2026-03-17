@@ -28,7 +28,6 @@ export function DynamicsStep({
     const alliancesMissingHq = gameState.alliances.filter(
         alliance => alliance.memberIds.length > 0 && (alliance.hqHexQ == null || alliance.hqHexR == null),
     );
-    const showSupplyLinesHqWarning = dynamics.supplyLinesEnabled && !dynamics.hqEnabled;
     const showHqAssignmentWarning = dynamics.hqEnabled && !dynamics.hqAutoAssign && alliancesMissingHq.length > 0;
 
     const updateDynamics = (updates: Partial<GameDynamics>) => {
@@ -161,14 +160,6 @@ export function DynamicsStep({
                             )}
                         </div>
                     ))}
-
-                    {showSupplyLinesHqWarning && (
-                        <p className="wizard-hint" role="alert" style={{ color: '#f4b350' }}>
-                            {t('dynamics.warning.supplyLinesNeedsHq' as never, {
-                                defaultValue: "Supply lines won't work without HQ enabled.",
-                            })}
-                        </p>
-                    )}
 
                     {showHqAssignmentWarning && (
                         <p className="wizard-hint" role="alert" style={{ color: '#f4b350' }}>

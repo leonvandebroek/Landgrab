@@ -3,7 +3,7 @@ import { getTileActions, getTileInteractionStatus } from '../components/game/til
 import type { TileAction, TileActionType } from '../components/game/tileInteraction';
 import { useGameplayStore } from '../stores/gameplayStore';
 import { useUiStore } from '../stores/uiStore';
-import type { CombatPreviewDto, HexCell, ReClaimMode } from '../types/game';
+import type { CombatPreviewDto, HexCell } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { getErrorMessage, getPlaceSuccessMessage } from '../utils/gameHelpers';
 import type { UseGameActionsOptions } from './useGameActions.shared';
@@ -51,7 +51,6 @@ interface UseGameActionsGameplayResult {
   handleDeployCombatTroops: (count: number) => Promise<void>;
   handleDeployNeutralClaimTroops: (count: number) => Promise<void>;
   handleCancelAttack: () => void;
-  handleReClaimHex: (mode: ReClaimMode) => Promise<void>;
 }
 
 export function useGameActionsGameplay({
@@ -213,9 +212,8 @@ export function useGameActionsGameplay({
     }
 
     const [q, r] = targetHex;
-    const claimForSelf = actionType === 'claimSelf';
 
-    invoke('PlaceTroops', q, r, coordinates.lat, coordinates.lng, null, claimForSelf)
+    invoke('PlaceTroops', q, r, coordinates.lat, coordinates.lng, null)
       .then(() => {
         setPickupPrompt(null);
         setReinforcePrompt(null);
@@ -679,30 +677,6 @@ export function useGameActionsGameplay({
     setCombatPreview(null);
   }, [setAttackPrompt, setCombatPreview]);
 
-  const handleReClaimHex = useCallback(async (mode: ReClaimMode): Promise<void> => {
-    if (!combatResult) {
-      return;
-    }
-
-    if (mode === 'Alliance') {
-      setCombatResult(null);
-      return;
-    }
-
-    if (!invoke) {
-      setCombatResult(null);
-      return;
-    }
-
-    try {
-      await invoke('ReClaimHex', combatResult.q, combatResult.r, mode);
-    } catch (error) {
-      setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex: [combatResult.q, combatResult.r] });
-    } finally {
-      setCombatResult(null);
-    }
-  }, [combatResult, invoke, setCombatResult, setMapFeedback]);
-
   return {
     handleHexClick,
     tileActions,
@@ -717,6 +691,5 @@ export function useGameActionsGameplay({
     handleDeployCombatTroops,
     handleDeployNeutralClaimTroops,
     handleCancelAttack,
-    handleReClaimHex,
   };
 }

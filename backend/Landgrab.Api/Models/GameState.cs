@@ -45,7 +45,6 @@ public enum GameAreaPattern
     Starburst
 }
 
-public enum ReClaimMode { Alliance, Self, Abandon }
 
 public enum CombatMode
 {
@@ -72,7 +71,6 @@ public enum PlayerRole
     None,
     Commander,
     Scout,
-    Defender,
     Engineer
 }
 
@@ -84,7 +82,6 @@ public class GameDynamics
     public CombatMode CombatMode { get; set; } = CombatMode.Balanced;
     public bool PlayerRolesEnabled { get; set; }
     public bool FogOfWarEnabled { get; set; }
-    public bool SupplyLinesEnabled { get; set; }
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
     public bool TimedEscalationEnabled { get; set; }
@@ -125,26 +122,25 @@ public class PlayerDto
     public double? BeaconLat { get; set; }
     public double? BeaconLng { get; set; }
 
-    // Phase 6: CommandoRaid
-    public bool IsCommandoActive { get; set; }
-    public int? CommandoTargetQ { get; set; }
-    public int? CommandoTargetR { get; set; }
-    public DateTime? CommandoDeadline { get; set; }
-    public DateTime? CommandoCooldownUntil { get; set; }
+    // Phase 6: CommandoRaid cooldown (raid itself is now game-level via ActiveRaids)
+    public DateTime? CommandoRaidCooldownUntil { get; set; }
 
     // Commander abilities
     public bool TacticalStrikeActive { get; set; }
     public DateTime? TacticalStrikeExpiry { get; set; }
     public DateTime? TacticalStrikeCooldownUntil { get; set; }
-    public DateTime? ReinforceCooldownUntil { get; set; }
-
-    // Defender abilities
-    public bool ShieldWallActive { get; set; }
-    public DateTime? ShieldWallExpiry { get; set; }
-    public DateTime? ShieldWallCooldownUntil { get; set; }
+    public bool RallyPointActive { get; set; }
+    public DateTime? RallyPointDeadline { get; set; }
+    public DateTime? RallyPointCooldownUntil { get; set; }
+    public int? RallyPointQ { get; set; }
+    public int? RallyPointR { get; set; }
 
     // Engineer abilities
-    public DateTime? EmergencyRepairCooldownUntil { get; set; }
+    public bool SabotageActive { get; set; }
+    public DateTime? SabotageStartedAt { get; set; }
+    public int? SabotageTargetQ { get; set; }
+    public int? SabotageTargetR { get; set; }
+    public DateTime? SabotageCooldownUntil { get; set; }
     public bool DemolishActive { get; set; }
     public string? DemolishTargetKey { get; set; }
     public DateTime? DemolishStartedAt { get; set; }
@@ -186,6 +182,18 @@ public class GameEventLogEntry
     public bool? IsAllianceVictory { get; set; }
 }
 
+public class ActiveCommandoRaid
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public int TargetQ { get; set; }
+    public int TargetR { get; set; }
+    public string InitiatorAllianceId { get; set; } = "";
+    public string InitiatorPlayerId { get; set; } = "";
+    public string InitiatorPlayerName { get; set; } = "";
+    public DateTime Deadline { get; set; }
+    public bool IsHQRaid { get; set; }
+}
+
 public class GameState
 {
     public string RoomCode { get; set; } = "";
@@ -194,6 +202,7 @@ public class GameState
     public int CurrentWizardStep { get; set; }
     public List<PlayerDto> Players { get; set; } = [];
     public List<AllianceDto> Alliances { get; set; } = [];
+    public List<ActiveCommandoRaid> ActiveRaids { get; set; } = [];
     public List<GameEventLogEntry> EventLog { get; set; } = [];
     public Dictionary<string, HexCell> Grid { get; set; } = [];
     public double? MapLat { get; set; }
@@ -203,11 +212,10 @@ public class GameState
     public GameAreaMode GameAreaMode { get; set; } = GameAreaMode.Centered;
     public GameAreaPattern? GameAreaPattern { get; set; }
     public int TileSizeMeters { get; set; } = 25;
-    public ClaimMode ClaimMode { get; set; } = ClaimMode.AdjacencyRequired;
+    public ClaimMode ClaimMode { get; set; } = ClaimMode.PresenceOnly;
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;
-    public bool AllowSelfClaim { get; set; } = true;
-    public GameDynamics Dynamics { get; set; } = new();
+public GameDynamics Dynamics { get; set; } = new();
     public int? GameDurationMinutes { get; set; }
     public int? MasterTileQ { get; set; }
     public int? MasterTileR { get; set; }
@@ -222,9 +230,6 @@ public class GameState
     public int? MaxFootprintMetersOverride { get; set; }
     public bool HostObserverMode { get; set; } = false;
     public bool IsPaused { get; set; } = false;
-
-    // Phase 8: Rush Hour
-    public bool IsRushHour { get; set; }
 }
 
 public class GameRoom
