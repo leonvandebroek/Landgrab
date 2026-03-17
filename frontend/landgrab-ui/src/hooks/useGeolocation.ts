@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import i18n from '../i18n';
 
 interface GeoState {
@@ -6,24 +6,6 @@ interface GeoState {
   lng: number | null;
   error: string | null;
   loading: boolean;
-}
-
-function hasMoved(
-  prev: { lat: number; lng: number } | null,
-  next: { lat: number; lng: number },
-  thresholdMeters: number
-): boolean {
-  if (!prev) {
-    return true;
-  }
-
-  const R = 6_371_000; // Earth radius in metres
-  const dLat = ((next.lat - prev.lat) * Math.PI) / 180;
-  const dLng = ((next.lng - prev.lng) * Math.PI) / 180;
-  const avgLat = (((prev.lat + next.lat) / 2) * Math.PI) / 180;
-  const dx = dLng * Math.cos(avgLat) * R;
-  const dy = dLat * R;
-  return Math.sqrt(dx * dx + dy * dy) > thresholdMeters;
 }
 
 export function useGeolocation(enabled = true): GeoState {
@@ -35,7 +17,6 @@ export function useGeolocation(enabled = true): GeoState {
   const [error, setError] = useState<string | null>(
     supported ? null : i18n.t('errors.geolocationNotSupported')
   );
-  const lastEmittedRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!enabled || !supported) {
@@ -47,21 +28,19 @@ export function useGeolocation(enabled = true): GeoState {
     const startWatch = () => {
       watchId = navigator.geolocation.watchPosition(
         pos => {
-          const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          if (!hasMoved(lastEmittedRef.current, next, 5)) {
-            return;
-          }
-          lastEmittedRef.current = next;
-          setPosition(next);
+          setPosition({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
           setError(null);
         },
         err => {
           setError(err.message || i18n.t('errors.locationDenied'));
         },
         {
-          enableHighAccuracy: false,
-          timeout: 15000,
-          maximumAge: 10000
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5000
         }
       );
     };

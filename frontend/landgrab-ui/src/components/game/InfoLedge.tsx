@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SEVERITY_PRIORITY, useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import type { LedgeItem, LedgeSeverity } from '../../stores/infoLedgeStore';
@@ -10,7 +10,7 @@ function getSeverityClass(severity: LedgeSeverity): string {
     return `info-ledge__dot--${severity}`;
 }
 
-function InfoLedgeComponent() {
+export function InfoLedge() {
     const { t } = useTranslation();
 
     const items = useInfoLedgeStore((state) => state.items);
@@ -139,5 +139,3 @@ function InfoLedgeComponent() {
         </div>
     );
 }
-
-export const InfoLedge = memo(InfoLedgeComponent);

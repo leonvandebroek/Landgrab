@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { HexCell, AllianceDto } from '../../types/game';
 import { renderMiniMap } from '../../utils/miniMapRenderer';
 
@@ -49,7 +49,7 @@ function latLngBoundsToAxialPixel(
   };
 }
 
-function MiniMapComponent({
+export function MiniMap({
   grid,
   myUserId,
   alliances,
@@ -150,5 +150,3 @@ function MiniMapComponent({
     </div>
   );
 }
-
-export const MiniMap = memo(MiniMapComponent);

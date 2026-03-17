@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
@@ -111,7 +111,7 @@ function formatDurationRemaining(startedAt: string | undefined, durationMs: numb
   return formatTimeRemaining(new Date(startTime + durationMs).toISOString());
 }
 
-function PlayerHUDComponent({
+export function PlayerHUD({
   actions,
   onAction,
   currentHex,
@@ -554,5 +554,3 @@ function PlayerHUDComponent({
     </div>
   );
 }
-
-export const PlayerHUD = memo(PlayerHUDComponent);
