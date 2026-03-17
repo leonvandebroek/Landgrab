@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HexCell } from '../../types/game';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
@@ -21,6 +21,7 @@ import { PlayerHUD } from './PlayerHUD';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
+import { useSecondTick } from '../../hooks/useSecondTick';
 
 interface Props {
   myUserId: string;
@@ -105,6 +106,14 @@ export function PlayingHud({
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
   const me = state?.players.find((player) => player.id === myUserId);
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
+  const needsClock = Boolean(
+    state
+    && (
+      isTimedGame
+      || state.dynamics?.timedEscalationEnabled
+      || (state.dynamics?.underdogPactEnabled && myAlliance?.underdogBoostUntil)
+    )
+  );
 
   useEffect(() => {
     const layout = layoutRef.current;
@@ -139,45 +148,41 @@ export function PlayingHud({
     }
   }, [activeModal]);
 
-  useEffect(() => {
+  const tick = useCallback(() => {
     if (!state) {
       setTimeRemaining(null);
       return;
     }
 
-    const needsClock = Boolean(
-      isTimedGame
-      || state.dynamics?.timedEscalationEnabled
-      || (state.dynamics?.underdogPactEnabled && myAlliance?.underdogBoostUntil),
-    );
+    const now = Date.now();
+    setCurrentTime(now);
 
+    if (isTimedGame && state.gameStartedAt && state.gameDurationMinutes) {
+      const endTime = new Date(state.gameStartedAt).getTime() + state.gameDurationMinutes * 60 * 1000;
+      setTimeRemaining(Math.max(0, endTime - now));
+      return;
+    }
+
+    setTimeRemaining(null);
+  }, [isTimedGame, state]);
+
+  useEffect(() => {
     if (!needsClock) {
       setCurrentTime(Date.now());
       setTimeRemaining(null);
       return;
     }
 
-    const tick = () => {
-      const now = Date.now();
-      setCurrentTime(now);
+    tick();
+  }, [needsClock, tick]);
 
-      if (isTimedGame && state.gameStartedAt && state.gameDurationMinutes) {
-        const endTime = new Date(state.gameStartedAt).getTime() + state.gameDurationMinutes * 60 * 1000;
-        setTimeRemaining(Math.max(0, endTime - now));
-        return;
-      }
-
-      setTimeRemaining(null);
-    };
+  useSecondTick(() => {
+    if (!needsClock) {
+      return;
+    }
 
     tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [
-    isTimedGame,
-    myAlliance?.underdogBoostUntil,
-    state,
-  ]);
+  });
 
   const displayTimeRemaining = isTimedGame ? timeRemaining : null;
 

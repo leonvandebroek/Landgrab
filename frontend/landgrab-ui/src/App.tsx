@@ -71,7 +71,26 @@ export default function App() {
   const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
     mapNavigateRef.current?.(lat, lng);
   }, []);
-  const location = useGeolocation(Boolean(auth));
+  const myPlayer = useMemo(() => {
+    if (!auth || !gameState) return null;
+    return gameState.players.find(player => player.id === auth.userId) ?? null;
+  }, [auth, gameState]);
+  const isHostOnLocationSetupStep = useMemo(() => {
+    if (!gameState || gameState.phase !== 'Lobby' || !myPlayer?.isHost) {
+      return false;
+    }
+
+    if (typeof gameState.currentWizardStep === 'number') {
+      return gameState.currentWizardStep === 0;
+    }
+
+    return !gameState.hasMapLocation || gameState.mapLat == null || gameState.mapLng == null;
+  }, [gameState, myPlayer?.isHost]);
+  const shouldEnableGeolocation = Boolean(auth) && (
+    gameState?.phase === 'Playing'
+    || isHostOnLocationSetupStep
+  );
+  const location = useGeolocation(shouldEnableGeolocation);
   const { playSound } = useSound();
 
   // ── SignalR wiring ───────────────────────────────────────────────────────
@@ -206,11 +225,6 @@ export default function App() {
   ]);
 
   // ── Player / game derived values ─────────────────────────────────────────
-  const myPlayer = useMemo(() => {
-    if (!auth || !gameState) return null;
-    return gameState.players.find(player => player.id === auth.userId) ?? null;
-  }, [auth, gameState]);
-
   const isHostBypass = Boolean(gameState?.hostBypassGps && myPlayer?.isHost);
   const effectiveLocationError = usingDebugLocation || isHostBypass ? null : location.error;
   const effectiveLocationLoading = usingDebugLocation || isHostBypass ? false : location.loading;

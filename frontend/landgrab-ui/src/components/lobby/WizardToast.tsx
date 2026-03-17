@@ -31,7 +31,7 @@ export function WizardToast({ message, durationMs = 2500 }: Props) {
                 top: '1rem',
                 right: '1rem',
                 zIndex: 1000,
-                maxWidth: '320px',
+                maxWidth: 'min(400px, calc(100vw - 2rem))',
                 padding: '0.875rem 1rem',
                 borderRadius: '10px',
                 background: 'rgba(20, 24, 35, 0.95)',

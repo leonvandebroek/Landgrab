@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
+import { useSecondTick } from '../../hooks/useSecondTick';
 import { terrainDefendBonus } from '../../utils/terrainColors';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -102,11 +103,13 @@ export function PlayerHUD({
     player && (player.commandoDeadline || player.commandoCooldownUntil),
   );
 
-  useEffect(() => {
-    if (!hasActiveCountdown) return;
-    const interval = setInterval(() => setTick((tick) => tick + 1), 1000);
-    return () => clearInterval(interval);
-  }, [hasActiveCountdown]);
+  useSecondTick(() => {
+    if (!hasActiveCountdown) {
+      return;
+    }
+
+    setTick((tick) => tick + 1);
+  });
 
   const hasActions = actions.length > 0;
   const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);

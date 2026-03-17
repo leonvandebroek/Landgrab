@@ -221,6 +221,18 @@ export function useSignalRHandlers({
       }
       useUiStore.getState().clearError();
     },
+    onPlayersMoved: (players) => {
+      useGameStore.getState().updateGameState((currentState) => {
+        if (!currentState) {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          players,
+        };
+      });
+    },
     onGameOver: () => {
       playSound('victory');
       vibrate(HAPTIC.victory);

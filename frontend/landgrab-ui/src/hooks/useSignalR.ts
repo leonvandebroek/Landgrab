@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import type { GameState, CombatResult, GameDynamics } from '../types/game';
+import type { GameState, CombatResult, GameDynamics, Player } from '../types/game';
 
 const AUTO_RECONNECT_DELAYS = [0, 1000, 2000, 5000, 10000, 15000, 30000, 30000, 30000, 30000, 60000, 60000, 60000];
 const MANUAL_RECONNECT_DELAY_MS = 15000;
@@ -11,6 +11,7 @@ export interface GameEvents {
   onPlayerJoined?: (state: GameState) => void;
   onGameStarted?: (state: GameState) => void;
   onStateUpdated?: (state: GameState) => void;
+  onPlayersMoved?: (players: Player[]) => void;
   onCombatResult?: (result: CombatResult) => void;
   onDrainTick?: (data: { q: number; r: number; troopsLost: number; allianceId: string | null }) => void;
   onDynamicsChanged?: (dynamics: GameDynamics) => void;
@@ -125,6 +126,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('PlayerJoined', (state: GameState) => eventsRef.current.onPlayerJoined?.(state));
     conn.on('GameStarted', (state: GameState) => eventsRef.current.onGameStarted?.(state));
     conn.on('StateUpdated', (state: GameState) => eventsRef.current.onStateUpdated?.(state));
+    conn.on('PlayersMoved', (players: Player[]) => eventsRef.current.onPlayersMoved?.(players));
     conn.on('CombatResult', (result: CombatResult) => eventsRef.current.onCombatResult?.(result));
     conn.on('GameOver', (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => eventsRef.current.onGameOver?.(data));
     conn.on('TileLost', (data: { Q: number; R: number; AttackerName: string }) => eventsRef.current.onTileLost?.(data));

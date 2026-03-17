@@ -103,7 +103,13 @@ public partial class GameHub
             return;
         }
 
-        await BroadcastState(room.Code, result.state!);
+        if (result.gridChanged)
+        {
+            await BroadcastState(room.Code, result.state!);
+            return;
+        }
+
+        await Clients.Group(room.Code).SendAsync("PlayersMoved", result.state!.Players);
     }
 
     public async Task PickUpTroops(int q, int r, int count, double playerLat, double playerLng)

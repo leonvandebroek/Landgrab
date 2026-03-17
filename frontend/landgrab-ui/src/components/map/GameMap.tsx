@@ -38,6 +38,8 @@ const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const GRID_FIT_PADDING = L.point(24, 24);
 const DEFAULT_MAP_ZOOM = 16;
 const SHOW_HEX_DEBUG_OVERLAY = import.meta.env.DEV;
+const HEX_LAYER_PANE = 'game-map-hex-pane';
+const PLAYER_LAYER_PANE = 'game-map-player-pane';
 type BasemapLayer = L.TileLayer | L.TileLayer.WMS;
 
 function formatDebugCoordinate(value: number | null | undefined): string {
@@ -46,6 +48,24 @@ function formatDebugCoordinate(value: number | null | undefined): string {
 
 function formatDebugHex(hex: [number, number] | null): string {
   return hex ? `(${hex[0]}, ${hex[1]})` : '—';
+}
+
+function applyLayerPane(layerGroup: L.LayerGroup, paneName: string) {
+  const layers = [...layerGroup.getLayers()];
+
+  for (const layer of layers) {
+    if (!(layer instanceof L.Marker || layer instanceof L.Path)) {
+      continue;
+    }
+
+    if (layer.options.pane === paneName) {
+      continue;
+    }
+
+    layerGroup.removeLayer(layer);
+    layer.options.pane = paneName;
+    layerGroup.addLayer(layer);
+  }
 }
 
 export function GameMap({
@@ -75,6 +95,7 @@ export function GameMap({
   const basemapDismissedRef = useRef(false);
   const followedLocationKeyRef = useRef('');
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const playerLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const animLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const activeBaseLayerRef = useRef<BasemapLayer | null>(null);
@@ -113,6 +134,30 @@ export function GameMap({
 
   const renderedGrid = gridOverride ?? state.grid;
   const inactiveHexKeySet = useMemo(() => new Set(inactiveHexKeys), [inactiveHexKeys]);
+  const hexRenderPlayersKey = useMemo(
+    () => state.players
+      .map(player => [
+        player.id,
+        player.isHost ? '1' : '0',
+        player.color ?? '',
+        player.allianceColor ?? '',
+        player.allianceId ?? '',
+      ].join(':'))
+      .join('|'),
+    [state.players],
+  );
+  const hexRenderPlayers = useMemo(() => state.players, [hexRenderPlayersKey]);
+  const hexRenderState = useMemo(
+    () => ({
+      alliances: state.alliances,
+      dynamics: state.dynamics,
+      mapLat: state.mapLat,
+      mapLng: state.mapLng,
+      players: hexRenderPlayers,
+      tileSizeMeters: state.tileSizeMeters,
+    }) as GameState,
+    [hexRenderPlayers, state.alliances, state.dynamics, state.mapLat, state.mapLng, state.tileSizeMeters],
+  );
 
   const applyBasemapError = useCallback((nextValue: boolean) => {
     if (basemapErrorRef.current === nextValue) {
@@ -151,6 +196,12 @@ export function GameMap({
       zoom: DEFAULT_MAP_ZOOM,
       zoomControl: false,
     });
+
+    const hexPane = map.createPane(HEX_LAYER_PANE);
+    hexPane.style.zIndex = '450';
+
+    const playerPane = map.createPane(PLAYER_LAYER_PANE);
+    playerPane.style.zIndex = '650';
 
     const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
     const basemapLayers: BasemapLayer[] = [top25, brtStandard, brtGray];
@@ -218,6 +269,7 @@ export function GameMap({
     }).addTo(map);
 
     layerGroupRef.current = L.layerGroup().addTo(map);
+    playerLayerGroupRef.current = L.layerGroup().addTo(map);
     animLayerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
@@ -255,6 +307,7 @@ export function GameMap({
       map.remove();
       mapRef.current = null;
       layerGroupRef.current = null;
+      playerLayerGroupRef.current = null;
       animLayerGroupRef.current = null;
       geometryKeyRef.current = '';
       if (navigateRef) {
@@ -401,9 +454,8 @@ export function GameMap({
   }, [constrainViewportToGrid, renderedGrid, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
   useEffect(() => {
-    const map = mapRef.current;
     const layerGroup = layerGroupRef.current;
-    if (!map || !layerGroup || state.mapLat == null || state.mapLng == null) {
+    if (!layerGroup || hexRenderState.mapLat == null || hexRenderState.mapLng == null) {
       return;
     }
 
@@ -419,19 +471,46 @@ export function GameMap({
       prevGridRef,
       renderedGrid,
       selectedHex,
-      state,
+      state: hexRenderState,
     });
+
+    applyLayerPane(layerGroup, HEX_LAYER_PANE);
+  }, [currentHex, currentZoom, hexRenderState, inactiveHexKeySet, layerPrefs, myUserId, renderedGrid, selectedHex]);
+
+  useEffect(() => {
+    const playerLayerGroup = playerLayerGroupRef.current;
+    if (!playerLayerGroup) {
+      return;
+    }
+
+    playerLayerGroup.clearLayers();
+
+    if (state.mapLat == null || state.mapLng == null) {
+      return;
+    }
 
     renderPlayerMarkers({
       currentLocation,
       currentZoom,
-      layerGroup,
+      layerGroup: playerLayerGroup,
       layerPrefs,
       myUserId,
       playerDisplayPrefs,
       state,
     });
-  }, [currentHex, currentLocation, currentZoom, inactiveHexKeySet, layerPrefs, myUserId, playerDisplayPrefs, renderedGrid, selectedHex, state]);
+
+    applyLayerPane(playerLayerGroup, PLAYER_LAYER_PANE);
+  }, [
+    currentLocation,
+    currentZoom,
+    layerPrefs,
+    myUserId,
+    playerDisplayPrefs,
+    state.mapLat,
+    state.mapLng,
+    state.players,
+    state.tileSizeMeters,
+  ]);
 
   useEffect(() => {
     const layerGroup = animLayerGroupRef.current;

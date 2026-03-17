@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, Player } from '../../types/game';
+import { useSecondTick } from '../../hooks/useSecondTick';
 
 interface AbilityBarProps {
   player: Player;
@@ -27,13 +28,11 @@ const pillStyle: CSSProperties = {
   padding: '0.4rem 0.75rem',
   borderRadius: '2rem',
   border: '1px solid rgba(255,255,255,0.2)',
-  background: 'rgba(0,0,0,0.4)',
+  background: 'rgba(0,0,0,0.88)',
   color: '#fff',
   fontSize: '0.8rem',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
-  backdropFilter: 'blur(8px)',
-  WebkitBackdropFilter: 'blur(8px)',
   transition: 'background 0.2s, border-color 0.2s'
 };
 
@@ -85,12 +84,13 @@ export function AbilityBar({
     player.commandoDeadline || player.commandoCooldownUntil
   );
 
-  useEffect(() => {
-    if (!hasActiveCountdown) return;
+  useSecondTick(() => {
+    if (!hasActiveCountdown) {
+      return;
+    }
 
-    const interval = setInterval(() => setTick((tick) => tick + 1), 1000);
-    return () => clearInterval(interval);
-  }, [hasActiveCountdown]);
+    setTick((tick) => tick + 1);
+  });
 
   if (!showBeacon && !showCommando) {
     return null;

@@ -25,39 +25,50 @@ public class GameplayService(
     private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
-    public (GameState? state, string? error) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
-            return (null, error);
+            return (null, error, false);
 
         var room = GetRoom(roomCode);
         if (room == null)
-            return (null, "Room not found.");
+            return (null, "Room not found.", false);
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Player locations are only tracked while the game is playing.");
+                return (null, "Player locations are only tracked while the game is playing.", false);
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
-                return (null, "Player not in room.");
+                return (null, "Player not in room.", false);
 
             var previousPhase = room.State.Phase;
+            var gridChanged = false;
             SetPlayerLocation(room.State, player, lat, lng);
 
             // ── Phase 3: Rally — update IsFortified for all hexes ──
             if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Rally))
             {
-                foreach (var cell in room.State.Grid.Values.Where(c => c.OwnerId != null))
+                var ownedCells = room.State.Grid.Values
+                    .Where(c => c.OwnerId != null)
+                    .ToList();
+                var previousFortifiedStates = ownedCells.ToDictionary(
+                    cell => HexService.Key(cell.Q, cell.R),
+                    cell => cell.IsFortified);
+
+                foreach (var cell in ownedCells)
                 {
                     var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
                     var alliedCount = playersInCell.Count(p =>
                         cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId);
                     cell.IsFortified = alliedCount >= 2;
                 }
+
+                gridChanged |= ownedCells.Any(cell =>
+                    previousFortifiedStates[HexService.Key(cell.Q, cell.R)] != cell.IsFortified);
             }
 
             // ── Phase 3: Shepherd — update LastVisitedAt for hexes player is in ──
@@ -71,7 +82,10 @@ public class GameplayService(
                         var isTeamMember = cell.OwnerId == userId
                             || (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId);
                         if (isTeamMember)
+                        {
                             cell.LastVisitedAt = DateTime.UtcNow;
+                            gridChanged = true;
+                        }
                     }
                 }
             }
@@ -88,13 +102,17 @@ public class GameplayService(
                         || (player.AllianceId != null && engCell.OwnerAllianceId == player.AllianceId)))
                 {
                     if (engCell.EngineerBuiltAt == null)
+                    {
                         engCell.EngineerBuiltAt = DateTime.UtcNow;
+                        gridChanged = true;
+                    }
 
                     // Check if engineer has been building for ≥10 minutes
                     if (!engCell.IsFort && engCell.EngineerBuiltAt.HasValue
                         && (DateTime.UtcNow - engCell.EngineerBuiltAt.Value).TotalMinutes >= 10)
                     {
                         engCell.IsFort = true;
+                        gridChanged = true;
                         AppendEventLog(room.State, new GameEventLogEntry
                         {
                             Type = "FortBuilt",
@@ -140,6 +158,7 @@ public class GameplayService(
                     {
                         SetCellOwner(targetCell, player);
                         targetCell.Troops = Math.Max(1, player.CarriedTroops);
+                        gridChanged = true;
                         ResetCarriedTroops(player);
                         winConditionService.RefreshTerritoryCount(room.State);
 
@@ -174,13 +193,15 @@ public class GameplayService(
                         PlayerId = userId,
                         PlayerName = player.Name
                     });
+                    gridChanged = true;
                 }
             }
 
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
-            return (snapshot, null);
+            gridChanged |= snapshot.Phase != previousPhase;
+            return (snapshot, null, gridChanged);
         }
     }
 

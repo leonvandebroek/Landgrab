@@ -6,6 +6,7 @@ import { hexKey } from '../map/HexMath';
 import { GameEventLog } from './GameEventLog';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { MapInteractionFeedback } from './tileInteraction';
+import { useSecondTick } from '../../hooks/useSecondTick';
 
 interface LocationPoint {
   lat: number;
@@ -99,15 +100,26 @@ export function PlayerPanel({
     () => getFieldGuidance({ currentLocation, currentHex, currentCell, player: me, t }),
     [currentCell, currentHex, currentLocation, me, t]
   );
+  const shouldUpdateNow = state.phase === 'Playing'
+    && state.winConditionType === 'TimedGame'
+    && Boolean(state.gameStartedAt)
+    && Boolean(state.gameDurationMinutes);
 
   useEffect(() => {
-    if (state.phase !== 'Playing' || state.winConditionType !== 'TimedGame' || !state.gameStartedAt || !state.gameDurationMinutes) {
+    if (!shouldUpdateNow) {
       return;
     }
 
-    const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(intervalId);
-  }, [state.gameDurationMinutes, state.gameStartedAt, state.phase, state.winConditionType]);
+    setNow(Date.now());
+  }, [shouldUpdateNow]);
+
+  useSecondTick(() => {
+    if (!shouldUpdateNow) {
+      return;
+    }
+
+    setNow(Date.now());
+  });
 
   const timeRemaining = useMemo(() => {
     if (state.winConditionType !== 'TimedGame' || !state.gameStartedAt || !state.gameDurationMinutes) {

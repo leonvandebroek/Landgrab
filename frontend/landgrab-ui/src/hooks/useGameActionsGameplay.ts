@@ -10,6 +10,23 @@ import type { UseGameActionsOptions } from './useGameActions.shared';
 import { resolveActionCoordinates } from './useGameActions.shared';
 
 const LOCATION_BROADCAST_THROTTLE_MS = 3000;
+const MIN_MOVEMENT_METRES = 5;
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
+function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const earthRadiusM = 6_371_000;
+  const toRadians = (degrees: number): number => degrees * (Math.PI / 180);
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLng = toRadians(lng2 - lng1);
+  const startLat = toRadians(lat1);
+  const endLat = toRadians(lat2);
+
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusM * c;
+}
 
 type ClaimTileActionType = 'claim' | 'reinforce' | 'claimAlliance' | 'claimSelf';
 
@@ -63,9 +80,9 @@ export function useGameActionsGameplay({
   const setCommandoTargetingMode = useGameplayStore(state => state.setCommandoTargetingMode);
   const setError = useUiStore(state => state.setError);
   const clearError = useUiStore(state => state.clearError);
-  const lastLocationRef = useRef<string>('');
+  const lastSentPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const locationThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingLocationRef = useRef<{ lat: number; lon: number } | null>(null);
+  const pendingLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastSendTimeRef = useRef<number>(0);
   const previousCurrentHexRef = useRef<string | null>(null);
 
@@ -89,17 +106,42 @@ export function useGameActionsGameplay({
       return;
     }
 
-    const locationKey = `${pendingLocation.lat.toFixed(6)},${pendingLocation.lon.toFixed(6)}`;
-    if (lastLocationRef.current === locationKey) {
-      pendingLocationRef.current = null;
+    const elapsedSinceLastSend = Date.now() - lastSendTimeRef.current;
+    if (elapsedSinceLastSend < LOCATION_BROADCAST_THROTTLE_MS) {
+      locationThrottleRef.current = setTimeout(() => {
+        sendPendingLocation();
+      }, LOCATION_BROADCAST_THROTTLE_MS - elapsedSinceLastSend);
       return;
     }
 
-    pendingLocationRef.current = null;
-    lastLocationRef.current = locationKey;
+    const lastSentPosition = lastSentPositionRef.current;
+    const distanceSinceLastSend = lastSentPosition
+      ? haversineDistanceM(
+        lastSentPosition.lat,
+        lastSentPosition.lng,
+        pendingLocation.lat,
+        pendingLocation.lng,
+      )
+      : Number.POSITIVE_INFINITY;
+    const heartbeatDue = lastSendTimeRef.current === 0 || elapsedSinceLastSend >= HEARTBEAT_INTERVAL_MS;
+
+    if (!heartbeatDue && distanceSinceLastSend < MIN_MOVEMENT_METRES) {
+      locationThrottleRef.current = setTimeout(() => {
+        sendPendingLocation();
+      }, HEARTBEAT_INTERVAL_MS - elapsedSinceLastSend);
+      return;
+    }
+
     lastSendTimeRef.current = Date.now();
 
-    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lon)
+    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng)
+      .then(() => {
+        lastSentPositionRef.current = { lat: pendingLocation.lat, lng: pendingLocation.lng };
+        clearLocationThrottle();
+        locationThrottleRef.current = setTimeout(() => {
+          sendPendingLocation();
+        }, HEARTBEAT_INTERVAL_MS);
+      })
       .catch(cause => setError(String(cause)));
   }, [clearLocationThrottle, invoke, setError]);
 
@@ -108,28 +150,12 @@ export function useGameActionsGameplay({
       clearLocationThrottle();
       pendingLocationRef.current = null;
       lastSendTimeRef.current = 0;
-      lastLocationRef.current = '';
+      lastSentPositionRef.current = null;
       return;
     }
 
-    pendingLocationRef.current = { lat: currentLocation.lat, lon: currentLocation.lng };
-
-    const locationKey = `${currentLocation.lat.toFixed(6)},${currentLocation.lng.toFixed(6)}`;
-    if (lastLocationRef.current === locationKey) {
-      pendingLocationRef.current = null;
-      return;
-    }
-
-    const elapsedSinceLastSend = Date.now() - lastSendTimeRef.current;
-    if (elapsedSinceLastSend >= LOCATION_BROADCAST_THROTTLE_MS) {
-      sendPendingLocation();
-      return;
-    }
-
-    clearLocationThrottle();
-    locationThrottleRef.current = setTimeout(() => {
-      sendPendingLocation();
-    }, LOCATION_BROADCAST_THROTTLE_MS - elapsedSinceLastSend);
+    pendingLocationRef.current = { lat: currentLocation.lat, lng: currentLocation.lng };
+    sendPendingLocation();
   }, [clearLocationThrottle, connected, currentLocation, gameState?.phase, sendPendingLocation]);
 
   useEffect(() => {

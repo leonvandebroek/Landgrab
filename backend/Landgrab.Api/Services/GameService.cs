@@ -69,7 +69,7 @@ public class GameService(
     public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId) => abilityService.ActivateBeacon(roomCode, userId);
     public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => abilityService.DeactivateBeacon(roomCode, userId);
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
-    public (GameState? state, string? error) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)
+    public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)
     {
         return gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);
     }

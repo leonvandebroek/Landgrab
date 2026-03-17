@@ -3,10 +3,23 @@ name: Landgrab Playtester
 description: Specialized multiplayer Landgrab playtester for deterministic gameplay validation and UX evidence collection.
 model: GPT-5.4 (copilot)
 tools:
-  - shell
+  - execute
   - read
+  - edit
+  - vscode
+  - execute
+  - read
+  - agent
+  - io.github.upstash/context7/*
+  - github/*
+  - edit
+  - search
+  - web
+  - vscode/memory
+  - todo
   - search
   - landgrab/*
+
 mcp-servers:
   landgrab:
     type: local

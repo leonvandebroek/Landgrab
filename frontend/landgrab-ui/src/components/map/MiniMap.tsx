@@ -59,12 +59,23 @@ export function MiniMap({
   mainMapBounds,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const redrawTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const canvasDimensionsRef = useRef<{ width: number; height: number } | null>(null);
   const [visible, setVisible] = useState(() => window.innerWidth >= 480);
 
   useEffect(() => {
     const handleResize = () => setVisible(window.innerWidth >= 480);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (redrawTimeoutRef.current !== null) {
+        window.clearTimeout(redrawTimeoutRef.current);
+        redrawTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // Memoize HQ hexes so the useEffect dependency stays stable across renders
@@ -83,25 +94,46 @@ export function MiniMap({
     const canvas = canvasRef.current;
     if (!canvas || !visible) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = CSS_W * dpr;
-    canvas.height = CSS_H * dpr;
+    redrawTimeoutRef.current = window.setTimeout(() => {
+      const currentCanvas = canvasRef.current;
+      if (!currentCanvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
+      const dpr = window.devicePixelRatio || 1;
+      const width = CSS_W * dpr;
+      const height = CSS_H * dpr;
+      const lastDimensions = canvasDimensionsRef.current;
 
-    // Convert Leaflet lat/lng bounds to axial-pixel space expected by renderMiniMap
-    const axialBounds = mainMapBounds
-      ? latLngBoundsToAxialPixel(mainMapBounds, mapLat, mapLng, tileSizeMeters)
-      : null;
+      if (!lastDimensions || lastDimensions.width !== width || lastDimensions.height !== height) {
+        currentCanvas.width = width;
+        currentCanvas.height = height;
+        canvasDimensionsRef.current = { width, height };
+      }
 
-    renderMiniMap(ctx, CSS_W, CSS_H, {
-      grid,
-      viewportBounds: axialBounds,
-      myUserId,
-      hqHexes,
-    });
+      const ctx = currentCanvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // Convert Leaflet lat/lng bounds to axial-pixel space expected by renderMiniMap
+      const axialBounds = mainMapBounds
+        ? latLngBoundsToAxialPixel(mainMapBounds, mapLat, mapLng, tileSizeMeters)
+        : null;
+
+      renderMiniMap(ctx, CSS_W, CSS_H, {
+        grid,
+        viewportBounds: axialBounds,
+        myUserId,
+        hqHexes,
+      });
+
+      redrawTimeoutRef.current = null;
+    }, 250);
+
+    return () => {
+      if (redrawTimeoutRef.current !== null) {
+        window.clearTimeout(redrawTimeoutRef.current);
+        redrawTimeoutRef.current = null;
+      }
+    };
   }, [grid, mainMapBounds, mapLat, mapLng, tileSizeMeters, visible, myUserId, hqHexes]);
 
   if (!visible) {
