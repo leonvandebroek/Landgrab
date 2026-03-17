@@ -72,7 +72,6 @@ public enum PlayerRole
     None,
     Commander,
     Scout,
-    Defender,
     Engineer
 }
 
@@ -137,11 +136,6 @@ public class PlayerDto
     public DateTime? TacticalStrikeExpiry { get; set; }
     public DateTime? TacticalStrikeCooldownUntil { get; set; }
     public DateTime? ReinforceCooldownUntil { get; set; }
-
-    // Defender abilities
-    public bool ShieldWallActive { get; set; }
-    public DateTime? ShieldWallExpiry { get; set; }
-    public DateTime? ShieldWallCooldownUntil { get; set; }
 
     // Engineer abilities
     public DateTime? EmergencyRepairCooldownUntil { get; set; }

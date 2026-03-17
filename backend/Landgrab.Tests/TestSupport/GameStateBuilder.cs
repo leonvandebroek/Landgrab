@@ -122,7 +122,7 @@ internal sealed class GameStateBuilder
         return this;
     }
 
-    public GameStateBuilder AddPlayer(string id, string name, string? allianceId = null)
+    public GameStateBuilder AddPlayer(string id, string name, string? allianceId = null, PlayerRole role = PlayerRole.None)
     {
         var alliance = allianceId == null
             ? null
@@ -135,7 +135,8 @@ internal sealed class GameStateBuilder
             AllianceId = allianceId,
             AllianceName = alliance?.Name,
             AllianceColor = alliance?.Color,
-            Color = $"#{id}"
+            Color = $"#{id}",
+            Role = role
         });
 
         return this;

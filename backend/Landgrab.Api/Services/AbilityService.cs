@@ -229,43 +229,7 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
     }
 
     public (GameState? state, string? error) ActivateShieldWall(string roomCode, string userId)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Shield Wall only works during gameplay.");
-            if (!room.State.Dynamics.PlayerRolesEnabled)
-                return (null, "Player roles are not active.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-            if (player.Role != PlayerRole.Defender)
-                return (null, "Shield Wall can only be performed by Defenders.");
-            if (player.ShieldWallCooldownUntil.HasValue && player.ShieldWallCooldownUntil > DateTime.UtcNow)
-                return (null, "Shield Wall is on cooldown.");
-
-            player.ShieldWallActive = true;
-            player.ShieldWallExpiry = DateTime.UtcNow.AddMinutes(5);
-            player.ShieldWallCooldownUntil = DateTime.UtcNow.AddMinutes(20);
-
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "ShieldWallActivated",
-                Message = $"{player.Name} activated Shield Wall.",
-                PlayerId = userId,
-                PlayerName = player.Name
-            });
-
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
+        => (null, "Shield Wall has been removed.");
 
     public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId)
     {

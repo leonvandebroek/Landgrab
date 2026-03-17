@@ -590,15 +590,6 @@ public class GameplayService(
             if (commanderPresent)
                 AddBonus(attackerBonuses, "Commander", 1);
 
-            var shieldWallActive = state.Players.Any(defender =>
-                defender.Role == PlayerRole.Defender &&
-                defender.ShieldWallActive &&
-                TryGetCurrentHex(state, defender, out var defenderQ, out var defenderR) &&
-                defenderQ == q &&
-                defenderR == r &&
-                IsFriendlyCell(defender, cell));
-            if (shieldWallActive)
-                AddBonus(defenderBonuses, "Shield Wall", 2);
         }
 
         if (state.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
@@ -960,14 +951,6 @@ public class GameplayService(
                 if (terrainEnabled && cell.TerrainType == TerrainType.Building)
                     cell.Troops++;
 
-                // Phase 4: Defender role — double regen when Defender is physically present
-                if (room.State.Dynamics.PlayerRolesEnabled && cell.OwnerId != null && !cell.IsMasterTile)
-                {
-                    var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
-                    if (playersInCell.Any(p => p.Role == PlayerRole.Defender
-                        && (cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId)))
-                        cell.Troops++; // extra regen (doubles the +1 from normal regen)
-                }
             }
 
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
@@ -1194,11 +1177,6 @@ public class GameplayService(
                 player.TacticalStrikeExpiry = null;
             }
 
-            if (player.ShieldWallActive && player.ShieldWallExpiry <= now)
-            {
-                player.ShieldWallActive = false;
-                player.ShieldWallExpiry = null;
-            }
         }
     }
 

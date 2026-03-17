@@ -773,40 +773,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PlaceTroops_WhenShieldWallDefenderIsOnTargetHex_AddsDefenseBonus()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice", "a1")
-            .AddPlayer("p2", "Bob", "a2")
-            .AddAlliance("a1", "Alpha", "p1")
-            .AddAlliance("a2", "Beta", "p2")
-            .OwnHex(0, 0, "p1", "a1")
-            .OwnHex(1, 0, "p2", "a2")
-            .WithTroops(1, 0, 2)
-            .WithCarriedTroops("p1", 3, 0, 0)
-            .WithPlayerPosition("p2", 1, 0)
-            .Build();
-        state.Dynamics.CombatMode = CombatMode.Classic;
-        state.Players.Single(player => player.Id == "p2").Role = PlayerRole.Defender;
-        state.Players.Single(player => player.Id == "p2").ShieldWallActive = true;
-        state.Players.Single(player => player.Id == "p2").ShieldWallExpiry = DateTime.UtcNow.AddMinutes(5);
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
-
-        result.state.Should().NotBeNull();
-        result.error.Should().BeNull();
-        result.combatResult.Should().NotBeNull();
-        result.combatResult!.AttackerWon.Should().BeFalse();
-        result.combatResult.DefenderBonus.Should().Be(2);
-        context.Cell(1, 0).OwnerId.Should().Be("p2");
-        context.Player("p1").CarriedTroops.Should().Be(1);
-    }
-
-    [Fact]
     public void UpdatePlayerLocation_WhenDemolishChannelCompletes_RemovesFortAndClearsState()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -849,8 +815,6 @@ public sealed class GameplayServiceTests
             .Build();
         state.Players.Single(player => player.Id == "p1").TacticalStrikeActive = true;
         state.Players.Single(player => player.Id == "p1").TacticalStrikeExpiry = DateTime.UtcNow.AddMinutes(-1);
-        state.Players.Single(player => player.Id == "p1").ShieldWallActive = true;
-        state.Players.Single(player => player.Id == "p1").ShieldWallExpiry = DateTime.UtcNow.AddMinutes(-1);
         var context = new ServiceTestContext(state);
 
         var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
@@ -858,8 +822,6 @@ public sealed class GameplayServiceTests
         result.error.Should().BeNull();
         context.Player("p1").TacticalStrikeActive.Should().BeFalse();
         context.Player("p1").TacticalStrikeExpiry.Should().BeNull();
-        context.Player("p1").ShieldWallActive.Should().BeFalse();
-        context.Player("p1").ShieldWallExpiry.Should().BeNull();
     }
 
 }

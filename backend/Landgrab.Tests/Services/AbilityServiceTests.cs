@@ -376,26 +376,6 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateShieldWall_WhenDefenderUsesAbility_Succeeds()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Defender)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var beforeActivation = DateTime.UtcNow;
-
-        var result = context.AbilityService.ActivateShieldWall(ServiceTestContext.RoomCode, "p1");
-
-        result.error.Should().BeNull();
-        context.Player("p1").ShieldWallActive.Should().BeTrue();
-        context.Player("p1").ShieldWallExpiry.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(10));
-        context.Player("p1").ShieldWallCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(20), TimeSpan.FromSeconds(10));
-    }
-
-    [Fact]
     public void ActivateEmergencyRepair_OnFriendlyHex_AddsTroopsAndStartsCooldown()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -415,6 +395,21 @@ public sealed class AbilityServiceTests
         result.error.Should().BeNull();
         context.Cell(0, 0).Troops.Should().Be(4);
         context.Player("p1").EmergencyRepairCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void ActivateShieldWall_AlwaysReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var (result, error) = context.AbilityService.ActivateShieldWall(ServiceTestContext.RoomCode, "p1");
+
+        error.Should().NotBeNull();
+        result.Should().BeNull();
     }
 
     [Fact]
