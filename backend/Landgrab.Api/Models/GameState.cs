@@ -122,12 +122,8 @@ public class PlayerDto
     public double? BeaconLat { get; set; }
     public double? BeaconLng { get; set; }
 
-    // Phase 6: CommandoRaid
-    public bool IsCommandoActive { get; set; }
-    public int? CommandoTargetQ { get; set; }
-    public int? CommandoTargetR { get; set; }
-    public DateTime? CommandoDeadline { get; set; }
-    public DateTime? CommandoCooldownUntil { get; set; }
+    // Phase 6: CommandoRaid cooldown (raid itself is now game-level via ActiveRaids)
+    public DateTime? CommandoRaidCooldownUntil { get; set; }
 
     // Commander abilities
     public bool TacticalStrikeActive { get; set; }
@@ -178,6 +174,18 @@ public class GameEventLogEntry
     public bool? IsAllianceVictory { get; set; }
 }
 
+public class ActiveCommandoRaid
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public int TargetQ { get; set; }
+    public int TargetR { get; set; }
+    public string InitiatorAllianceId { get; set; } = "";
+    public string InitiatorPlayerId { get; set; } = "";
+    public string InitiatorPlayerName { get; set; } = "";
+    public DateTime Deadline { get; set; }
+    public bool IsHQRaid { get; set; }
+}
+
 public class GameState
 {
     public string RoomCode { get; set; } = "";
@@ -186,6 +194,7 @@ public class GameState
     public int CurrentWizardStep { get; set; }
     public List<PlayerDto> Players { get; set; } = [];
     public List<AllianceDto> Alliances { get; set; } = [];
+    public List<ActiveCommandoRaid> ActiveRaids { get; set; } = [];
     public List<GameEventLogEntry> EventLog { get; set; } = [];
     public Dictionary<string, HexCell> Grid { get; set; } = [];
     public double? MapLat { get; set; }

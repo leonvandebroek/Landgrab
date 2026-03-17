@@ -99,14 +99,33 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateCommandoRaid_OnValidTargetHex_Succeeds()
+    public void ActivateCommandoRaid_ByNonCommander_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
             .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Scout)
-            .WithPlayerPosition("p1", 0, 0)
+            .AddPlayer("p1", "Alice", role: PlayerRole.Scout)
+            .OwnHex(0, 0, "p1")
+            .WithTroops(0, 0, 3)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 1, 0);
+
+        result.error.Should().Contain("Commander");
+        result.state.Should().BeNull();
+    }
+
+    [Fact]
+    public void ActivateCommandoRaid_ByCommander_CreatesActiveRaid_BothTeamsSeeIt()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 3)
+            .WithClaimMode(ClaimMode.PresenceOnly)
             .Build();
         var context = new ServiceTestContext(state);
         var beforeActivation = DateTime.UtcNow;
@@ -114,11 +133,11 @@ public sealed class AbilityServiceTests
         var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
 
         result.error.Should().BeNull();
-        context.Player("p1").IsCommandoActive.Should().BeTrue();
-        context.Player("p1").CommandoTargetQ.Should().Be(2);
-        context.Player("p1").CommandoTargetR.Should().Be(0);
-        context.Player("p1").CommandoDeadline.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(10));
-        context.Player("p1").CommandoCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
+        result.state.Should().NotBeNull();
+        result.state!.ActiveRaids.Should().HaveCount(1);
+        result.state.ActiveRaids[0].TargetQ.Should().Be(2);
+        result.state.ActiveRaids[0].InitiatorAllianceId.Should().Be("a1");
+        result.state.ActiveRaids[0].Deadline.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -126,71 +145,14 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
-            .AddPlayer("p1", "Alice")
-            .WithPlayerPosition("p1", 0, 0)
+            .AddPlayer("p1", "Alice", role: PlayerRole.Commander)
             .Build();
         var context = new ServiceTestContext(state);
 
         var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
 
         result.state.Should().BeNull();
-        result.error.Should().Be("CommandoRaid mode is not active.");
-    }
-
-    [Fact]
-    public void ActivateCommandoRaid_WhenTargetIsOutOfRange_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(4)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Scout)
-            .WithPlayerPosition("p1", 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 4, 0);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Target hex must be within 3 hex distance.");
-        context.Player("p1").IsCommandoActive.Should().BeFalse();
-    }
-
-    [Fact]
-    public void ActivateCommandoRaid_WhenAlreadyActive_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(3)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Scout)
-            .WithPlayerPosition("p1", 0, 0)
-            .Build();
-        state.Players.Single(player => player.Id == "p1").IsCommandoActive = true;
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("You already have an active commando raid.");
-    }
-
-    [Fact]
-    public void ActivateCommandoRaid_WhenPlayerIsNotScout_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(3)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Commander)
-            .WithPlayerPosition("p1", 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Commando raids can only be performed by Scouts.");
+        result.error.Should().NotBeNull();
     }
 
 
@@ -247,71 +209,27 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateCommandoRaid_WhenTargetIsExactlyThreeHexesAway_Succeeds()
+    public void ActivateCommandoRaid_WhenAllianceAlreadyHasActiveRaid_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(4)
             .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Scout)
-            .WithPlayerPosition("p1", 0, 0)
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
             .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 3, 0);
-
-        result.error.Should().BeNull();
-        context.Player("p1").IsCommandoActive.Should().BeTrue();
-        context.Player("p1").CommandoTargetQ.Should().Be(3);
-        context.Player("p1").CommandoTargetR.Should().Be(0);
-    }
-
-    [Fact]
-    public void ActivateCommandoRaid_WhenTargetHexIsEnemyOwned_StillSucceedsBecauseOwnershipIsNotValidated()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(3)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Scout)
-            .AddPlayer("p2", "Bob")
-            .WithPlayerPosition("p1", 0, 0)
-            .OwnHex(2, 0, "p2", troops: 3)
-            .Build();
+        state.ActiveRaids.Add(new ActiveCommandoRaid
+        {
+            TargetQ = 1, TargetR = 0,
+            InitiatorAllianceId = "a1",
+            InitiatorPlayerId = "p1",
+            Deadline = DateTime.UtcNow.AddMinutes(3)
+        });
         var context = new ServiceTestContext(state);
 
         var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
 
-        result.error.Should().BeNull();
-        context.Player("p1").IsCommandoActive.Should().BeTrue();
-        context.Cell(2, 0).OwnerId.Should().Be("p2");
-        context.Cell(2, 0).Troops.Should().Be(3);
-    }
-
-    [Fact]
-    public void ActivateCommandoRaid_WhenPlayerReachesNeutralTargetHex_SetsTargetTroopsFromCarriedTroops()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(3)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice")
-            .WithPlayerRole("p1", PlayerRole.Scout)
-            .WithPlayerPosition("p1", 0, 0)
-            .WithCarriedTroops("p1", 4, 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var (targetLat, targetLng) = ServiceTestContext.HexCenter(2, 0);
-
-        var activationResult = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
-        var moveResult = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", targetLat, targetLng);
-
-        activationResult.error.Should().BeNull();
-        moveResult.error.Should().BeNull();
-        context.Cell(2, 0).OwnerId.Should().Be("p1");
-        context.Cell(2, 0).Troops.Should().Be(4);
-        context.Player("p1").CarriedTroops.Should().Be(0);
-        context.Player("p1").IsCommandoActive.Should().BeFalse();
-        context.State.EventLog.Should().Contain(entry => entry.Type == "CommandoRaidSuccess" && entry.PlayerId == "p1");
+        result.state.Should().BeNull();
+        result.error.Should().Contain("active commando raid");
     }
 
     [Fact]

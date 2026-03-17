@@ -90,49 +90,55 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR)
     {
         var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
+        if (room == null) return (null, "Room not found.");
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
                 return (null, "Commando raids only work during gameplay.");
             if (!room.State.Dynamics.PlayerRolesEnabled)
-                return (null, "CommandoRaid mode is not active.");
+                return (null, "Player roles are not active.");
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-            if (player.Role != PlayerRole.Scout)
-                return (null, "Commando raids can only be performed by Scouts.");
-            if (player.IsCommandoActive)
-                return (null, "You already have an active commando raid.");
-            if (player.CommandoCooldownUntil.HasValue && player.CommandoCooldownUntil > DateTime.UtcNow)
+            if (player == null) return (null, "Player not in room.");
+            if (player.Role != PlayerRole.Commander)
+                return (null, "Only a Commander can activate a commando raid.");
+            if (player.CommandoRaidCooldownUntil.HasValue && player.CommandoRaidCooldownUntil > DateTime.UtcNow)
                 return (null, "Commando raid is on cooldown.");
-
-            if (player.CurrentLat.HasValue && player.CurrentLng.HasValue && room.State.HasMapLocation)
-            {
-                var playerHex = HexService.LatLngToHexForRoom(player.CurrentLat.Value, player.CurrentLng.Value,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var dist = HexService.HexDistance(playerHex.q - targetQ, playerHex.r - targetR);
-                if (dist > 3)
-                    return (null, "Target hex must be within 3 hex distance.");
-            }
+            if (room.State.ActiveRaids.Any(r => r.InitiatorAllianceId == player.AllianceId))
+                return (null, "Your alliance already has an active commando raid.");
 
             var key = HexService.Key(targetQ, targetR);
-            if (!room.State.Grid.ContainsKey(key))
+            if (!room.State.Grid.TryGetValue(key, out _))
                 return (null, "Invalid target hex.");
 
-            player.IsCommandoActive = true;
-            player.CommandoTargetQ = targetQ;
-            player.CommandoTargetR = targetR;
-            player.CommandoDeadline = DateTime.UtcNow.AddMinutes(5);
-            player.CommandoCooldownUntil = DateTime.UtcNow.AddMinutes(15);
+            var isHQRaid = room.State.Alliances.Any(a =>
+                a.HQHexQ == targetQ && a.HQHexR == targetR);
+            if (isHQRaid)
+            {
+                var totalHexes = room.State.Grid.Count;
+                var claimedHexes = room.State.Grid.Values.Count(c => c.OwnerId != null && !c.IsMasterTile);
+                if (totalHexes > 0 && (double)claimedHexes / totalHexes < 0.40)
+                    return (null, "The battle hasn't reached its peak yet — HQ raids unlock when 40% of the map is claimed.");
+            }
+
+            var raid = new ActiveCommandoRaid
+            {
+                TargetQ = targetQ,
+                TargetR = targetR,
+                InitiatorAllianceId = player.AllianceId ?? "",
+                InitiatorPlayerId = userId,
+                InitiatorPlayerName = player.Name,
+                Deadline = DateTime.UtcNow.AddMinutes(5),
+                IsHQRaid = isHQRaid
+            };
+            room.State.ActiveRaids.Add(raid);
+            player.CommandoRaidCooldownUntil = DateTime.UtcNow.AddMinutes(15);
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
                 Type = "CommandoRaidStarted",
-                Message = $"{player.Name} launched a commando raid towards ({targetQ}, {targetR})!",
+                Message = $"{player.Name} launched a commando raid on ({targetQ}, {targetR})! Everyone converge!",
                 PlayerId = userId,
                 PlayerName = player.Name,
                 Q = targetQ,

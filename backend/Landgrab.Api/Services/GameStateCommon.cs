@@ -60,11 +60,7 @@ internal static class GameStateCommon
                 IsBeacon = player.IsBeacon,
                 BeaconLat = player.BeaconLat,
                 BeaconLng = player.BeaconLng,
-                IsCommandoActive = player.IsCommandoActive,
-                CommandoTargetQ = player.CommandoTargetQ,
-                CommandoTargetR = player.CommandoTargetR,
-                CommandoDeadline = player.CommandoDeadline,
-                CommandoCooldownUntil = player.CommandoCooldownUntil,
+                CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
                 TacticalStrikeActive = player.TacticalStrikeActive,
                 TacticalStrikeExpiry = player.TacticalStrikeExpiry,
                 TacticalStrikeCooldownUntil = player.TacticalStrikeCooldownUntil,
@@ -162,7 +158,18 @@ internal static class GameStateCommon
             HostBypassGps = state.HostBypassGps,
             MaxFootprintMetersOverride = state.MaxFootprintMetersOverride,
             HostObserverMode = state.HostObserverMode,
-            IsPaused = state.IsPaused
+            IsPaused = state.IsPaused,
+            ActiveRaids = state.ActiveRaids.Select(r => new ActiveCommandoRaid
+            {
+                Id = r.Id,
+                TargetQ = r.TargetQ,
+                TargetR = r.TargetR,
+                InitiatorAllianceId = r.InitiatorAllianceId,
+                InitiatorPlayerId = r.InitiatorPlayerId,
+                InitiatorPlayerName = r.InitiatorPlayerName,
+                Deadline = r.Deadline,
+                IsHQRaid = r.IsHQRaid
+            }).ToList()
         };
     }
 

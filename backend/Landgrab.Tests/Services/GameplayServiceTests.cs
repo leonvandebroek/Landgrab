@@ -695,4 +695,71 @@ public sealed class GameplayServiceTests
         context.Player("p1").TacticalStrikeExpiry.Should().BeNull();
     }
 
+    [Fact]
+    public void ResolveCommandoRaid_AttackersWinWithTwoPlusPresence_CapturesHexAndTransfersTroops()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddPlayer("p3", "Charlie", allianceId: "a2")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .OwnHex(2, 0, "p3", allianceId: "a2")
+            .WithTroops(2, 0, 6)
+            .WithCarriedTroops("p1", 0)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(2, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        state.Players.First(p => p.Id == "p2").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p2").CurrentLng = lng;
+        state.ActiveRaids.Add(new ActiveCommandoRaid
+        {
+            TargetQ = 2, TargetR = 0,
+            InitiatorAllianceId = "a1",
+            InitiatorPlayerId = "p1",
+            InitiatorPlayerName = "Alice",
+            Deadline = DateTime.UtcNow.AddSeconds(-1)
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.ResolveExpiredCommandoRaids(ServiceTestContext.RoomCode);
+
+        result.state.Should().NotBeNull();
+        result.state!.Grid[HexService.Key(2, 0)].OwnerAllianceId.Should().Be("a1");
+        result.state.Grid[HexService.Key(2, 0)].Troops.Should().BeGreaterThan(0);
+        result.state.ActiveRaids.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ResolveCommandoRaid_AttackersHaveOnlyOnePresence_RaidFails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .AddPlayer("p3", "Charlie", allianceId: "a2")
+            .OwnHex(2, 0, "p3", allianceId: "a2")
+            .WithTroops(2, 0, 6)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(2, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        state.ActiveRaids.Add(new ActiveCommandoRaid
+        {
+            TargetQ = 2, TargetR = 0,
+            InitiatorAllianceId = "a1",
+            InitiatorPlayerId = "p1",
+            InitiatorPlayerName = "Alice",
+            Deadline = DateTime.UtcNow.AddSeconds(-1)
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.GameplayService.ResolveExpiredCommandoRaids(ServiceTestContext.RoomCode);
+
+        result.state!.Grid[HexService.Key(2, 0)].OwnerAllianceId.Should().Be("a2");
+        result.state.ActiveRaids.Should().BeEmpty();
+    }
+
 }

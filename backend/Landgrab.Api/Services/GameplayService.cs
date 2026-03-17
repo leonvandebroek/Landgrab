@@ -170,60 +170,6 @@ public class GameplayService(
                 }
             }
 
-            // Phase 6: CommandoRaid — check if player arrived at target
-            if (player.IsCommandoActive && player.CommandoTargetQ.HasValue && player.CommandoTargetR.HasValue
-                && room.State.HasMapLocation)
-            {
-                var commandoCurrentHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                if (commandoCurrentHex.q == player.CommandoTargetQ && commandoCurrentHex.r == player.CommandoTargetR)
-                {
-                    // Arrived at target — claim hex bypassing adjacency
-                    var targetKey = HexService.Key(player.CommandoTargetQ.Value, player.CommandoTargetR.Value);
-                    if (room.State.Grid.TryGetValue(targetKey, out var targetCell)
-                        && targetCell.OwnerId == null && !targetCell.IsMasterTile)
-                    {
-                        SetCellOwner(targetCell, player);
-                        targetCell.Troops = Math.Max(1, player.CarriedTroops);
-                        gridChanged = true;
-                        ResetCarriedTroops(player);
-                        winConditionService.RefreshTerritoryCount(room.State);
-
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "CommandoRaidSuccess",
-                            Message = $"{player.Name} completed a commando raid at ({player.CommandoTargetQ}, {player.CommandoTargetR})!",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            Q = player.CommandoTargetQ.Value,
-                            R = player.CommandoTargetR.Value
-                        });
-                    }
-
-                    player.IsCommandoActive = false;
-                    player.CommandoTargetQ = null;
-                    player.CommandoTargetR = null;
-                    player.CommandoDeadline = null;
-                }
-                else if (player.CommandoDeadline.HasValue && DateTime.UtcNow > player.CommandoDeadline.Value)
-                {
-                    // Deadline expired — raid failed
-                    player.IsCommandoActive = false;
-                    player.CommandoTargetQ = null;
-                    player.CommandoTargetR = null;
-                    player.CommandoDeadline = null;
-
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "CommandoRaidFailed",
-                        Message = $"{player.Name}'s commando raid expired.",
-                        PlayerId = userId,
-                        PlayerName = player.Name
-                    });
-                    gridChanged = true;
-                }
-            }
-
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
@@ -743,6 +689,85 @@ public class GameplayService(
         };
     }
 
+
+    public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null) return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var now = DateTime.UtcNow;
+            var expired = room.State.ActiveRaids.Where(r => r.Deadline <= now).ToList();
+            if (expired.Count == 0) return (null, null);
+
+            foreach (var raid in expired)
+            {
+                ResolveRaid(room.State, raid, now);
+                room.State.ActiveRaids.Remove(raid);
+            }
+
+            winConditionService.RefreshTerritoryCount(room.State);
+            winConditionService.ApplyWinConditionAndLog(room.State, now);
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    private static void ResolveRaid(GameState state, ActiveCommandoRaid raid, DateTime now)
+    {
+        var key = HexService.Key(raid.TargetQ, raid.TargetR);
+        if (!state.Grid.TryGetValue(key, out var cell)) return;
+
+        var attackers = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
+            .Where(p => p.AllianceId == raid.InitiatorAllianceId)
+            .ToList();
+        var defenders = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
+            .Where(p => p.AllianceId != raid.InitiatorAllianceId)
+            .ToList();
+
+        var attackerWins = attackers.Count >= 2 && attackers.Count > defenders.Count;
+
+        if (attackerWins)
+        {
+            var spoils = cell.Troops;
+            var newOwner = attackers.First();
+
+            cell.OwnerId = newOwner.Id;
+            cell.OwnerName = newOwner.Name;
+            cell.OwnerAllianceId = raid.InitiatorAllianceId;
+            cell.OwnerColor = newOwner.AllianceColor ?? newOwner.Color;
+            cell.Troops = spoils;
+
+            if (raid.IsHQRaid)
+            {
+                var losingAlliance = state.Alliances.FirstOrDefault(a =>
+                    a.HQHexQ == raid.TargetQ && a.HQHexR == raid.TargetR);
+                if (losingAlliance != null)
+                    losingAlliance.ClaimFrozenUntil = now.AddMinutes(5);
+            }
+
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "CommandoRaidSuccess",
+                Message = $"Commando raid succeeded! {raid.InitiatorPlayerName}'s team captured ({raid.TargetQ}, {raid.TargetR}) and took {spoils} troops!",
+                AllianceId = raid.InitiatorAllianceId,
+                Q = raid.TargetQ,
+                R = raid.TargetR
+            });
+        }
+        else
+        {
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "CommandoRaidFailed",
+                Message = $"Commando raid failed at ({raid.TargetQ}, {raid.TargetR}) — defenders held their ground.",
+                Q = raid.TargetQ,
+                R = raid.TargetR
+            });
+        }
+    }
 
     public ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode)
     {
