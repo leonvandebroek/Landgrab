@@ -20,7 +20,7 @@ function hasMoved(
   const R = 6_371_000; // Earth radius in metres
   const dLat = ((next.lat - prev.lat) * Math.PI) / 180;
   const dLng = ((next.lng - prev.lng) * Math.PI) / 180;
-  const avgLat = ((prev.lat + next.lat) / 2 * Math.PI) / 180;
+  const avgLat = (((prev.lat + next.lat) / 2) * Math.PI) / 180;
   const dx = dLng * Math.cos(avgLat) * R;
   const dy = dLat * R;
   return Math.sqrt(dx * dx + dy * dy) > thresholdMeters;

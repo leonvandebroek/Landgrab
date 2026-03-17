@@ -237,12 +237,12 @@ export function useSignalRHandlers({
       }
       useGameStore.getState().setGameState(normalizedState);
 
-      const gameplayUpdates: Partial<
-        Pick<
-          ReturnType<typeof useGameplayStore.getState>,
-          'pickupPrompt' | 'attackPrompt' | 'combatPreview' | 'reinforcePrompt'
-        >
-      > = {};
+      const gameplayUpdates: {
+        pickupPrompt?: PickupPrompt | null;
+        attackPrompt?: AttackPrompt | null;
+        combatPreview?: CombatPreviewState | null;
+        reinforcePrompt?: ReinforcePrompt | null;
+      } = {};
       if (shouldClearPickup) {
         gameplayUpdates.pickupPrompt = null;
       }
