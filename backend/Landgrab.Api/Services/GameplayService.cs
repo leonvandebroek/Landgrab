@@ -757,10 +757,6 @@ public class GameplayService(
 
             ExpireTimedAbilities(room.State, DateTime.UtcNow);
 
-            // Rush Hour auto-end: lasts only one regen cycle
-            if (room.State.IsRushHour)
-                room.State.IsRushHour = false;
-
             var terrainEnabled = room.State.Dynamics.TerrainEnabled;
 
             // Phase 8: Timed Escalation — increase regen after time thresholds
@@ -769,65 +765,6 @@ public class GameplayService(
             {
                 var elapsed = DateTime.UtcNow - room.State.GameStartedAt.Value;
                 escalationBonus = (int)(elapsed.TotalMinutes / 30); // +1 per 30 min
-            }
-
-            // Phase 7: Supply Lines — find connected hexes via BFS from starting tiles
-            HashSet<string>? connectedHexes = null;
-            if (room.State.Dynamics.SupplyLinesEnabled)
-            {
-                connectedHexes = new HashSet<string>();
-                // BFS from master tile and all starting positions
-                var seedHexes = new List<(int q, int r)>();
-                if (room.State.MasterTileQ.HasValue && room.State.MasterTileR.HasValue)
-                    seedHexes.Add((room.State.MasterTileQ.Value, room.State.MasterTileR.Value));
-
-                // Group by alliance — each alliance's territory must connect to their starting tile
-                var allianceSeeds = new Dictionary<string, List<(int q, int r)>>();
-                foreach (var alliance in room.State.Alliances)
-                {
-                    // Find any hex owned by this alliance to use as seed
-                    var firstOwned = room.State.Grid.Values
-                        .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id);
-                    if (firstOwned != null)
-                    {
-                        if (!allianceSeeds.ContainsKey(alliance.Id))
-                            allianceSeeds[alliance.Id] = [];
-                        allianceSeeds[alliance.Id].Add((firstOwned.Q, firstOwned.R));
-                    }
-                }
-
-                // BFS per alliance
-                foreach (var (allianceId, seeds) in allianceSeeds)
-                {
-                    var visited = new HashSet<string>();
-                    var queue = new Queue<(int q, int r)>();
-                    foreach (var seed in seeds)
-                    {
-                        var seedKey = HexService.Key(seed.q, seed.r);
-                        if (visited.Add(seedKey))
-                            queue.Enqueue(seed);
-                    }
-
-                    while (queue.Count > 0)
-                    {
-                        var (cq, cr) = queue.Dequeue();
-                        connectedHexes.Add(HexService.Key(cq, cr));
-
-                        foreach (var (nq, nr) in HexService.Neighbors(cq, cr))
-                        {
-                            var nk = HexService.Key(nq, nr);
-                            if (visited.Contains(nk)) continue;
-                            if (!room.State.Grid.TryGetValue(nk, out var nc)) continue;
-                            if (nc.OwnerAllianceId != allianceId) continue;
-                            visited.Add(nk);
-                            queue.Enqueue((nq, nr));
-                        }
-                    }
-                }
-
-                // Also add master tile
-                if (room.State.MasterTileQ.HasValue && room.State.MasterTileR.HasValue)
-                    connectedHexes.Add(HexService.Key(room.State.MasterTileQ.Value, room.State.MasterTileR.Value));
             }
 
             var drainTicks = new List<DrainTickNotification>();
@@ -871,14 +808,6 @@ public class GameplayService(
                         // Never visited since Shepherd enabled — don't decay yet, just skip bonus regen
                         // Normal regen still applies
                     }
-                }
-
-                // Phase 7: Supply Lines — isolated hexes get no regen
-                if (connectedHexes != null && cell.OwnerId != null && !cell.IsMasterTile)
-                {
-                    var cellKey = HexService.Key(cell.Q, cell.R);
-                    if (!connectedHexes.Contains(cellKey))
-                        continue; // skip regen for isolated hexes
                 }
 
                 cell.Troops++;

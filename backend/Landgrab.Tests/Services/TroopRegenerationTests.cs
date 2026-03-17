@@ -47,22 +47,4 @@ public sealed class TroopRegenerationTests
         context.Cell(0, 0).Troops.Should().Be(2);
     }
 
-    [Fact]
-    public void AddReinforcementsToAllHexes_WhenRushHourIsActive_ClearsRushHourOnTheTick()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1", troops: 2)
-            .Build();
-        state.IsRushHour = true;
-        state.GameStartedAt = DateTime.UtcNow.AddMinutes(-10);
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
-
-        result.error.Should().BeNull();
-        context.State.IsRushHour.Should().BeFalse();
-        context.Cell(0, 0).Troops.Should().Be(3);
-    }
 }

@@ -181,7 +181,6 @@ public sealed class GameConfigServiceTests
             TerrainEnabled = true,
             PlayerRolesEnabled = false,
             FogOfWarEnabled = true,
-            SupplyLinesEnabled = false,
             HQEnabled = true,
             HQAutoAssign = true,
             TimedEscalationEnabled = false,
@@ -195,7 +194,6 @@ public sealed class GameConfigServiceTests
         result.state!.Dynamics.TerrainEnabled.Should().BeTrue();
         result.state.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         result.state.Dynamics.FogOfWarEnabled.Should().BeTrue();
-        result.state.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         result.state.Dynamics.HQEnabled.Should().BeTrue();
         result.state.Dynamics.HQAutoAssign.Should().BeTrue();
         result.state.Dynamics.TimedEscalationEnabled.Should().BeFalse();
@@ -203,7 +201,6 @@ public sealed class GameConfigServiceTests
         context.State.Dynamics.TerrainEnabled.Should().BeTrue();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
-        context.State.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.HQAutoAssign.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
@@ -220,7 +217,6 @@ public sealed class GameConfigServiceTests
             TerrainEnabled = true,
             PlayerRolesEnabled = true,
             FogOfWarEnabled = true,
-            SupplyLinesEnabled = true,
             HQEnabled = true,
             TimedEscalationEnabled = true,
             UnderdogPactEnabled = true
@@ -231,7 +227,6 @@ public sealed class GameConfigServiceTests
         context.State.Dynamics.TerrainEnabled.Should().BeFalse();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         context.State.Dynamics.FogOfWarEnabled.Should().BeFalse();
-        context.State.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         context.State.Dynamics.HQEnabled.Should().BeFalse();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeFalse();

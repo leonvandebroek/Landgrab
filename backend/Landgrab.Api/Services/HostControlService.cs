@@ -55,7 +55,6 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
-            room.State.Dynamics.SupplyLinesEnabled = dynamics.SupplyLinesEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
             room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
@@ -167,17 +166,6 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                         {
                             Type = "RandomEvent",
                             Message = msg
-                        });
-                        break;
-                    }
-
-                case "RushHour":
-                    {
-                        room.State.IsRushHour = true;
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "RandomEvent",
-                            Message = "Rush Hour! Claimed hexes count double for 5 minutes."
                         });
                         break;
                     }

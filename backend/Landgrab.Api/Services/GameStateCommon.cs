@@ -139,7 +139,6 @@ internal static class GameStateCommon
                 CombatMode = state.Dynamics.CombatMode,
                 PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
                 FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
-                SupplyLinesEnabled = state.Dynamics.SupplyLinesEnabled,
                 HQEnabled = state.Dynamics.HQEnabled,
                 HQAutoAssign = state.Dynamics.HQAutoAssign,
                 TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
@@ -163,8 +162,7 @@ internal static class GameStateCommon
             HostBypassGps = state.HostBypassGps,
             MaxFootprintMetersOverride = state.MaxFootprintMetersOverride,
             HostObserverMode = state.HostObserverMode,
-            IsPaused = state.IsPaused,
-            IsRushHour = state.IsRushHour
+            IsPaused = state.IsPaused
         };
     }
 

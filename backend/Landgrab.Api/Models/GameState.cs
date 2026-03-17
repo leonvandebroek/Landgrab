@@ -82,7 +82,6 @@ public class GameDynamics
     public CombatMode CombatMode { get; set; } = CombatMode.Balanced;
     public bool PlayerRolesEnabled { get; set; }
     public bool FogOfWarEnabled { get; set; }
-    public bool SupplyLinesEnabled { get; set; }
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
     public bool TimedEscalationEnabled { get; set; }
@@ -214,9 +213,6 @@ public GameDynamics Dynamics { get; set; } = new();
     public int? MaxFootprintMetersOverride { get; set; }
     public bool HostObserverMode { get; set; } = false;
     public bool IsPaused { get; set; } = false;
-
-    // Phase 8: Rush Hour
-    public bool IsRushHour { get; set; }
 }
 
 public class GameRoom

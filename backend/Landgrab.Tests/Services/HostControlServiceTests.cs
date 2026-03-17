@@ -86,7 +86,6 @@ public sealed class HostControlServiceTests
             TerrainEnabled = true,
             PlayerRolesEnabled = true,
             FogOfWarEnabled = true,
-            SupplyLinesEnabled = true,
             HQEnabled = true,
             HQAutoAssign = true,
             TimedEscalationEnabled = true,
@@ -100,7 +99,6 @@ public sealed class HostControlServiceTests
         context.State.Dynamics.TerrainEnabled.Should().BeTrue();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeTrue();
         context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
-        context.State.Dynamics.SupplyLinesEnabled.Should().BeTrue();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.HQAutoAssign.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeTrue();

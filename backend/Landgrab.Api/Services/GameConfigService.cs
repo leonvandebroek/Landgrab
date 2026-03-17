@@ -134,7 +134,6 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
             room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
-            room.State.Dynamics.SupplyLinesEnabled = dynamics.SupplyLinesEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
             room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;

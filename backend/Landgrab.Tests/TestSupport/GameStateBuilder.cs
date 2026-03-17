@@ -110,13 +110,7 @@ public GameStateBuilder WithPaused(bool isPaused = true)
         return this;
     }
 
-    public GameStateBuilder WithSupplyLinesEnabled(bool enabled = true)
-    {
-        _state.Dynamics.SupplyLinesEnabled = enabled;
-        return this;
-    }
-
-    public GameStateBuilder AddPlayer(string id, string name, string? allianceId = null, PlayerRole role = PlayerRole.None)
+public GameStateBuilder AddPlayer(string id, string name, string? allianceId = null, PlayerRole role = PlayerRole.None)
     {
         var alliance = allianceId == null
             ? null

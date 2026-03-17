@@ -204,7 +204,6 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             MaxFootprintMetersOverride = fullSnapshot.MaxFootprintMetersOverride,
             HostObserverMode = fullSnapshot.HostObserverMode,
             IsPaused = fullSnapshot.IsPaused,
-            IsRushHour = fullSnapshot.IsRushHour,
         };
     }
 
