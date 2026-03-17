@@ -442,27 +442,6 @@
   background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
 }
 
-.hud-toast {
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: white;
-  pointer-events: none;
-  animation: slideUp 0.2s ease-out;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.toast-danger {
-  background: rgba(220, 38, 38, 0.9); /* red-600 */
-  border: 1px solid rgba(239, 68, 68, 0.5);
-}
-
-.toast-success {
-  background: rgba(5, 150, 105, 0.9); /* emerald-600 */
-  border: 1px solid rgba(16, 185, 129, 0.5);
-}
-
 .player-hud__relation--team {
   background: rgba(46, 204, 113, 0.22);
   color: #7ce7af;

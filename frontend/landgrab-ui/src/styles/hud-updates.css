@@ -22,17 +22,6 @@
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-.top-warning-bar {
-  background: rgba(220, 38, 38, 0.95);
-  color: white;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  text-align: center;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-}
-
 .top-stats-row {
   display: flex;
   justify-content: space-between;
@@ -68,22 +57,6 @@
   font-weight: 600;
   color: #93c5fd;
   white-space: nowrap;
-}
-
-.top-warning-bar--dismissible {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.top-warning-bar--dismissible button {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
 }
 
 .troop-pulse {
@@ -168,43 +141,6 @@
   pointer-events: none;
   z-index: 1000;
   background: none;
-}
-
-.hud-toast {
-  padding: 0.5rem 1rem;
-  border-radius: 14px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: white;
-  pointer-events: none;
-  animation: toastCycle 3.5s ease-out forwards;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  max-width: 90%;
-  text-align: left;
-  word-break: break-word;
-}
-
-@keyframes toastCycle {
-  0%   { opacity: 0; transform: translateY(10px); }
-  8%   { opacity: 1; transform: translateY(0); }
-  80%  { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-5px); }
-}
-
-.toast-danger {
-  background: rgba(220, 38, 38, 0.95); /* red-600 */
-  border: 1px solid rgba(239, 68, 68, 0.8);
-}
-
-.toast-success {
-  background: rgba(5, 150, 105, 0.95); /* emerald-600 */
-  border: 1px solid rgba(16, 185, 129, 0.8);
-}
-
-.toast-info {
-  background: rgba(30, 64, 120, 0.95);
-  border: 1px solid rgba(59, 130, 246, 0.8);
 }
 
 
@@ -442,7 +378,6 @@
   letter-spacing: 0.01em;
 }
 
-.hud-toast { animation: fadeSlideIn 0.3s ease-out; }
 .tile-claimed { animation: pulseSuccess 0.6s ease-out; }
 .combat-shake { animation: shakeCombat 0.4s ease-in-out; }
 
@@ -528,91 +463,6 @@
 /* ═══════════════════════════════════════════════════════
    (Radial Action Menu — removed, replaced by ActionDock)
    ═══════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════
-   Feature: Toast Notification Stack
-   ═══════════════════════════════════════════════════════ */
-.toast-stack {
-  position: absolute;
-  bottom: 120px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 0.5rem;
-  pointer-events: none;
-  z-index: 1000;
-  max-width: min(420px, 94%);
-  width: 100%;
-}
-
-.game-toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.65rem 1rem;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: white;
-  pointer-events: auto;
-  cursor: pointer;
-  animation: toast-enter 0.3s ease-out;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  border-left: 4px solid var(--toast-team-color, var(--accent));
-  background: rgba(15, 25, 35, 0.92);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-@keyframes toast-enter {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.game-toast-achievement {
-  border-left-color: #f59e0b;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 25, 35, 0.92));
-}
-
-.game-toast-combat {
-  border-left-color: #e74c3c;
-  background: linear-gradient(135deg, rgba(231, 76, 60, 0.15), rgba(15, 25, 35, 0.92));
-}
-
-.game-toast-event {
-  border-left-color: #3498db;
-  background: linear-gradient(135deg, rgba(52, 152, 219, 0.15), rgba(15, 25, 35, 0.92));
-}
-
-.game-toast-mission {
-  border-left-color: #2ecc71;
-  background: linear-gradient(135deg, rgba(46, 204, 113, 0.15), rgba(15, 25, 35, 0.92));
-}
-
-.game-toast-territory {
-  border-left-color: var(--toast-team-color, var(--accent));
-}
-
-.toast-icon {
-  font-size: 1.1rem;
-  flex-shrink: 0;
-  margin-top: 0.05rem;
-}
-
-.toast-message {
-  flex: 1;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
-}
-
 
 /* ═══════════════════════════════════════════════════════
    Feature: Action Dock — Persistent bottom action bar

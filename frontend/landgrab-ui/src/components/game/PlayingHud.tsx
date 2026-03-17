@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HexCell } from '../../types/game';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
@@ -6,17 +6,16 @@ import { hexKey } from '../map/HexMath';
 import { useSound } from '../../hooks/useSound';
 import { useGameStore } from '../../stores/gameStore';
 import { useGameplayStore } from '../../stores/gameplayStore';
-import { useNotificationStore } from '../../stores/notificationStore';
+import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import { useUiStore } from '../../stores/uiStore';
 import { GameEventLog } from './GameEventLog';
 import { GameRulesPage } from './GameRulesPage';
 import { GuidanceBanner } from './GuidanceBanner';
 import { HelpOverlay } from './HelpOverlay';
+import { InfoLedge } from './InfoLedge';
 import { PlayerDisplaySettings } from './PlayerDisplaySettings';
 import { ScoreRow } from './PlayerPanel';
 import { TileInfoCard } from './TileInfoCard';
-import { ToastManager } from './ToastManager';
-import type { GameToast } from '../../hooks/useToastQueue';
 import { PlayerHUD } from './PlayerHUD';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
@@ -49,8 +48,6 @@ interface Props {
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
-  toasts?: GameToast[];
-  onDismissToast?: (id: string) => void;
   onNavigateMap?: (lat: number, lng: number) => void;
 }
 
@@ -80,8 +77,6 @@ export function PlayingHud({
   debugToggle,
   debugPanel,
   children,
-  toasts,
-  onDismissToast,
   onNavigateMap,
 }: Props) {
   const { t } = useTranslation();
@@ -97,17 +92,16 @@ export function PlayingHud({
   const setPickupCount = useGameplayStore((store) => store.setPickupCount);
   const setReinforcePrompt = useGameplayStore((store) => store.setReinforcePrompt);
   const setReinforceCount = useGameplayStore((store) => store.setReinforceCount);
-  const hostMessage = useNotificationStore((store) => store.hostMessage);
   const error = useUiStore((store) => store.error);
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
+  const effectiveShowReturnConfirm = activeModal === 'menu' && showReturnConfirm;
   const me = state?.players.find((player) => player.id === myUserId);
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
   const needsClock = Boolean(
@@ -146,49 +140,80 @@ export function PlayingHud({
     };
   }, []);
 
-  useEffect(() => {
-    if (activeModal !== 'menu') {
-      setShowReturnConfirm(false);
-    }
-  }, [activeModal]);
-
-  const tick = useCallback(() => {
-    if (!state) {
-      setTimeRemaining(null);
-      return;
-    }
-
-    const now = Date.now();
-    setCurrentTime(now);
-
-    if (isTimedGame && state.gameStartedAt && state.gameDurationMinutes) {
-      const endTime = new Date(state.gameStartedAt).getTime() + state.gameDurationMinutes * 60 * 1000;
-      setTimeRemaining(Math.max(0, endTime - now));
-      return;
-    }
-
-    setTimeRemaining(null);
-  }, [isTimedGame, state]);
-
-  useEffect(() => {
-    if (!needsClock) {
-      setCurrentTime(Date.now());
-      setTimeRemaining(null);
-      return;
-    }
-
-    tick();
-  }, [needsClock, tick]);
-
   useSecondTick(() => {
     if (!needsClock) {
       return;
     }
 
-    tick();
+    setCurrentTime(Date.now());
   });
 
-  const displayTimeRemaining = isTimedGame ? timeRemaining : null;
+  // ── Info Ledge bridges ────────────────────────────────────────────────
+  useEffect(() => {
+    if (locationError && !isHostBypass) {
+      useInfoLedgeStore.getState().clearBySource('locationError');
+      useInfoLedgeStore.getState().push({
+        severity: 'error',
+        source: 'locationError',
+        persistent: true,
+        icon: '📍',
+        message: locationError,
+      });
+    } else {
+      useInfoLedgeStore.getState().clearBySource('locationError');
+    }
+  }, [locationError, isHostBypass]);
+
+  useEffect(() => {
+    if (error) {
+      useInfoLedgeStore.getState().clearBySource('error');
+      useInfoLedgeStore.getState().push({
+        severity: 'error',
+        source: 'error',
+        persistent: true,
+        icon: '⚠️',
+        message: error,
+      });
+    } else {
+      useInfoLedgeStore.getState().clearBySource('error');
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (state?.isPaused) {
+      useInfoLedgeStore.getState().clearBySource('paused');
+      useInfoLedgeStore.getState().push({
+        severity: 'error',
+        source: 'paused',
+        persistent: true,
+        icon: '⏸',
+        message: t('observer.gamePaused' as never),
+      });
+    } else {
+      useInfoLedgeStore.getState().clearBySource('paused');
+    }
+  }, [state?.isPaused, t]);
+
+  useEffect(() => {
+    if (interactionFeedback) {
+      useInfoLedgeStore.getState().push({
+        severity: 'interaction',
+        source: 'interaction',
+        persistent: false,
+        duration: 3500,
+        message: interactionFeedback.message,
+      });
+    }
+  }, [interactionFeedback]);
+
+  const displayTimeRemaining = useMemo(() => {
+    if (!isTimedGame || !state?.gameStartedAt || !state.gameDurationMinutes) {
+      return null;
+    }
+
+    const endTime = new Date(state.gameStartedAt).getTime() + state.gameDurationMinutes * 60 * 1000;
+    return Math.max(0, endTime - currentTime);
+  }, [currentTime, isTimedGame, state]);
 
   const currentHexCell: HexCell | undefined = useMemo(() => {
     if (!state || !currentHex) {
@@ -223,7 +248,7 @@ export function PlayingHud({
     return state.players
       .filter((player) => player.allianceId === me.allianceId)
       .reduce((sum, player) => sum + (player.carriedTroops ?? 0), 0);
-  }, [state, me?.allianceId, carriedTroops]);
+  }, [state, me, carriedTroops]);
 
   const allianceTotalTroops = allianceTileTroops + allianceCarriedTroops;
 
@@ -245,7 +270,7 @@ export function PlayingHud({
     }
 
     return Math.floor((currentTime - new Date(state.gameStartedAt).getTime()) / (30 * 60000));
-  }, [currentTime, state?.dynamics?.timedEscalationEnabled, state?.gameStartedAt]);
+  }, [currentTime, state]);
   const underdogBoostActive = Boolean(
     state?.dynamics?.underdogPactEnabled
     && myAlliance?.underdogBoostUntil
@@ -286,19 +311,6 @@ export function PlayingHud({
   return (
     <div className="game-layout hud-active playing-hud-layout" ref={layoutRef}>
       <div className="top-status-bar">
-        {locationError && !isHostBypass && <div className="top-warning-bar">📍 {locationError}</div>}
-        {error && <div className="top-warning-bar">⚠️ {error}</div>}
-        {state.isPaused && (
-          <div className="top-warning-bar event-warning">
-            ⏸ {t('observer.gamePaused' as never)}
-          </div>
-        )}
-        {hostMessage && (
-          <div className="top-warning-bar host-message-banner">
-            📢 {hostMessage.message}
-          </div>
-        )}
-
         <div className="top-stats-row">
           <div className="hud-stats-flat">
             {currentPlayerName && (
@@ -377,6 +389,7 @@ export function PlayingHud({
             <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
         </div>
+        <InfoLedge />
       </div>
 
       <div className="map-area-wrapper map-area-wrapper--with-player-hud">
@@ -454,16 +467,6 @@ export function PlayingHud({
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
               {interactionStatus.message}
             </div>
-          )}
-
-          {interactionFeedback && !pickupPrompt && !reinforcePrompt && (
-            <div className={`hud-toast toast-${interactionFeedback.tone === 'error' ? 'danger' : interactionFeedback.tone === 'success' ? 'success' : 'info'}`}>
-              {interactionFeedback.message}
-            </div>
-          )}
-
-          {toasts && onDismissToast && (
-            <ToastManager toasts={toasts} onDismiss={onDismissToast} />
           )}
         </div>
       </div>
@@ -587,7 +590,7 @@ export function PlayingHud({
             </div>
           )}
           {debugToggle}
-          {!showReturnConfirm ? (
+          {!effectiveShowReturnConfirm ? (
             <button
               className="btn-secondary"
               style={{ width: '100%', color: 'var(--danger, #e74c3c)' }}

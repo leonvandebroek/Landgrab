@@ -1185,6 +1185,9 @@ const en = {
     resumeGame: 'Resume Game',
     gamePaused: 'Game is paused',
   },
+  infoLedge: {
+    moreCount: '+{{count}}',
+  },
 } as const;
 
 export default en;

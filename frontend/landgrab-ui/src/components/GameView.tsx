@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
-import { ConnectionBanner } from './ConnectionBanner';
 import { CombatModal } from './game/CombatModal';
 import { CombatPreviewModal } from './game/CombatPreviewModal';
 import { GameRulesPage } from './game/GameRulesPage';
@@ -13,7 +12,6 @@ import { useUiStore } from '../stores/uiStore';
 import type { GameDynamics, HexCell } from '../types/game';
 import type { PlayerDisplayPreferences } from '../types/playerPreferences';
 import type { TileAction, TileActionType } from './game/tileInteraction';
-import type { GameToast } from '../hooks/useToastQueue';
 
 // Heavy components loaded lazily — same split as original App.
 const GameMap = lazy(() =>
@@ -56,8 +54,6 @@ export interface GameViewActions {
 export interface GameViewProps {
   /** The authenticated user's ID. */
   userId: string;
-  /** Pre-formatted banner text; empty string means no banner. */
-  connectionBanner: string;
   currentLocation: LocationPoint | null;
   currentHex: [number, number] | null;
   effectiveLocationError: string | null;
@@ -73,8 +69,6 @@ export interface GameViewProps {
   onNavigateMap: (lat: number, lng: number) => void;
   debugToggle: ReactNode;
   debugPanel: ReactNode;
-  toasts: GameToast[];
-  onDismissToast: (id: string) => void;
   actions: GameViewActions;
 }
 
@@ -87,7 +81,6 @@ export interface GameViewProps {
  */
 export function GameView({
   userId,
-  connectionBanner,
   currentLocation,
   currentHex,
   effectiveLocationError,
@@ -98,8 +91,6 @@ export function GameView({
   onNavigateMap,
   debugToggle,
   debugPanel,
-  toasts,
-  onDismissToast,
   actions,
 }: GameViewProps) {
   // ── Store reads ─────────────────────────────────────────────────────────
@@ -154,7 +145,6 @@ export function GameView({
   if (shouldShowRulesGate) {
     return (
       <>
-        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
         <GameRulesPage gameState={gameState} onContinue={handleAcknowledgeRules} />
       </>
     );
@@ -166,7 +156,6 @@ export function GameView({
   if (isObserverMode) {
     return (
       <>
-        {connectionBanner && <ConnectionBanner message={connectionBanner} />}
         <Suspense fallback={<LoadingFallback />}>
           <HostControlPlane
             state={gameState}
@@ -195,7 +184,6 @@ export function GameView({
   // ── Standard playing mode ────────────────────────────────────────────────
   return (
     <>
-      {connectionBanner && <ConnectionBanner message={connectionBanner} />}
       <Suspense fallback={<LoadingFallback />}>
         <PlayingHud
           myUserId={userId}
@@ -222,8 +210,6 @@ export function GameView({
           onSetObserverMode={actions.onSetObserverMode}
           debugToggle={debugToggle}
           debugPanel={debugPanel}
-          toasts={toasts}
-          onDismissToast={onDismissToast}
           onNavigateMap={onNavigateMap}
         >
           <GameMap

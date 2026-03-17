@@ -4,10 +4,10 @@ import type { TFunction } from 'i18next';
 import { useGameplayStore } from '../stores/gameplayStore';
 import type { SavedSession } from '../stores/gameStore';
 import { useGameStore } from '../stores/gameStore';
+import { useInfoLedgeStore } from '../stores/infoLedgeStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useUiStore } from '../stores/uiStore';
 import type { SoundName } from './useSound';
-import type { GameToast } from './useToastQueue';
 import type { GameEvents } from './useSignalR';
 import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
@@ -24,7 +24,6 @@ interface UseSignalRHandlersOptions {
   savedSessionRef: MutableRefObject<SavedSession | null>;
   t: TFunction;
   playSound: (name: SoundName) => void;
-  pushToast: (toast: Omit<GameToast, 'id'>) => void;
 }
 
 function getHex(state: GameState | null, q: number, r: number) {
@@ -150,7 +149,6 @@ export function useSignalRHandlers({
   savedSessionRef,
   t,
   playSound,
-  pushToast,
 }: UseSignalRHandlersOptions): GameEvents {
   const gameState = useGameStore(state => state.gameState);
 
@@ -275,8 +273,11 @@ export function useSignalRHandlers({
       useGameplayStore.getState().setCombatPreview(null);
       useGameplayStore.getState().setAttackPrompt(null);
       useGameplayStore.getState().setCombatResult(result);
-      pushToast({
-        type: 'combat',
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent',
+        source: 'gameToast',
+        persistent: false,
+        icon: '⚔️',
         message: result.attackerWon
           ? t('game.toast.combatWon', { q: result.q, r: result.r })
           : t('game.toast.combatLost', { q: result.q, r: result.r }),
@@ -293,10 +294,12 @@ export function useSignalRHandlers({
         message: t('game.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
         targetHex: [data.Q, data.R],
       });
-      pushToast({
-        type: 'territory',
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent',
+        source: 'gameToast',
+        persistent: false,
+        icon: '🚩',
         message: t('game.toast.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
-        teamColor: undefined,
       });
     },
     onError: (message) => {
@@ -308,6 +311,14 @@ export function useSignalRHandlers({
     },
     onHostMessage: (data) => {
       useNotificationStore.getState().setHostMessage(data);
+      useInfoLedgeStore.getState().push({
+        severity: 'hostMessage',
+        source: 'hostMessage',
+        persistent: false,
+        duration: 10000,
+        icon: '📢',
+        message: data.message,
+      });
     },
     onDrainTick: (data) => {
       const { gameState: currentState, savedSession } = useGameStore.getState();
@@ -320,8 +331,11 @@ export function useSignalRHandlers({
         return;
       }
 
-      pushToast({
-        type: 'territory',
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent',
+        source: 'gameToast',
+        persistent: false,
+        icon: '🚩',
         message: t('game.toast.drainTick' as never, { troops: data.troopsLost }),
       });
     },
@@ -337,8 +351,11 @@ export function useSignalRHandlers({
         };
       });
 
-      pushToast({
-        type: 'event',
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent',
+        source: 'gameToast',
+        persistent: false,
+        icon: '🎲',
         message: t('game.dynamicsChanged' as never),
       });
     },
@@ -356,5 +373,5 @@ export function useSignalRHandlers({
         // Silently ignore — the justConnected auto-resume flow also attempts rejoin.
       });
     },
-  }), [gameState, getInvoke, playSound, pushToast, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
+  }), [gameState, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
 }

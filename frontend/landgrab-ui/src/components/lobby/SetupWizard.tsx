@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ClaimMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, WinConditionType } from '../../types/game';
 import { LocationStep } from './LocationStep';
@@ -119,20 +119,7 @@ export function SetupWizard({
     }, [gameState.currentWizardStep, totalSteps]);
 
     const [step, setStep] = useState(() => serverWizardStep ?? deriveStep());
-
-    useEffect(() => {
-        if (serverWizardStep == null) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => {
-            setStep(prev => (prev !== serverWizardStep ? serverWizardStep : prev));
-        }, 0);
-
-        return () => {
-            window.clearTimeout(timer);
-        };
-    }, [serverWizardStep]);
+    const effectiveStep = clampWizardStep(serverWizardStep ?? step, totalSteps);
 
     const syncWizardStep = useCallback(async (nextStep: number) => {
         const normalizedStep = clampWizardStep(nextStep, totalSteps);
@@ -152,23 +139,16 @@ export function SetupWizard({
         }
     }, [invoke, totalSteps]);
 
-    useEffect(() => {
-        setStep(prev => {
-            const normalizedStep = clampWizardStep(prev, totalSteps);
-            return prev !== normalizedStep ? normalizedStep : prev;
-        });
-    }, [totalSteps]);
-
     const handleSetMapLocation = useCallback((lat: number, lng: number) => {
         onSetMapLocation(lat, lng);
 
-        if (step === 0) {
+        if (effectiveStep === 0) {
             void syncWizardStep(1);
         }
-    }, [onSetMapLocation, step, syncWizardStep]);
+    }, [effectiveStep, onSetMapLocation, syncWizardStep]);
 
     const canGoNext = useMemo(() => {
-        switch (step) {
+        switch (effectiveStep) {
             case 0:
                 return stepComplete.location;
             case 1:
@@ -178,9 +158,9 @@ export function SetupWizard({
             case 3:
                 return true;
             default:
-                return step < totalSteps - 1;
+                return effectiveStep < totalSteps - 1;
         }
-    }, [step, stepComplete, totalSteps]);
+    }, [effectiveStep, stepComplete, totalSteps]);
 
     const canStart = useMemo(() => {
         return gameState.players.length >= 2
@@ -189,28 +169,28 @@ export function SetupWizard({
     }, [gameState]);
 
     const goNext = useCallback(() => {
-        if (step >= totalSteps - 1 || !canGoNext) {
+        if (effectiveStep >= totalSteps - 1 || !canGoNext) {
             return;
         }
 
-        void syncWizardStep(step + 1);
-    }, [canGoNext, step, syncWizardStep, totalSteps]);
+        void syncWizardStep(effectiveStep + 1);
+    }, [canGoNext, effectiveStep, syncWizardStep, totalSteps]);
 
     const goBack = useCallback(() => {
-        if (step <= 0) {
+        if (effectiveStep <= 0) {
             return;
         }
 
-        void syncWizardStep(step - 1);
-    }, [step, syncWizardStep]);
+        void syncWizardStep(effectiveStep - 1);
+    }, [effectiveStep, syncWizardStep]);
 
     const goToStep = useCallback((nextStep: number) => {
-        if (nextStep > step + 1 || (nextStep === step + 1 && !canGoNext)) {
+        if (nextStep > effectiveStep + 1 || (nextStep === effectiveStep + 1 && !canGoNext)) {
             return;
         }
 
         void syncWizardStep(nextStep);
-    }, [canGoNext, step, syncWizardStep]);
+    }, [canGoNext, effectiveStep, syncWizardStep]);
 
     return (
         <div className="wizard-page">
@@ -248,19 +228,19 @@ export function SetupWizard({
                             <button
                                 key={i}
                                 type="button"
-                                className={`wizard-dot${i === step ? ' is-active' : ''}${i < step ? ' is-done' : ''}`}
+                                className={`wizard-dot${i === effectiveStep ? ' is-active' : ''}${i < effectiveStep ? ' is-done' : ''}`}
                                 onClick={() => goToStep(i)}
                                 aria-label={`Step ${i + 1}`}
                             />
                         ))}
                         <span className="wizard-step-label">
-                            {t('wizard.stepOf', { current: step + 1, total: totalSteps })}
+                            {t('wizard.stepOf', { current: effectiveStep + 1, total: totalSteps })}
                         </span>
                     </div>
                 </div>
 
                 <div className="wizard-content" data-testid="wizard-step-content">
-                    {step === 0 && (
+                    {effectiveStep === 0 && (
                         <LocationStep
                             currentLocation={currentLocation}
                             locationLoading={locationLoading}
@@ -270,7 +250,7 @@ export function SetupWizard({
                             onSetMapLocation={handleSetMapLocation}
                         />
                     )}
-                    {step === 1 && (
+                    {effectiveStep === 1 && (
                         <TeamsStep
                             gameState={gameState}
                             myUserId={myUserId}
@@ -280,7 +260,7 @@ export function SetupWizard({
                             onDistributePlayers={onDistributePlayers}
                         />
                     )}
-                    {step === 2 && (
+                    {effectiveStep === 2 && (
                         <RulesStep
                             gameState={gameState}
                             isHost={isHost}
@@ -291,7 +271,7 @@ export function SetupWizard({
                             invoke={invoke}
                         />
                     )}
-                    {step === 3 && (
+                    {effectiveStep === 3 && (
                         <DynamicsStep
                             gameState={gameState}
                             isHost={isHost}
@@ -300,7 +280,7 @@ export function SetupWizard({
                             onSetGameDynamics={onSetGameDynamics}
                         />
                     )}
-                    {rolesEnabled && step === rolesStep && (
+                    {rolesEnabled && effectiveStep === rolesStep && (
                         <RolesStep
                             gameState={gameState}
                             myUserId={myUserId}
@@ -309,7 +289,7 @@ export function SetupWizard({
                             onRandomizeRoles={onRandomizeRoles}
                         />
                     )}
-                    {step === reviewStep && (
+                    {effectiveStep === reviewStep && (
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}
@@ -331,7 +311,7 @@ export function SetupWizard({
 
                 <div className="wizard-footer">
                     <div className="wizard-footer-left">
-                        {step > 0 ? (
+                        {effectiveStep > 0 ? (
                             <button type="button" className="btn-ghost" data-testid="wizard-back-btn" onClick={goBack}>
                                 {t('wizard.back')}
                             </button>
@@ -343,7 +323,7 @@ export function SetupWizard({
                     </div>
 
                     <div className="wizard-footer-right">
-                        {step < totalSteps - 1 && (
+                        {effectiveStep < totalSteps - 1 && (
                             <button
                                 type="button"
                                 className="btn-primary"

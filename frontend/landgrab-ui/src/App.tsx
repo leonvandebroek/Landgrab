@@ -8,7 +8,6 @@ import { useSignalRHandlers } from './hooks/useSignalRHandlers';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
-import { useToastQueue } from './hooks/useToastQueue';
 import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { ConnectionBanner } from './components/ConnectionBanner';
@@ -23,6 +22,7 @@ import type { GameState, RoomSummary } from './types/game';
 import { useGameStore } from './stores/gameStore';
 import type { SavedSession } from './stores/gameStore';
 import { useGameplayStore } from './stores/gameplayStore';
+import { useInfoLedgeStore } from './stores/infoLedgeStore';
 import { useUiStore } from './stores/uiStore';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
 import {
@@ -66,7 +66,6 @@ export default function App() {
   const setDebugLocation = useUiStore(state => state.setDebugLocation);
 
   // ── Toast queue / misc hooks ─────────────────────────────────────────────
-  const { toasts, pushToast, dismissToast } = useToastQueue();
   const mapNavigateRef = useRef<((lat: number, lng: number) => void) | null>(null);
   const handleMiniMapNavigate = useCallback((lat: number, lng: number) => {
     mapNavigateRef.current?.(lat, lng);
@@ -148,7 +147,6 @@ export default function App() {
     savedSessionRef,
     t,
     playSound,
-    pushToast,
   });
 
   const { connected, reconnecting, invoke } = useSignalR(auth?.token ?? null, signalRHandlers);
@@ -380,6 +378,25 @@ export default function App() {
       ? t('errors.reconnecting')
       : '';
 
+  useEffect(() => {
+    if (view !== 'game') {
+      useInfoLedgeStore.getState().clearBySource('connection');
+      return;
+    }
+
+    if (connectionBanner) {
+      useInfoLedgeStore.getState().push({
+        severity: 'connection',
+        source: 'connection',
+        persistent: true,
+        icon: '🔄',
+        message: connectionBanner,
+      });
+    } else {
+      useInfoLedgeStore.getState().clearBySource('connection');
+    }
+  }, [connectionBanner, view]);
+
   // ── Logout handler ───────────────────────────────────────────────────────
   const handleLogout = useCallback(() => {
     clearSession();
@@ -526,7 +543,6 @@ export default function App() {
     return (
       <GameView
         userId={auth.userId}
-        connectionBanner={connectionBanner}
         currentLocation={currentLocation}
         currentHex={currentHex}
         effectiveLocationError={effectiveLocationError}
@@ -537,8 +553,6 @@ export default function App() {
         onNavigateMap={handleMiniMapNavigate}
         debugToggle={debugToggleButton}
         debugPanel={debugGpsPanel}
-        toasts={toasts}
-        onDismissToast={dismissToast}
         actions={gameViewActions}
       />
     );

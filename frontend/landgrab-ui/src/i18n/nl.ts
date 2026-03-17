@@ -1185,6 +1185,9 @@ const nl = {
     resumeGame: 'Hervat spel',
     gamePaused: 'Spel is gepauzeerd',
   },
+  infoLedge: {
+    moreCount: '+{{count}}',
+  },
 } as const;
 
 export default nl;

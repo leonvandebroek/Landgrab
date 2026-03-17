@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
@@ -104,14 +104,6 @@ export function PlayerPanel({
     && state.winConditionType === 'TimedGame'
     && Boolean(state.gameStartedAt)
     && Boolean(state.gameDurationMinutes);
-
-  useEffect(() => {
-    if (!shouldUpdateNow) {
-      return;
-    }
-
-    setNow(Date.now());
-  }, [shouldUpdateNow]);
 
   useSecondTick(() => {
     if (!shouldUpdateNow) {
