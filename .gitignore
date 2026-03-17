@@ -421,6 +421,9 @@ FodyWeavers.xsd
 todos.db
 .todos.db
 
+# Git worktrees
+.worktrees/
+
 # Node.js tool workspaces — compiled output
 tools/landgrab-agent-mcp/dist/
 
