@@ -842,4 +842,41 @@ public sealed class GameplayServiceTests
         result.state.ActiveRaids.Should().BeEmpty();
     }
 
+    [Fact]
+    public void AddReinforcements_HexWithFriendlyPresence_RegeneratesAtTripleRate()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 3)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        // Base regen is 1, presence multiplier is 3x → expect 3 added = total 6
+        context.Cell(0, 0).Troops.Should().Be(6);
+    }
+
+    [Fact]
+    public void AddReinforcements_HexWithoutPresence_RegeneratesAtBaseRate()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 3)
+            .Build();
+        // p1 has no location set
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
+
+        context.Cell(0, 0).Troops.Should().Be(4); // base +1
+    }
+
 }

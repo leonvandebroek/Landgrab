@@ -943,12 +943,16 @@ public class GameplayService(
                 // Phase: Sabotage — sabotaged hexes skip regen
                 if (cell.SabotagedUntil.HasValue)
                 {
-                    if (cell.SabotagedUntil > now)
+                    if (cell.SabotagedUntil > DateTime.UtcNow)
                         continue;
                     cell.SabotagedUntil = null;
                 }
 
-                cell.Troops++;
+                // Presence bonus: 3× regen if a friendly player is physically on this hex
+                var friendlyPresent = GetPlayersInHex(room.State, cell.Q, cell.R)
+                    .Any(p => IsFriendlyCell(p, cell));
+                var presenceMultiplier = friendlyPresent ? 3 : 1;
+                cell.Troops += presenceMultiplier;
 
                 // Phase 8: Timed Escalation bonus
                 cell.Troops += escalationBonus;
