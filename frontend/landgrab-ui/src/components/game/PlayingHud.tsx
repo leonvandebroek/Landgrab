@@ -446,6 +446,14 @@ export function PlayingHud({
               targetCell={selectedCell}
               targetHex={selectedHex}
               onDismiss={onDismissTileActions!}
+              isPresenceBoosted={Boolean(
+                selectedCell?.ownerId
+                && me
+                && (selectedCell.ownerId === me.id || (me.allianceId && selectedCell.ownerAllianceId === me.allianceId))
+                && currentHex
+                && selectedHex[0] === currentHex[0]
+                && selectedHex[1] === currentHex[1]
+              )}
             />
           )}
 

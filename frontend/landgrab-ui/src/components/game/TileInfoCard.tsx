@@ -8,9 +8,10 @@ interface TileInfoCardProps {
   targetCell: HexCell | undefined;
   targetHex: [number, number];
   onDismiss: () => void;
+  isPresenceBoosted?: boolean;
 }
 
-export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardProps) {
+export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoosted }: TileInfoCardProps) {
   const { t } = useTranslation();
 
   if (!targetCell) return null;
@@ -94,6 +95,14 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardP
           <div className="tile-info-card__row">
             <span className="tile-info-card__value tile-info-card__neutral">
               {t('game.tileInfo.unclaimed')}
+            </span>
+          </div>
+        )}
+
+        {isPresenceBoosted && (
+          <div className="tile-info-card__row">
+            <span className="tile-info-card__value" style={{ color: '#2ecc71' }}>
+              <GameIcon name="rallyTroops" size="sm" /> {t('game.tileInfo.presenceBoost' as never)}
             </span>
           </div>
         )}

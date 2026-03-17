@@ -449,6 +449,11 @@ export function PlayerHUD({
           {targetCell?.isFort && (
             <span className="player-hud__badge" title={t('game.dock.fort' as never)}><GameIcon name="fort" size="sm" /></span>
           )}
+          {(relation === 'own' || relation === 'team') && targetCell?.ownerId && (
+            <span className="player-hud__badge player-hud__badge--boost" title={t('game.tileInfo.presenceBoost' as never)}>
+              <GameIcon name="rallyTroops" size="sm" /> 3×
+            </span>
+          )}
         </div>
       )}
 

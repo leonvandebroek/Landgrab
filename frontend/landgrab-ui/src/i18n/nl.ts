@@ -373,6 +373,7 @@ const nl = {
       terrain: 'Terrein',
       status: 'Status',
       unclaimed: 'Onbezet gebied',
+      presenceBoost: 'Verhoogde regeneratie (3×) — jij bent hier',
     },
 
     // Meldingen (F8)

@@ -373,6 +373,7 @@ const en = {
       terrain: 'Terrain',
       status: 'Status',
       unclaimed: 'Unclaimed territory',
+      presenceBoost: 'Boosted regen (3×) — you are here',
     },
 
     // Toast notifications (F8)
