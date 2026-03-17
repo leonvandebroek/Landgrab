@@ -11,7 +11,6 @@ import type {
   HexCell,
   HexCoordinate,
   Player,
-  ReClaimMode,
   WinConditionType,
 } from '../types/game';
 import type { SoundName } from './useSound';
@@ -52,7 +51,6 @@ export interface UseGameActionsResult {
   handleSetPatternGameArea: (pattern: GameAreaPattern) => void;
   handleSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   handleSetClaimMode: (mode: ClaimMode) => void;
-  handleSetAllowSelfClaim: (allow: boolean) => Promise<void>;
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
   handleSetBeaconEnabled: (enabled: boolean) => void;
   handleSetTileDecayEnabled: (enabled: boolean) => void;
@@ -64,7 +62,6 @@ export interface UseGameActionsResult {
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
   handleActivateTacticalStrike: () => Promise<void>;
   handleActivateReinforce: () => Promise<void>;
-  handleActivateShieldWall: () => Promise<void>;
   handleActivateEmergencyRepair: () => Promise<void>;
   handleStartDemolish: () => Promise<void>;
   handleSetMasterTile: (lat: number, lng: number) => void;
@@ -92,7 +89,6 @@ export interface UseGameActionsResult {
   handleDeployCombatTroops: (count: number) => Promise<void>;
   handleDeployNeutralClaimTroops: (count: number) => Promise<void>;
   handleCancelAttack: () => void;
-  handleReClaimHex: (mode: ReClaimMode) => Promise<void>;
   handlePlayAgain: () => void;
 }
 

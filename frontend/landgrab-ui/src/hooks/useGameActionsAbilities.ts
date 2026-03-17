@@ -8,7 +8,6 @@ interface UseGameActionsAbilitiesResult {
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
   handleActivateTacticalStrike: () => Promise<void>;
   handleActivateReinforce: () => Promise<void>;
-  handleActivateShieldWall: () => Promise<void>;
   handleActivateEmergencyRepair: () => Promise<void>;
   handleStartDemolish: () => Promise<void>;
 }
@@ -78,18 +77,6 @@ export function useGameActionsAbilities({
     }
   }, [invoke, setError]);
 
-  const handleActivateShieldWall = useCallback(async (): Promise<void> => {
-    if (!invoke) {
-      return;
-    }
-
-    try {
-      await invoke('ActivateShieldWall');
-    } catch (error) {
-      setError(String(error));
-    }
-  }, [invoke, setError]);
-
   const handleActivateEmergencyRepair = useCallback(async (): Promise<void> => {
     if (!invoke) {
       return;
@@ -120,7 +107,6 @@ export function useGameActionsAbilities({
     handleActivateCommandoRaid,
     handleActivateTacticalStrike,
     handleActivateReinforce,
-    handleActivateShieldWall,
     handleActivateEmergencyRepair,
     handleStartDemolish,
   };

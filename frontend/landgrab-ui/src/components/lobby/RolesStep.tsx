@@ -5,13 +5,12 @@ import { GameIcon } from '../common/GameIcon';
 import { RoleModal } from './RoleModal';
 import { isRoleModalRole, type RoleModalRole } from './roleModalUtils';
 
-const ROLE_OPTIONS: PlayerRole[] = ['None', 'Commander', 'Scout', 'Defender', 'Engineer'];
+const ROLE_OPTIONS: PlayerRole[] = ['None', 'Commander', 'Scout', 'Engineer'];
 
 const ROLE_LABEL_KEYS: Record<PlayerRole, string> = {
     None: 'phase4.roleNone',
     Commander: 'phase4.roleCommander',
     Scout: 'phase4.roleScout',
-    Defender: 'phase4.roleDefender',
     Engineer: 'phase4.roleEngineer',
 };
 

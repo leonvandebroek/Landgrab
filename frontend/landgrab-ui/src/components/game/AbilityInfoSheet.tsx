@@ -27,11 +27,6 @@ const ROLE_ABILITY_META: Record<AbilityRole, Record<string, AbilityMeta>> = {
         firstStrike: { icon: 'archeryTarget', type: 'passive' },
         commandoRaid: { icon: 'crossbow', type: 'active' },
     },
-    Defender: {
-        presenceShield: { icon: 'shield', type: 'passive' },
-        shieldWall: { icon: 'shieldWall', type: 'active' },
-        lastStand: { icon: 'biceps', type: 'passive' },
-    },
     Engineer: {
         fortConstruction: { icon: 'gearHammer', type: 'passive' },
         emergencyRepair: { icon: 'wrench', type: 'active' },
@@ -42,7 +37,6 @@ const ROLE_ABILITY_META: Record<AbilityRole, Record<string, AbilityMeta>> = {
 const ROLE_ACCENT_COLORS: Record<AbilityRole, string> = {
     Commander: '#f6c453',
     Scout: '#6bc5ff',
-    Defender: '#72e0b5',
     Engineer: '#ffb366',
 };
 

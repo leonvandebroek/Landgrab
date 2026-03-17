@@ -4,7 +4,7 @@ import { GameIcon } from '../common/GameIcon';
 import type { PlayerRole } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
 
-const ROLES: PlayerRole[] = ['None', 'Commander', 'Scout', 'Defender', 'Engineer'];
+const ROLES: PlayerRole[] = ['None', 'Commander', 'Scout', 'Engineer'];
 
 const ROLE_META: Record<PlayerRole, { emoji: GameIconName | null; labelKey: string; descriptionKey?: string }> = {
   None: {
@@ -20,11 +20,6 @@ const ROLE_META: Record<PlayerRole, { emoji: GameIconName | null; labelKey: stri
     emoji: 'compass',
     labelKey: 'phase4.roleScout',
     descriptionKey: 'phase4.roleScoutDesc'
-  },
-  Defender: {
-    emoji: 'barricade',
-    labelKey: 'phase4.roleDefender',
-    descriptionKey: 'phase4.roleDefenderDesc'
   },
   Engineer: {
     emoji: 'gearHammer',

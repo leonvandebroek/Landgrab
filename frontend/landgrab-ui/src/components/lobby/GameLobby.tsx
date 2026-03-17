@@ -31,7 +31,6 @@ interface Props {
   onSetPatternGameArea: (pattern: GameAreaPattern) => void;
   onSetCustomGameArea: (coordinates: HexCoordinate[]) => void;
   onSetClaimMode: (mode: ClaimMode) => void;
-  onSetAllowSelfClaim: (allow: boolean) => void;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetBeaconEnabled: (enabled: boolean) => void;
   onSetTileDecayEnabled: (enabled: boolean) => void;
@@ -75,7 +74,6 @@ export function GameLobby({
   onSetPatternGameArea,
   onSetCustomGameArea,
   onSetClaimMode,
-  onSetAllowSelfClaim,
   onSetWinCondition,
   onSetBeaconEnabled,
   onSetTileDecayEnabled,
@@ -259,7 +257,6 @@ export function GameLobby({
         onSetPatternGameArea={onSetPatternGameArea}
         onSetCustomGameArea={onSetCustomGameArea}
         onSetClaimMode={onSetClaimMode}
-        onSetAllowSelfClaim={onSetAllowSelfClaim}
         onSetWinCondition={onSetWinCondition}
         onSetBeaconEnabled={onSetBeaconEnabled}
         onSetTileDecayEnabled={onSetTileDecayEnabled}

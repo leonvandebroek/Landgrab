@@ -36,7 +36,6 @@ interface PlayerHUDProps {
   onDeactivateBeacon: () => void;
   onActivateTacticalStrike: () => void;
   onActivateReinforce: () => void;
-  onActivateShieldWall: () => void;
   onActivateEmergencyRepair: () => void;
   onStartDemolish: () => void;
 }
@@ -56,12 +55,11 @@ interface AbilityButtonConfig {
   abilityKey?: string;
 }
 
-type AbilityRole = 'Commander' | 'Scout' | 'Defender' | 'Engineer';
+type AbilityRole = 'Commander' | 'Scout' | 'Engineer';
 
 const ROLE_ACCENT_COLORS: Record<AbilityRole, string> = {
   Commander: '#f6c453',
   Scout: '#6bc5ff',
-  Defender: '#72e0b5',
   Engineer: '#ffb366',
 };
 
@@ -130,7 +128,6 @@ export function PlayerHUD({
   onDeactivateBeacon,
   onActivateTacticalStrike,
   onActivateReinforce,
-  onActivateShieldWall,
   onActivateEmergencyRepair,
   onStartDemolish,
 }: PlayerHUDProps) {
@@ -147,8 +144,6 @@ export function PlayerHUD({
   const tacticalStrikeTime = formatTimeRemaining(player?.tacticalStrikeExpiry);
   const tacticalStrikeCooldownTime = formatTimeRemaining(player?.tacticalStrikeCooldownUntil);
   const reinforceCooldownTime = formatTimeRemaining(player?.reinforceCooldownUntil);
-  const shieldWallTime = formatTimeRemaining(player?.shieldWallExpiry);
-  const shieldWallCooldownTime = formatTimeRemaining(player?.shieldWallCooldownUntil);
   const emergencyRepairCooldownTime = formatTimeRemaining(player?.emergencyRepairCooldownUntil);
   const demolishProgressTime = formatDurationRemaining(player?.demolishStartedAt, DEMOLISH_DURATION_MS);
   const demolishCooldownTime = formatTimeRemaining(player?.demolishCooldownUntil);
@@ -158,8 +153,6 @@ export function PlayerHUD({
     tacticalStrikeTime,
     tacticalStrikeCooldownTime,
     reinforceCooldownTime,
-    shieldWallTime,
-    shieldWallCooldownTime,
     emergencyRepairCooldownTime,
     demolishProgressTime,
     demolishCooldownTime,
@@ -318,30 +311,6 @@ export function PlayerHUD({
         abilityKey: 'commandoRaid',
       });
     }
-  }
-
-  if (rolesEnabled && player?.role === 'Defender') {
-    const shieldWallActive = Boolean(player.shieldWallActive && shieldWallTime);
-    const shieldWallOnCooldown = !shieldWallActive && shieldWallCooldownTime !== null;
-
-    abilityButtons.push({
-      key: 'shield-wall',
-      icon: 'shieldWall',
-      title: t('roles.Defender.abilities.shieldWall.title' as never),
-      description: t('roles.Defender.abilities.shieldWall.description' as never),
-      shortDescription: t('roles.Defender.abilities.shieldWall.shortDesc' as never),
-      status: shieldWallActive
-        ? formatStatus('active', shieldWallTime)
-        : shieldWallOnCooldown
-          ? formatStatus('cooldown', shieldWallCooldownTime)
-          : formatStatus('activate'),
-      className: `player-hud__ability ${shieldWallActive ? 'player-hud__ability--active ability-btn-active' : ''} ${shieldWallOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      accentColor: ROLE_ACCENT_COLORS.Defender,
-      disabled: shieldWallActive || shieldWallOnCooldown,
-      onClick: shieldWallActive || shieldWallOnCooldown ? undefined : onActivateShieldWall,
-      role: 'Defender',
-      abilityKey: 'shieldWall',
-    });
   }
 
   if (rolesEnabled && player?.role === 'Engineer') {

@@ -12,7 +12,6 @@ export interface RoleAbility {
 export const ROLE_EMOJIS: Record<RoleModalRole, GameIconName> = {
     Commander: 'rallyTroops',
     Scout: 'compass',
-    Defender: 'barricade',
     Engineer: 'gearHammer',
 };
 
@@ -27,11 +26,6 @@ export const ROLE_ABILITIES: Record<RoleModalRole, RoleAbility[]> = {
         { key: 'firstStrike', icon: 'archeryTarget', type: 'passive' },
         { key: 'commandoRaid', icon: 'crossbow', type: 'active' },
     ],
-    Defender: [
-        { key: 'presenceShield', icon: 'shield', type: 'passive' },
-        { key: 'shieldWall', icon: 'shieldWall', type: 'active' },
-        { key: 'lastStand', icon: 'biceps', type: 'passive' },
-    ],
     Engineer: [
         { key: 'fortConstruction', icon: 'gearHammer', type: 'passive' },
         { key: 'emergencyRepair', icon: 'wrench', type: 'active' },
@@ -42,10 +36,9 @@ export const ROLE_ABILITIES: Record<RoleModalRole, RoleAbility[]> = {
 export const ROLE_CARDS = [
     { role: 'Commander', emoji: ROLE_EMOJIS.Commander, abilities: ROLE_ABILITIES.Commander },
     { role: 'Scout', emoji: ROLE_EMOJIS.Scout, abilities: ROLE_ABILITIES.Scout },
-    { role: 'Defender', emoji: ROLE_EMOJIS.Defender, abilities: ROLE_ABILITIES.Defender },
     { role: 'Engineer', emoji: ROLE_EMOJIS.Engineer, abilities: ROLE_ABILITIES.Engineer },
 ] as const;
 
 export function isRoleModalRole(role: PlayerRole | null | undefined): role is RoleModalRole {
-    return role === 'Commander' || role === 'Scout' || role === 'Defender' || role === 'Engineer';
+    return role === 'Commander' || role === 'Scout' || role === 'Engineer';
 }

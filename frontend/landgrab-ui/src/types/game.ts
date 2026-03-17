@@ -8,7 +8,7 @@ export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starbu
 
 export type TerrainType = 'None' | 'Water' | 'Building' | 'Road' | 'Path' | 'Forest' | 'Park' | 'Hills' | 'Steep';
 
-export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Defender' | 'Engineer';
+export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Engineer';
 
 export interface GameDynamics {
   terrainEnabled: boolean;
@@ -203,8 +203,6 @@ export interface GameState {
   winnerName?: string;
   isAllianceVictory: boolean;
   achievements?: Achievement[];
-  // Phase 8: Rush Hour
-  isRushHour?: boolean;
   // Host overrides
   hostBypassGps?: boolean;
   maxFootprintMetersOverride?: number | null;
@@ -219,8 +217,6 @@ export interface Achievement {
   titleKey: string;
   value?: string;
 }
-
-export type ReClaimMode = 'Alliance' | 'Self' | 'Abandon';
 
 export interface CombatResult {
   attackDice: number[];
