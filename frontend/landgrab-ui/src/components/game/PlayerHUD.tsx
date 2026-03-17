@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
+import { terrainIcons } from '../../utils/terrainIcons';
 import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
 import { useSecondTick } from '../../hooks/useSecondTick';
 import { terrainDefendBonus } from '../../utils/terrainColors';
 import { AbilityInfoSheet } from './AbilityInfoSheet';
+import { GameIcon } from '../common/GameIcon';
 
 /* ═══════════════════════════════════════════════════════════════════════
    PlayerHUD — Unified bottom-of-screen HUD
@@ -40,7 +43,7 @@ interface PlayerHUDProps {
 
 interface AbilityButtonConfig {
   key: string;
-  icon: string;
+  icon: GameIconName;
   title: string;
   description: string;
   shortDescription?: string;
@@ -81,17 +84,6 @@ const RELATION_ACCENT: Record<HexRelation, string> = {
   allied: 'rgba(52, 152, 219, 0.5)',
   enemy: 'rgba(231, 76, 60, 0.6)',
   neutral: 'rgba(149, 165, 166, 0.3)',
-};
-
-const TERRAIN_ICONS: Record<string, string> = {
-  Water: '🌊',
-  Building: '🏢',
-  Road: '═',
-  Path: '···',
-  Forest: '🌿',
-  Park: '🌳',
-  Hills: '⛰️',
-  Steep: '🏔️',
 };
 
 const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
@@ -253,7 +245,7 @@ export function PlayerHUD({
 
     abilityButtons.push({
       key: 'tactical-strike',
-      icon: '⚡',
+      icon: 'lightning',
       title: t('roles.Commander.abilities.tacticalStrike.title' as never),
       description: t('roles.Commander.abilities.tacticalStrike.description' as never),
       shortDescription: t('roles.Commander.abilities.tacticalStrike.shortDesc' as never),
@@ -272,7 +264,7 @@ export function PlayerHUD({
 
     abilityButtons.push({
       key: 'reinforce',
-      icon: '🔄',
+      icon: 'rallyTroops',
       title: t('roles.Commander.abilities.reinforce.title' as never),
       description: t('roles.Commander.abilities.reinforce.description' as never),
       shortDescription: t('roles.Commander.abilities.reinforce.shortDesc' as never),
@@ -295,7 +287,7 @@ export function PlayerHUD({
     if (commandoTargetingMode) {
       abilityButtons.push({
         key: 'commando-targeting',
-        icon: '🎯',
+        icon: 'archeryTarget',
         title: t('roles.Scout.abilities.commandoRaid.title' as never),
         description: t('roles.Scout.abilities.commandoRaid.description' as never),
         shortDescription: t('roles.Scout.abilities.commandoRaid.shortDesc' as never),
@@ -309,7 +301,7 @@ export function PlayerHUD({
     } else {
       abilityButtons.push({
         key: 'commando-raid',
-        icon: '🎯',
+        icon: 'archeryTarget',
         title: t('roles.Scout.abilities.commandoRaid.title' as never),
         description: t('roles.Scout.abilities.commandoRaid.description' as never),
         shortDescription: t('roles.Scout.abilities.commandoRaid.shortDesc' as never),
@@ -334,7 +326,7 @@ export function PlayerHUD({
 
     abilityButtons.push({
       key: 'shield-wall',
-      icon: '🛡️',
+      icon: 'shieldWall',
       title: t('roles.Defender.abilities.shieldWall.title' as never),
       description: t('roles.Defender.abilities.shieldWall.description' as never),
       shortDescription: t('roles.Defender.abilities.shieldWall.shortDesc' as never),
@@ -358,7 +350,7 @@ export function PlayerHUD({
 
     abilityButtons.push({
       key: 'emergency-repair',
-      icon: '🔧',
+      icon: 'wrench',
       title: t('roles.Engineer.abilities.emergencyRepair.title' as never),
       description: t('roles.Engineer.abilities.emergencyRepair.description' as never),
       shortDescription: t('roles.Engineer.abilities.emergencyRepair.shortDesc' as never),
@@ -375,7 +367,7 @@ export function PlayerHUD({
 
     abilityButtons.push({
       key: 'demolish',
-      icon: '💣',
+      icon: 'gearHammer',
       title: t('roles.Engineer.abilities.demolish.title' as never),
       description: t('roles.Engineer.abilities.demolish.description' as never),
       shortDescription: t('roles.Engineer.abilities.demolish.shortDesc' as never),
@@ -396,7 +388,7 @@ export function PlayerHUD({
   if (showBeacon && player) {
     abilityButtons.push({
       key: 'beacon',
-      icon: '📡',
+      icon: 'radioTower',
       title: t('phase5.beacon' as never),
       description: t('phase5.beaconDesc' as never),
       status: player.isBeacon ? formatStatus('active') : formatStatus('activate'),
@@ -412,7 +404,7 @@ export function PlayerHUD({
     terrainType && terrainType !== 'None'
       ? t(`terrain.${terrainType}` as never)
       : null;
-  const terrainIcon = terrainType ? TERRAIN_ICONS[terrainType] : null;
+  const terrainIconName = terrainType && terrainType !== 'None' ? terrainIcons[terrainType] : '';
   const defendBonus = terrainDefendBonus(terrainType, true);
 
   return (
@@ -427,7 +419,7 @@ export function PlayerHUD({
               className="player-hud__carried"
               style={{ '--player-color': playerColor } as React.CSSProperties}
             >
-              🎒 {carriedTroops}
+              <GameIcon name="chest" size="sm" /> {carriedTroops}
             </span>
           )}
 
@@ -459,7 +451,7 @@ export function PlayerHUD({
           )}
 
           {targetCell && targetCell.troops > 0 && (
-            <span className="player-hud__troops">⚔ {targetCell.troops}</span>
+            <span className="player-hud__troops"><GameIcon name="contested" size="sm" /> {targetCell.troops}</span>
           )}
 
           {terrainLabel && (
@@ -472,19 +464,19 @@ export function PlayerHUD({
                 })
                 : undefined}
             >
-              {terrainIcon && <span aria-hidden>{terrainIcon}</span>}
+              {terrainIconName && <GameIcon name={terrainIconName} size="sm" />}
               {terrainLabel}
               {defendBonus > 0 && (
-                <span className="player-hud__defend-bonus">+{defendBonus}🛡</span>
+                <span className="player-hud__defend-bonus">+{defendBonus}<GameIcon name="shield" size="sm" /></span>
               )}
             </span>
           )}
 
           {targetCell?.isFortified && (
-            <span className="player-hud__badge" title={t('phase3.fortifiedDesc' as never)}>🛡️</span>
+            <span className="player-hud__badge" title={t('phase3.fortifiedDesc' as never)}><GameIcon name="shield" size="sm" /></span>
           )}
           {targetCell?.isFort && (
-            <span className="player-hud__badge" title={t('game.dock.fort' as never)}>🏰</span>
+            <span className="player-hud__badge" title={t('game.dock.fort' as never)}><GameIcon name="fort" size="sm" /></span>
           )}
         </div>
       )}
@@ -501,12 +493,12 @@ export function PlayerHUD({
               aria-label={t(action.label as never)}
             >
               <span className="player-hud__btn-icon" aria-hidden>
-                {action.icon}
+                <GameIcon name={action.icon} />
               </span>
               <span className="player-hud__btn-label">
                 {t(action.label as never)}
               </span>
-              {!action.enabled && <span className="player-hud__btn-locked" aria-hidden>🔒</span>}
+              {!action.enabled && <span className="player-hud__btn-locked" aria-hidden><GameIcon name="shield" size="sm" /></span>}
             </button>
           ))}
         </div>
@@ -539,7 +531,7 @@ export function PlayerHUD({
                     className="player-hud__ability-icon"
                     style={{ '--ability-accent': ability.accentColor } as React.CSSProperties}
                   >
-                    {ability.icon}
+                    <GameIcon name={ability.icon} />
                   </span>
                   <span className="player-hud__ability-label">{ability.title}</span>
                 </span>
@@ -565,19 +557,19 @@ export function PlayerHUD({
         <div className="player-hud__empty">
           {emptyReason === 'noLocation' && (
             <>
-              <span className="player-hud__empty-icon">📍</span>
+              <span className="player-hud__empty-icon"><GameIcon name="pin" /></span>
               <span>{t('game.dock.noLocation')}</span>
             </>
           )}
           {emptyReason === 'outsideGrid' && (
             <>
-              <span className="player-hud__empty-icon">🗺️</span>
+              <span className="player-hud__empty-icon"><GameIcon name="treasureMap" /></span>
               <span>{t('game.dock.outsideGrid')}</span>
             </>
           )}
           {emptyReason === 'noActions' && (
             <>
-              <span className="player-hud__empty-icon">✓</span>
+              <span className="player-hud__empty-icon"><GameIcon name="flag" /></span>
               <span>{t('game.dock.noActions')}</span>
             </>
           )}

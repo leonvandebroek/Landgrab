@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, Player, PlayerRole } from '../../types/game';
+import { GameIcon } from '../common/GameIcon';
 import { RoleModal } from './RoleModal';
 import { isRoleModalRole, type RoleModalRole } from './roleModalUtils';
 
@@ -76,7 +77,7 @@ export function RolesStep({
                                 onClick={onRandomizeRoles}
                                 title={t('wizard.randomizeRolesDesc')}
                             >
-                                🎲 {t('wizard.randomizeRoles')}
+                                {t('wizard.randomizeRoles')}
                             </button>
                         )}
                     </div>
@@ -124,7 +125,7 @@ function PlayerRow({
         <div className={`player-row${isMe ? ' is-me' : ''}`}>
             <span className="player-dot" style={{ background: player.allianceColor ?? player.color }} />
             <div className="player-copy">
-                <span className="player-name">{player.name} {player.isHost ? '👑' : ''}</span>
+                <span className="player-name">{player.name} {player.isHost && <GameIcon name="crown" size="sm" />}</span>
                 {!isHost && <span className="section-note">{t(ROLE_LABEL_KEYS[currentRole] as never)}</span>}
             </div>
             {isHost ? (

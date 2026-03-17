@@ -4959,13 +4959,13 @@ input:checked+.display-settings-slider:before {
 
 .troop-count {
   font-size: var(--troop-count-size, 0.75rem);
-  font-weight: 800;
+  font-weight: 700;
   color: white;
   z-index: 1;
-  font-family: 'SF Mono', 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 1), 0 0 8px rgba(0, 0, 0, 0.5);
   line-height: 1;
 }
 
@@ -5022,6 +5022,64 @@ input:checked+.display-settings-slider:before {
     0 0 0 1px rgba(142, 68, 173, 0.32),
     0 0 8px rgba(142, 68, 173, 0.2),
     0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* SVG Game Icons */
+.hex-game-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+
+.hex-game-icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+.hex-game-icon--sm {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
+.hex-game-icon--lg {
+  width: 26px;
+  height: 26px;
+  font-size: 26px;
+}
+
+/* ── SVG Game Icons (React context) ─────────────────── */
+.game-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 1.125em;
+  height: 1.125em;
+  color: currentColor;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.game-icon svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+
+.game-icon--sm {
+  width: 0.875em;
+  height: 0.875em;
+}
+
+.game-icon--lg {
+  width: 1.5em;
+  height: 1.5em;
 }
 
 .hex-fort-progress {
@@ -6174,6 +6232,18 @@ input:checked+.display-settings-slider:before {
   animation-duration: 0.8s;
 }
 
+/* Hex hover feedback */
+.hex-polygon.is-neutral:hover,
+.hex-polygon.is-owned:hover {
+  filter: brightness(1.15);
+  transition: filter 0.15s ease;
+}
+
+.hex-polygon.is-neutral,
+.hex-polygon.is-owned {
+  transition: filter 0.15s ease;
+}
+
 /* ═══════════════════════════════════════════════════════
    Feature: Supply Lines
    ═══════════════════════════════════════════════════════ */
@@ -6188,9 +6258,14 @@ input:checked+.display-settings-slider:before {
 }
 
 .supply-line {
-  animation: supply-flow 1.5s linear infinite;
+  animation: supply-flow 2s linear infinite;
   stroke-linecap: round;
   pointer-events: none;
+}
+
+.supply-arrow {
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 .hex-polygon.is-disconnected {

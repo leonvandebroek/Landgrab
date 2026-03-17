@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import type { GameState } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
 
 interface Props {
   state: GameState;
@@ -20,11 +22,11 @@ const confettiStyles = Array.from({ length: 40 }, () => ({
   height: `${8 + Math.random() * 6}px`,
 }));
 
-const achievementIcons: Record<string, string> = {
-  territoryLeader: '🗺️',
-  armyCommander: '⚔️',
-  conqueror: '🏹',
-  firstStrike: '⚡',
+const achievementIcons: Record<string, GameIconName> = {
+  territoryLeader: 'treasureMap',
+  armyCommander: 'contested',
+  conqueror: 'crossbow',
+  firstStrike: 'lightning',
 };
 
 export function GameOver({ state, onPlayAgain }: Props) {
@@ -55,7 +57,7 @@ export function GameOver({ state, onPlayAgain }: Props) {
       </div>
 
       <div className="gameover-card">
-        <div className="trophy">🏆</div>
+        <div className="trophy"><GameIcon name="trophy" size="lg" /></div>
         <h1
           className="winner-glow"
           style={{ '--winner-color': winnerColor ?? '#f39c12' } as React.CSSProperties}
@@ -70,37 +72,37 @@ export function GameOver({ state, onPlayAgain }: Props) {
           <h3>{t('gameover.finalScores')}</h3>
           {state.isAllianceVictory
             ? [...state.alliances]
-                .sort((a, b) => b.territoryCount - a.territoryCount)
-                .map(a => (
-                  <div key={a.id} className="score-row final">
-                    <span className="score-dot" style={{ background: a.color }} />
-                    <span className="score-name">{a.name}</span>
-                    <span className="score-count">
-                      {t('gameover.hexCount', {
-                        count: a.territoryCount,
-                        total: totalHexes,
-                        percent: formatTerritoryShare(totalHexes > 0 ? (a.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
-                      })}
-                    </span>
-                    {a.id === state.winnerId && <span className="crown">👑</span>}
-                  </div>
-                ))
+              .sort((a, b) => b.territoryCount - a.territoryCount)
+              .map(a => (
+                <div key={a.id} className="score-row final">
+                  <span className="score-dot" style={{ background: a.color }} />
+                  <span className="score-name">{a.name}</span>
+                  <span className="score-count">
+                    {t('gameover.hexCount', {
+                      count: a.territoryCount,
+                      total: totalHexes,
+                      percent: formatTerritoryShare(totalHexes > 0 ? (a.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
+                    })}
+                  </span>
+                  {a.id === state.winnerId && <span className="crown"><GameIcon name="crown" /></span>}
+                </div>
+              ))
             : [...state.players]
-                .sort((a, b) => b.territoryCount - a.territoryCount)
-                .map(p => (
-                  <div key={p.id} className="score-row final">
-                    <span className="score-dot" style={{ background: p.color }} />
-                    <span className="score-name">{p.name}</span>
-                    <span className="score-count">
-                      {t('gameover.hexCount', {
-                        count: p.territoryCount,
-                        total: totalHexes,
-                        percent: formatTerritoryShare(totalHexes > 0 ? (p.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
-                      })}
-                    </span>
-                    {p.id === state.winnerId && <span className="crown">👑</span>}
-                  </div>
-                ))
+              .sort((a, b) => b.territoryCount - a.territoryCount)
+              .map(p => (
+                <div key={p.id} className="score-row final">
+                  <span className="score-dot" style={{ background: p.color }} />
+                  <span className="score-name">{p.name}</span>
+                  <span className="score-count">
+                    {t('gameover.hexCount', {
+                      count: p.territoryCount,
+                      total: totalHexes,
+                      percent: formatTerritoryShare(totalHexes > 0 ? (p.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
+                    })}
+                  </span>
+                  {p.id === state.winnerId && <span className="crown"><GameIcon name="crown" /></span>}
+                </div>
+              ))
           }
         </div>
 
@@ -112,7 +114,7 @@ export function GameOver({ state, onPlayAgain }: Props) {
               fontSize: '0.9rem',
               textTransform: 'uppercase',
             }}>
-              🏆 {t('gameover.achievements' as never)}
+              <GameIcon name="trophy" /> {t('gameover.achievements' as never)}
             </h3>
             <div style={{
               display: 'flex',
@@ -121,7 +123,7 @@ export function GameOver({ state, onPlayAgain }: Props) {
             }}>
               {state.achievements.map(achievement => {
                 const playerColor = playerColorMap.get(achievement.playerId) ?? '#888';
-                const icon = achievementIcons[achievement.id] ?? '🏅';
+                const icon = achievementIcons[achievement.id] ?? 'trophy';
                 return (
                   <div
                     key={achievement.id}
@@ -139,7 +141,7 @@ export function GameOver({ state, onPlayAgain }: Props) {
                       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
                     }}
                   >
-                    <span style={{ fontSize: '1.4rem', flexShrink: 0 }}>{icon}</span>
+                    <span style={{ fontSize: '1.4rem', flexShrink: 0 }}><GameIcon name={icon} /></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
                         fontWeight: 600,

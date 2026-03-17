@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import { ROLE_ABILITIES, ROLE_EMOJIS, type RoleModalRole } from './roleModalUtils';
 
 export interface RoleModalProps {
@@ -22,7 +23,7 @@ export function RoleModal({ role, onDismiss }: RoleModalProps) {
             >
                 <div className="role-modal-header">
                     <h3 id="role-modal-title">
-                        <span className="role-modal-emoji" aria-hidden="true">{ROLE_EMOJIS[role]}</span>
+                        <span className="role-modal-emoji" aria-hidden="true"><GameIcon name={ROLE_EMOJIS[role]} /></span>
                         <span>{t(`${rolePrefix}.title` as never)}</span>
                     </h3>
                     <p>{t(`${rolePrefix}.intro` as never)}</p>
@@ -38,7 +39,7 @@ export function RoleModal({ role, onDismiss }: RoleModalProps) {
                             <div key={ability.key} className="role-modal-ability">
                                 <div className="role-modal-ability-topline">
                                     <div className="role-modal-ability-name">
-                                        <span className="role-modal-ability-icon" aria-hidden="true">{ability.icon}</span>
+                                        <span className="role-modal-ability-icon" aria-hidden="true"><GameIcon name={ability.icon} /></span>
                                         <span>{t(`${abilityPrefix}.title` as never)}</span>
                                     </div>
                                     <div className="role-modal-ability-meta">

@@ -1,3 +1,5 @@
+import type { GameIconName } from '../utils/gameIcons';
+
 export interface MapLayerPreferences {
   borderEffects: boolean;
   buildingIcons: boolean;
@@ -30,7 +32,7 @@ export const DEFAULT_MAP_LAYER_PREFS: MapLayerPreferences = {
 
 export interface LayerGroup {
   key: string;
-  icon: string;
+  icon: GameIconName | string;
   layers: (keyof MapLayerPreferences)[];
 }
 
@@ -42,22 +44,22 @@ export const LAYER_GROUPS: LayerGroup[] = [
   },
   {
     key: 'terrain',
-    icon: '🌿',
+    icon: 'forest',
     layers: ['terrainIcons', 'buildingIcons'],
   },
   {
     key: 'units',
-    icon: '🪖',
+    icon: 'helmet',
     layers: ['troopBadges', 'troopAnimations'],
   },
   {
     key: 'players',
-    icon: '👥',
+    icon: 'rallyTroops',
     layers: ['playerMarkers', 'playerRadius'],
   },
   {
     key: 'overlays',
-    icon: '🌫️',
+    icon: 'fog',
     layers: ['fogOfWar', 'worldDimMask', 'timeOverlay'],
   },
 ];

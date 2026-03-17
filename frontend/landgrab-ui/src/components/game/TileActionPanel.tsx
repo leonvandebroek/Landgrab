@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import type { HexCell, Player } from '../../types/game';
+import { terrainIcons } from '../../utils/terrainIcons';
 import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { terrainDefendBonus } from '../../utils/terrainColors';
+import { GameIcon } from '../common/GameIcon';
 
 interface TileActionPanelProps {
   actions: TileAction[];
@@ -35,6 +37,9 @@ export function TileActionPanel({
   if (actions.length === 0) return null;
 
   const carriedTroops = player?.carriedTroops ?? 0;
+  const terrainIconName = targetCell?.terrainType && targetCell.terrainType !== 'None'
+    ? terrainIcons[targetCell.terrainType]
+    : '';
 
   return (
     <div
@@ -68,7 +73,7 @@ export function TileActionPanel({
           )}
           {targetCell?.terrainType && targetCell.terrainType !== 'None' && (
             <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-              🏔️ {t(`terrain.${targetCell.terrainType}` as never)}
+              {terrainIconName && <GameIcon name={terrainIconName} size="sm" />} {t(`terrain.${targetCell.terrainType}` as never)}
               {terrainDefendBonus(targetCell.terrainType, true) > 0 && (
                 <> ({t('terrain.defendBonus', { bonus: terrainDefendBonus(targetCell.terrainType, true) })})</>
               )}
@@ -76,12 +81,12 @@ export function TileActionPanel({
           )}
           {targetCell?.isFortified && (
             <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-              🛡️ {t('phase3.fortified')}
+              <GameIcon name="shield" size="sm" /> {t('phase3.fortified')}
             </span>
           )}
           {targetCell?.isFort && (
             <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-              🏰 {t('phase4.fort')}
+              <GameIcon name="fort" size="sm" /> {t('phase4.fort')}
             </span>
           )}
         </div>
@@ -95,7 +100,7 @@ export function TileActionPanel({
             onClick={onDismiss}
             style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', alignSelf: 'flex-end' }}
           >
-            ✕
+            ×
           </button>
         </div>
       </div>
@@ -120,7 +125,7 @@ export function TileActionPanel({
               cursor: action.enabled ? 'pointer' : 'not-allowed',
             }}
           >
-            <span>{action.icon}</span>
+            <span><GameIcon name={action.icon} /></span>
             <span>{t(action.label as never)}</span>
           </button>
         ))}

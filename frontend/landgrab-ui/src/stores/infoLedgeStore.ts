@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { gameIcons, type GameIconName } from '../utils/gameIcons';
 
 export type LedgeSeverity = 'connection' | 'error' | 'hostMessage' | 'interaction' | 'gameEvent';
 
@@ -15,7 +16,7 @@ export interface LedgeItem {
     id: string;
     severity: LedgeSeverity;
     message: string;
-    icon?: string;
+    icon?: GameIconName;
     teamColor?: string;
     persistent: boolean;
     duration?: number;
@@ -37,7 +38,7 @@ export const SEVERITY_PRIORITY: Record<LedgeSeverity, number> = {
 interface InfoLedgeStore {
     items: LedgeItem[];
     expanded: boolean;
-    push: (item: Omit<LedgeItem, 'id' | 'createdAt'>) => void;
+    push: (item: Omit<LedgeItem, 'id' | 'createdAt' | 'icon'> & { icon?: GameIconName | string }) => void;
     dismiss: (id: string) => void;
     clearBySource: (source: LedgeSource) => void;
     setExpanded: (expanded: boolean) => void;
@@ -46,6 +47,29 @@ interface InfoLedgeStore {
 }
 
 const ledgeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const legacyLedgeIcons: Record<string, GameIconName> = {
+    '⚔️': 'contested',
+    '🚩': 'flag',
+    '📢': 'radioTower',
+    '🎲': 'gearHammer',
+    '📍': 'pin',
+    '⚠️': 'lightning',
+    '⏸': 'hourglass',
+    '🔄': 'returnArrow',
+};
+
+function normalizeLedgeIcon(icon?: GameIconName | string): GameIconName | undefined {
+    if (!icon) {
+        return undefined;
+    }
+
+    if (icon in gameIcons) {
+        return icon as GameIconName;
+    }
+
+    return legacyLedgeIcons[icon];
+}
 
 function createLedgeId(): string {
     return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -120,6 +144,7 @@ export const useInfoLedgeStore = create<InfoLedgeStore>()((set, get) => ({
         const duration = item.persistent ? item.duration : item.duration ?? DEFAULT_DURATION_MS;
         const ledgeItem: LedgeItem = {
             ...item,
+            icon: normalizeLedgeIcon(item.icon),
             duration,
             id,
             createdAt,

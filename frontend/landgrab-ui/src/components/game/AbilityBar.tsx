@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import type { GameDynamics, Player } from '../../types/game';
 import { useSecondTick } from '../../hooks/useSecondTick';
 
@@ -103,7 +104,7 @@ export function AbilityBar({
           onClick={player.isBeacon ? onDeactivateBeacon : onActivateBeacon}
           style={getPillStyle(player.isBeacon ? 'active' : 'default')}
         >
-          <span>📡</span>
+          <span><GameIcon name="radioTower" /></span>
           <span>{player.isBeacon ? t('phase5.beaconDeactivate' as never) : t('phase5.beaconActivate' as never)}</span>
         </button>
       )}
@@ -121,7 +122,7 @@ export function AbilityBar({
               onClick={onCancelCommandoTargeting}
               style={getPillStyle('targeting')}
             >
-              <span>🎯</span>
+              <span><GameIcon name="archeryTarget" /></span>
               <span>{t('phase6.commandoSelectTarget' as never)}</span>
             </button>
           );
@@ -134,7 +135,7 @@ export function AbilityBar({
             disabled={isActive || isOnCooldown}
             style={getPillStyle(isActive ? 'active' : isOnCooldown ? 'disabled' : 'default')}
           >
-            <span>⚔️</span>
+            <span><GameIcon name="contested" /></span>
             <span>
               {isActive
                 ? t('phase6.commandoActive' as never, { time: deadlineTime })

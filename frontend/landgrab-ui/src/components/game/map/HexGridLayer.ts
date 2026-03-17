@@ -2,6 +2,7 @@ import type { MutableRefObject } from 'react';
 import L from 'leaflet';
 import type { GameState, HexCell } from '../../../types/game';
 import type { MapLayerPreferences } from '../../../types/mapLayerPreferences';
+import { gameIcons, iconHtml } from '../../../utils/gameIcons';
 import { terrainIcons } from '../../../utils/terrainIcons';
 import {
   showBorderEffects,
@@ -273,6 +274,12 @@ function renderHexCell({
   const isHQHex = state.alliances.some(alliance => alliance.hqHexQ === cell.q && alliance.hqHexR === cell.r);
   const ownerColor = getHexOwnerColor(cell, playersById, DEFAULT_PLAYER_MARKER_COLOR);
   const isFriendlyAllianceCell = Boolean(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
+  const isHostile = Boolean(
+    isSelected
+    && cell.ownerId
+    && cell.ownerId !== myUserId
+    && (!myPlayer?.allianceId || cell.ownerAllianceId !== myPlayer.allianceId)
+  );
   const { isFrontier, isContested } = getHexTerritoryStatus(cell, renderedGrid, isFriendlyAllianceCell);
   const isFogHidden = shouldApplyFogOfWar && isFogHiddenHex(cell, isInactive, state.dynamics?.fogOfWarEnabled);
   const hasShieldWall = shieldWallHexKeys.has(cellKey);
@@ -292,6 +299,7 @@ function renderHexCell({
     isCurrentHex,
     isFogHidden,
     isHQ: isHQHex,
+    isHostile,
     isInactive,
     isSelected,
   });
@@ -310,7 +318,7 @@ function renderHexCell({
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
         className: 'hex-terrain-icon',
-        html: `<span aria-hidden="true">${terrainIcon}</span>`,
+        html: terrainIcon ? iconHtml(terrainIcon, 'sm') : '',
         iconSize: [22, 22],
         iconAnchor: [11, 7],
       }),
@@ -419,7 +427,7 @@ function renderHexCell({
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
         className: 'hex-shield-wall-marker',
-        html: '<div class="hex-shield-wall-icon" aria-hidden="true">🛡️</div>',
+        html: iconHtml('shieldWall'),
         iconSize: [26, 26],
         iconAnchor: [13, 13],
       }),
@@ -448,7 +456,7 @@ function renderHexCell({
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
         className: 'hex-contested-icon',
-        html: '<div aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12px;line-height:1;opacity:0.72;color:#fff;text-shadow:0 1px 2px rgba(0, 0, 0, 0.55);">⚔️</div>',
+        html: iconHtml('contested', 'sm'),
         iconSize: [18, 18],
         iconAnchor: [9, 9],
       }),
@@ -522,7 +530,7 @@ function renderHexCell({
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
         className: 'hex-fort-icon-wrapper',
-        html: '<div class="hex-fort-icon" aria-hidden="true">🏰</div>',
+        html: iconHtml('fort', 'sm'),
         iconSize: [18, 18],
         iconAnchor: [0, 18],
       }),
@@ -536,7 +544,7 @@ function renderHexCell({
       L.marker([centerLat, centerLng], {
         icon: L.divIcon({
           className: 'hex-building-icon',
-          html: '<div class="building master">✦</div>',
+          html: `<div class="building master" aria-hidden="true">${gameIcons.master}</div>`,
           iconSize: [28, 28],
           iconAnchor: [14, 28],
         }),
@@ -549,7 +557,7 @@ function renderHexCell({
       L.marker([centerLat, centerLng], {
         icon: L.divIcon({
           className: 'hex-building-icon',
-          html: '<div class="building hq">🏛️</div>',
+          html: iconHtml('hq'),
           iconSize: [28, 28],
           iconAnchor: [14, 28],
         }),
@@ -607,11 +615,30 @@ function renderSupplyLines(
   for (const edge of supplyEdges) {
     L.polyline([edge.fromCenter, edge.toCenter], {
       color: edge.teamColor,
-      weight: 1.5,
-      opacity: 0.4,
+      weight: 2.5,
+      opacity: 0.55,
       dashArray: '8 4',
       interactive: false,
       className: 'supply-line',
+    }).addTo(layerGroup);
+
+    const fromLatLng = L.latLng(edge.fromCenter);
+    const toLatLng = L.latLng(edge.toCenter);
+    const midpoint: L.LatLngExpression = [
+      (fromLatLng.lat + toLatLng.lat) / 2,
+      (fromLatLng.lng + toLatLng.lng) / 2,
+    ];
+    const angle = Math.atan2(toLatLng.lng - fromLatLng.lng, toLatLng.lat - fromLatLng.lat) * 180 / Math.PI;
+
+    L.marker(midpoint, {
+      icon: L.divIcon({
+        className: 'supply-arrow',
+        html: `<svg viewBox="0 0 24 24" width="12" height="12" style="transform:rotate(${angle}deg)"><path d="M8 4l8 8-8 8" fill="none" stroke="${edge.teamColor}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+      }),
+      interactive: false,
+      keyboard: false,
     }).addTo(layerGroup);
   }
 }

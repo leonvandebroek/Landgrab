@@ -1,40 +1,41 @@
 import type { PlayerRole } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
 
 export type RoleModalRole = Exclude<PlayerRole, 'None'>;
 
 export interface RoleAbility {
     key: string;
-    icon: string;
+    icon: GameIconName;
     type: 'passive' | 'active';
 }
 
-export const ROLE_EMOJIS: Record<RoleModalRole, string> = {
-    Commander: '🫡',
-    Scout: '🧭',
-    Defender: '🛡️',
-    Engineer: '🛠️',
+export const ROLE_EMOJIS: Record<RoleModalRole, GameIconName> = {
+    Commander: 'rallyTroops',
+    Scout: 'compass',
+    Defender: 'barricade',
+    Engineer: 'gearHammer',
 };
 
 export const ROLE_ABILITIES: Record<RoleModalRole, RoleAbility[]> = {
     Commander: [
-        { key: 'warBonus', icon: '🎖️', type: 'passive' },
-        { key: 'tacticalStrike', icon: '⚡', type: 'active' },
-        { key: 'reinforce', icon: '🔄', type: 'active' },
+        { key: 'warBonus', icon: 'master', type: 'passive' },
+        { key: 'tacticalStrike', icon: 'lightning', type: 'active' },
+        { key: 'reinforce', icon: 'rallyTroops', type: 'active' },
     ],
     Scout: [
-        { key: 'extendedVision', icon: '👁️', type: 'passive' },
-        { key: 'firstStrike', icon: '🎯', type: 'passive' },
-        { key: 'commandoRaid', icon: '🏹', type: 'active' },
+        { key: 'extendedVision', icon: 'compass', type: 'passive' },
+        { key: 'firstStrike', icon: 'archeryTarget', type: 'passive' },
+        { key: 'commandoRaid', icon: 'crossbow', type: 'active' },
     ],
     Defender: [
-        { key: 'presenceShield', icon: '🔁', type: 'passive' },
-        { key: 'shieldWall', icon: '🛡️', type: 'active' },
-        { key: 'lastStand', icon: '🏃', type: 'passive' },
+        { key: 'presenceShield', icon: 'shield', type: 'passive' },
+        { key: 'shieldWall', icon: 'shieldWall', type: 'active' },
+        { key: 'lastStand', icon: 'biceps', type: 'passive' },
     ],
     Engineer: [
-        { key: 'fortConstruction', icon: '🏗️', type: 'passive' },
-        { key: 'emergencyRepair', icon: '🔧', type: 'active' },
-        { key: 'demolish', icon: '💣', type: 'active' },
+        { key: 'fortConstruction', icon: 'gearHammer', type: 'passive' },
+        { key: 'emergencyRepair', icon: 'wrench', type: 'active' },
+        { key: 'demolish', icon: 'fist', type: 'active' },
     ],
 };
 

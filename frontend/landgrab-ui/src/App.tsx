@@ -389,7 +389,7 @@ export default function App() {
         severity: 'connection',
         source: 'connection',
         persistent: true,
-        icon: '🔄',
+        icon: 'returnArrow',
         message: connectionBanner,
       });
     } else {

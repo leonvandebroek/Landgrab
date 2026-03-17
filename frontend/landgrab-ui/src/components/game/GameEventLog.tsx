@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import type { GameEventLogEntry, Player } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
 import { formatGameLogEntry } from './gameLogFormat';
 
 interface Props {
@@ -55,7 +57,7 @@ export function GameEventLog({ events, players }: Props) {
                 key={`${event.createdAt}-${event.type}-${event.playerId ?? 'unknown'}-${event.q ?? 'x'}-${event.r ?? 'y'}`}
                 className={`game-log-item is-${tone}`}
               >
-                <div className={`game-log-icon is-${tone}`} aria-hidden="true">{getGameLogIcon(event.type)}</div>
+                <div className={`game-log-icon is-${tone}`} aria-hidden="true"><GameIcon name={getGameLogIcon(event.type)} size="sm" /></div>
                 <div className="game-log-body">
                   <time className="game-log-time" dateTime={event.createdAt}>
                     {formatEventTimestamp(event.createdAt, i18n.resolvedLanguage)}
@@ -95,27 +97,27 @@ function getGameLogTone(type: string): GameLogTone {
   }
 }
 
-function getGameLogIcon(type: string): string {
+function getGameLogIcon(type: string): GameIconName {
   switch (type) {
     case 'PlayerJoined':
-      return '➕';
+      return 'shinyEntrance';
     case 'PlayerLeft':
     case 'PlayerReturnedToLobby':
-      return '↩';
+      return 'returnArrow';
     case 'AllianceChanged':
-      return '🏷';
+      return 'priceTag';
     case 'MasterTileAssigned':
-      return '👑';
+      return 'crown';
     case 'StartingTileAssigned':
-      return '📍';
+      return 'pin';
     case 'TileCaptured':
-      return '⚔️';
+      return 'contested';
     case 'GameStarted':
-      return '🚀';
+      return 'rocket';
     case 'GameOver':
-      return '🏆';
+      return 'trophy';
     default:
-      return '•';
+      return 'pin';
   }
 }
 

@@ -1,15 +1,16 @@
 import type { TerrainType } from '../types/game';
+import type { GameIconName } from './gameIcons';
 
-export const terrainIcons: Record<TerrainType, string> = {
+export const terrainIcons: Record<TerrainType, GameIconName | ''> = {
   None: '',
-  Water: '🌊',
-  Building: '🏢',
-  Road: '═',
-  Path: '···',
-  Forest: '🌲',
-  Park: '🌿',
-  Hills: '⛰',
-  Steep: '🏔'
+  Water: 'waves',
+  Building: 'house',
+  Road: 'road',
+  Path: 'trail',
+  Forest: 'forest',
+  Park: 'pineTree',
+  Hills: 'hills',
+  Steep: 'mountain'
 };
 
 export const terrainLabels: Record<TerrainType, string> = {

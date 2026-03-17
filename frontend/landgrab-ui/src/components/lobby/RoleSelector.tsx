@@ -1,31 +1,33 @@
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import type { PlayerRole } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
 
 const ROLES: PlayerRole[] = ['None', 'Commander', 'Scout', 'Defender', 'Engineer'];
 
-const ROLE_META: Record<PlayerRole, { emoji: string; labelKey: string; descriptionKey?: string }> = {
+const ROLE_META: Record<PlayerRole, { emoji: GameIconName | null; labelKey: string; descriptionKey?: string }> = {
   None: {
-    emoji: '⚪',
+    emoji: null,
     labelKey: 'phase4.roleNone'
   },
   Commander: {
-    emoji: '🫡',
+    emoji: 'rallyTroops',
     labelKey: 'phase4.roleCommander',
     descriptionKey: 'phase4.roleCommanderDesc'
   },
   Scout: {
-    emoji: '🧭',
+    emoji: 'compass',
     labelKey: 'phase4.roleScout',
     descriptionKey: 'phase4.roleScoutDesc'
   },
   Defender: {
-    emoji: '🛡️',
+    emoji: 'barricade',
     labelKey: 'phase4.roleDefender',
     descriptionKey: 'phase4.roleDefenderDesc'
   },
   Engineer: {
-    emoji: '🛠️',
+    emoji: 'gearHammer',
     labelKey: 'phase4.roleEngineer',
     descriptionKey: 'phase4.roleEngineerDesc'
   }
@@ -121,7 +123,7 @@ export function RoleSelector({ currentRole, onSelectRole }: RoleSelectorProps) {
               aria-pressed={isActive}
               onClick={() => onSelectRole(role)}
             >
-              <span style={emojiStyle}>{meta.emoji}</span>
+              <span style={emojiStyle}>{meta.emoji ? <GameIcon name={meta.emoji} /> : <span aria-hidden="true">-</span>}</span>
               <span style={roleNameStyle}>{t(meta.labelKey as never)}</span>
               <span style={roleDescriptionStyle}>
                 {meta.descriptionKey ? t(meta.descriptionKey as never) : t('phase4.roleNone' as never)}

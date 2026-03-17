@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { MapTemplate } from '../../types/game';
+import { GameIcon } from '../common/GameIcon';
 
 interface MapTemplateManagerProps {
   templates: MapTemplate[];
@@ -48,7 +49,7 @@ export function MapTemplateManager({
 
       {templates.length === 0 ? (
         <div className="map-editor-empty">
-          <div className="map-editor-empty__icon">🗺️</div>
+          <div className="map-editor-empty__icon"><GameIcon name="treasureMap" size="lg" /></div>
           <h3>{t('mapEditor.noTemplatesYet')}</h3>
           <p>{t('mapEditor.emptyMessage')}</p>
           <button className="btn-primary big" onClick={onCreateNew}>
@@ -97,14 +98,14 @@ export function MapTemplateManager({
                   onClick={() => onDuplicate(tpl.id)}
                   title={t('mapEditor.duplicate')}
                 >
-                  📋 {t('mapEditor.duplicate')}
+                  {t('mapEditor.duplicate')}
                 </button>
                 <button
                   className="btn-secondary map-editor-card__delete"
                   onClick={() => handleDelete(tpl.id, tpl.name)}
                   title={t('mapEditor.delete')}
                 >
-                  🗑️ {t('mapEditor.delete')}
+                  {t('mapEditor.delete')}
                 </button>
               </div>
             </div>

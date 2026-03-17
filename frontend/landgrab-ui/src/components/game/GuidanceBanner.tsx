@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import { hexAreAdjacent } from '../map/HexMath';
 import { useGameStore } from '../../stores/gameStore';
 import { useGameplayStore } from '../../stores/gameplayStore';
@@ -153,7 +154,7 @@ export function GuidanceBanner({
 
   return (
     <div className={`context-item guidance-tip ${isVisible ? 'enter-active' : ''}`}>
-      <span className="context-icon" aria-hidden="true">💡</span>
+      <span className="context-icon" aria-hidden="true"><GameIcon name="lightning" size="sm" /></span>
       <span>{hint}</span>
     </div>
   );

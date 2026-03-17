@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Safe hexRendering.ts Mock</title>
+  <style>
+    body {
+      background-color: #121217;
+      background-image: radial-gradient(circle at center, #1b1b22 0%, #0d0d12 100%);
+      color: #ffffff;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+
+    .mock-wrapper {
+      position: relative;
+      width: 150px;
+      height: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .hex-neutral {
+      fill: rgba(255, 255, 255, 0.03);
+      stroke: rgba(255, 255, 255, 0.25);
+      stroke-width: 2;
+      stroke-dasharray: 6 6;
+      transition: fill 0.2s, stroke 0.2s;
+    }
+
+    .hex-neutral:hover {
+      fill: rgba(255, 255, 255, 0.08);
+      stroke: rgba(255, 255, 255, 0.5);
+    }
+
+    .hex-owned {
+      fill: rgba(56, 189, 248, 0.15);
+      stroke: rgba(56, 189, 248, 0.8);
+      stroke-width: 3;
+      transition: fill 0.2s;
+    }
+
+    .hex-owned:hover {
+      fill: rgba(56, 189, 248, 0.25);
+    }
+
+    .hex-selected {
+      fill: rgba(56, 189, 248, 0.25);
+      stroke: #ffffff;
+      stroke-width: 4;
+      animation: pulse-stroke 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-stroke {
+      0% {
+        stroke-width: 4;
+        stroke: rgba(255, 255, 255, 1);
+      }
+
+      50% {
+        stroke-width: 6;
+        stroke: rgba(56, 189, 248, 1);
+      }
+
+      100% {
+        stroke-width: 4;
+        stroke: rgba(255, 255, 255, 1);
+      }
+    }
+
+    .badge-container {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .hq-icon {
+      font-size: 16px;
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.8));
+    }
+
+    .troop-badge {
+      background-color: rgba(15, 15, 20, 0.85);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: #e2e8f0;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 3px 10px;
+      line-height: 1;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+    }
+
+    .troop-badge.owned {
+      border-color: rgba(56, 189, 248, 0.5);
+      color: #38bdf8;
+      background-color: rgba(10, 25, 35, 0.9);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6), 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+
+    .label {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+      color: #a1a1aa;
+    }
+
+    .code-snippet {
+      background: #1e1e24;
+      padding: 20px;
+      border-radius: 8px;
+      color: #10b981;
+      font-family: monospace;
+      white-space: pre-wrap;
+      font-size: 13px;
+      max-width: 600px;
+      border: 1px solid #333;
+      margin-top: 40px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2 style="margin-bottom: 40px; font-weight: 300;">Clean <code style="color:#38bdf8">hexRendering.ts</code>
+    Equivalents</h2>
+
+  <div class="container">
+
+    <div>
+      <div class="mock-wrapper">
+        <svg viewBox="0 0 100 86.6">
+          <polygon class="hex-neutral" points="25,0 75,0 100,43.3 75,86.6 25,86.6 0,43.3" />
+        </svg>
+        <div class="badge-container">
+          <div class="troop-badge">5</div>
+        </div>
+      </div>
+      <div class="label">Neutral (Dashed)</div>
+    </div>
+
+    <div>
+      <div class="mock-wrapper">
+        <svg viewBox="0 0 100 86.6">
+          <polygon class="hex-owned" points="25,0 75,0 100,43.3 75,86.6 25,86.6 0,43.3" />
+        </svg>
+        <div class="badge-container">
+          <div class="troop-badge owned">61</div>
+        </div>
+      </div>
+      <div class="label">Owned By Player</div>
+    </div>
+
+    <div>
+      <div class="mock-wrapper">
+        <svg viewBox="0 0 100 86.6">
+          <polygon class="hex-selected" points="25,0 75,0 100,43.3 75,86.6 25,86.6 0,43.3" />
+        </svg>
+        <div class="badge-container">
+          <div class="hq-icon">👑</div>
+          <div class="troop-badge owned">117</div>
+        </div>
+      </div>
+      <div class="label">Selected + HQ</div>
+    </div>
+
+  </div>
+
+  <h2 style="margin-top: 60px; margin-bottom: 20px; font-weight: 300;">Tilemap Cluster Example</h2>
+
+  <style>
+    .tilemap-container {
+      position: relative;
+      width: 250px;
+      height: 260px;
+      margin: 0 auto 40px auto;
+    }
+
+    .hex-tile {
+      position: absolute;
+      width: 100px;
+      height: 86.6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Enemy player color overrides for mockup */
+    .hex-enemy {
+      fill: rgba(239, 68, 68, 0.15) !important;
+      stroke: rgba(239, 68, 68, 0.8) !important;
+    }
+
+    .badge-enemy {
+      border-color: rgba(239, 68, 68, 0.5) !important;
+      color: #ef4444 !important;
+      background-color: rgba(35, 10, 10, 0.9) !important;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6), 0 0 10px rgba(239, 68, 68, 0.2) !important;
+    }
+
+    /* Supply Lines */
+    .supply-line-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .supply-line {
+      stroke: rgba(56, 189, 248, 0.8);
+      stroke-width: 3;
+      stroke-dasharray: 6 6;
+      fill: none;
+      filter: drop-shadow(0 0 4px rgba(56, 189, 248, 0.5));
+      animation: flow-supply 0.8s linear infinite;
+    }
+
+    .supply-line.enemy {
+      stroke: rgba(239, 68, 68, 0.8);
+      filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.5));
+    }
+
+    @keyframes flow-supply {
+      from {
+        stroke-dashoffset: 12;
+      }
+
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+
+    /* Player Avatars / GPS Location */
+    .player-location {
+      position: absolute;
+      z-index: 20;
+      top: 5px;
+      left: 38px;
+      width: 20px;
+      height: 20px;
+      background: #38bdf8;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 0 10px #38bdf8, 0 4px 6px rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: float-avatar 2s infinite ease-in-out;
+    }
+
+    .player-location::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: white;
+      border-radius: 50%;
+    }
+
+    .player-location.enemy-avatar {
+      background: #ef4444;
+      box-shadow: 0 0 10px #ef4444, 0 4px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    .gps-ring {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border: 2px solid #38bdf8;
+      border-radius: 50%;
+      top: -8px;
+      left: -8px;
+      animation: radar-pulse 2s infinite ease-out;
+    }
+
+    .enemy-avatar .gps-ring {
+      border-color: #ef4444;
+    }
+
+    @keyframes float-avatar {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
+    }
+
+    @keyframes radar-pulse {
+      0% {
+        transform: scale(0.5);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+  </style>
+
+  <div class="tilemap-container" id="large-tilemap"
+    style="width: 800px; height: 950px; transform: scale(0.65); transform-origin: top center; margin-bottom: -300px;">
+
+    <!-- Terrain SVG Patterns -->
+    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
+      <defs>
+        <!-- Water Terrain: subtle horizontal wavy/straight lines -->
+        <pattern id="pattern-water" width="20" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(-10)">
+          <path d="M 0 5 Q 5 0 10 5 T 20 5" fill="none" stroke="rgba(14, 165, 233, 0.4)" stroke-width="1.5" />
+        </pattern>
+
+        <!-- Mountain Terrain: difficult diagonal hatching -->
+        <pattern id="pattern-mountain" width="10" height="10" patternUnits="userSpaceOnUse"
+          patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="10" stroke="rgba(168, 162, 158, 0.4)" stroke-width="2" />
+        </pattern>
+
+        <!-- Forest Terrain: abstract pine tree clustering -->
+        <pattern id="pattern-forest" width="16" height="14" patternUnits="userSpaceOnUse">
+          <path d="M 4 2 L 6 8 L 2 8 Z" fill="rgba(34, 197, 94, 0.4)" />
+          <path d="M 12 6 L 14 12 L 10 12 Z" fill="rgba(34, 197, 94, 0.4)" />
+        </pattern>
+
+        <!-- Buildings Terrain: techy/urban block grid -->
+        <pattern id="pattern-buildings" width="12" height="12" patternUnits="userSpaceOnUse">
+          <rect x="2" y="2" width="4" height="4" fill="rgba(209, 213, 219, 0.4)" rx="1" />
+          <rect x="8" y="8" width="4" height="4" fill="rgba(209, 213, 219, 0.4)" rx="1" />
+        </pattern>
+
+        <!-- Road Terrain: thick double parallel lines traversing the hex -->
+        <pattern id="pattern-road" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
+          <line x1="0" y1="8" x2="20" y2="8" stroke="rgba(251, 191, 36, 0.5)" stroke-width="2" />
+          <line x1="0" y1="13" x2="20" y2="13" stroke="rgba(251, 191, 36, 0.5)" stroke-width="2" />
+        </pattern>
+
+        <!-- Path Terrain: single dotted/dashed trail -->
+        <pattern id="pattern-path" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(-15)">
+          <line x1="0" y1="10" x2="20" y2="10" stroke="rgba(217, 119, 6, 0.5)" stroke-width="2"
+            stroke-dasharray="4 4" />
+        </pattern>
+      </defs>
+    </svg>
+
+    <svg class="supply-line-layer" id="supply-layer" viewBox="0 0 800 950"></svg>
+    <div id="hex-layer"></div>
+  </div>
+
+  <script>
+    const hexLayer = document.getElementById('hex-layer');
+    const supplyLayer = document.getElementById('supply-layer');
+
+    const cols = 10;
+    const rows = 10;
+
+    let hexHTML = '';
+    let supplyHTML = '';
+
+    for (let q = 0; q < cols; q++) {
+      for (let r = 0; r < rows; r++) {
+        let owner = 'neutral';
+        let isHQ = false;
+        let troops = Math.floor(Math.random() * 8) + 1;
+        let terrain = 'plain';
+
+        // Determine terrain procedurally based on coordinates for the mockup
+        if (r > 6 && q < 4) {
+          terrain = 'water'; // Lake at bottom left
+        } else if (r < 3 && q > 7) {
+          terrain = 'mountain'; // Mountains at top right
+        } else if (q === 0) {
+          terrain = 'forest'; // Forest at far left edge
+        } else if (q === 1) {
+          terrain = 'buildings'; // Urban blocks
+        } else if (q === 8) {
+          terrain = 'road'; // Highway strip
+        } else if (q === 9) {
+          terrain = 'path'; // Dirt path strip
+        }
+
+        // Create a player blob (Manhattan distance approx)
+        if (Math.abs(q - 3) + Math.abs(r - 4) <= 2) {
+          owner = 'player';
+          troops = Math.floor(Math.random() * 40) + 10;
+          if (q === 3 && r === 4) { isHQ = true; troops = 150; }
+        }
+
+        // Create an enemy blob
+        if (Math.abs(q - 7) + Math.abs(r - 7) <= 2) {
+          owner = 'enemy';
+          troops = Math.floor(Math.random() * 40) + 10;
+          if (q === 7 && r === 7) { isHQ = true; troops = 120; }
+        }
+
+        const x = q * 75;
+        const y = r * 86.6 + (q % 2 === 1 ? 43.3 : 0);
+
+        let hexClass = owner === 'neutral' ? 'hex-neutral' : (owner === 'enemy' ? 'hex-owned hex-enemy' : 'hex-owned');
+        if (isHQ && owner === 'player') hexClass = 'hex-selected';
+
+        let badgeClass = owner === 'neutral' ? 'troop-badge' : (owner === 'enemy' ? 'troop-badge badge-enemy' : 'troop-badge owned');
+
+        let hqEl = isHQ ? '<div class="hq-icon">👑</div>' : '';
+
+        let avatarEl = '';
+        if (q === 4 && r === 4) { // Player current location
+          avatarEl = '<div class="player-location"><div class="gps-ring"></div></div>';
+        } else if (q === 6 && r === 7) { // Enemy location
+          avatarEl = '<div class="player-location enemy-avatar"><div class="gps-ring"></div></div>';
+        }
+
+        let terrainPoly = '';
+        if (terrain !== 'plain') {
+          terrainPoly = `<polygon fill="url(#pattern-${terrain})" points="25,0 75,0 100,43.3 75,86.6 25,86.6 0,43.3" />`;
+        }
+
+        hexHTML += `
+                <div class="hex-tile" style="left: ${x}px; top: ${y}px;">
+                    ${avatarEl}
+                    <svg viewBox="0 0 100 86.6">
+                        ${terrainPoly}
+                        <polygon class="${hexClass}" points="25,0 75,0 100,43.3 75,86.6 25,86.6 0,43.3" />
+                    </svg>
+                    <div class="badge-container">${hqEl}<div class="${badgeClass}">${troops}</div></div>
+                </div>`;
+      }
+    }
+
+    const drawLine = (q1, r1, q2, r2, isEnemy) => {
+      const getX = (q) => q * 75 + 50;
+      const getY = (q, r) => r * 86.6 + (q % 2 === 1 ? 43.3 : 0) + 43.3;
+      supplyHTML += `<line class="supply-line ${isEnemy ? 'enemy' : ''}" x1="${getX(q1)}" y1="${getY(q1, r1)}" x2="${getX(q2)}" y2="${getY(q2, r2)}" />`;
+    };
+
+    // Player lines radiating out
+    drawLine(3, 4, 3, 3, false);
+    drawLine(3, 4, 4, 4, false);
+    drawLine(3, 4, 2, 4, false);
+    drawLine(3, 4, 3, 5, false);
+    drawLine(4, 4, 5, 4, false);
+    drawLine(2, 4, 2, 3, false);
+
+    // Enemy lines radiating out
+    drawLine(7, 7, 7, 6, true);
+    drawLine(7, 7, 6, 7, true);
+    drawLine(7, 7, 8, 7, true);
+    drawLine(7, 7, 7, 8, true);
+
+    hexLayer.innerHTML = hexHTML;
+    supplyLayer.innerHTML = supplyHTML;
+  </script>
+
+  <div class="code-snippet">
+    // Planned changes for hexRendering.ts:
+
+    <b>getHexBorderStyle()</b> {
+    if (isNeutral) return {
+    color: '#ffffff', opacity: 0.25, weight: 2, <b>dashArray: '6, 6'</b>
+    };
+    if (isSelected) return {
+    color: '#ffffff', opacity: 1, weight: 4 // Handled via CSS pulse
+    };
+    return { color: playerHexColor, opacity: 0.8, weight: 3 };
+    }
+
+    <b>getHexFillStyle()</b> {
+    if (isNeutral) return { fillOpacity: 0.03 };
+    return { fillOpacity: isSelected ? 0.25 : 0.15 };
+    }
+  </div>
+
+</body>
+
+</html>

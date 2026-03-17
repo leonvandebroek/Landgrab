@@ -1,5 +1,6 @@
 import i18n from '../../../i18n';
 import type { HexCell } from '../../../types/game';
+import { iconHtml } from '../../../utils/gameIcons';
 import { terrainIcons } from '../../../utils/terrainIcons';
 
 export function buildHexTooltipHtml(
@@ -9,12 +10,13 @@ export function buildHexTooltipHtml(
 ): string {
   const owner = escapeHtml(cell.ownerName ?? i18n.t('map.unclaimed'));
   const terrainType = cell.terrainType ?? 'None';
-  const terrainIcon = terrainType !== 'None' ? escapeHtml(terrainIcons[terrainType] ?? '') : '';
+  const terrainIconName = terrainType !== 'None' ? terrainIcons[terrainType] : '';
+  const terrainIcon = terrainIconName ? iconHtml(terrainIconName, 'sm') : '';
   const terrainName = terrainType !== 'None' ? escapeHtml(i18n.t(`terrain.${terrainType}` as never)) : '';
   const ownerColor = escapeHtml(cell.ownerColor ?? 'transparent');
-  const fortInfo = cell.isFort ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">🏰</span>${escapeHtml(i18n.t('map.fort'))}</div>` : '';
+  const fortInfo = cell.isFort ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">${iconHtml('fort', 'sm')}</span>${escapeHtml(i18n.t('map.fort'))}</div>` : '';
   const contestedInfo = isContested
-    ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">⚔️</span>${escapeHtml(i18n.t('map.contestedLabel' as never, { defaultValue: 'Contested' }))} - ${escapeHtml(i18n.t('map.contestedDescription' as never, { defaultValue: 'borders enemy territory' }))}</div>`
+    ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">${iconHtml('contested', 'sm')}</span>${escapeHtml(i18n.t('map.contestedLabel' as never, { defaultValue: 'Contested' }))} - ${escapeHtml(i18n.t('map.contestedDescription' as never, { defaultValue: 'borders enemy territory' }))}</div>`
     : '';
 
   const distance = currentHex == null ? null : getHexDistance([cell.q, cell.r], currentHex);
@@ -28,9 +30,9 @@ export function buildHexTooltipHtml(
     </div>
     <div class="tooltip-owner">
       <span class="tooltip-owner-swatch" style="background:${ownerColor}"></span>
-      ${owner}${cell.isMasterTile ? ' 👑' : ''}
+      ${owner}${cell.isMasterTile ? ` ${iconHtml('crown', 'sm')}` : ''}
     </div>
-    <div class="tooltip-stat"><span class="tooltip-stat-icon">⚔️</span>${cell.troops}</div>
+    <div class="tooltip-stat"><span class="tooltip-stat-icon">${iconHtml('contested', 'sm')}</span>${cell.troops}</div>
     ${fortInfo}${contestedInfo}${distanceHtml}
   </div>`;
 }

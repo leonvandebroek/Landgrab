@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
 import { hexKey, hexNeighbors } from '../map/HexMath';
 import { terrainDefendBonus } from '../../utils/terrainColors';
+import type { GameIconName } from '../../utils/gameIcons';
 
 export type MapInteractionTone = 'info' | 'success' | 'error';
 
@@ -18,7 +19,7 @@ export type TileActionType = 'claim' | 'claimAlliance' | 'claimSelf' | 'attack' 
 export interface TileAction {
   type: TileActionType;
   label: string;   // i18n key
-  icon: string;     // emoji
+  icon: GameIconName;
   tone: 'primary' | 'danger' | 'neutral' | 'info';
   enabled: boolean;
   disabledReason?: string; // i18n key
@@ -99,7 +100,7 @@ export function getTileActions({
       actions.push({
         type: 'claimAlliance',
         label: 'game.tileAction.claimAllianceBtn',
-        icon: '🏰',
+        icon: 'fort',
         tone: 'primary',
         enabled: claimEnabled,
         disabledReason,
@@ -108,7 +109,7 @@ export function getTileActions({
       actions.push({
         type: 'claim',
         label: 'game.tileAction.claimBtn',
-        icon: '🏴',
+        icon: 'flag',
         tone: 'primary',
         enabled: claimEnabled,
         disabledReason,
@@ -128,7 +129,7 @@ export function getTileActions({
     actions.push({
       type: 'attack',
       label: 'game.tileAction.attackBtn',
-      icon: '⚔️',
+      icon: 'contested',
       tone: 'danger',
       enabled: canAttack,
       disabledReason: canAttack ? undefined : 'game.tileAction.enemyAttackBlocked',
@@ -143,7 +144,7 @@ export function getTileActions({
       actions.push({
         type: 'reinforce',
         label: 'game.tileAction.reinforceBtn',
-        icon: '🛡️',
+        icon: 'shield',
         tone: 'info',
         enabled: true,
       });
@@ -152,7 +153,7 @@ export function getTileActions({
       actions.push({
         type: 'pickup',
         label: 'game.tileAction.pickupBtn',
-        icon: '🪖',
+        icon: 'helmet',
         tone: 'info',
         enabled: true,
       });
@@ -166,7 +167,7 @@ export function getTileActions({
       actions.push({
         type: 'reinforce',
         label: 'game.tileAction.reinforceBtn',
-        icon: '🛡️',
+        icon: 'shield',
         tone: 'info',
         enabled: true,
       });
@@ -175,7 +176,7 @@ export function getTileActions({
       actions.push({
         type: 'pickup',
         label: 'game.tileAction.pickupBtn',
-        icon: '🪖',
+        icon: 'helmet',
         tone: 'info',
         enabled: true,
       });

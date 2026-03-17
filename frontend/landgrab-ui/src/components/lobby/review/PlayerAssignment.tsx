@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../../common/GameIcon';
 import type { AllianceDto, Player } from '../../../types/game';
 import { CustomSelect } from '../CustomSelect';
 import type { AreaModeOption } from './AreaModeSelector';
@@ -84,7 +85,7 @@ export function PlayerAssignment({
                                 <strong>{alliance.name}</strong>
                                 {alliance.hqHexQ != null && alliance.hqHexR != null && (
                                     <span className="wizard-hq-coords">
-                                        🏛️ ({alliance.hqHexQ}, {alliance.hqHexR})
+                                        <GameIcon name="hq" size="sm" /> ({alliance.hqHexQ}, {alliance.hqHexR})
                                     </span>
                                 )}
                             </div>
@@ -96,14 +97,14 @@ export function PlayerAssignment({
                                 {hqMode && hqAllianceId === alliance.id
                                     ? t('game.cancel' as never)
                                     : alliance.hqHexQ != null
-                                        ? `${t('phase4.hq' as never)} ✏️`
-                                        : `${t('phase4.hq' as never)} 📍`}
+                                        ? <><GameIcon name="wrench" size="sm" /> {t('phase4.hq' as never)}</>
+                                        : <><GameIcon name="pin" size="sm" /> {t('phase4.hq' as never)}</>}
                             </button>
                         </div>
                     ))}
                     {hqMode && (
                         <div className="wizard-hq-hint">
-                            📍 Click a hex on the map to place the HQ
+                            <GameIcon name="pin" size="sm" /> Click a hex on the map to place the HQ
                         </div>
                     )}
                 </div>

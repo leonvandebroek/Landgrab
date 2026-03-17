@@ -21,6 +21,7 @@ import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useSecondTick } from '../../hooks/useSecondTick';
+import { GameIcon } from '../common/GameIcon';
 
 interface Props {
   myUserId: string;
@@ -80,7 +81,7 @@ export function PlayingHud({
   onNavigateMap,
 }: Props) {
   const { t } = useTranslation();
-  const { soundEnabled, toggleSound } = useSound();
+  const { toggleSound } = useSound();
   const state = useGameStore((store) => store.gameState);
   const selectedHex = useGameplayStore((store) => store.selectedHex);
   const interactionFeedback = useGameplayStore((store) => store.mapFeedback);
@@ -156,7 +157,7 @@ export function PlayingHud({
         severity: 'error',
         source: 'locationError',
         persistent: true,
-        icon: '📍',
+        icon: 'pin',
         message: locationError,
       });
     } else {
@@ -171,7 +172,7 @@ export function PlayingHud({
         severity: 'error',
         source: 'error',
         persistent: true,
-        icon: '⚠️',
+        icon: 'lightning',
         message: error,
       });
     } else {
@@ -186,7 +187,7 @@ export function PlayingHud({
         severity: 'error',
         source: 'paused',
         persistent: true,
-        icon: '⏸',
+        icon: 'hourglass',
         message: t('observer.gamePaused' as never),
       });
     } else {
@@ -350,7 +351,7 @@ export function PlayingHud({
                 <span>{allianceTotalTroops}</span>
                 {carriedTroops > 0 && (
                   <span className="stat-value-detail" aria-label={t('game.carriedTroops')}>
-                    (+{carriedTroops}🎒)
+                    (+{carriedTroops}<GameIcon name="chest" size="sm" />)
                   </span>
                 )}
               </span>
@@ -367,20 +368,20 @@ export function PlayingHud({
             {state.dynamics?.timedEscalationEnabled && state.gameStartedAt && (
               <div className="stat-item">
                 <span className="stat-value warning">
-                  ⚡ {escalationLevel}
+                  <GameIcon name="lightning" size="sm" /> {escalationLevel}
                 </span>
                 <span className="stat-label">{t('game.escalationLevel' as never)}</span>
               </div>
             )}
             {underdogBoostActive && (
               <div className="stat-item">
-                <span className="stat-value" style={{ color: '#2ecc71' }}>💪</span>
+                <span className="stat-value" style={{ color: '#2ecc71' }}><GameIcon name="biceps" size="sm" /></span>
                 <span className="stat-label">{t('game.underdogActive' as never)}</span>
               </div>
             )}
             {state.isRushHour && (
               <div className="stat-item">
-                <span className="stat-value warning">⚡</span>
+                <span className="stat-value warning"><GameIcon name="lightning" size="sm" /></span>
                 <span className="stat-label">{t('phase8.rushHour' as never)}</span>
               </div>
             )}
@@ -544,7 +545,7 @@ export function PlayingHud({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('players')}>
-              👥 {t('game.hudPlayers')}
+              <GameIcon name="helmet" size="sm" /> {t('game.hudPlayers')}
             </button>
             <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
               {t('game.hudPlayersDesc' as never, { defaultValue: 'Scoreboard and player list' })}
@@ -552,7 +553,7 @@ export function PlayingHud({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('log')}>
-              📜 {t('game.hudActivityFeed')}
+              <GameIcon name="hourglass" size="sm" /> {t('game.hudActivityFeed')}
             </button>
             <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
               {t('game.hudFeedDesc' as never, { defaultValue: 'Game event history' })}
@@ -561,7 +562,7 @@ export function PlayingHud({
           <div className="menu-nav-separator" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <button className="btn-secondary" style={{ width: '100%' }} onClick={toggleSound}>
-              {soundEnabled ? '🔊' : '🔇'} {t('game.soundToggle')}
+              <GameIcon name="radioTower" size="sm" /> {t('game.soundToggle')}
             </button>
             <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
               {t('game.hudSoundDesc' as never, { defaultValue: 'Toggle sound effects' })}
@@ -569,18 +570,18 @@ export function PlayingHud({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('help')}>
-              ❓ {t('guidance.helpTitle')}
+              <GameIcon name="compass" size="sm" /> {t('guidance.helpTitle')}
             </button>
             <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
               {t('game.hudHelpDesc' as never, { defaultValue: 'Rules and mechanics guide' })}
             </span>
           </div>
           <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('rules')}>
-            📖 {t('rules.title')}
+            <GameIcon name="master" size="sm" /> {t('rules.title')}
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
             <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('displaySettings')}>
-              ⚙️ {t('settings.display.title')}
+              <GameIcon name="gearHammer" size="sm" /> {t('settings.display.title')}
             </button>
             <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
               {t('game.hudDisplayDesc' as never, { defaultValue: 'Map layers and visual options' })}
@@ -589,7 +590,7 @@ export function PlayingHud({
           {isHost && onSetObserverMode && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <button className="btn-secondary" style={{ width: '100%' }} onClick={() => onSetObserverMode(true)}>
-                🔭 {t('observer.switchToObserver' as never)}
+                <GameIcon name="archeryTarget" size="sm" /> {t('observer.switchToObserver' as never)}
               </button>
               <span className="hint" style={{ fontSize: '0.75rem', textAlign: 'center', paddingInline: '0.25rem' }}>
                 {t('observer.switchToObserverDesc' as never)}

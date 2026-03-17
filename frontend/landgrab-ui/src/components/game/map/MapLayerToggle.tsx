@@ -1,11 +1,14 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../../common/GameIcon';
 import { useGameStore } from '../../../stores/gameStore';
 import {
   DEFAULT_MAP_LAYER_PREFS,
   LAYER_GROUPS,
+  type LayerGroup,
   type MapLayerPreferences,
 } from '../../../types/mapLayerPreferences';
+import { gameIcons, type GameIconName } from '../../../utils/gameIcons';
 
 interface MapLayerToggleProps {
   prefs: MapLayerPreferences;
@@ -13,6 +16,10 @@ interface MapLayerToggleProps {
 }
 
 const ALL_LAYER_KEYS: (keyof MapLayerPreferences)[] = LAYER_GROUPS.flatMap((group) => group.layers);
+
+function isGameIconName(icon: LayerGroup['icon']): icon is GameIconName {
+  return typeof icon === 'string' && icon in gameIcons;
+}
 
 export function MapLayerToggle({ prefs, onPrefsChange }: MapLayerToggleProps) {
   const { t } = useTranslation();
@@ -73,7 +80,7 @@ export function MapLayerToggle({ prefs, onPrefsChange }: MapLayerToggleProps) {
           <div className="map-layer-toggle-header">
             <div className="map-layer-toggle-header-copy">
               <span className="map-layer-toggle-header-icon" aria-hidden="true">
-                🗺️
+                <GameIcon name="treasureMap" />
               </span>
               <span className="map-layer-toggle-title">{t('mapLayers.title')}</span>
             </div>
@@ -111,7 +118,7 @@ export function MapLayerToggle({ prefs, onPrefsChange }: MapLayerToggleProps) {
                 <section key={group.key} className="map-layer-toggle-group">
                   <div className="map-layer-toggle-group-header">
                     <span className="map-layer-toggle-group-icon" aria-hidden="true">
-                      {group.icon}
+                      {isGameIconName(group.icon) ? <GameIcon name={group.icon} /> : group.icon}
                     </span>
                     <h3 className="map-layer-toggle-group-title">
                       {t(`mapLayers.${group.key}` as never)}
@@ -130,7 +137,7 @@ export function MapLayerToggle({ prefs, onPrefsChange }: MapLayerToggleProps) {
                               title={supplyLinesWarningText}
                               style={{ marginLeft: '0.45rem', fontSize: '0.85rem' }}
                             >
-                              ⚠️
+                              !
                             </span>
                           )}
                         </span>

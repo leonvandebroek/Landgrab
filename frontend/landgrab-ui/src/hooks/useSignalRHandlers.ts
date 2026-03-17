@@ -277,7 +277,7 @@ export function useSignalRHandlers({
         severity: 'gameEvent',
         source: 'gameToast',
         persistent: false,
-        icon: '⚔️',
+        icon: 'contested',
         message: result.attackerWon
           ? t('game.toast.combatWon', { q: result.q, r: result.r })
           : t('game.toast.combatLost', { q: result.q, r: result.r }),
@@ -298,7 +298,7 @@ export function useSignalRHandlers({
         severity: 'gameEvent',
         source: 'gameToast',
         persistent: false,
-        icon: '🚩',
+        icon: 'flag',
         message: t('game.toast.tileLost', { attacker: data.AttackerName, q: data.Q, r: data.R }),
       });
     },
@@ -316,7 +316,7 @@ export function useSignalRHandlers({
         source: 'hostMessage',
         persistent: false,
         duration: 10000,
-        icon: '📢',
+        icon: 'radioTower',
         message: data.message,
       });
     },
@@ -335,7 +335,7 @@ export function useSignalRHandlers({
         severity: 'gameEvent',
         source: 'gameToast',
         persistent: false,
-        icon: '🚩',
+        icon: 'flag',
         message: t('game.toast.drainTick' as never, { troops: data.troopsLost }),
       });
     },
@@ -355,7 +355,7 @@ export function useSignalRHandlers({
         severity: 'gameEvent',
         source: 'gameToast',
         persistent: false,
-        icon: '🎲',
+        icon: 'gearHammer',
         message: t('game.dynamicsChanged' as never),
       });
     },

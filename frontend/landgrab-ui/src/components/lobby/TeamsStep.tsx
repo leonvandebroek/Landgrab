@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, Player } from '../../types/game';
+import { GameIcon } from '../common/GameIcon';
 
 const ALLIANCE_COLORS = ['#ef4444', '#06b6d4', '#f59e0b', '#a855f7', '#10b981', '#ec4899', '#e67e22', '#34495e'];
 const MAX_ALLIANCES = 8;
@@ -242,7 +243,7 @@ function HostAllianceBuilder({
                     className="btn-secondary"
                     onClick={onDistributePlayers}
                 >
-                    🎲 {t('wizard.distributePlayers')}
+                    {t('wizard.distributePlayers')}
                 </button>
             )}
         </div>
@@ -306,7 +307,7 @@ function PlayerRow({
         <div className={`player-row${isMe ? ' is-me' : ''}`}>
             <span className="player-dot" style={{ background: player.allianceColor ?? player.color }} />
             <div className="player-copy">
-                <span className="player-name">{player.name} {player.isHost ? '👑' : ''}</span>
+                <span className="player-name">{player.name} {player.isHost && <GameIcon name="crown" size="sm" />}</span>
             </div>
             {player.allianceName ? (
                 <span className="alliance-tag" style={{ background: player.allianceColor }}>

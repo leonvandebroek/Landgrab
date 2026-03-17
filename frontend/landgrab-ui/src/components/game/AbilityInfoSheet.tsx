@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import type { PlayerRole } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
 
 type AbilityRole = Exclude<PlayerRole, 'None'>;
 
 interface AbilityMeta {
-    icon: string;
+    icon: GameIconName;
     type: 'passive' | 'active';
 }
 
@@ -16,24 +18,24 @@ export interface AbilityInfoSheetProps {
 
 const ROLE_ABILITY_META: Record<AbilityRole, Record<string, AbilityMeta>> = {
     Commander: {
-        warBonus: { icon: '🎖️', type: 'passive' },
-        tacticalStrike: { icon: '⚡', type: 'active' },
-        reinforce: { icon: '🔄', type: 'active' },
+        warBonus: { icon: 'master', type: 'passive' },
+        tacticalStrike: { icon: 'lightning', type: 'active' },
+        reinforce: { icon: 'rallyTroops', type: 'active' },
     },
     Scout: {
-        extendedVision: { icon: '👁️', type: 'passive' },
-        firstStrike: { icon: '🎯', type: 'passive' },
-        commandoRaid: { icon: '🎯', type: 'active' },
+        extendedVision: { icon: 'compass', type: 'passive' },
+        firstStrike: { icon: 'archeryTarget', type: 'passive' },
+        commandoRaid: { icon: 'crossbow', type: 'active' },
     },
     Defender: {
-        presenceShield: { icon: '🔁', type: 'passive' },
-        shieldWall: { icon: '🛡️', type: 'active' },
-        lastStand: { icon: '🏃', type: 'passive' },
+        presenceShield: { icon: 'shield', type: 'passive' },
+        shieldWall: { icon: 'shieldWall', type: 'active' },
+        lastStand: { icon: 'biceps', type: 'passive' },
     },
     Engineer: {
-        fortConstruction: { icon: '🏗️', type: 'passive' },
-        emergencyRepair: { icon: '🔧', type: 'active' },
-        demolish: { icon: '💣', type: 'active' },
+        fortConstruction: { icon: 'gearHammer', type: 'passive' },
+        emergencyRepair: { icon: 'wrench', type: 'active' },
+        demolish: { icon: 'fist', type: 'active' },
     },
 };
 
@@ -46,7 +48,7 @@ const ROLE_ACCENT_COLORS: Record<AbilityRole, string> = {
 
 export function AbilityInfoSheet({ role, abilityKey, onClose }: AbilityInfoSheetProps) {
     const { t } = useTranslation();
-    const abilityMeta = ROLE_ABILITY_META[role][abilityKey] ?? { icon: '✨', type: 'active' as const };
+    const abilityMeta = ROLE_ABILITY_META[role][abilityKey] ?? { icon: 'master', type: 'active' as const };
     const abilityPrefix = `roles.${role}.abilities.${abilityKey}`;
 
     return (
@@ -67,7 +69,7 @@ export function AbilityInfoSheet({ role, abilityKey, onClose }: AbilityInfoSheet
                             aria-hidden="true"
                             style={{ '--ability-accent': ROLE_ACCENT_COLORS[role] } as React.CSSProperties}
                         >
-                            {abilityMeta.icon}
+                            <GameIcon name={abilityMeta.icon} />
                         </span>
 
                         <div className="ability-info-sheet__title-block">

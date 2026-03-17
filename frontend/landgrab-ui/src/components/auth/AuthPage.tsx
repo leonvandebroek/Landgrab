@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { AuthApiError } from '../../hooks/useAuth';
+import { GameIcon } from '../common/GameIcon';
 
 interface Props {
   onLogin: (usernameOrEmail: string, password: string) => Promise<unknown>;
@@ -51,7 +52,7 @@ export function AuthPage({ onLogin, onRegister }: Props) {
           <div className="auth-hero-copy">
             <span className="section-kicker">{t('auth.leadBadge')}</span>
             <div className="auth-logo">
-              <span className="logo-icon">🗺️</span>
+              <span className="logo-icon"><GameIcon name="treasureMap" size="lg" /></span>
               <div>
                 <h1>Landgrab</h1>
                 <p>{t('auth.tagline')}</p>

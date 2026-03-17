@@ -2,6 +2,7 @@ import { roomHexCornerLatLngs, roomHexToLatLng } from '../../map/HexMath';
 import type { GameState, HexCell, TerrainType } from '../../../types/game';
 import { terrainFillColors, terrainFillOpacity } from '../../../utils/terrainColors';
 import { hexToHSL, scaleTroopColor, scaleTroopOpacity } from '../../../utils/hexColorUtils';
+import { gameIcons } from '../../../utils/gameIcons';
 import { escapeHtml } from './HexTooltip';
 
 export const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
@@ -43,6 +44,7 @@ interface HexBorderStyleOptions {
   isCurrentHex: boolean;
   isFogHidden: boolean;
   isHQ: boolean;
+  isHostile: boolean;
   isInactive: boolean;
   isSelected: boolean;
 }
@@ -211,6 +213,7 @@ export function getHexBorderStyle({
   isCurrentHex,
   isFogHidden,
   isHQ,
+  isHostile,
   isInactive,
   isSelected,
 }: HexBorderStyleOptions): HexBorderStyle {
@@ -232,8 +235,8 @@ export function getHexBorderStyle({
     borderWeight = Math.max(borderWeight, 3);
   }
   if (isSelected) {
-    borderColor = '#ffffff';
-    borderWeight = Math.max(borderWeight, 4);
+    borderColor = isHostile ? '#ef4444' : '#22d3ee';
+    borderWeight = Math.max(borderWeight, isHostile ? 5 : 4);
   }
   if (cell.isFortified && !isInactive) {
     borderColor = '#f39c12';
@@ -347,10 +350,20 @@ export function getTroopBadgeDescriptor({
     ? Math.max(10, Math.round(badgeSize * 0.34))
     : Math.max(11, Math.round(badgeSize * 0.4));
   const ringPct = Math.min(100, troops * 2);
-  const prefix = isMasterTile ? '👑' : (isHQ ? '🏛️' : '');
+  const prefix = isMasterTile
+    ? gameIcons.master.replace(
+      /<svg\b([^>]*)>/i,
+      '<svg$1 width="0.85em" height="0.85em" style="color:#ffe08a">',
+    )
+    : (isHQ
+      ? gameIcons.hq.replace(
+        /<svg\b([^>]*)>/i,
+        '<svg$1 width="0.85em" height="0.85em" style="color:#f1c40f">',
+      )
+      : '');
   const { h: badgeHue, s: badgeSaturation } = hexToHSL(ownerColor);
-  const badgeBg = `hsla(${Math.round(badgeHue)},${Math.round(badgeSaturation * 0.8)}%,22%,0.94)`;
-  const badgeBorderColor = `hsla(${Math.round(badgeHue)},${Math.round(badgeSaturation * 0.65)}%,48%,0.65)`;
+  const badgeBg = `hsla(${Math.round(badgeHue)},${Math.round(badgeSaturation * 0.8)}%,22%,0.97)`;
+  const badgeBorderColor = `hsla(${Math.round(badgeHue)},${Math.round(badgeSaturation * 0.65)}%,48%,0.85)`;
   const badgeGlow = troops >= 20
     ? `0 0 12px hsla(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,50%,0.50),0 2px 6px rgba(0,0,0,0.4)`
     : '0 2px 8px rgba(0,0,0,0.45)';
@@ -364,7 +377,7 @@ export function getTroopBadgeDescriptor({
 
   return {
     badgeSize,
-    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border-color:${badgeBorderColor};box-shadow:${badgeGlow};--troop-count-size:${countFontSize}px">
+    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border-color:${badgeBorderColor};box-shadow:${badgeGlow};backdrop-filter:blur(3px);--troop-count-size:${countFontSize}px">
   <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true">
     <circle cx="18" cy="18" r="16" fill="none" stroke="${ownerColor}" stroke-width="2.5"
             stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="0.6" />

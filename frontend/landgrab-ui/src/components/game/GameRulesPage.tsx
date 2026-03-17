@@ -1,13 +1,37 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ROLE_CARDS } from '../lobby/roleModalUtils';
+import { GameIcon } from '../common/GameIcon';
+import { ROLE_CARDS, type RoleModalRole } from '../lobby/roleModalUtils';
 import type { GameState } from '../../types/game';
+import type { GameIconName } from '../../utils/gameIcons';
 
 interface GameRulesPageProps {
   gameState: GameState;
   onContinue: () => void;
   isModal?: boolean;
 }
+
+const roleIconNames: Record<RoleModalRole, GameIconName> = {
+  Commander: 'helmet',
+  Scout: 'compass',
+  Defender: 'shieldWall',
+  Engineer: 'gearHammer',
+};
+
+const roleAbilityIconNames: Record<string, GameIconName> = {
+  warBonus: 'master',
+  tacticalStrike: 'lightning',
+  reinforce: 'rallyTroops',
+  extendedVision: 'compass',
+  firstStrike: 'archeryTarget',
+  commandoRaid: 'crossbow',
+  presenceShield: 'shield',
+  shieldWall: 'shieldWall',
+  lastStand: 'biceps',
+  fortConstruction: 'gearHammer',
+  emergencyRepair: 'wrench',
+  demolish: 'fist',
+};
 
 export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRulesPageProps) {
   const { t } = useTranslation();
@@ -117,7 +141,7 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
       <p className="rules-section-body">{t('rules.overview.body')}</p>
 
       <section className="rules-section">
-        <h3 className="rules-section-title">🚀 {t('rules.quickStart.title')}</h3>
+        <h3 className="rules-section-title"><GameIcon name="rocket" /> {t('rules.quickStart.title')}</h3>
         <ol className="rules-list rules-list-numbered">
           <li className="rules-list-item">{t('rules.quickStart.step1')}</li>
           <li className="rules-list-item">{t('rules.quickStart.step2')}</li>
@@ -127,7 +151,7 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
       </section>
 
       <section className="rules-section">
-        <h3 className="rules-section-title">📘 {t('rules.coreRules.title')}</h3>
+        <h3 className="rules-section-title"><GameIcon name="compass" /> {t('rules.coreRules.title')}</h3>
         <ul className="rules-list">
           {coreRuleItems.map((item) => (
             <li key={item} className="rules-list-item">
@@ -147,17 +171,17 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
 
       {dynamics.playerRolesEnabled && (
         <section className="rules-section rules-roles-section">
-          <h3 className="rules-section-title">🧩 {t('rules.roles.title')}</h3>
+          <h3 className="rules-section-title"><GameIcon name="theater" /> {t('rules.roles.title')}</h3>
           <div className="role-cards-grid">
-            {ROLE_CARDS.map(({ role, emoji, abilities }) => (
+            {ROLE_CARDS.map(({ role, abilities }) => (
               <div key={role} className="role-card">
                 <h4>
-                  {emoji} {t(`roles.${role}.title` as never)}
+                  <GameIcon name={roleIconNames[role]} /> {t(`roles.${role}.title` as never)}
                 </h4>
                 <ul className="role-abilities-list">
-                  {abilities.map(({ key, icon, type }) => (
+                  {abilities.map(({ key, type }) => (
                     <li key={key}>
-                      <span className="ability-icon" aria-hidden="true">{icon}</span>
+                      <span className="ability-icon" aria-hidden="true"><GameIcon name={roleAbilityIconNames[key] ?? 'master'} /></span>
                       <span className="ability-name">{t(`roles.${role}.abilities.${key}.title` as never)}</span>
                       <span className={`ability-type ${type}`}>
                         {type === 'passive' ? t('roleModal.passive') : t('roleModal.activate')}
@@ -173,7 +197,7 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
       )}
 
       <section className="rules-section">
-        <h3 className="rules-section-title">🧠 {t('rules.advanced.title')}</h3>
+        <h3 className="rules-section-title"><GameIcon name="master" /> {t('rules.advanced.title')}</h3>
         <ul className="rules-list">
           <li className="rules-list-item">{t('rules.advanced.observer')}</li>
         </ul>

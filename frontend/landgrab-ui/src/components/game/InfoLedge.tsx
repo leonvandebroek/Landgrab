@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SEVERITY_PRIORITY, useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import type { LedgeItem, LedgeSeverity } from '../../stores/infoLedgeStore';
+import { GameIcon } from '../common/GameIcon';
 import '../../styles/info-ledge.css';
 
 // Using a slightly extracted mapping function to isolate logic
@@ -63,7 +64,7 @@ export function InfoLedge() {
 
                     {activeItem.icon && (
                         <div className="info-ledge__icon" aria-hidden="true">
-                            {activeItem.icon}
+                            <GameIcon name={activeItem.icon} />
                         </div>
                     )}
 
@@ -114,7 +115,7 @@ export function InfoLedge() {
 
                                 {item.icon && (
                                     <div className="info-ledge__item-icon" aria-hidden="true">
-                                        {item.icon}
+                                        <GameIcon name={item.icon} />
                                     </div>
                                 )}
 

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { GameIcon } from '../common/GameIcon';
 import type { GameState } from '../../types/game';
 
 interface HelpOverlayProps {
@@ -23,47 +24,47 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
       </div>
       <div className="help-overlay-content">
         <div className="help-section">
-          <h4>🗺️ {t('guidance.movementTitle')}</h4>
+          <h4><GameIcon name="treasureMap" /> {t('guidance.movementTitle')}</h4>
           <p>{t('guidance.helpMovement')}</p>
         </div>
 
         <div className="help-section">
-          <h4>⛳ {t('guidance.claimingTitle')}</h4>
+          <h4><GameIcon name="flag" /> {t('guidance.claimingTitle')}</h4>
           <p>{t('guidance.helpClaim')}</p>
         </div>
 
         <div className="help-section">
-          <h4>⚔️ {t('guidance.combatTitle')}</h4>
+          <h4><GameIcon name="contested" /> {t('guidance.combatTitle')}</h4>
           <p>{t('guidance.helpAttack')}</p>
         </div>
 
         <div className="help-section">
-          <h4>⚔️ {t('guidance.contestedZonesTitle' as never, { defaultValue: 'Contested Zones' })}</h4>
+          <h4><GameIcon name="contested" /> {t('guidance.contestedZonesTitle' as never, { defaultValue: 'Contested Zones' })}</h4>
           <p>{t('guidance.contestedZonesText' as never, { defaultValue: 'Red circles mark hexes that border enemy territory. These are frontline zones where combat can occur.' })}</p>
         </div>
 
         {dynamics?.terrainEnabled && (
           <div className="help-section">
-            <h4>⛰️ {t('guidance.terrainTitle')}</h4>
+            <h4><GameIcon name="hills" /> {t('guidance.terrainTitle')}</h4>
             <p>{t('guidance.helpTerrain')}</p>
           </div>
         )}
 
         {dynamics?.fogOfWarEnabled && (
           <div className="help-section">
-            <h4>🌫️ {t('guidance.fogOfWarTitle')}</h4>
+            <h4><GameIcon name="fog" /> {t('guidance.fogOfWarTitle')}</h4>
             <p>{t('guidance.fogOfWarText')}</p>
           </div>
         )}
 
         <div className="help-section">
-          <h4>🪖 {t('guidance.troopsTitle' as never, { defaultValue: 'Troops' })}</h4>
+          <h4><GameIcon name="helmet" /> {t('guidance.troopsTitle' as never, { defaultValue: 'Troops' })}</h4>
           <p>{t('guidance.helpTroops' as never, { defaultValue: 'Pick up troops from your team\'s tiles and carry them in your backpack. Reinforce friendly tiles or use carried troops to attack enemies. You need more troops than the defender to capture a tile.' })}</p>
         </div>
 
         {dynamics?.beaconEnabled && (
           <div className="help-section">
-            <h4>📡 {t('guidance.beaconTitle')}</h4>
+            <h4><GameIcon name="radioTower" /> {t('guidance.beaconTitle')}</h4>
             <p>{t('guidance.helpBeaconLegend' as never, { defaultValue: "Beacons extend your team's claiming range. In Adjacency Required mode, a teammate's beacon lets allies claim hexes within 2 hexes of the beacon, even without bordering territory. The beacon holder must stay within 1 hex of the beacon location." })}</p>
             <p className="help-section-intro">{t('guidance.helpBeaconIntro')}</p>
             <ul className="help-list">
@@ -76,42 +77,42 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
 
         {dynamics?.hqEnabled && (
           <div className="help-section">
-            <h4>🏛️ {t('guidance.hqLegendTitle' as never, { defaultValue: 'HQ' })}</h4>
+            <h4><GameIcon name="hq" /> {t('guidance.hqLegendTitle' as never, { defaultValue: 'HQ' })}</h4>
             <p>{t('guidance.hqLegendText' as never, { defaultValue: "Your alliance's headquarters. When enabled, HQ must be assigned in the lobby. Supply lines connect to HQ - disconnected territory may not regenerate troops. If your HQ is captured, claiming is temporarily frozen!" })}</p>
           </div>
         )}
 
         {dynamics?.tileDecayEnabled && (
           <div className="help-section">
-            <h4>⌛ {t('dynamics.feature.tileDecayEnabled')}</h4>
+            <h4><GameIcon name="hourglass" /> {t('dynamics.feature.tileDecayEnabled')}</h4>
             <p>{t('dynamics.feature.tileDecayEnabledDesc')}</p>
           </div>
         )}
 
         {dynamics?.supplyLinesEnabled && (
           <div className="help-section">
-            <h4>📦 {t('guidance.supplyLinesLegendTitle' as never, { defaultValue: 'Supply Lines' })}</h4>
+            <h4><GameIcon name="chest" /> {t('guidance.supplyLinesLegendTitle' as never, { defaultValue: 'Supply Lines' })}</h4>
             <p>{t('guidance.supplyLinesLegendText' as never, { defaultValue: "Dashed lines showing the connection from your HQ to your territory. Hexes disconnected from the supply network (not reachable from HQ via owned hexes) won't regenerate troops." })}</p>
           </div>
         )}
 
         {dynamics?.playerRolesEnabled && (
           <div className="help-section">
-            <h4>🎭 {t('dynamics.feature.playerRoles')}</h4>
+            <h4><GameIcon name="theater" /> {t('dynamics.feature.playerRoles')}</h4>
             <p>{t('dynamics.feature.playerRolesDesc')}</p>
           </div>
         )}
 
         {dynamics?.timedEscalationEnabled && (
           <div className="help-section">
-            <h4>⏱️ {t('dynamics.feature.timedEscalation')}</h4>
+            <h4><GameIcon name="stopwatch" /> {t('dynamics.feature.timedEscalation')}</h4>
             <p>{t('dynamics.feature.timedEscalationDesc')}</p>
           </div>
         )}
 
         {dynamics?.underdogPactEnabled && (
           <div className="help-section">
-            <h4>💪 {t('dynamics.feature.underdogPact')}</h4>
+            <h4><GameIcon name="biceps" /> {t('dynamics.feature.underdogPact')}</h4>
             <p>{t('dynamics.feature.underdogPactDesc')}</p>
           </div>
         )}

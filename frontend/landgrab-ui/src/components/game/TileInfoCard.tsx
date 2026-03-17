@@ -1,17 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import type { HexCell } from '../../types/game';
 import { terrainDefendBonus } from '../../utils/terrainColors';
-
-const TERRAIN_ICONS: Record<string, string> = {
-  Water: '🌊',
-  Building: '🏢',
-  Road: '═',
-  Path: '···',
-  Forest: '🌿',
-  Park: '🌳',
-  Hills: '⛰️',
-  Steep: '🏔️',
-};
+import { terrainIcons } from '../../utils/terrainIcons';
+import { GameIcon } from '../common/GameIcon';
 
 interface TileInfoCardProps {
   targetCell: HexCell | undefined;
@@ -26,7 +17,7 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardP
 
   const terrainType = targetCell.terrainType;
   const terrainLabel = terrainType && terrainType !== 'None' ? t(`terrain.${terrainType}` as never) : null;
-  const terrainIcon = terrainType ? TERRAIN_ICONS[terrainType] : null;
+  const terrainIconName = terrainType && terrainType !== 'None' ? terrainIcons[terrainType] : '';
   const defendBonus = terrainDefendBonus(terrainType, true);
   const hasOwner = !!targetCell.ownerId;
 
@@ -42,7 +33,7 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardP
           onClick={onDismiss}
           aria-label={t('game.close')}
         >
-          ✕
+          ×
         </button>
       </div>
 
@@ -63,7 +54,7 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardP
         {targetCell.troops > 0 && (
           <div className="tile-info-card__row">
             <span className="tile-info-card__label">{t('game.tileInfo.troops')}</span>
-            <span className="tile-info-card__value">⚔ {targetCell.troops}</span>
+            <span className="tile-info-card__value"><GameIcon name="contested" size="sm" /> {targetCell.troops}</span>
           </div>
         )}
 
@@ -71,8 +62,8 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardP
           <div className="tile-info-card__row">
             <span className="tile-info-card__label">{t('game.tileInfo.terrain')}</span>
             <span className="tile-info-card__value">
-              {terrainIcon && <span aria-hidden>{terrainIcon}</span>} {terrainLabel}
-              {defendBonus > 0 && <span className="tile-info-card__bonus"> +{defendBonus}🛡</span>}
+              {terrainIconName && <GameIcon name={terrainIconName} size="sm" />} {terrainLabel}
+              {defendBonus > 0 && <span className="tile-info-card__bonus"> +{defendBonus}<GameIcon name="shield" size="sm" /></span>}
             </span>
           </div>
         )}
@@ -80,21 +71,21 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss }: TileInfoCardP
         {targetCell.isFortified && (
           <div className="tile-info-card__row">
             <span className="tile-info-card__label">{t('game.tileInfo.status')}</span>
-            <span className="tile-info-card__value">🛡️ {t('game.dock.fortified')}</span>
+            <span className="tile-info-card__value"><GameIcon name="shield" size="sm" /> {t('game.dock.fortified')}</span>
           </div>
         )}
 
         {targetCell.isFort && (
           <div className="tile-info-card__row">
             <span className="tile-info-card__label">{t('game.tileInfo.status')}</span>
-            <span className="tile-info-card__value">🏰 {t('game.dock.fort')}</span>
+            <span className="tile-info-card__value"><GameIcon name="fort" size="sm" /> {t('game.dock.fort')}</span>
           </div>
         )}
 
         {targetCell.isMasterTile && (
           <div className="tile-info-card__row">
             <span className="tile-info-card__value tile-info-card__master">
-              ⭐ {t('game.tileAction.masterTile')}
+              <GameIcon name="crown" size="sm" /> {t('game.tileAction.masterTile')}
             </span>
           </div>
         )}

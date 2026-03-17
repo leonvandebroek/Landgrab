@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConnectionBanner } from './ConnectionBanner';
+import { GameIcon } from './common/GameIcon';
 import { LoadingFallback } from './LoadingFallback';
 import { useGameStore } from '../stores/gameStore';
 import { useUiStore } from '../stores/uiStore';
@@ -160,7 +161,7 @@ export function LobbyView({
           data-testid="lobby-map-editor-toggle"
           onClick={() => setView('mapEditor')}
         >
-          🗺️ {t('mapEditor.title')}
+          <GameIcon name="treasureMap" /> {t('mapEditor.title')}
         </button>
       )}
 
