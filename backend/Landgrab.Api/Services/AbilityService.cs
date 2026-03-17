@@ -44,6 +44,8 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
                 return (null, "Player not in room.");
+            if (room.State.Dynamics.PlayerRolesEnabled && player.Role != PlayerRole.Scout)
+                return (null, "Only a Scout can activate the Beacon.");
             if (player.CurrentLat == null || player.CurrentLng == null)
                 return (null, "Your location is required to activate a beacon.");
 
