@@ -9,13 +9,23 @@ public static class HexService
     private static readonly (int q, int r)[] Directions =
         [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
 
+    // Direction offsets used when walking the edges of each ring in SpiralSearch.
+    private static readonly (int dq, int dr)[] SpiralDirections =
+        [(0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1), (1, 0)];
+
     public static string Key(int q, int r) => $"{q},{r}";
 
     public static IEnumerable<(int q, int r)> Neighbors(int q, int r) =>
         Directions.Select(d => (q + d.q, r + d.r));
 
-    public static bool AreAdjacent(int q1, int r1, int q2, int r2) =>
-        Neighbors(q1, r1).Any(n => n.q == q2 && n.r == r2);
+    public static bool AreAdjacent(int q1, int r1, int q2, int r2)
+    {
+        var dq = q2 - q1;
+        var dr = r2 - r1;
+        foreach (var d in Directions)
+            if (d.q == dq && d.r == dr) return true;
+        return false;
+    }
 
     public static IEnumerable<(int q, int r)> Spiral(int radius)
     {
@@ -268,14 +278,13 @@ public static class HexService
             var q = startQ + ring;
             var r = startR - ring;
             // Walk the 6 edges of the ring
-            int[][] directions = [[0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1], [1, 0]];
-            foreach (var dir in directions)
+            foreach (var (dq, dr) in SpiralDirections)
             {
                 for (var step = 0; step < ring; step++)
                 {
                     yield return (q, r);
-                    q += dir[0];
-                    r += dir[1];
+                    q += dq;
+                    r += dr;
                 }
             }
         }

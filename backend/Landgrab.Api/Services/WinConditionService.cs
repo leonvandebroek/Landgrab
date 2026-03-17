@@ -16,11 +16,27 @@ public class WinConditionService
 
     internal static void RefreshTerritoryCountCore(GameState state)
     {
+        var playerById = new Dictionary<string, PlayerDto>(state.Players.Count);
         foreach (var player in state.Players)
-            player.TerritoryCount = HexService.TerritoryCount(state.Grid, player.Id);
+        {
+            player.TerritoryCount = 0;
+            playerById[player.Id] = player;
+        }
 
+        var allianceById = new Dictionary<string, AllianceDto>(state.Alliances.Count);
         foreach (var alliance in state.Alliances)
-            alliance.TerritoryCount = HexService.AllianceTerritoryCount(state.Grid, alliance.Id);
+        {
+            alliance.TerritoryCount = 0;
+            allianceById[alliance.Id] = alliance;
+        }
+
+        foreach (var cell in state.Grid.Values)
+        {
+            if (cell.OwnerId != null && playerById.TryGetValue(cell.OwnerId, out var owner))
+                owner.TerritoryCount++;
+            if (cell.OwnerAllianceId != null && allianceById.TryGetValue(cell.OwnerAllianceId, out var allianceOwner))
+                allianceOwner.TerritoryCount++;
+        }
     }
 
     internal static void ApplyWinConditionAndLogCore(GameState state, DateTime now)
@@ -65,24 +81,28 @@ public class WinConditionService
         }
 
         // Army Commander: player with most total troops on the map
-        var troopsByPlayer = state.Players.Select(p => new
-        {
-            Player = p,
-            TotalTroops = state.Grid.Values.Where(c => c.OwnerId == p.Id).Sum(c => c.Troops)
-        }).ToList();
-        var maxTroops = troopsByPlayer.Count > 0 ? troopsByPlayer.Max(t => t.TotalTroops) : 0;
+        var playerTroopTotals = new Dictionary<string, int>(state.Players.Count);
+        foreach (var p in state.Players)
+            playerTroopTotals[p.Id] = 0;
+        foreach (var cell in state.Grid.Values)
+            if (cell.OwnerId != null && playerTroopTotals.TryGetValue(cell.OwnerId, out var current))
+                playerTroopTotals[cell.OwnerId] = current + cell.Troops;
+        var maxTroops = playerTroopTotals.Count > 0 ? playerTroopTotals.Values.Max() : 0;
         if (maxTroops > 0)
         {
-            foreach (var t in troopsByPlayer.Where(t => t.TotalTroops == maxTroops))
+            foreach (var player in state.Players)
             {
-                state.Achievements.Add(new Achievement
+                if (playerTroopTotals.TryGetValue(player.Id, out var total) && total == maxTroops)
                 {
-                    Id = "armyCommander",
-                    PlayerId = t.Player.Id,
-                    PlayerName = t.Player.Name,
-                    TitleKey = "achievement.armyCommander",
-                    Value = maxTroops.ToString()
-                });
+                    state.Achievements.Add(new Achievement
+                    {
+                        Id = "armyCommander",
+                        PlayerId = player.Id,
+                        PlayerName = player.Name,
+                        TitleKey = "achievement.armyCommander",
+                        Value = maxTroops.ToString()
+                    });
+                }
             }
         }
 
