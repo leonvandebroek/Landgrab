@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../common/GameIcon';
 import { hexAreAdjacent } from '../map/HexMath';
@@ -11,7 +11,7 @@ interface GuidanceBannerProps {
   hasLocation: boolean;
 }
 
-export function GuidanceBanner({
+function GuidanceBannerComponent({
   carriedTroops,
   isInOwnHex,
   hasLocation
@@ -159,3 +159,5 @@ export function GuidanceBanner({
     </div>
   );
 }
+
+export const GuidanceBanner = memo(GuidanceBannerComponent);

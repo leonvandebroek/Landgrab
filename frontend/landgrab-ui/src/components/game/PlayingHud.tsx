@@ -51,6 +51,96 @@ interface Props {
   onNavigateMap?: (lat: number, lng: number) => void;
 }
 
+interface GameTimerStatsProps {
+  winConditionType: string | null | undefined;
+  gameStartedAt: string | null | undefined;
+  gameDurationMinutes: number | null | undefined;
+  timedEscalationEnabled: boolean | null | undefined;
+  underdogPactEnabled: boolean | null | undefined;
+  underdogBoostUntil: string | null | undefined;
+}
+
+function GameTimerStats({
+  winConditionType,
+  gameStartedAt,
+  gameDurationMinutes,
+  timedEscalationEnabled,
+  underdogPactEnabled,
+  underdogBoostUntil,
+}: GameTimerStatsProps) {
+  const { t } = useTranslation();
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  const isTimedGame = winConditionType === 'TimedGame' && !!gameStartedAt && !!gameDurationMinutes;
+  const needsClock = Boolean(
+    isTimedGame
+    || timedEscalationEnabled
+    || (underdogPactEnabled && underdogBoostUntil),
+  );
+
+  useSecondTick(() => {
+    if (!needsClock) {
+      return;
+    }
+
+    setCurrentTime(Date.now());
+  });
+
+  const displayTimeRemaining = useMemo(() => {
+    if (!isTimedGame || !gameStartedAt || !gameDurationMinutes) {
+      return null;
+    }
+
+    const endTime = new Date(gameStartedAt).getTime() + gameDurationMinutes * 60 * 1000;
+    return Math.max(0, endTime - currentTime);
+  }, [currentTime, isTimedGame, gameStartedAt, gameDurationMinutes]);
+
+  const escalationLevel = useMemo(() => {
+    if (!timedEscalationEnabled || !gameStartedAt) {
+      return 0;
+    }
+
+    return Math.floor((currentTime - new Date(gameStartedAt).getTime()) / (30 * 60000));
+  }, [currentTime, timedEscalationEnabled, gameStartedAt]);
+
+  const underdogBoostActive = Boolean(
+    underdogPactEnabled
+    && underdogBoostUntil
+    && new Date(underdogBoostUntil).getTime() > currentTime,
+  );
+
+  if (!needsClock) {
+    return null;
+  }
+
+  return (
+    <>
+      {displayTimeRemaining !== null && (
+        <div className="stat-item">
+          <span className={`stat-value ${displayTimeRemaining < 60000 ? 'danger' : displayTimeRemaining < 300000 ? 'warning' : 'primary'}`}>
+            {formatTimeRemaining(displayTimeRemaining)}
+          </span>
+          <span className="stat-label">{t('game.hudTimer')}</span>
+        </div>
+      )}
+      {timedEscalationEnabled && gameStartedAt && (
+        <div className="stat-item">
+          <span className="stat-value warning">
+            <GameIcon name="lightning" size="sm" /> {escalationLevel}
+          </span>
+          <span className="stat-label">{t('game.escalationLevel' as never)}</span>
+        </div>
+      )}
+      {underdogBoostActive && (
+        <div className="stat-item">
+          <span className="stat-value" style={{ color: '#2ecc71' }}><GameIcon name="biceps" size="sm" /></span>
+          <span className="stat-label">{t('game.underdogActive' as never)}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function PlayingHud({
   myUserId,
   currentHex,
@@ -95,22 +185,12 @@ export function PlayingHud({
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
-  const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
   const effectiveShowReturnConfirm = activeModal === 'menu' && showReturnConfirm;
   const me = state?.players.find((player) => player.id === myUserId);
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
-  const needsClock = Boolean(
-    state
-    && (
-      isTimedGame
-      || state.dynamics?.timedEscalationEnabled
-      || (state.dynamics?.underdogPactEnabled && myAlliance?.underdogBoostUntil)
-    )
-  );
 
   useEffect(() => {
     const layout = layoutRef.current;
@@ -138,14 +218,6 @@ export function PlayingHud({
       layout.style.removeProperty('--player-hud-h');
     };
   }, []);
-
-  useSecondTick(() => {
-    if (!needsClock) {
-      return;
-    }
-
-    setCurrentTime(Date.now());
-  });
 
   // ── Info Ledge bridges ────────────────────────────────────────────────
   useEffect(() => {
@@ -205,15 +277,6 @@ export function PlayingHud({
     }
   }, [interactionFeedback]);
 
-  const displayTimeRemaining = useMemo(() => {
-    if (!isTimedGame || !state?.gameStartedAt || !state.gameDurationMinutes) {
-      return null;
-    }
-
-    const endTime = new Date(state.gameStartedAt).getTime() + state.gameDurationMinutes * 60 * 1000;
-    return Math.max(0, endTime - currentTime);
-  }, [currentTime, isTimedGame, state]);
-
   const currentHexCell: HexCell | undefined = useMemo(() => {
     if (!state || !currentHex) {
       return undefined;
@@ -263,18 +326,6 @@ export function PlayingHud({
   }, [state]);
 
   const totalHexes = useMemo(() => Object.keys(state?.grid ?? {}).length, [state]);
-  const escalationLevel = useMemo(() => {
-    if (!state?.dynamics?.timedEscalationEnabled || !state.gameStartedAt) {
-      return 0;
-    }
-
-    return Math.floor((currentTime - new Date(state.gameStartedAt).getTime()) / (30 * 60000));
-  }, [currentTime, state]);
-  const underdogBoostActive = Boolean(
-    state?.dynamics?.underdogPactEnabled
-    && myAlliance?.underdogBoostUntil
-    && new Date(myAlliance.underdogBoostUntil).getTime() > currentTime,
-  );
 
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
@@ -355,28 +406,14 @@ export function PlayingHud({
               </span>
               <span className="stat-label">{t('game.hudTroops')}</span>
             </div>
-            {displayTimeRemaining !== null && (
-              <div className="stat-item">
-                <span className={`stat-value ${displayTimeRemaining < 60000 ? 'danger' : displayTimeRemaining < 300000 ? 'warning' : 'primary'}`}>
-                  {formatTimeRemaining(displayTimeRemaining)}
-                </span>
-                <span className="stat-label">{t('game.hudTimer')}</span>
-              </div>
-            )}
-            {state.dynamics?.timedEscalationEnabled && state.gameStartedAt && (
-              <div className="stat-item">
-                <span className="stat-value warning">
-                  <GameIcon name="lightning" size="sm" /> {escalationLevel}
-                </span>
-                <span className="stat-label">{t('game.escalationLevel' as never)}</span>
-              </div>
-            )}
-            {underdogBoostActive && (
-              <div className="stat-item">
-                <span className="stat-value" style={{ color: '#2ecc71' }}><GameIcon name="biceps" size="sm" /></span>
-                <span className="stat-label">{t('game.underdogActive' as never)}</span>
-              </div>
-            )}
+            <GameTimerStats
+              winConditionType={state.winConditionType}
+              gameStartedAt={state.gameStartedAt}
+              gameDurationMinutes={state.gameDurationMinutes}
+              timedEscalationEnabled={state.dynamics?.timedEscalationEnabled}
+              underdogPactEnabled={state.dynamics?.underdogPactEnabled}
+              underdogBoostUntil={myAlliance?.underdogBoostUntil}
+            />
           </div>
           <button className="hud-menu-btn-flat" onClick={() => setActiveModal('menu')} aria-label={t('game.hudMenu')}>
             <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
