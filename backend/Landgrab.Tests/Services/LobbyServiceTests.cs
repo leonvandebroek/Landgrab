@@ -814,10 +814,10 @@ public sealed class LobbyServiceTests
     }
 
     [Fact]
-    public void StartGame_AllNonMasterHexesAreWater_ReturnsStartingTileError()
+    public void StartGame_AllNonMasterHexesAreWater_ReturnsBlockedPlayersError()
     {
         // Master tile is pre-set so AutoAssign won't fail on that check.
-        // All remaining hexes are water so no starting tiles can be auto-assigned.
+        // All remaining hexes are water so no alliance or player can gain territory access.
         var hostGuid = Guid.NewGuid();
         var hostId = hostGuid.ToString();
         var state = ServiceTestContext.CreateBuilder()
@@ -842,7 +842,7 @@ public sealed class LobbyServiceTests
         var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
 
         result.Should().BeNull();
-        error.Should().Be("Every player needs at least one starting tile before the game can start.");
+        error.Should().Be("Cannot start the game because these players would begin with 0 troops and no territory access: Alice, Bob.");
     }
 
     [Fact]
