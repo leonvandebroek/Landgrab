@@ -86,6 +86,7 @@ public class GameDynamics
     public bool FogOfWarEnabled { get; set; }
     public bool SupplyLinesEnabled { get; set; }
     public bool HQEnabled { get; set; }
+    public bool HQAutoAssign { get; set; } = true;
     public bool TimedEscalationEnabled { get; set; }
     public bool UnderdogPactEnabled { get; set; }
 }

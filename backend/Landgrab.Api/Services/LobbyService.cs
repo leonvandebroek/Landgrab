@@ -219,10 +219,22 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Every player must join an alliance before the game can start.");
             if (room.State.Grid.Count < room.State.Players.Count + 1)
                 return (null, "The game area must have enough tiles for the master tile and every player.");
+            if (room.State.Dynamics.HQEnabled && !room.State.Dynamics.HQAutoAssign)
+            {
+                var missingHq = room.State.Alliances.Where(a =>
+                    a.MemberIds.Count > 0 && (a.HQHexQ is null || a.HQHexR is null)).ToList();
+                if (missingHq.Count > 0)
+                    return (null, "All alliances must have an HQ assigned when manual HQ placement is selected.");
+            }
 
             AutoAssignTiles(room);
             RefreshTerritoryCount(room.State);
             GrantStartingTroops(room.State);
+
+            if (room.State.Dynamics.HQEnabled && room.State.Dynamics.HQAutoAssign)
+            {
+                AutoAssignAllianceHQs(room);
+            }
 
             if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
                 return (null, "The master tile must be set before starting the game.");
@@ -336,6 +348,40 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
         }
 
         RefreshTerritoryCount(room.State);
+    }
+
+    private static void AutoAssignAllianceHQs(GameRoom room)
+    {
+        var host = room.State.Players.FirstOrDefault(p => p.IsHost);
+
+        foreach (var alliance in room.State.Alliances)
+        {
+            if (alliance.MemberIds.Count == 0)
+                continue;
+            if (alliance.HQHexQ is not null && alliance.HQHexR is not null)
+                continue;
+
+            var hqCell = room.State.Grid.Values
+                .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id);
+
+            if (hqCell == null)
+                continue;
+
+            alliance.HQHexQ = hqCell.Q;
+            alliance.HQHexR = hqCell.R;
+
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "AllianceHQAutoAssigned",
+                Message = $"Alliance {alliance.Name} HQ was auto-assigned at ({hqCell.Q}, {hqCell.R}).",
+                PlayerId = host?.Id,
+                PlayerName = host?.Name,
+                AllianceId = alliance.Id,
+                AllianceName = alliance.Name,
+                Q = hqCell.Q,
+                R = hqCell.R
+            });
+        }
     }
 
     private static void AutoAssignPlayerStartingTiles(GameRoom room)

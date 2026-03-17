@@ -29,7 +29,7 @@ export function DynamicsStep({
         alliance => alliance.memberIds.length > 0 && (alliance.hqHexQ == null || alliance.hqHexR == null),
     );
     const showSupplyLinesHqWarning = dynamics.supplyLinesEnabled && !dynamics.hqEnabled;
-    const showHqAssignmentWarning = dynamics.hqEnabled && alliancesMissingHq.length > 0;
+    const showHqAssignmentWarning = dynamics.hqEnabled && !dynamics.hqAutoAssign && alliancesMissingHq.length > 0;
 
     const updateDynamics = (updates: Partial<GameDynamics>) => {
         onSetGameDynamics({ ...dynamics, ...updates });
@@ -90,7 +90,7 @@ export function DynamicsStep({
                 });
                 return;
             case 'hq':
-                updateDynamics({ hqEnabled: checked });
+                updateDynamics({ hqEnabled: checked, ...(checked ? { hqAutoAssign: true } : {}) });
                 return;
             case 'timedEscalation':
                 updateDynamics({ timedEscalationEnabled: checked });
@@ -157,6 +157,27 @@ export function DynamicsStep({
                                     count: alliancesMissingHq.length,
                                     defaultValue: 'HQ is enabled, but {{count}} alliances still need an HQ assigned in Review.',
                                 })}
+                        </p>
+                    )}
+
+                    {dynamics.hqEnabled && (
+                        <label className="toggle-row" style={{ marginTop: '0.25rem', paddingLeft: '1.5rem' }}>
+                            <input
+                                type="checkbox"
+                                checked={dynamics.hqAutoAssign ?? true}
+                                onChange={e => updateDynamics({ hqAutoAssign: e.target.checked })}
+                                disabled={!isHost}
+                            />
+                            <span className="toggle-row-copy">
+                                <strong>{t('dynamics.feature.hqAutoAssign')}</strong>
+                                <span>{t('dynamics.feature.hqAutoAssignDesc')}</span>
+                            </span>
+                        </label>
+                    )}
+
+                    {dynamics.hqEnabled && dynamics.hqAutoAssign && (
+                        <p className="wizard-hint" style={{ color: '#6ec6ff', paddingLeft: '1.5rem' }}>
+                            {t('dynamics.info.hqAutoAssignNote')}
                         </p>
                     )}
                 </div>

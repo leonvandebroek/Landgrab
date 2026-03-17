@@ -877,6 +877,9 @@ const nl = {
       missingSingleHq: 'HQ staat aan, maar 1 alliantie moet in Review nog een HQ toegewezen krijgen.',
       missingMultipleHq: 'HQ staat aan, maar {{count}} allianties moeten in Review nog een HQ toegewezen krijgen.',
     },
+    info: {
+      hqAutoAssignNote: 'HQ-tegels worden automatisch geplaatst op het startgebied van elke alliantie.',
+    },
     combatMode: {
       Classic: {
         title: 'Klassiek',
@@ -904,6 +907,8 @@ const nl = {
       supplyLinesDesc: 'Losgekoppeld territorium stopt met regenereren.',
       hq: 'HQ-mechaniek',
       hqDesc: 'Elk team heeft een inneembaar hoofdkwartier.',
+      hqAutoAssign: 'HQ automatisch toewijzen',
+      hqAutoAssignDesc: 'Wijs automatisch het hoofdkwartier van elke alliantie toe aan hun starttegel bij aanvang van het spel.',
       tileDecayEnabled: 'Tegelverval',
       tileDecayEnabledDesc: 'Onbezette tegels verliezen geleidelijk troepen over de tijd.',
       timedEscalation: 'Tijdsescalatie',

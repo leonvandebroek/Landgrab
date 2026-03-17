@@ -233,6 +233,7 @@ public sealed class GameConfigServiceTests
             FogOfWarEnabled = true,
             SupplyLinesEnabled = false,
             HQEnabled = true,
+            HQAutoAssign = true,
             TimedEscalationEnabled = false,
             UnderdogPactEnabled = true
         };
@@ -246,6 +247,7 @@ public sealed class GameConfigServiceTests
         result.state.Dynamics.FogOfWarEnabled.Should().BeTrue();
         result.state.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         result.state.Dynamics.HQEnabled.Should().BeTrue();
+        result.state.Dynamics.HQAutoAssign.Should().BeTrue();
         result.state.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         result.state.Dynamics.UnderdogPactEnabled.Should().BeTrue();
         context.State.Dynamics.TerrainEnabled.Should().BeTrue();
@@ -253,6 +255,7 @@ public sealed class GameConfigServiceTests
         context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
         context.State.Dynamics.SupplyLinesEnabled.Should().BeFalse();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
+        context.State.Dynamics.HQAutoAssign.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
     }

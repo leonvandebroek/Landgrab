@@ -625,6 +625,67 @@ public sealed class LobbyServiceTests
     }
 
     [Fact]
+    public void StartGame_WhenHqAutoAssignEnabled_AssignsAllianceHqs()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .WithMasterTile(0, 0)
+            .AddPlayer(hostId, "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddAlliance("a1", "Alpha", hostId)
+            .AddAlliance("a2", "Beta", "p2")
+            .Build();
+        state.Dynamics.HQEnabled = true;
+        state.Dynamics.HQAutoAssign = true;
+
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        foreach (var alliance in context.State.Alliances)
+        {
+            alliance.HQHexQ.Should().NotBeNull();
+            alliance.HQHexR.Should().NotBeNull();
+        }
+        context.State.EventLog.Should().Contain(entry => entry.Type == "AllianceHQAutoAssigned");
+    }
+
+    [Fact]
+    public void StartGame_WhenManualHqPlacementSelectedWithoutAssignedHqs_ReturnsError()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .WithMasterTile(0, 0)
+            .AddPlayer(hostId, "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddAlliance("a1", "Alpha", hostId)
+            .AddAlliance("a2", "Beta", "p2")
+            .Build();
+        state.Dynamics.HQEnabled = true;
+        state.Dynamics.HQAutoAssign = false;
+
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
+
+        result.Should().BeNull();
+        error.Should().Be("All alliances must have an HQ assigned when manual HQ placement is selected.");
+        context.State.Phase.Should().Be(GamePhase.Lobby);
+    }
+
+    [Fact]
     public void StartGame_WithPreAssignedAllianceTerritory_Succeeds()
     {
         var hostGuid = Guid.NewGuid();

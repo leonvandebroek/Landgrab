@@ -88,6 +88,7 @@ public sealed class HostControlServiceTests
             FogOfWarEnabled = true,
             SupplyLinesEnabled = true,
             HQEnabled = true,
+            HQAutoAssign = true,
             TimedEscalationEnabled = true,
             UnderdogPactEnabled = true
         };
@@ -101,6 +102,7 @@ public sealed class HostControlServiceTests
         context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
         context.State.Dynamics.SupplyLinesEnabled.Should().BeTrue();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
+        context.State.Dynamics.HQAutoAssign.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeTrue();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
         context.State.EventLog.Should().ContainSingle(entry =>

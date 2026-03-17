@@ -395,7 +395,7 @@ export function ReviewStep({
                                 effectiveSelectedPlayerId={effectiveSelectedPlayerId}
                                 hqMode={hqMode}
                                 hqAllianceId={hqAllianceId}
-                                hqEnabled={gameState.dynamics?.hqEnabled ?? false}
+                                hqEnabled={(gameState.dynamics?.hqEnabled ?? false) && !(gameState.dynamics?.hqAutoAssign ?? true)}
                                 onSelectedPlayerChange={setSelectedPlayerId}
                                 onSetMasterTile={handleSetMasterTile}
                                 onAssignStartingTile={handleAssignStartingTile}

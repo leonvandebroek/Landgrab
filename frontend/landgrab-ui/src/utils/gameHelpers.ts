@@ -8,6 +8,7 @@ const DEFAULT_GAME_DYNAMICS: GameDynamics = {
   beaconEnabled: false,
   supplyLinesEnabled: false,
   hqEnabled: false,
+  hqAutoAssign: true,
   tileDecayEnabled: false,
   timedEscalationEnabled: false,
   underdogPactEnabled: false,

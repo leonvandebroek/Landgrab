@@ -145,6 +145,7 @@ internal static class GameStateCommon
                 FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
                 SupplyLinesEnabled = state.Dynamics.SupplyLinesEnabled,
                 HQEnabled = state.Dynamics.HQEnabled,
+                HQAutoAssign = state.Dynamics.HQAutoAssign,
                 TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
                 UnderdogPactEnabled = state.Dynamics.UnderdogPactEnabled,
             },

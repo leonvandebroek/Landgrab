@@ -877,6 +877,9 @@ const en = {
       missingSingleHq: 'HQ is enabled, but 1 alliance still needs an HQ assigned in Review.',
       missingMultipleHq: 'HQ is enabled, but {{count}} alliances still need an HQ assigned in Review.',
     },
+    info: {
+      hqAutoAssignNote: "HQ tiles will be placed automatically on each alliance's starting area.",
+    },
     combatMode: {
       Classic: {
         title: 'Classic',
@@ -904,6 +907,8 @@ const en = {
       supplyLinesDesc: 'Disconnected territory stops regenerating.',
       hq: 'HQ Mechanic',
       hqDesc: 'Each team has a capturable headquarters.',
+      hqAutoAssign: 'Auto-assign HQ',
+      hqAutoAssignDesc: "Automatically place each alliance's headquarters on their starting tile when the game begins.",
       tileDecayEnabled: 'Tile decay',
       tileDecayEnabledDesc: 'Unoccupied tiles gradually lose troops over time.',
       timedEscalation: 'Timed Escalation',

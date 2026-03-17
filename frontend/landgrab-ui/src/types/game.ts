@@ -18,6 +18,7 @@ export interface GameDynamics {
   combatMode?: CombatMode;
   supplyLinesEnabled: boolean;
   hqEnabled: boolean;
+  hqAutoAssign: boolean;
   tileDecayEnabled: boolean;
   timedEscalationEnabled: boolean;
   underdogPactEnabled: boolean;
