@@ -89,6 +89,8 @@ export interface UseGameActionsResult {
   handleConfirmPickup: () => void;
   handleConfirmReinforce: () => Promise<void>;
   handleConfirmAttack: () => Promise<void>;
+  handleDeployCombatTroops: (count: number) => Promise<void>;
+  handleDeployNeutralClaimTroops: (count: number) => Promise<void>;
   handleCancelAttack: () => void;
   handleReClaimHex: (mode: ReClaimMode) => Promise<void>;
   handlePlayAgain: () => void;

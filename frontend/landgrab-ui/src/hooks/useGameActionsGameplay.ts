@@ -3,7 +3,7 @@ import { getTileActions, getTileInteractionStatus } from '../components/game/til
 import type { TileAction, TileActionType } from '../components/game/tileInteraction';
 import { useGameplayStore } from '../stores/gameplayStore';
 import { useUiStore } from '../stores/uiStore';
-import type { HexCell, ReClaimMode } from '../types/game';
+import type { CombatPreviewDto, HexCell, ReClaimMode } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { getErrorMessage, getPlaceSuccessMessage } from '../utils/gameHelpers';
 import type { UseGameActionsOptions } from './useGameActions.shared';
@@ -48,6 +48,8 @@ interface UseGameActionsGameplayResult {
   handleConfirmPickup: () => void;
   handleConfirmReinforce: () => Promise<void>;
   handleConfirmAttack: () => Promise<void>;
+  handleDeployCombatTroops: (count: number) => Promise<void>;
+  handleDeployNeutralClaimTroops: (count: number) => Promise<void>;
   handleCancelAttack: () => void;
   handleReClaimHex: (mode: ReClaimMode) => Promise<void>;
 }
@@ -68,6 +70,7 @@ export function useGameActionsGameplay({
   const selectedHex = useGameplayStore(state => state.selectedHex);
   const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
   const combatResult = useGameplayStore(state => state.combatResult);
+  const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
   const setSelectedHex = useGameplayStore(state => state.setSelectedHex);
   const setMapFeedback = useGameplayStore(state => state.setMapFeedback);
   const setPickupPrompt = useGameplayStore(state => state.setPickupPrompt);
@@ -75,8 +78,9 @@ export function useGameActionsGameplay({
   const setReinforcePrompt = useGameplayStore(state => state.setReinforcePrompt);
   const setReinforceCount = useGameplayStore(state => state.setReinforceCount);
   const setAttackPrompt = useGameplayStore(state => state.setAttackPrompt);
-  const setAttackCount = useGameplayStore(state => state.setAttackCount);
+  const setCombatPreview = useGameplayStore(state => state.setCombatPreview);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
+  const setNeutralClaimResult = useGameplayStore(state => state.setNeutralClaimResult);
   const setCommandoTargetingMode = useGameplayStore(state => state.setCommandoTargetingMode);
   const setError = useUiStore(state => state.setError);
   const clearError = useUiStore(state => state.clearError);
@@ -187,7 +191,16 @@ export function useGameActionsGameplay({
     setPickupPrompt(null);
     setReinforcePrompt(null);
     setAttackPrompt(null);
-  }, [currentHex, gameState?.phase, setAttackPrompt, setMapFeedback, setPickupPrompt, setReinforcePrompt, setSelectedHex]);
+    setCombatPreview(null);
+  }, [currentHex, gameState?.phase, setAttackPrompt, setCombatPreview, setMapFeedback, setPickupPrompt, setReinforcePrompt, setSelectedHex]);
+
+  const getCombatPreview = useCallback(async (q: number, r: number): Promise<CombatPreviewDto> => {
+    if (!invoke) {
+      throw new Error('SignalR connection is not available.');
+    }
+
+    return invoke<CombatPreviewDto>('GetCombatPreview', q, r);
+  }, [invoke]);
 
   const placeTroopsAction = useCallback((targetHex: [number, number], actionType: ClaimTileActionType): void => {
     if (!invoke) {
@@ -207,6 +220,7 @@ export function useGameActionsGameplay({
         setPickupPrompt(null);
         setReinforcePrompt(null);
         setAttackPrompt(null);
+        setCombatPreview(null);
         playSound(actionType === 'reinforce' ? 'reinforce' : 'claim');
         if (actionType !== 'reinforce') {
           vibrate(HAPTIC.claim);
@@ -228,6 +242,7 @@ export function useGameActionsGameplay({
     isHostBypass,
     playSound,
     setAttackPrompt,
+    setCombatPreview,
     setMapFeedback,
     setPickupPrompt,
     setReinforcePrompt,
@@ -290,6 +305,7 @@ export function useGameActionsGameplay({
     setPickupPrompt(null);
     setReinforcePrompt(null);
     setAttackPrompt(null);
+    setCombatPreview(null);
     clearError();
 
     if (!isHostBypass && (!currentHex || currentHex[0] !== q || currentHex[1] !== r)) {
@@ -326,6 +342,7 @@ export function useGameActionsGameplay({
     setReinforcePrompt,
     setSelectedHex,
     setAttackPrompt,
+    setCombatPreview,
     t,
   ]);
 
@@ -354,11 +371,16 @@ export function useGameActionsGameplay({
       case 'attack': {
         setPickupPrompt(null);
         setReinforcePrompt(null);
-        const cell = gameState.grid[`${q},${r}`];
-        const defenderTroops = cell?.troops ?? 0;
-        const maxTroops = myPlayer?.carriedTroops ?? 0;
-        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
-        setAttackCount(maxTroops);
+        setAttackPrompt(null);
+        setCombatResult(null);
+        void getCombatPreview(q, r)
+          .then((preview) => {
+            setCombatPreview({ q, r, preview });
+          })
+          .catch((cause) => {
+            playSound('error');
+            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: selectedHex });
+          });
         break;
       }
       case 'pickup': {
@@ -376,12 +398,16 @@ export function useGameActionsGameplay({
     myPlayer,
     placeTroopsAction,
     selectedHex,
-    setAttackCount,
     setAttackPrompt,
+    setCombatPreview,
+    setCombatResult,
     setPickupCount,
     setPickupPrompt,
     setReinforceCount,
     setReinforcePrompt,
+    getCombatPreview,
+    playSound,
+    setMapFeedback,
   ]);
 
   const handleCurrentHexAction = useCallback((actionType: TileActionType): void => {
@@ -411,11 +437,16 @@ export function useGameActionsGameplay({
         setSelectedHex(currentHex);
         setPickupPrompt(null);
         setReinforcePrompt(null);
-        const cell = gameState.grid[`${q},${r}`];
-        const defenderTroops = cell?.troops ?? 0;
-        const maxTroops = myPlayer?.carriedTroops ?? 0;
-        setAttackPrompt({ q, r, max: maxTroops, defenderTroops });
-        setAttackCount(maxTroops);
+        setAttackPrompt(null);
+        setCombatResult(null);
+        void getCombatPreview(q, r)
+          .then((preview) => {
+            setCombatPreview({ q, r, preview });
+          })
+          .catch((cause) => {
+            playSound('error');
+            setMapFeedback({ tone: 'error', message: getErrorMessage(cause), targetHex: currentHex });
+          });
         break;
       }
       case 'pickup': {
@@ -434,19 +465,24 @@ export function useGameActionsGameplay({
     invoke,
     myPlayer,
     placeTroopsAction,
-    setAttackCount,
     setAttackPrompt,
+    setCombatPreview,
+    setCombatResult,
     setPickupCount,
     setPickupPrompt,
     setReinforceCount,
     setReinforcePrompt,
     setSelectedHex,
+    getCombatPreview,
+    playSound,
+    setMapFeedback,
   ]);
 
   const handleDismissTileActions = useCallback((): void => {
     setSelectedHex(null);
     setMapFeedback(null);
-  }, [setMapFeedback, setSelectedHex]);
+    setCombatPreview(null);
+  }, [setCombatPreview, setMapFeedback, setSelectedHex]);
 
   const handleConfirmPickup = useCallback((): void => {
     const currentPickupPrompt = useGameplayStore.getState().pickupPrompt;
@@ -555,33 +591,93 @@ export function useGameActionsGameplay({
   ]);
 
   const handleConfirmAttack = useCallback(async (): Promise<void> => {
-    const currentAttackPrompt = useGameplayStore.getState().attackPrompt;
-    const currentAttackCount = useGameplayStore.getState().attackCount;
+    const currentCombatPreview = useGameplayStore.getState().combatPreview;
 
-    if (!currentAttackPrompt || !invoke) {
+    if (!currentCombatPreview || !invoke) {
       return;
     }
 
-    const targetHex: [number, number] = [currentAttackPrompt.q, currentAttackPrompt.r];
+    const targetHex: [number, number] = [currentCombatPreview.q, currentCombatPreview.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
       return;
     }
 
     try {
-      await invoke('PlaceTroops', currentAttackPrompt.q, currentAttackPrompt.r, coordinates.lat, coordinates.lng, currentAttackCount, false);
+      const troopCount = myPlayer?.carriedTroops ?? currentCombatPreview.preview.attackerTroops;
+      await invoke('PlaceTroops', currentCombatPreview.q, currentCombatPreview.r, coordinates.lat, coordinates.lng, troopCount, false);
       playSound('attack');
+      setCombatPreview(null);
     } catch (error) {
       playSound('error');
       setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex });
-    } finally {
-      setAttackPrompt(null);
     }
-  }, [currentLocation, gameState, invoke, isHostBypass, playSound, setAttackPrompt, setMapFeedback]);
+  }, [currentLocation, gameState, invoke, isHostBypass, myPlayer?.carriedTroops, playSound, setCombatPreview, setMapFeedback]);
+
+  const handleDeployCombatTroops = useCallback(async (count: number): Promise<void> => {
+    if (!combatResult) {
+      return;
+    }
+
+    if (count === 0) {
+      setCombatResult(null);
+      return;
+    }
+
+    if (!invoke) {
+      return;
+    }
+
+    const targetHex: [number, number] = [combatResult.q, combatResult.r];
+    const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
+    if (!coordinates) {
+      return;
+    }
+
+    try {
+      await invoke('PlaceTroops', combatResult.q, combatResult.r, coordinates.lat, coordinates.lng, count, false);
+      playSound('reinforce');
+      setCombatResult(null);
+    } catch (error) {
+      playSound('error');
+      setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex });
+    }
+  }, [combatResult, currentLocation, gameState, invoke, isHostBypass, playSound, setCombatResult, setMapFeedback]);
+
+  const handleDeployNeutralClaimTroops = useCallback(async (count: number): Promise<void> => {
+    if (!neutralClaimResult) {
+      return;
+    }
+
+    if (count === 0) {
+      setNeutralClaimResult(null);
+      return;
+    }
+
+    if (!invoke) {
+      return;
+    }
+
+    const targetHex: [number, number] = [neutralClaimResult.q, neutralClaimResult.r];
+    const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
+    if (!coordinates) {
+      return;
+    }
+
+    try {
+      await invoke('PlaceTroops', neutralClaimResult.q, neutralClaimResult.r, coordinates.lat, coordinates.lng, count, false);
+      playSound('reinforce');
+      setNeutralClaimResult(null);
+    } catch (error) {
+      playSound('error');
+      setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex });
+    }
+  }, [currentLocation, gameState, invoke, isHostBypass, neutralClaimResult, playSound, setMapFeedback, setNeutralClaimResult]);
 
   const handleCancelAttack = useCallback((): void => {
     setAttackPrompt(null);
-  }, [setAttackPrompt]);
+    setCombatPreview(null);
+  }, [setAttackPrompt, setCombatPreview]);
 
   const handleReClaimHex = useCallback(async (mode: ReClaimMode): Promise<void> => {
     if (!combatResult) {
@@ -618,6 +714,8 @@ export function useGameActionsGameplay({
     handleConfirmPickup,
     handleConfirmReinforce,
     handleConfirmAttack,
+    handleDeployCombatTroops,
+    handleDeployNeutralClaimTroops,
     handleCancelAttack,
     handleReClaimHex,
   };

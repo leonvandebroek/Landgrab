@@ -34,7 +34,6 @@ interface Props {
   currentHexActions?: TileAction[];
   onCurrentHexAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
-  onConfirmAttack: () => void;
   onActivateBeacon?: () => void;
   onDeactivateBeacon?: () => void;
   onActivateTacticalStrike?: () => void;
@@ -66,7 +65,6 @@ export function PlayingHud({
   currentHexActions,
   onCurrentHexAction,
   onDismissTileActions,
-  onConfirmAttack,
   onActivateBeacon,
   onDeactivateBeacon,
   onActivateTacticalStrike,
@@ -95,14 +93,10 @@ export function PlayingHud({
   const pickupCount = useGameplayStore((store) => store.pickupCount);
   const reinforcePrompt = useGameplayStore((store) => store.reinforcePrompt);
   const reinforceCount = useGameplayStore((store) => store.reinforceCount);
-  const attackPrompt = useGameplayStore((store) => store.attackPrompt);
-  const attackCount = useGameplayStore((store) => store.attackCount);
   const setPickupPrompt = useGameplayStore((store) => store.setPickupPrompt);
   const setPickupCount = useGameplayStore((store) => store.setPickupCount);
   const setReinforcePrompt = useGameplayStore((store) => store.setReinforcePrompt);
   const setReinforceCount = useGameplayStore((store) => store.setReinforceCount);
-  const setAttackCount = useGameplayStore((store) => store.setAttackCount);
-  const setAttackPrompt = useGameplayStore((store) => store.setAttackPrompt);
   const hostMessage = useNotificationStore((store) => store.hostMessage);
   const error = useUiStore((store) => store.error);
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
@@ -447,34 +441,6 @@ export function PlayingHud({
             </div>
           )}
 
-          {attackPrompt && (
-            <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
-              <div>{t('game.tileAction.defenderTroops', { count: attackPrompt.defenderTroops })}</div>
-              <div>{t('game.tileAction.attackMinimumExplanation', { count: attackPrompt.defenderTroops })}</div>
-              <div className="pickup-controls">
-                <span>{attackPrompt.defenderTroops + 1}</span>
-                <input
-                  type="range"
-                  data-testid="attack-count-slider"
-                  min={attackPrompt.defenderTroops + 1}
-                  max={attackPrompt.max}
-                  value={attackCount}
-                  aria-label={t('game.tileAction.attackPrompt')}
-                  title={t('game.tileAction.attackPrompt')}
-                  onChange={(event) => setAttackCount(Number(event.target.value))}
-                />
-                <span>{attackPrompt.max}</span>
-              </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }} data-testid="attack-count-display">
-                {t('game.tileAction.deployCount', { count: attackCount })}
-              </div>
-              <div className="hud-action-bar">
-                <button className="hud-btn" onClick={() => setAttackPrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary" data-testid="attack-confirm" onClick={onConfirmAttack}>{t('game.confirm')}</button>
-              </div>
-            </div>
-          )}
-
           {showRemoteTileInfoCard && selectedHex && (
             <TileInfoCard
               targetCell={selectedCell}
@@ -483,14 +449,14 @@ export function PlayingHud({
             />
           )}
 
-          {!pickupPrompt && !reinforcePrompt && !attackPrompt && !showRemoteTileInfoCard && interactionStatus && interactionStatus.action !== 'none' && (
+          {!pickupPrompt && !reinforcePrompt && !showRemoteTileInfoCard && interactionStatus && interactionStatus.action !== 'none' && (
             <div className={`glass-panel hud-context-pill context-${interactionStatus.tone === 'error' ? 'danger' : 'info'}`}>
               <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
               {interactionStatus.message}
             </div>
           )}
 
-          {interactionFeedback && !pickupPrompt && !reinforcePrompt && !attackPrompt && (
+          {interactionFeedback && !pickupPrompt && !reinforcePrompt && (
             <div className={`hud-toast toast-${interactionFeedback.tone === 'error' ? 'danger' : interactionFeedback.tone === 'success' ? 'success' : 'info'}`}>
               {interactionFeedback.message}
             </div>

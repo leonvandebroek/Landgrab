@@ -1,0 +1,94 @@
+{
+  "startedAt": "2026-03-17T09:31:32.337Z",
+  "evidenceDir": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z",
+  "hostUser": "RoleTestHost_uexo53",
+  "guestUser": "RoleTestGuest_uexo53",
+  "roomCode": "B2BF7S",
+  "checks": {
+    "hostTeams": {
+      "roleDropdownCount": 1,
+      "randomizeButtonVisible": true,
+      "screenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/02-host-teams-initial.png"
+    },
+    "guestTeamsInitial": {
+      "screenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/04-guest-teams-before-assignment.png",
+      "roleText": "No Role",
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/05-host-teams-synced.png"
+    },
+    "preDynamicsRoleAssignment": {
+      "hostError": "{\"code\":\"GENERAL\",\"message\":\"Player roles are not enabled for this game.\"}",
+      "guestRoleText": "No Role",
+      "guestRoleModalVisible": false,
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/06-host-after-pre-dynamics-role-assignment.png",
+      "guestScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/07-guest-after-pre-dynamics-role-assignment.png"
+    },
+    "dynamics": {
+      "playerRolesToggleVisible": true,
+      "playerRolesEnabledBefore": false,
+      "playerRolesEnabledAfter": true,
+      "screenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/07-dynamics-player-roles-toggle.png"
+    },
+    "postToggleGuestRoleAssignment": {
+      "guestRoleText": "Scout",
+      "guestRoleModalVisible": true,
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/09-host-after-role-assignment-enabled.png",
+      "guestScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-31-32-337Z/08-guest-role-modal-after-toggle.png"
+    },
+    "review": {
+      "startButtonEnabled": true
+    }
+  },
+  "console": {
+    "host": [
+      {
+        "page": "host",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      },
+      {
+        "page": "host",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      }
+    ],
+    "guest": [
+      {
+        "page": "guest",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      },
+      {
+        "page": "guest",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      }
+    ]
+  },
+  "errors": [
+    {
+      "message": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.top-status-bar') to be visible\u001b[22m\n",
+      "stack": "locator.waitFor: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.top-status-bar') to be visible\u001b[22m\n\n    at /Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-runner.mjs:283:46"
+    }
+  ],
+  "finishedAt": "2026-03-17T09:32:06.436Z"
+}

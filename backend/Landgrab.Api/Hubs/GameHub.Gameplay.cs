@@ -2,12 +2,43 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Landgrab.Api.Models;
+using Landgrab.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Landgrab.Api.Hubs;
 
 public partial class GameHub
 {
+    [Authorize]
+    public async Task<CombatPreviewDto> GetCombatPreview(int q, int r)
+    {
+        if (!ValidateCoordRange(q, r))
+        {
+            const string message = "Invalid target coordinates.";
+            await SendError(InvalidRequestCode, message);
+            throw new HubException(message);
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            const string message = "Not in a room.";
+            await SendError("ROOM_NOT_JOINED", message);
+            throw new HubException(message);
+        }
+
+        var (preview, error) = gameService.GetCombatPreview(room.Code, UserId, q, r);
+        if (error != null || preview == null)
+        {
+            var message = error ?? "Unable to calculate combat preview.";
+            await SendError(MapErrorCode(message), message);
+            throw new HubException(message);
+        }
+
+        return preview;
+    }
+
     public async Task ActivateBeacon()
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
@@ -237,7 +268,7 @@ public partial class GameHub
     {
         if (!ValidateCoordRange(q, r) ||
             !ValidateLatLng(playerLat, playerLng) ||
-            (troopCount.HasValue && troopCount.Value <= 0))
+            (troopCount.HasValue && troopCount.Value < 0))
         {
             await SendError(InvalidRequestCode, "Invalid troop placement request.");
             return;
@@ -249,6 +280,10 @@ public partial class GameHub
             await SendError("Not in a room.");
             return;
         }
+
+        var targetKey = HexService.Key(q, r);
+        var wasNeutralHex = room.State.Grid.TryGetValue(targetKey, out var existingCell)
+            && existingCell.OwnerId == null;
 
         var (state, error, previousOwnerId, combatResult) = gameService.PlaceTroops(
             room.Code, UserId, q, r, playerLat, playerLng, troopCount, claimForSelf);
@@ -274,6 +309,21 @@ public partial class GameHub
         if (combatResult != null)
         {
             await Clients.Caller.SendAsync("CombatResult", combatResult);
+        }
+
+        if (wasNeutralHex)
+        {
+            var player = state!.Players.FirstOrDefault(candidate => candidate.Id == UserId);
+            if (player?.CarriedTroops > 0 && state.Grid.TryGetValue(targetKey, out var claimedCell))
+            {
+                await Clients.Caller.SendAsync("NeutralClaimResult", new NeutralClaimResult
+                {
+                    Q = q,
+                    R = r,
+                    CarriedTroops = player.CarriedTroops,
+                    TroopsOnHex = claimedCell.Troops
+                });
+            }
         }
     }
 

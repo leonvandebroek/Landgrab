@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useGameStore } from '../../../stores/gameStore';
 import {
   DEFAULT_MAP_LAYER_PREFS,
   LAYER_GROUPS,
@@ -15,10 +16,22 @@ const ALL_LAYER_KEYS: (keyof MapLayerPreferences)[] = LAYER_GROUPS.flatMap((grou
 
 export function MapLayerToggle({ prefs, onPrefsChange }: MapLayerToggleProps) {
   const { t } = useTranslation();
+  const gameState = useGameStore((state) => state.gameState);
   const panelId = useId();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const allEnabled = ALL_LAYER_KEYS.every((layerKey) => prefs[layerKey]);
+  const hasAssignedHq = gameState?.alliances.some(
+    (alliance) => alliance.memberIds.length > 0 && alliance.hqHexQ != null && alliance.hqHexR != null,
+  ) ?? false;
+  const showSupplyLinesWarning = Boolean(
+    prefs.supplyLines
+    && gameState?.dynamics?.supplyLinesEnabled
+    && !hasAssignedHq,
+  );
+  const supplyLinesWarningText = t('mapLayers.supplyLinesMissingHq' as never, {
+    defaultValue: 'Supply lines require an HQ to be assigned',
+  });
 
   function handlePanelToggle() {
     setIsExpanded((expanded) => !expanded);
@@ -110,6 +123,16 @@ export function MapLayerToggle({ prefs, onPrefsChange }: MapLayerToggleProps) {
                       <div key={layerKey} className="map-layer-toggle-row">
                         <span className="map-layer-toggle-label">
                           {t(`mapLayers.${layerKey}` as never)}
+                          {layerKey === 'supplyLines' && showSupplyLinesWarning && (
+                            <span
+                              role="img"
+                              aria-label={supplyLinesWarningText}
+                              title={supplyLinesWarningText}
+                              style={{ marginLeft: '0.45rem', fontSize: '0.85rem' }}
+                            >
+                              ⚠️
+                            </span>
+                          )}
                         </span>
                         <label className="display-settings-switch">
                           <input

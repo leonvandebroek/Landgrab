@@ -4310,6 +4310,24 @@ input:checked+.display-settings-slider:before {
   margin: 0;
 }
 
+.help-section-intro {
+  margin-bottom: 0.75rem;
+}
+
+.help-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.help-list-item {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 /* ── Player Display Settings ────────────────────────────────────────────── */
 .display-settings-container {
   display: flex;
@@ -4664,9 +4682,21 @@ input:checked+.display-settings-slider:before {
   padding-left: 1.5rem;
 }
 
+.rules-list-secondary {
+  margin-top: 1rem;
+}
+
 .rules-list-item {
   color: var(--text);
   line-height: 1.5;
+}
+
+.rules-item-body {
+  margin-top: 0.55rem;
+}
+
+.rules-item-intro {
+  margin: 0;
 }
 
 .rules-detail-stack {

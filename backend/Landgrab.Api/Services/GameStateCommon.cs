@@ -140,6 +140,7 @@ internal static class GameStateCommon
                 BeaconEnabled = state.Dynamics.BeaconEnabled,
                 TileDecayEnabled = state.Dynamics.TileDecayEnabled,
                 TerrainEnabled = state.Dynamics.TerrainEnabled,
+                CombatMode = state.Dynamics.CombatMode,
                 PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
                 FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
                 SupplyLinesEnabled = state.Dynamics.SupplyLinesEnabled,

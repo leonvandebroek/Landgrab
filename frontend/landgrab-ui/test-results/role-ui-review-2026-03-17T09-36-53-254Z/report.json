@@ -1,0 +1,101 @@
+{
+  "startedAt": "2026-03-17T09:36:53.254Z",
+  "evidenceDir": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z",
+  "hostUser": "RoleTestHost_uf4jrc",
+  "guestUser": "RoleTestGuest_uf4jrc",
+  "roomCode": "GZS4FU",
+  "checks": {
+    "hostTeams": {
+      "roleDropdownCount": 1,
+      "randomizeButtonVisible": true,
+      "screenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/02-host-teams-initial.png"
+    },
+    "guestTeamsInitial": {
+      "screenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/04-guest-teams-before-assignment.png",
+      "roleText": "No Role",
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/05-host-teams-synced.png"
+    },
+    "preDynamicsRoleAssignment": {
+      "hostError": "{\"code\":\"GENERAL\",\"message\":\"Player roles are not enabled for this game.\"}",
+      "guestRoleText": "No Role",
+      "guestRoleModalVisible": false,
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/06-host-after-pre-dynamics-role-assignment.png",
+      "guestScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/07-guest-after-pre-dynamics-role-assignment.png"
+    },
+    "dynamics": {
+      "playerRolesToggleVisible": true,
+      "playerRolesEnabledBefore": false,
+      "playerRolesEnabledAfter": true,
+      "screenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/07-dynamics-player-roles-toggle.png"
+    },
+    "postToggleGuestRoleAssignment": {
+      "guestRoleText": "Scout",
+      "guestRoleModalVisible": true,
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/09-host-after-role-assignment-enabled.png",
+      "guestScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/08-guest-role-modal-after-toggle.png"
+    },
+    "review": {
+      "startButtonEnabled": true
+    },
+    "rulesGate": {
+      "hostRulesGateVisible": false,
+      "guestRulesGateVisible": true
+    },
+    "inGame": {
+      "hostTopStatusText": "🐺RoleTestHost_uf4jrcYouCommanderYour role: {{role}}1Lands10(+3🎒)Troops",
+      "guestTopStatusText": "🦊RoleTestGuest_uf4jrcYouScoutYour role: {{role}}1Lands10(+3🎒)Troops",
+      "hostAbilityButtons": 2,
+      "guestAbilityButtons": 1,
+      "hostScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/08-host-in-game-role-hud.png",
+      "guestScreenshot": "/Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/test-results/role-ui-review-2026-03-17T09-36-53-254Z/09-guest-in-game-role-hud.png"
+    }
+  },
+  "console": {
+    "host": [
+      {
+        "page": "host",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      },
+      {
+        "page": "host",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      }
+    ],
+    "guest": [
+      {
+        "page": "guest",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      },
+      {
+        "page": "guest",
+        "type": "error",
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "location": {
+          "url": "http://localhost:5173/api/auth/me",
+          "lineNumber": 0,
+          "columnNumber": 0
+        }
+      }
+    ]
+  },
+  "errors": [],
+  "finishedAt": "2026-03-17T09:37:29.941Z"
+}

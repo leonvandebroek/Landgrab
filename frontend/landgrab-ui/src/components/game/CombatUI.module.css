@@ -1,0 +1,316 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    animation: fadeIn 180ms ease-out;
+}
+
+.modal {
+    width: min(100%, 25rem);
+    max-width: 25rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1.25rem;
+    background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 42%),
+        linear-gradient(180deg, #1a1c23 0%, #111216 100%);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.38);
+    color: #f3f6fb;
+    overflow: hidden;
+    animation: slideUp 220ms ease-out;
+}
+
+.content {
+    display: grid;
+    gap: 1rem;
+    padding: 1.2rem;
+}
+
+.badgeRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.modeBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #c9d5e7;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.subtleText {
+    color: rgba(223, 232, 244, 0.72);
+    font-size: 0.9rem;
+}
+
+.header {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.title {
+    margin: 0;
+    font-size: 1.75rem;
+    line-height: 1;
+    letter-spacing: 0.02em;
+}
+
+.titleVictory {
+    color: #5be08b;
+}
+
+.titleDefeat {
+    color: #ff6c67;
+}
+
+.subtitle {
+    margin: 0;
+    color: rgba(223, 232, 244, 0.78);
+    font-size: 0.95rem;
+}
+
+.versus {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0.75rem;
+}
+
+.combatant {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.combatantHeader {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.combatantLabel {
+    color: rgba(223, 232, 244, 0.64);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.combatantName {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.combatantMeta {
+    color: rgba(223, 232, 244, 0.7);
+    font-size: 0.83rem;
+}
+
+.troopCount {
+    font-size: 3.5rem;
+    line-height: 0.9;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+
+.metricLabel {
+    color: rgba(223, 232, 244, 0.62);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.metricValue {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.vsDivider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+}
+
+.probabilityCard,
+.recapCard,
+.sliderCard {
+    display: grid;
+    gap: 0.7rem;
+    padding: 0.95rem 1rem;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.probabilityRow,
+.sliderHeader,
+.summaryRow,
+.recapRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.probabilityValue {
+    font-weight: 800;
+}
+
+.barTrack {
+    overflow: hidden;
+    width: 100%;
+    height: 0.8rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.barFill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ff5858 0%, #f9be4a 45%, #44d97a 100%);
+    transition: width 180ms ease-out;
+}
+
+.bonusList {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.bonusRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 0.7rem;
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 0.88rem;
+}
+
+.bonusValue {
+    color: #5be08b;
+    font-weight: 700;
+}
+
+.emptyBonus {
+    color: rgba(223, 232, 244, 0.52);
+    font-size: 0.88rem;
+}
+
+.actions {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.button {
+    width: 100%;
+    border: none;
+    border-radius: 0.9rem;
+    padding: 0.95rem 1rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 140ms ease, opacity 140ms ease, border-color 140ms ease;
+}
+
+.button:hover {
+    transform: translateY(-1px);
+}
+
+.button:disabled {
+    cursor: default;
+    opacity: 0.5;
+    transform: none;
+}
+
+.primaryButton {
+    background: linear-gradient(180deg, #ff5f56 0%, #d53c39 100%);
+    color: #fff6f6;
+}
+
+.primarySuccessButton {
+    background: linear-gradient(180deg, #4ee084 0%, #219e58 100%);
+    color: #08170e;
+}
+
+.secondaryButton {
+    background: transparent;
+    color: #d7dfec;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.slider {
+    width: 100%;
+    accent-color: #44d97a;
+}
+
+.deploymentValue {
+    font-size: 2.1rem;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.recapGrid {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.recapValueStrong {
+    font-weight: 800;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(22px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (min-width: 640px) {
+    .overlay {
+        align-items: center;
+        padding: 1.5rem;
+    }
+
+    .content {
+        padding: 1.35rem;
+    }
+}

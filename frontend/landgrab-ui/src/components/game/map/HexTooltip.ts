@@ -2,13 +2,20 @@ import i18n from '../../../i18n';
 import type { HexCell } from '../../../types/game';
 import { terrainIcons } from '../../../utils/terrainIcons';
 
-export function buildHexTooltipHtml(cell: HexCell, currentHex: [number, number] | null): string {
+export function buildHexTooltipHtml(
+  cell: HexCell,
+  currentHex: [number, number] | null,
+  isContested = false,
+): string {
   const owner = escapeHtml(cell.ownerName ?? i18n.t('map.unclaimed'));
   const terrainType = cell.terrainType ?? 'None';
   const terrainIcon = terrainType !== 'None' ? escapeHtml(terrainIcons[terrainType] ?? '') : '';
   const terrainName = terrainType !== 'None' ? escapeHtml(i18n.t(`terrain.${terrainType}` as never)) : '';
   const ownerColor = escapeHtml(cell.ownerColor ?? 'transparent');
   const fortInfo = cell.isFort ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">🏰</span>${escapeHtml(i18n.t('map.fort'))}</div>` : '';
+  const contestedInfo = isContested
+    ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">⚔️</span>${escapeHtml(i18n.t('map.contestedLabel' as never, { defaultValue: 'Contested' }))} - ${escapeHtml(i18n.t('map.contestedDescription' as never, { defaultValue: 'borders enemy territory' }))}</div>`
+    : '';
 
   const distance = currentHex == null ? null : getHexDistance([cell.q, cell.r], currentHex);
   const distanceHtml = distance == null
@@ -24,7 +31,7 @@ export function buildHexTooltipHtml(cell: HexCell, currentHex: [number, number] 
       ${owner}${cell.isMasterTile ? ' 👑' : ''}
     </div>
     <div class="tooltip-stat"><span class="tooltip-stat-icon">⚔️</span>${cell.troops}</div>
-    ${fortInfo}${distanceHtml}
+    ${fortInfo}${contestedInfo}${distanceHtml}
   </div>`;
 }
 

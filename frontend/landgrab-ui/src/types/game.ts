@@ -1,6 +1,7 @@
 export type GamePhase = 'Lobby' | 'Playing' | 'GameOver';
 export type GameMode = 'Alliances' | 'FreeForAll';
 export type ClaimMode = 'PresenceOnly' | 'PresenceWithTroop' | 'AdjacencyRequired';
+export type CombatMode = 'Classic' | 'Balanced' | 'Siege';
 export type WinConditionType = 'TerritoryPercent' | 'Elimination' | 'TimedGame';
 export type GameAreaMode = 'Centered' | 'Drawn' | 'Pattern';
 export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starburst';
@@ -14,6 +15,7 @@ export interface GameDynamics {
   playerRolesEnabled: boolean;
   fogOfWarEnabled: boolean;
   beaconEnabled: boolean;
+  combatMode?: CombatMode;
   supplyLinesEnabled: boolean;
   hqEnabled: boolean;
   tileDecayEnabled: boolean;
@@ -51,6 +53,30 @@ export interface AttackPrompt {
   r: number;
   max: number;
   defenderTroops: number;
+}
+
+export interface CombatBonusDetail {
+  source: string;
+  value: number;
+}
+
+export interface CombatPreviewDto {
+  attackerTroops: number;
+  defenderTroops: number;
+  effectiveAttack: number;
+  effectiveDefence: number;
+  attackerWinProbability: number;
+  attackerBonuses: CombatBonusDetail[];
+  defenderBonuses: CombatBonusDetail[];
+  combatMode: string;
+  defenderName: string;
+  defenderAllianceName?: string | null;
+}
+
+export interface CombatPreviewState {
+  q: number;
+  r: number;
+  preview: CombatPreviewDto;
 }
 
 export interface HexCell {
@@ -209,6 +235,23 @@ export interface CombatResult {
   attackerBonus: number;
   defenderBonus: number;
   defenderTerrainType: TerrainType | null;
+  effectiveAttack: number;
+  effectiveDefence: number;
+  attackerTroopsLost: number;
+  defenderTroopsLost: number;
+  attackerTroopsRemaining: number;
+  defenderTroopsRemaining: number;
+  attackerWinProbability: number;
+  combatModeUsed: string;
+  attackerBonuses: CombatBonusDetail[];
+  defenderBonuses: CombatBonusDetail[];
+}
+
+export interface NeutralClaimResult {
+  q: number;
+  r: number;
+  carriedTroops: number;
+  troopsOnHex: number;
 }
 
 export interface AuthState {

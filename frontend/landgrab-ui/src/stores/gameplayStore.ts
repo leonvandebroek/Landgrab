@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import type {
   AttackPrompt,
+  CombatPreviewState,
   CombatResult,
   MapInteractionFeedback,
+  NeutralClaimResult,
   PickupPrompt,
   ReinforcePrompt,
 } from '../types/game';
@@ -18,7 +20,9 @@ interface GameplayStore {
   reinforceCount: number;
   attackPrompt: AttackPrompt | null;
   attackCount: number;
+  combatPreview: CombatPreviewState | null;
   combatResult: CombatResult | null;
+  neutralClaimResult: NeutralClaimResult | null;
   commandoTargetingMode: boolean;
   setSelectedHex: (hex: [number, number] | null) => void;
   setMapFeedback: (feedback: MapInteractionFeedback | null) => void;
@@ -28,7 +32,9 @@ interface GameplayStore {
   setReinforceCount: (count: number) => void;
   setAttackPrompt: (prompt: AttackPrompt | null) => void;
   setAttackCount: (count: number) => void;
+  setCombatPreview: (preview: CombatPreviewState | null) => void;
   setCombatResult: (result: CombatResult | null) => void;
+  setNeutralClaimResult: (result: NeutralClaimResult | null) => void;
   setCommandoTargetingMode: (mode: boolean) => void;
   clearGameplayUi: () => void;
   selectedHexKey: string | null;
@@ -54,7 +60,9 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
   reinforceCount: 1,
   attackPrompt: null,
   attackCount: 1,
+  combatPreview: null,
   combatResult: null,
+  neutralClaimResult: null,
   commandoTargetingMode: false,
   setSelectedHex: (selectedHex) => set({ selectedHex }),
   setMapFeedback: (mapFeedback) => {
@@ -76,7 +84,9 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
   setReinforceCount: (reinforceCount) => set({ reinforceCount }),
   setAttackPrompt: (attackPrompt) => set({ attackPrompt }),
   setAttackCount: (attackCount) => set({ attackCount }),
+  setCombatPreview: (combatPreview) => set({ combatPreview }),
   setCombatResult: (combatResult) => set({ combatResult }),
+  setNeutralClaimResult: (neutralClaimResult) => set({ neutralClaimResult }),
   setCommandoTargetingMode: (commandoTargetingMode) => set({ commandoTargetingMode }),
   clearGameplayUi: () => {
     clearMapFeedbackTimer();
@@ -89,7 +99,9 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
       reinforceCount: 1,
       attackPrompt: null,
       attackCount: 1,
+      combatPreview: null,
       combatResult: null,
+      neutralClaimResult: null,
       commandoTargetingMode: false,
     });
   },

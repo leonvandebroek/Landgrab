@@ -349,7 +349,7 @@ function renderHexCell({
 
   if (shouldShowHexTooltips && !isFogHidden) {
     polygon.bindTooltip(
-      buildHexTooltipHtml(cell, currentHex),
+      buildHexTooltipHtml(cell, currentHex, isContested),
       { sticky: true, className: 'hex-tooltip-card' },
     );
   }
@@ -428,7 +428,14 @@ function renderHexCell({
     }).addTo(layerGroup);
   }
 
-  if (shouldShowContestEffects && cell.troops > 0 && cell.ownerId && isContested && !isInactive && !isFogHidden) {
+  const showContestedIndicator = shouldShowContestEffects
+    && cell.troops > 0
+    && cell.ownerId
+    && isContested
+    && !isInactive
+    && !isFogHidden;
+
+  if (showContestedIndicator) {
     L.circle([centerLat, centerLng], {
       radius: state.tileSizeMeters * 0.3,
       color: '#e74c3c',
@@ -436,6 +443,18 @@ function renderHexCell({
       fillColor: '#e74c3c',
       fillOpacity: 0.2,
       interactive: false,
+    }).addTo(layerGroup);
+
+    L.marker([centerLat, centerLng], {
+      icon: L.divIcon({
+        className: 'hex-contested-icon',
+        html: '<div aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:12px;line-height:1;opacity:0.72;color:#fff;text-shadow:0 1px 2px rgba(0, 0, 0, 0.55);">⚔️</div>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      }),
+      interactive: false,
+      keyboard: false,
+      zIndexOffset: 12,
     }).addTo(layerGroup);
   }
 

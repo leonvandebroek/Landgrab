@@ -290,7 +290,8 @@ export default function App() {
     handleConfirmPickup,
     handleConfirmReinforce,
     handleConfirmAttack,
-    handleReClaimHex,
+    handleDeployCombatTroops,
+    handleDeployNeutralClaimTroops,
     handlePlayAgain,
   } = useGameActions({
     invoke,
@@ -448,14 +449,16 @@ export default function App() {
     onUpdateDynamicsLive: handleUpdateDynamicsLive,
     onSendHostMessage: handleSendHostMessage,
     onPauseGame: handlePauseGame,
-    onReClaimHex: handleReClaimHex,
+    onDeployCombatTroops: handleDeployCombatTroops,
+    onDeployNeutralClaimTroops: handleDeployNeutralClaimTroops,
   }), [
     handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
     handleActivateBeacon, handleDeactivateBeacon, handleActivateTacticalStrike,
     handleActivateReinforce, handleActivateShieldWall, handleActivateEmergencyRepair,
     handleStartDemolish, handleSetObserverMode,
-    handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleReClaimHex,
+    handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleDeployCombatTroops,
+    handleDeployNeutralClaimTroops,
   ]);
 
   const lobbyViewActions = useMemo<LobbyViewActions>(() => ({

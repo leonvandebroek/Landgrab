@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameState, PlayerRole } from '../../types/game';
 import { RoleModal } from './RoleModal';
+import { RolesStep } from './RolesStep';
 import { TeamsStep } from './TeamsStep';
 import { ReviewStep } from './ReviewStep';
 import { WizardToast } from './WizardToast';
@@ -29,10 +30,8 @@ interface Props {
     error: string;
 }
 
-const TOTAL_STEPS = 5;
-
-function clampWizardStep(step: number) {
-    return Math.max(0, Math.min(TOTAL_STEPS - 1, step));
+function clampWizardStep(step: number, total: number) {
+    return Math.max(0, Math.min(total - 1, step));
 }
 
 function WaitingStepCard({ title, description }: { title: string; description: string }) {
@@ -65,6 +64,9 @@ export function GuestWizardView({
     const hostAdvancedStepMessage = String(t('wizard.hostAdvancedStep' as never, {
         defaultValue: 'The host moved to the next step.',
     } as never));
+    const rolesEnabled = gameState.dynamics?.playerRolesEnabled === true;
+    const totalSteps = rolesEnabled ? 6 : 5;
+    const reviewStep = totalSteps - 1;
     const me = useMemo(
         () => gameState.players.find(player => player.id === myUserId),
         [gameState.players, myUserId],
@@ -77,7 +79,7 @@ export function GuestWizardView({
 
     const guestStep = useMemo(() => {
         if (typeof gameState.currentWizardStep === 'number') {
-            return clampWizardStep(gameState.currentWizardStep);
+            return clampWizardStep(gameState.currentWizardStep, totalSteps);
         }
 
         if (!gameState.hasMapLocation || gameState.mapLat == null || gameState.mapLng == null) {
@@ -88,8 +90,8 @@ export function GuestWizardView({
             return 1;
         }
 
-        return 4;
-    }, [gameState.currentWizardStep, gameState.hasMapLocation, gameState.mapLat, gameState.mapLng, me?.allianceId]);
+        return totalSteps - 1;
+    }, [gameState.currentWizardStep, gameState.hasMapLocation, gameState.mapLat, gameState.mapLng, me?.allianceId, totalSteps]);
 
     useEffect(() => {
         const previousStep = previousStepRef.current;
@@ -141,14 +143,14 @@ export function GuestWizardView({
                         <span className="phase-badge">{t('lobby.guestRole')}</span>
                     </div>
                     <div className="wizard-step-indicator">
-                        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+                        {Array.from({ length: totalSteps }, (_, i) => (
                             <span
                                 key={i}
                                 className={`wizard-dot${i === guestStep ? ' is-active' : ''}${i < guestStep ? ' is-done' : ''}`}
                             />
                         ))}
                         <span className="wizard-step-label">
-                            {t('wizard.stepOf', { current: guestStep + 1, total: TOTAL_STEPS })}
+                            {t('wizard.stepOf', { current: guestStep + 1, total: totalSteps })}
                         </span>
                     </div>
                 </div>
@@ -165,10 +167,7 @@ export function GuestWizardView({
                             gameState={gameState}
                             myUserId={myUserId}
                             isHost={false}
-                            enableAssignedRoleModal={false}
                             onSetAlliance={onSetAlliance}
-                            onAssignPlayerRole={onAssignPlayerRole}
-                            onRandomizeRoles={onRandomizeRoles}
                             onConfigureAlliances={() => { }}
                             onDistributePlayers={() => { }}
                         />
@@ -185,7 +184,16 @@ export function GuestWizardView({
                             description={t('lobby.waitingForHost')}
                         />
                     )}
-                    {guestStep === 4 && (
+                    {rolesEnabled && guestStep === 4 && (
+                        <RolesStep
+                            gameState={gameState}
+                            myUserId={myUserId}
+                            isHost={false}
+                            onAssignPlayerRole={onAssignPlayerRole}
+                            onRandomizeRoles={onRandomizeRoles}
+                        />
+                    )}
+                    {guestStep === reviewStep && (
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}

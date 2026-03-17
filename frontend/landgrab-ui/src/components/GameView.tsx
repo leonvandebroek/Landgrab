@@ -2,13 +2,15 @@ import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import { ConnectionBanner } from './ConnectionBanner';
 import { CombatModal } from './game/CombatModal';
+import { CombatPreviewModal } from './game/CombatPreviewModal';
 import { GameRulesPage } from './game/GameRulesPage';
 import { HostControlPlane } from './game/HostControlPlane';
 import { LoadingFallback } from './LoadingFallback';
+import { TroopDeployModal } from './game/TroopDeployModal';
 import { useGameStore } from '../stores/gameStore';
 import { useGameplayStore } from '../stores/gameplayStore';
 import { useUiStore } from '../stores/uiStore';
-import type { GameDynamics, HexCell, ReClaimMode } from '../types/game';
+import type { GameDynamics, HexCell } from '../types/game';
 import type { PlayerDisplayPreferences } from '../types/playerPreferences';
 import type { TileAction, TileActionType } from './game/tileInteraction';
 import type { GameToast } from '../hooks/useToastQueue';
@@ -47,7 +49,8 @@ export interface GameViewActions {
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
   onPauseGame: (paused: boolean) => void;
-  onReClaimHex: (mode: ReClaimMode) => Promise<void>;
+  onDeployCombatTroops: (count: number) => Promise<void>;
+  onDeployNeutralClaimTroops: (count: number) => Promise<void>;
 }
 
 export interface GameViewProps {
@@ -78,7 +81,7 @@ export interface GameViewProps {
 /**
  * Renders the full in-game UI for `view === 'game'`.
  *
- * Reads gameState, selectedHex, combatResult, hasAcknowledgedRules, error,
+ * Reads gameState, selectedHex, combatPreview, combatResult, hasAcknowledgedRules, error,
  * setMainMapBounds and setSelectedHexScreenPos directly from Zustand stores.
  * Delegates everything else through props to keep App as a thin orchestrator.
  */
@@ -102,8 +105,12 @@ export function GameView({
   // ── Store reads ─────────────────────────────────────────────────────────
   const gameState = useGameStore(state => state.gameState);
   const selectedHex = useGameplayStore(state => state.selectedHex);
+  const combatPreview = useGameplayStore(state => state.combatPreview);
   const combatResult = useGameplayStore(state => state.combatResult);
+  const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
+  const setCombatPreview = useGameplayStore(state => state.setCombatPreview);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
+  const setNeutralClaimResult = useGameplayStore(state => state.setNeutralClaimResult);
   const hasAcknowledgedRules = useUiStore(state => state.hasAcknowledgedRules);
   const setHasAcknowledgedRules = useUiStore(state => state.setHasAcknowledgedRules);
   const error = useUiStore(state => state.error);
@@ -201,7 +208,6 @@ export function GameView({
           currentHexActions={actions.currentHexActions}
           onCurrentHexAction={actions.onCurrentHexAction}
           onDismissTileActions={actions.onDismissTileActions}
-          onConfirmAttack={actions.onConfirmAttack}
           onActivateBeacon={actions.onActivateBeacon}
           onDeactivateBeacon={actions.onDeactivateBeacon}
           onActivateTacticalStrike={actions.onActivateTacticalStrike}
@@ -234,12 +240,25 @@ export function GameView({
           />
         </PlayingHud>
       </Suspense>
+      {combatPreview && (
+        <CombatPreviewModal
+          preview={combatPreview.preview}
+          onAttack={() => void actions.onConfirmAttack()}
+          onRetreat={() => setCombatPreview(null)}
+        />
+      )}
       {combatResult && (
         <CombatModal
           result={combatResult}
-          gameMode={gameState.gameMode}
-          onReClaim={actions.onReClaimHex}
+          onDeployTroops={(count) => void actions.onDeployCombatTroops(count)}
           onClose={() => setCombatResult(null)}
+        />
+      )}
+      {neutralClaimResult && (
+        <TroopDeployModal
+          claimResult={neutralClaimResult}
+          onDeploy={(count) => void actions.onDeployNeutralClaimTroops(count)}
+          onClose={() => setNeutralClaimResult(null)}
         />
       )}
     </>

@@ -5,6 +5,7 @@ import { LocationStep } from './LocationStep';
 import { TeamsStep } from './TeamsStep';
 import { RulesStep } from './RulesStep';
 import { DynamicsStep } from './DynamicsStep';
+import { RolesStep } from './RolesStep';
 import { ReviewStep } from './ReviewStep';
 
 interface LocationPoint {
@@ -47,10 +48,8 @@ interface Props {
     invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
-const TOTAL_STEPS = 5;
-
-function clampWizardStep(step: number) {
-    return Math.max(0, Math.min(TOTAL_STEPS - 1, step));
+function clampWizardStep(step: number, total: number) {
+    return Math.max(0, Math.min(total - 1, step));
 }
 
 export function SetupWizard({
@@ -89,6 +88,10 @@ export function SetupWizard({
     const { t } = useTranslation();
     const me = gameState.players.find(p => p.id === myUserId);
     const isHost = me?.isHost ?? false;
+    const rolesEnabled = gameState.dynamics?.playerRolesEnabled === true;
+    const totalSteps = rolesEnabled ? 6 : 5;
+    const reviewStep = totalSteps - 1;
+    const rolesStep = rolesEnabled ? 4 : -1;
 
     const stepComplete = useMemo(() => ({
         location: gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
@@ -112,8 +115,8 @@ export function SetupWizard({
             return null;
         }
 
-        return clampWizardStep(gameState.currentWizardStep);
-    }, [gameState.currentWizardStep]);
+        return clampWizardStep(gameState.currentWizardStep, totalSteps);
+    }, [gameState.currentWizardStep, totalSteps]);
 
     const [step, setStep] = useState(() => serverWizardStep ?? deriveStep());
 
@@ -132,7 +135,7 @@ export function SetupWizard({
     }, [serverWizardStep]);
 
     const syncWizardStep = useCallback(async (nextStep: number) => {
-        const normalizedStep = clampWizardStep(nextStep);
+        const normalizedStep = clampWizardStep(nextStep, totalSteps);
         setStep(normalizedStep);
 
         if (!invoke) {
@@ -147,7 +150,14 @@ export function SetupWizard({
                 wizardStepError,
             });
         }
-    }, [invoke]);
+    }, [invoke, totalSteps]);
+
+    useEffect(() => {
+        setStep(prev => {
+            const normalizedStep = clampWizardStep(prev, totalSteps);
+            return prev !== normalizedStep ? normalizedStep : prev;
+        });
+    }, [totalSteps]);
 
     const handleSetMapLocation = useCallback((lat: number, lng: number) => {
         onSetMapLocation(lat, lng);
@@ -168,9 +178,9 @@ export function SetupWizard({
             case 3:
                 return true;
             default:
-                return false;
+                return step < totalSteps - 1;
         }
-    }, [step, stepComplete]);
+    }, [step, stepComplete, totalSteps]);
 
     const canStart = useMemo(() => {
         return gameState.players.length >= 2
@@ -179,12 +189,12 @@ export function SetupWizard({
     }, [gameState]);
 
     const goNext = useCallback(() => {
-        if (step >= TOTAL_STEPS - 1 || !canGoNext) {
+        if (step >= totalSteps - 1 || !canGoNext) {
             return;
         }
 
         void syncWizardStep(step + 1);
-    }, [canGoNext, step, syncWizardStep]);
+    }, [canGoNext, step, syncWizardStep, totalSteps]);
 
     const goBack = useCallback(() => {
         if (step <= 0) {
@@ -234,7 +244,7 @@ export function SetupWizard({
                         {isHost && gameState.hostObserverMode && <span className="phase-badge">{t('observer.observerBadge' as never)}</span>}
                     </div>
                     <div className="wizard-step-indicator">
-                        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+                        {Array.from({ length: totalSteps }, (_, i) => (
                             <button
                                 key={i}
                                 type="button"
@@ -244,7 +254,7 @@ export function SetupWizard({
                             />
                         ))}
                         <span className="wizard-step-label">
-                            {t('wizard.stepOf', { current: step + 1, total: TOTAL_STEPS })}
+                            {t('wizard.stepOf', { current: step + 1, total: totalSteps })}
                         </span>
                     </div>
                 </div>
@@ -266,8 +276,6 @@ export function SetupWizard({
                             myUserId={myUserId}
                             isHost={isHost}
                             onSetAlliance={onSetAlliance}
-                            onAssignPlayerRole={onAssignPlayerRole}
-                            onRandomizeRoles={onRandomizeRoles}
                             onConfigureAlliances={onConfigureAlliances}
                             onDistributePlayers={onDistributePlayers}
                         />
@@ -292,7 +300,16 @@ export function SetupWizard({
                             onSetGameDynamics={onSetGameDynamics}
                         />
                     )}
-                    {step === 4 && (
+                    {rolesEnabled && step === rolesStep && (
+                        <RolesStep
+                            gameState={gameState}
+                            myUserId={myUserId}
+                            isHost={isHost}
+                            onAssignPlayerRole={onAssignPlayerRole}
+                            onRandomizeRoles={onRandomizeRoles}
+                        />
+                    )}
+                    {step === reviewStep && (
                         <ReviewStep
                             gameState={gameState}
                             myUserId={myUserId}
@@ -326,7 +343,7 @@ export function SetupWizard({
                     </div>
 
                     <div className="wizard-footer-right">
-                        {step < TOTAL_STEPS - 1 && (
+                        {step < totalSteps - 1 && (
                             <button
                                 type="button"
                                 className="btn-primary"

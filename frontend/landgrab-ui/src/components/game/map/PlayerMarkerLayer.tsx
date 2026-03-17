@@ -58,6 +58,7 @@ export function renderPlayerMarkers({
   const effectivePlayerDisplayPrefs = playerDisplayPrefs ?? DEFAULT_PLAYER_PREFS;
   const playerMarkerSizeMultiplier = MARKER_SIZE_MULTIPLIER[effectivePlayerDisplayPrefs.markerSize] ?? 1;
   const markerZoomScale = getMarkerZoomScale(currentZoom);
+  const myPlayer = state.players.find((player) => player.id === myUserId);
 
   for (const player of state.players) {
     const isMe = player.id === myUserId;
@@ -125,7 +126,11 @@ export function renderPlayerMarkers({
       }
     }
 
-    if (player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
+    const shouldShowBeacon = myPlayer?.allianceId != null
+      ? player.allianceId === myPlayer.allianceId
+      : player.id === myUserId;
+
+    if (shouldShowBeacon && player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
       L.circle([player.beaconLat, player.beaconLng], {
         radius: state.tileSizeMeters * 2.5,
         color: player.allianceColor ?? player.color,

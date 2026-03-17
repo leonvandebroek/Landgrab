@@ -9,7 +9,7 @@ import { useUiStore } from '../stores/uiStore';
 import type { SoundName } from './useSound';
 import type { GameToast } from './useToastQueue';
 import type { GameEvents } from './useSignalR';
-import type { AttackPrompt, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
+import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
@@ -83,6 +83,29 @@ function shouldClearAttackPrompt(
   }
 
   return previousHex.ownerId !== nextHex.ownerId;
+}
+
+function shouldClearCombatPreview(
+  previewState: CombatPreviewState | null,
+  previousState: GameState | null,
+  nextState: GameState
+): boolean {
+  if (!previewState) {
+    return false;
+  }
+
+  const previousHex = getHex(previousState, previewState.q, previewState.r);
+  const nextHex = getHex(nextState, previewState.q, previewState.r);
+
+  if (!nextHex) {
+    return true;
+  }
+
+  if (!previousHex) {
+    return false;
+  }
+
+  return previousHex.ownerId !== nextHex.ownerId || previousHex.troops !== nextHex.troops;
 }
 
 function shouldClearReinforcePrompt(
@@ -190,6 +213,11 @@ export function useSignalRHandlers({
         gameState,
         normalizedState
       );
+      const shouldClearPreview = shouldClearCombatPreview(
+        gameplayState.combatPreview,
+        gameState,
+        normalizedState
+      );
       const shouldClearReinforce = shouldClearReinforcePrompt(
         gameplayState.reinforcePrompt,
         gameState,
@@ -206,6 +234,9 @@ export function useSignalRHandlers({
       }
       if (shouldClearAttack) {
         gameplayState.setAttackPrompt(null);
+      }
+      if (shouldClearPreview) {
+        gameplayState.setCombatPreview(null);
       }
       if (shouldClearReinforce) {
         gameplayState.setReinforcePrompt(null);
@@ -241,6 +272,8 @@ export function useSignalRHandlers({
     },
     onCombatResult: (result) => {
       vibrate(HAPTIC.attack);
+      useGameplayStore.getState().setCombatPreview(null);
+      useGameplayStore.getState().setAttackPrompt(null);
       useGameplayStore.getState().setCombatResult(result);
       pushToast({
         type: 'combat',
@@ -248,6 +281,9 @@ export function useSignalRHandlers({
           ? t('game.toast.combatWon', { q: result.q, r: result.r })
           : t('game.toast.combatLost', { q: result.q, r: result.r }),
       });
+    },
+    onNeutralClaimResult: (result) => {
+      useGameplayStore.getState().setNeutralClaimResult(result);
     },
     onTileLost: (data) => {
       playSound('notification');

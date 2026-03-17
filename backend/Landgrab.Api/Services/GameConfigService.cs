@@ -151,6 +151,7 @@ public class GameConfigService(IGameRoomProvider roomProvider, GameStateService 
             room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
             room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
             room.State.Dynamics.TerrainEnabled = dynamics.TerrainEnabled;
+            room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
             room.State.Dynamics.SupplyLinesEnabled = dynamics.SupplyLinesEnabled;

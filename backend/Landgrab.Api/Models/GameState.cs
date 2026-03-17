@@ -47,6 +47,13 @@ public enum GameAreaPattern
 
 public enum ReClaimMode { Alliance, Self, Abandon }
 
+public enum CombatMode
+{
+    Classic,
+    Balanced,
+    Siege
+}
+
 public enum TerrainType
 {
     None,
@@ -74,6 +81,7 @@ public class GameDynamics
     public bool BeaconEnabled { get; set; }
     public bool TileDecayEnabled { get; set; }
     public bool TerrainEnabled { get; set; }
+    public CombatMode CombatMode { get; set; } = CombatMode.Balanced;
     public bool PlayerRolesEnabled { get; set; }
     public bool FogOfWarEnabled { get; set; }
     public bool SupplyLinesEnabled { get; set; }
@@ -241,6 +249,26 @@ public class Achievement
     public string? Value { get; set; }
 }
 
+public class CombatBonusDetail
+{
+    public string Source { get; set; } = "";
+    public int Value { get; set; }
+}
+
+public class CombatPreviewDto
+{
+    public int AttackerTroops { get; set; }
+    public int DefenderTroops { get; set; }
+    public int EffectiveAttack { get; set; }
+    public int EffectiveDefence { get; set; }
+    public double AttackerWinProbability { get; set; }
+    public List<CombatBonusDetail> AttackerBonuses { get; set; } = [];
+    public List<CombatBonusDetail> DefenderBonuses { get; set; } = [];
+    public string CombatMode { get; set; } = "";
+    public string DefenderName { get; set; } = "";
+    public string? DefenderAllianceName { get; set; }
+}
+
 public class CombatResult
 {
     public int[] AttackDice { get; set; } = [];
@@ -256,6 +284,24 @@ public class CombatResult
     public int AttackerBonus { get; set; }
     public int DefenderBonus { get; set; }
     public string? DefenderTerrainType { get; set; }
+    public int EffectiveAttack { get; set; }
+    public int EffectiveDefence { get; set; }
+    public int AttackerTroopsLost { get; set; }
+    public int DefenderTroopsLost { get; set; }
+    public int AttackerTroopsRemaining { get; set; }
+    public int DefenderTroopsRemaining { get; set; }
+    public double AttackerWinProbability { get; set; }
+    public string CombatModeUsed { get; set; } = "";
+    public List<CombatBonusDetail> AttackerBonuses { get; set; } = [];
+    public List<CombatBonusDetail> DefenderBonuses { get; set; } = [];
+}
+
+public class NeutralClaimResult
+{
+    public int Q { get; set; }
+    public int R { get; set; }
+    public int CarriedTroops { get; set; }
+    public int TroopsOnHex { get; set; }
 }
 
 public class GameEvent

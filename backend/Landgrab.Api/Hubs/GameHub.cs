@@ -171,6 +171,7 @@ public partial class GameHub : Hub
             BeaconEnabled = dynamics.BeaconEnabled,
             TileDecayEnabled = dynamics.TileDecayEnabled,
             TerrainEnabled = dynamics.TerrainEnabled,
+            CombatMode = Enum.IsDefined(dynamics.CombatMode) ? dynamics.CombatMode : CombatMode.Balanced,
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
             FogOfWarEnabled = dynamics.FogOfWarEnabled,
             SupplyLinesEnabled = dynamics.SupplyLinesEnabled,

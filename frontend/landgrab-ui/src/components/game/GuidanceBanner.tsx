@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { hexAreAdjacent } from '../map/HexMath';
 import { useGameStore } from '../../stores/gameStore';
 import { useGameplayStore } from '../../stores/gameplayStore';
 
@@ -16,15 +17,72 @@ export function GuidanceBanner({
 }: GuidanceBannerProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((state) => state.gameState);
+  const currentUserId = useGameStore((state) => state.savedSession?.userId);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
   const isCarryingTroops = carriedTroops > 0;
-  const selectedHexExists = useMemo(
-    () => Boolean(gameState && selectedHexKey && gameState.grid[selectedHexKey]),
+  const selectedHexCell = useMemo(
+    () => (gameState && selectedHexKey ? gameState.grid[selectedHexKey] : undefined),
     [gameState, selectedHexKey]
   );
+  const selectedHexExists = Boolean(selectedHexCell);
+  const currentPlayer = useMemo(
+    () => gameState?.players.find((player) => player.id === currentUserId) ?? null,
+    [currentUserId, gameState]
+  );
+  const currentHexCell = useMemo(() => {
+    if (!gameState || !currentPlayer || currentPlayer.currentHexQ == null || currentPlayer.currentHexR == null) {
+      return undefined;
+    }
+
+    return gameState.grid[`${currentPlayer.currentHexQ},${currentPlayer.currentHexR}`];
+  }, [currentPlayer, gameState]);
+  const claimModeHint = useMemo(() => {
+    if (!gameState || !currentPlayer || currentPlayer.currentHexQ == null || currentPlayer.currentHexR == null) {
+      return null;
+    }
+
+    const isStandingOnUnclaimedHex = Boolean(currentHexCell && !currentHexCell.ownerId);
+    const isSelectedUnclaimedHexNearby = Boolean(
+      selectedHexCell
+      && !selectedHexCell.ownerId
+      && (
+        (selectedHexCell.q === currentPlayer.currentHexQ && selectedHexCell.r === currentPlayer.currentHexR)
+        || hexAreAdjacent(
+          currentPlayer.currentHexQ,
+          currentPlayer.currentHexR,
+          selectedHexCell.q,
+          selectedHexCell.r,
+        )
+      )
+    );
+
+    if (!isStandingOnUnclaimedHex && !isSelectedUnclaimedHexNearby) {
+      return null;
+    }
+
+    if (gameState.claimMode === 'PresenceOnly') {
+      return t('guidance.claimMode.presenceOnly' as never, {
+        defaultValue: 'Walk to any hex to claim it for your team',
+      });
+    }
+
+    if (gameState.claimMode === 'PresenceWithTroop') {
+      return t('guidance.claimMode.presenceWithTroop' as never, {
+        defaultValue: 'Walk to a hex and carry at least 1 troop to claim it',
+      });
+    }
+
+    return t('guidance.claimMode.adjacencyRequired' as never, {
+      defaultValue: 'You can only claim hexes that border your existing territory. Teammate beacons can extend your reach!',
+    });
+  }, [currentHexCell, currentPlayer, gameState, selectedHexCell, t]);
   const computedHint = useMemo(() => {
     if (!hasLocation) {
       return t('guidance.enableLocation');
+    }
+
+    if (claimModeHint) {
+      return claimModeHint;
     }
 
     if (isCarryingTroops) {
@@ -42,7 +100,7 @@ export function GuidanceBanner({
     }
 
     return t('guidance.walkToClaim');
-  }, [carriedTroops, hasLocation, isCarryingTroops, isInOwnHex, selectedHexExists, t]);
+  }, [carriedTroops, claimModeHint, hasLocation, isCarryingTroops, isInOwnHex, selectedHexExists, t]);
   const [hint, setHint] = useState<string>(computedHint);
   const [isVisible, setIsVisible] = useState<boolean>(true);
 

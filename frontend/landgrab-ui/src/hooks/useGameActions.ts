@@ -63,6 +63,8 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleConfirmPickup: gameplayActions.handleConfirmPickup,
     handleConfirmReinforce: gameplayActions.handleConfirmReinforce,
     handleConfirmAttack: gameplayActions.handleConfirmAttack,
+    handleDeployCombatTroops: gameplayActions.handleDeployCombatTroops,
+    handleDeployNeutralClaimTroops: gameplayActions.handleDeployNeutralClaimTroops,
     handleCancelAttack: gameplayActions.handleCancelAttack,
     handleReClaimHex: gameplayActions.handleReClaimHex,
     handlePlayAgain: lobbyActions.handlePlayAgain,

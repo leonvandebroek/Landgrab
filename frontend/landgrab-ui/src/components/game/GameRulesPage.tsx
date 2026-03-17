@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ROLE_CARDS } from '../lobby/roleModalUtils';
 import type { GameState } from '../../types/game';
@@ -11,6 +12,12 @@ interface GameRulesPageProps {
 export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRulesPageProps) {
   const { t } = useTranslation();
   const dynamics = gameState.dynamics;
+  const beaconRuleItems = [
+    t('rules.beacon.bullet1'),
+    t('rules.beacon.bullet2'),
+    t('rules.beacon.bullet3'),
+    t('rules.beacon.bullet4'),
+  ];
 
   const claimModeText =
     gameState.claimMode === 'PresenceOnly'
@@ -33,7 +40,7 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
     t('rules.coreRules.winCondition'),
   ];
 
-  const matchSpecificItems: Array<{ key: string; label: string; body: string }> = [
+  const matchSpecificItems: Array<{ key: string; label: string; body: ReactNode }> = [
     { key: 'claiming', label: t('rules.claiming.title'), body: claimModeText },
     { key: 'combat', label: t('rules.combat.title'), body: t('rules.combat.body') },
     { key: 'win-condition', label: t('rules.winCondition.title'), body: winConditionText },
@@ -52,6 +59,23 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
       key: 'fog-of-war',
       label: t('rules.fogOfWar.title'),
       body: t('rules.fogOfWar.body'),
+    });
+  }
+
+  if (dynamics.beaconEnabled) {
+    matchSpecificItems.push({
+      key: 'beacon',
+      label: t('rules.beacon.title'),
+      body: (
+        <div className="rules-item-body">
+          <p className="rules-item-intro">{t('rules.beacon.intro')}</p>
+          <ul className="rules-list rules-list-secondary">
+            {beaconRuleItems.map((item) => (
+              <li key={item} className="rules-list-item">{item}</li>
+            ))}
+          </ul>
+        </div>
+      ),
     });
   }
 
@@ -112,10 +136,10 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
           ))}
         </ul>
 
-        <ul className="rules-list" style={{ marginTop: '1rem' }}>
+        <ul className="rules-list rules-list-secondary">
           {matchSpecificItems.map((item) => (
             <li key={item.key} className="rules-list-item">
-              <strong>{item.label}:</strong> {item.body}
+              <strong>{item.label}:</strong>{typeof item.body === 'string' ? ` ${item.body}` : item.body}
             </li>
           ))}
         </ul>

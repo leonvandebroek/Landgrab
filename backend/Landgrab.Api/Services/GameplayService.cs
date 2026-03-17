@@ -7,6 +7,10 @@ public class GameplayService(
     GameStateService gameStateService,
     WinConditionService winConditionService)
 {
+    private const int BalancedCombatRounds = 3;
+    private const double MinCombatHitProbability = 0.2;
+    private const double MaxCombatHitProbability = 0.8;
+
     public sealed record DrainTickNotification(
         int q,
         int r,
@@ -18,6 +22,29 @@ public class GameplayService(
         GameState? state,
         string? error,
         IReadOnlyList<DrainTickNotification> drainTicks);
+
+    private sealed record CombatStats(
+        CombatMode CombatMode,
+        int AttackerTroops,
+        int DefenderTroops,
+        int EffectiveAttack,
+        int EffectiveDefence,
+        double AttackerWinProbability,
+        bool TacticalStrikeUsed,
+        List<CombatBonusDetail> AttackerBonuses,
+        List<CombatBonusDetail> DefenderBonuses,
+        string DefenderName,
+        string? DefenderAllianceName,
+        string DefenderTerrainType);
+
+    private sealed record CombatResolution(
+        bool AttackerWon,
+        int AttackerTroopsLost,
+        int DefenderTroopsLost,
+        int AttackerTroopsRemaining,
+        int DefenderTroopsRemaining,
+        int[] AttackDice,
+        int[] DefendDice);
 
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
@@ -235,9 +262,6 @@ public class GameplayService(
                 return (null, "You can only pick up troops from your own hexes.");
             if (cell.Troops < count)
                 return (null, "That hex does not have enough troops.");
-            if (player.CarriedTroops > 0 &&
-                (player.CarriedTroopsSourceQ != q || player.CarriedTroopsSourceR != r))
-                return (null, "Place your carried troops before picking up from a different hex.");
 
             cell.Troops -= count;
             player.CarriedTroops += count;
@@ -248,6 +272,49 @@ public class GameplayService(
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
+        }
+    }
+
+    public (CombatPreviewDto? preview, string? error) GetCombatPreview(string roomCode, string userId, int q, int r)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        if (room.State.IsPaused)
+            return (null, "Game is paused.");
+
+        lock (room.SyncRoot)
+        {
+            if (room.State.Phase != GamePhase.Playing)
+                return (null, "Combat preview is only available while the game is playing.");
+            if (!room.State.HasMapLocation || room.State.MapLat is null || room.State.MapLng is null)
+                return (null, "This room does not have a valid map location configured.");
+
+            var player = room.State.Players.FirstOrDefault(candidate => candidate.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+            if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
+                return (null, "Invalid hex.");
+
+            var previewError = ValidateCombatPreview(room.State, player, cell, q, r);
+            if (previewError != null)
+                return (null, previewError);
+
+            var combatStats = CalculateCombatStats(room.State, player, cell, q, r, player.CarriedTroops);
+            return (new CombatPreviewDto
+            {
+                AttackerTroops = combatStats.AttackerTroops,
+                DefenderTroops = combatStats.DefenderTroops,
+                EffectiveAttack = combatStats.EffectiveAttack,
+                EffectiveDefence = combatStats.EffectiveDefence,
+                AttackerWinProbability = combatStats.AttackerWinProbability,
+                AttackerBonuses = combatStats.AttackerBonuses.Select(CloneBonusDetail).ToList(),
+                DefenderBonuses = combatStats.DefenderBonuses.Select(CloneBonusDetail).ToList(),
+                CombatMode = combatStats.CombatMode.ToString(),
+                DefenderName = combatStats.DefenderName,
+                DefenderAllianceName = combatStats.DefenderAllianceName
+            }, null);
         }
     }
 
@@ -296,6 +363,13 @@ public class GameplayService(
                 if (player.CarriedTroops <= 0)
                     return (null, "You are not carrying any troops.", null, null);
 
+                if (troopCount == 0)
+                {
+                    var zeroDeploySnapshot = SnapshotState(room.State);
+                    QueuePersistence(room, zeroDeploySnapshot);
+                    return (zeroDeploySnapshot, null, null, null);
+                }
+
                 var reinforcedTroops = troopCount ?? player.CarriedTroops;
                 if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
                     return (null, "Troop count must be between 1 and your carried troops.", null, null);
@@ -329,99 +403,72 @@ public class GameplayService(
             var deployedTroops = troopCount ?? player.CarriedTroops;
             if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
                 return (null, "Troop count must be between 1 and your carried troops.", null, null);
-            // Calculate combat bonuses
-            var attackerBonus = 0;
-            var defenderBonus = 0;
-
-            // Terrain defence bonus
-            if (room.State.Dynamics.TerrainEnabled)
-            {
-                defenderBonus += cell.TerrainType switch
-                {
-                    TerrainType.Building or TerrainType.Hills => 1,
-                    TerrainType.Steep => 2,
-                    _ => 0
-                };
-            }
-
-            var tacticalStrikeUsed = room.State.Dynamics.PlayerRolesEnabled && player.TacticalStrikeActive;
-
-            // Phase 4: Rally — fortified hex gets +1 defence
-            if (cell.IsFortified && !tacticalStrikeUsed)
-                defenderBonus += 1;
-
-            // Phase 4: Fort — permanent +1 defence bonus
-            if (cell.IsFort && !tacticalStrikeUsed)
-                defenderBonus += 1;
-
-            // Phase 4: Commander — present in attacking hex gives +1 attack
-            if (room.State.Dynamics.PlayerRolesEnabled)
-            {
-                var playersInAttackHex = GetPlayersInHex(room.State, q, r);
-                if (playersInAttackHex.Any(p => p.Role == PlayerRole.Commander
-                    && p.AllianceId == player.AllianceId))
-                    attackerBonus += 1;
-
-                if (room.State.Players.Any(defender => defender.Role == PlayerRole.Defender
-                    && defender.ShieldWallActive
-                    && TryGetCurrentHex(room.State, defender, out var defenderQ, out var defenderR)
-                    && defenderQ == q
-                    && defenderR == r
-                    && IsFriendlyCell(defender, cell)))
-                {
-                    defenderBonus += 2;
-                }
-            }
-
-            // Phase 8: Underdog Pact — attack bonus if target's alliance controls >60% hexes
-            if (room.State.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
-            {
-                var totalOwned = room.State.Grid.Values.Count(c => c.OwnerId != null);
-                if (totalOwned > 0)
-                {
-                    var targetAllianceCount = room.State.Grid.Values.Count(c => c.OwnerAllianceId == cell.OwnerAllianceId);
-                    if ((double)targetAllianceCount / totalOwned > 0.6)
-                        attackerBonus += 2;
-                }
-            }
-
-            var effectiveAttack = deployedTroops + attackerBonus;
-            var effectiveDefence = cell.Troops + defenderBonus;
-
-            if (effectiveAttack <= effectiveDefence)
-                return (null, "You need more effective strength to overcome the defenders.", null, null);
-
+            var combatStats = CalculateCombatStats(room.State, player, cell, q, r, deployedTroops);
+            var combatResolution = ResolveCombat(combatStats);
             var previousOwnerId = cell.OwnerId;
             var previousOwnerName = cell.OwnerName;
-            var defendingTroops = cell.Troops;
-            if (claimForSelf)
-                SetCellOwnerForSelf(cell, player);
-            else
-                SetCellOwner(cell, player);
-            cell.Troops = deployedTroops - defendingTroops;
-            player.CarriedTroops -= deployedTroops;
+            var previousCarriedTroops = player.CarriedTroops;
+            var undeployedTroops = previousCarriedTroops - deployedTroops;
+
+            player.CarriedTroops = undeployedTroops + combatResolution.AttackerTroopsRemaining;
             if (player.CarriedTroops == 0)
+            {
                 ResetCarriedTroops(player);
-            if (tacticalStrikeUsed)
+            }
+            else if (combatResolution.AttackerWon && player.CarriedTroops == combatResolution.AttackerTroopsRemaining)
+            {
+                player.CarriedTroopsSourceQ = q;
+                player.CarriedTroopsSourceR = r;
+            }
+
+            cell.Troops = combatResolution.DefenderTroopsRemaining;
+
+            if (combatResolution.AttackerWon)
+            {
+                if (claimForSelf)
+                    SetCellOwnerForSelf(cell, player);
+                else
+                    SetCellOwner(cell, player);
+
+                // The winner carries all surviving troops and chooses later how many to drop.
+                cell.Troops = 0;
+                winConditionService.RefreshTerritoryCount(room.State);
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "TileCaptured",
+                    Message = $"{player.Name} captured hex ({q}, {r}) from {previousOwnerName ?? "another player"} after losing {combatResolution.AttackerTroopsLost} troops.",
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    TargetPlayerId = previousOwnerId,
+                    TargetPlayerName = previousOwnerName,
+                    Q = q,
+                    R = r
+                });
+            }
+            else
+            {
+                previousOwnerId = null;
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "CombatRepelled",
+                    Message = $"{player.Name} was repelled at hex ({q}, {r}) by {previousOwnerName ?? "another player"}.",
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    TargetPlayerId = cell.OwnerId,
+                    TargetPlayerName = previousOwnerName,
+                    Q = q,
+                    R = r
+                });
+            }
+
+            if (combatStats.TacticalStrikeUsed)
             {
                 player.TacticalStrikeActive = false;
                 player.TacticalStrikeExpiry = null;
             }
-            winConditionService.RefreshTerritoryCount(room.State);
-            AppendEventLog(room.State, new GameEventLogEntry
-            {
-                Type = "TileCaptured",
-                Message = $"{player.Name} captured hex ({q}, {r}) from {previousOwnerName ?? "another player"}.",
-                PlayerId = player.Id,
-                PlayerName = player.Name,
-                TargetPlayerId = previousOwnerId,
-                TargetPlayerName = previousOwnerName,
-                Q = q,
-                R = r
-            });
 
             // Phase 4: HQ capture check
-            if (room.State.Dynamics.HQEnabled && previousOwnerId != null)
+            if (combatResolution.AttackerWon && room.State.Dynamics.HQEnabled && previousOwnerId != null)
             {
                 var capturedAlliance = room.State.Alliances.FirstOrDefault(a =>
                     a.HQHexQ == q && a.HQHexR == r);
@@ -447,22 +494,269 @@ public class GameplayService(
             QueuePersistence(room, attackSnapshot);
             var combatResult = new CombatResult
             {
-                AttackerWon = true,
-                HexCaptured = true,
-                AttackDice = [],
-                DefendDice = [],
-                AttackerLost = 0,
-                DefenderLost = defendingTroops,
+                AttackerWon = combatResolution.AttackerWon,
+                HexCaptured = combatResolution.AttackerWon,
+                AttackDice = combatResolution.AttackDice,
+                DefendDice = combatResolution.DefendDice,
+                AttackerLost = combatResolution.AttackerTroopsLost,
+                DefenderLost = combatResolution.DefenderTroopsLost,
                 Q = q,
                 R = r,
                 PreviousOwnerName = previousOwnerName,
                 NewState = attackSnapshot,
-                AttackerBonus = attackerBonus,
-                DefenderBonus = defenderBonus,
-                DefenderTerrainType = cell.TerrainType.ToString()
+                AttackerBonus = combatStats.AttackerBonuses.Sum(bonus => bonus.Value),
+                DefenderBonus = combatStats.DefenderBonuses.Sum(bonus => bonus.Value),
+                DefenderTerrainType = combatStats.DefenderTerrainType,
+                EffectiveAttack = combatStats.EffectiveAttack,
+                EffectiveDefence = combatStats.EffectiveDefence,
+                AttackerTroopsLost = combatResolution.AttackerTroopsLost,
+                DefenderTroopsLost = combatResolution.DefenderTroopsLost,
+                AttackerTroopsRemaining = combatResolution.AttackerTroopsRemaining,
+                DefenderTroopsRemaining = combatResolution.DefenderTroopsRemaining,
+                AttackerWinProbability = combatStats.AttackerWinProbability,
+                CombatModeUsed = combatStats.CombatMode.ToString(),
+                AttackerBonuses = combatStats.AttackerBonuses.Select(CloneBonusDetail).ToList(),
+                DefenderBonuses = combatStats.DefenderBonuses.Select(CloneBonusDetail).ToList()
             };
             return (attackSnapshot, null, previousOwnerId, combatResult);
         }
+    }
+
+    private static string? ValidateCombatPreview(GameState state, PlayerDto player, HexCell cell, int q, int r)
+    {
+        if (cell.IsMasterTile)
+            return "The master tile is invincible and cannot be conquered.";
+        if (player.CarriedTroops <= 0)
+            return "You are not carrying any troops.";
+        if (cell.OwnerId == null)
+            return "Combat preview is only available for enemy-held hexes.";
+        if (cell.OwnerId == player.Id)
+            return "Combat preview is only available for enemy-held hexes.";
+        if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
+            return "You cannot attack an allied hex.";
+
+        if (player.IsHost && state.HostBypassGps)
+            return null;
+
+        if (player.CurrentLat.HasValue && player.CurrentLng.HasValue)
+        {
+            var isInHex = HexService.IsPlayerInHex(
+                player.CurrentLat.Value,
+                player.CurrentLng.Value,
+                q,
+                r,
+                state.MapLat!.Value,
+                state.MapLng!.Value,
+                state.TileSizeMeters);
+            if (isInHex)
+                return null;
+        }
+
+        if (TryGetCurrentHex(state, player, out var currentQ, out var currentR) && currentQ == q && currentR == r)
+            return null;
+
+        return "You must be physically inside that hex to preview combat.";
+    }
+
+    private static CombatStats CalculateCombatStats(GameState state, PlayerDto player, HexCell cell, int q, int r, int deployedTroops)
+    {
+        var combatMode = NormalizeCombatMode(state.Dynamics.CombatMode);
+        var attackerBonuses = new List<CombatBonusDetail>();
+        var defenderBonuses = new List<CombatBonusDetail>();
+        var tacticalStrikeUsed = state.Dynamics.PlayerRolesEnabled && player.TacticalStrikeActive;
+
+        if (state.Dynamics.TerrainEnabled)
+        {
+            var terrainBonus = cell.TerrainType switch
+            {
+                TerrainType.Building or TerrainType.Hills => 1,
+                TerrainType.Steep => 2,
+                _ => 0
+            };
+            AddBonus(defenderBonuses, "Terrain", terrainBonus);
+        }
+
+        if (cell.IsFortified && !tacticalStrikeUsed)
+            AddBonus(defenderBonuses, "Rally", 1);
+
+        if (cell.IsFort && !tacticalStrikeUsed)
+            AddBonus(defenderBonuses, "Fort", 1);
+
+        if (state.Dynamics.PlayerRolesEnabled)
+        {
+            var commanderPresent = GetPlayersInHex(state, q, r).Any(candidate =>
+                candidate.Role == PlayerRole.Commander &&
+                candidate.AllianceId == player.AllianceId);
+            if (commanderPresent)
+                AddBonus(attackerBonuses, "Commander", 1);
+
+            var shieldWallActive = state.Players.Any(defender =>
+                defender.Role == PlayerRole.Defender &&
+                defender.ShieldWallActive &&
+                TryGetCurrentHex(state, defender, out var defenderQ, out var defenderR) &&
+                defenderQ == q &&
+                defenderR == r &&
+                IsFriendlyCell(defender, cell));
+            if (shieldWallActive)
+                AddBonus(defenderBonuses, "Shield Wall", 2);
+        }
+
+        if (state.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
+        {
+            var totalOwnedHexes = state.Grid.Values.Count(candidate => candidate.OwnerId != null);
+            if (totalOwnedHexes > 0)
+            {
+                var targetAllianceHexes = state.Grid.Values.Count(candidate => candidate.OwnerAllianceId == cell.OwnerAllianceId);
+                if ((double)targetAllianceHexes / totalOwnedHexes > 0.6)
+                    AddBonus(attackerBonuses, "Underdog Pact", 2);
+            }
+        }
+
+        var effectiveAttack = deployedTroops + attackerBonuses.Sum(bonus => bonus.Value);
+        var baseDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
+        if (combatMode == CombatMode.Siege)
+        {
+            var siegeBonus = (int)Math.Ceiling(baseDefence * 0.25);
+            AddBonus(defenderBonuses, "Siege Defender Advantage", siegeBonus);
+        }
+
+        var effectiveDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
+        var attackerWinProbability = CalculateAttackerWinProbability(effectiveAttack, effectiveDefence, combatMode);
+        var defenderAllianceName = cell.OwnerAllianceId == null
+            ? null
+            : state.Alliances.FirstOrDefault(alliance => alliance.Id == cell.OwnerAllianceId)?.Name;
+
+        return new CombatStats(
+            combatMode,
+            deployedTroops,
+            cell.Troops,
+            effectiveAttack,
+            effectiveDefence,
+            attackerWinProbability,
+            tacticalStrikeUsed,
+            attackerBonuses,
+            defenderBonuses,
+            cell.OwnerName ?? "Unknown defender",
+            defenderAllianceName,
+            cell.TerrainType.ToString());
+    }
+
+    private static CombatResolution ResolveCombat(CombatStats combatStats)
+    {
+        return combatStats.CombatMode switch
+        {
+            CombatMode.Classic => ResolveClassicCombat(combatStats),
+            CombatMode.Balanced or CombatMode.Siege => ResolveDiceCombat(combatStats),
+            _ => ResolveDiceCombat(combatStats)
+        };
+    }
+
+    private static CombatResolution ResolveClassicCombat(CombatStats combatStats)
+    {
+        if (combatStats.EffectiveAttack > combatStats.EffectiveDefence)
+        {
+            var attackerTroopsRemaining = Math.Max(1, combatStats.AttackerTroops - combatStats.DefenderTroops);
+            var attackerTroopsLost = combatStats.AttackerTroops - attackerTroopsRemaining;
+            return new CombatResolution(
+                true,
+                attackerTroopsLost,
+                combatStats.DefenderTroops,
+                attackerTroopsRemaining,
+                0,
+                [],
+                []);
+        }
+
+        var lossCap = (int)Math.Ceiling(combatStats.AttackerTroops * 0.5);
+        var attackerTroopsLostOnFailure = Math.Min(combatStats.AttackerTroops, Math.Max(1, Math.Min(lossCap, combatStats.DefenderTroops)));
+        return new CombatResolution(
+            false,
+            attackerTroopsLostOnFailure,
+            0,
+            combatStats.AttackerTroops - attackerTroopsLostOnFailure,
+            combatStats.DefenderTroops,
+            [],
+            []);
+    }
+
+    private static CombatResolution ResolveDiceCombat(CombatStats combatStats)
+    {
+        var attackerTroopsRemaining = combatStats.AttackerTroops;
+        var defenderTroopsRemaining = combatStats.DefenderTroops;
+        var attackDice = new List<int>(BalancedCombatRounds);
+        var defendDice = new List<int>(BalancedCombatRounds);
+        var defenderHitProbability = 1d - combatStats.AttackerWinProbability;
+
+        for (var round = 0; round < BalancedCombatRounds && attackerTroopsRemaining > 0 && defenderTroopsRemaining > 0; round++)
+        {
+            var attackerHits = RollHits(attackerTroopsRemaining, combatStats.AttackerWinProbability);
+            var defenderHits = RollHits(defenderTroopsRemaining, defenderHitProbability);
+            attackDice.Add(attackerHits);
+            defendDice.Add(defenderHits);
+
+            defenderTroopsRemaining = Math.Max(0, defenderTroopsRemaining - attackerHits);
+            attackerTroopsRemaining = Math.Max(0, attackerTroopsRemaining - defenderHits);
+        }
+
+        return new CombatResolution(
+            defenderTroopsRemaining == 0 && attackerTroopsRemaining > 0,
+            combatStats.AttackerTroops - attackerTroopsRemaining,
+            combatStats.DefenderTroops - defenderTroopsRemaining,
+            attackerTroopsRemaining,
+            defenderTroopsRemaining,
+            attackDice.ToArray(),
+            defendDice.ToArray());
+    }
+
+    private static int RollHits(int troopCount, double hitProbability)
+    {
+        var hits = 0;
+        for (var index = 0; index < troopCount; index++)
+        {
+            if (Random.Shared.NextDouble() < hitProbability)
+                hits++;
+        }
+
+        return hits;
+    }
+
+    private static double CalculateAttackerWinProbability(int effectiveAttack, int effectiveDefence, CombatMode combatMode)
+    {
+        if (combatMode == CombatMode.Classic)
+            return effectiveAttack > effectiveDefence ? 1d : 0d;
+
+        var totalPower = effectiveAttack + effectiveDefence;
+        if (totalPower <= 0)
+            return 0.5;
+
+        var rawProbability = (double)effectiveAttack / totalPower;
+        return Math.Clamp(rawProbability, MinCombatHitProbability, MaxCombatHitProbability);
+    }
+
+    private static CombatMode NormalizeCombatMode(CombatMode combatMode)
+    {
+        return Enum.IsDefined(combatMode) ? combatMode : CombatMode.Balanced;
+    }
+
+    private static void AddBonus(List<CombatBonusDetail> bonuses, string source, int value)
+    {
+        if (value == 0)
+            return;
+
+        bonuses.Add(new CombatBonusDetail
+        {
+            Source = source,
+            Value = value
+        });
+    }
+
+    private static CombatBonusDetail CloneBonusDetail(CombatBonusDetail detail)
+    {
+        return new CombatBonusDetail
+        {
+            Source = detail.Source,
+            Value = detail.Value
+        };
     }
 
     public (GameState? state, string? error) ReClaimHex(string roomCode, string userId,
@@ -697,16 +991,12 @@ public class GameplayService(
         switch (state.ClaimMode)
         {
             case ClaimMode.PresenceOnly:
-                {
-                    var troopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
-                    if (claimForSelf)
-                        SetCellOwnerForSelf(cell, player);
-                    else
-                        SetCellOwner(cell, player);
-                    cell.Troops = troopsPlaced;
-                    ResetCarriedTroops(player);
-                    return null;
-                }
+                if (claimForSelf)
+                    SetCellOwnerForSelf(cell, player);
+                else
+                    SetCellOwner(cell, player);
+                cell.Troops = 0;
+                return null;
             case ClaimMode.PresenceWithTroop:
                 if (player.CarriedTroops < 1)
                     return "You must be carrying at least 1 troop to claim a neutral hex in this room.";
@@ -739,13 +1029,11 @@ public class GameplayService(
                 if (!isAdjacent)
                     return "This room requires neutral claims to border your territory.";
 
-                var adjacentTroopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
                 if (claimForSelf)
                     SetCellOwnerForSelf(cell, player);
                 else
                     SetCellOwner(cell, player);
-                cell.Troops = adjacentTroopsPlaced;
-                ResetCarriedTroops(player);
+                cell.Troops = 0;
                 return null;
             default:
                 return "Unsupported claim mode.";
@@ -940,21 +1228,24 @@ public class GameplayService(
 
     internal static void ReturnCarriedTroops(GameState state, PlayerDto player)
     {
-        if (player.CarriedTroops <= 0)
-            return;
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(player);
 
-        HexCell? returnCell = null;
-        if (player.CarriedTroopsSourceQ is int sourceQ && player.CarriedTroopsSourceR is int sourceR &&
-            state.Grid.TryGetValue(HexService.Key(sourceQ, sourceR), out var sourceCell) &&
-            sourceCell.OwnerId == player.Id)
+        if (player.CarriedTroops <= 0)
         {
-            returnCell = sourceCell;
+            ResetCarriedTroops(player);
+            return;
         }
 
-        returnCell ??= state.Grid.Values.FirstOrDefault(cell => cell.OwnerId == player.Id);
-        if (returnCell != null)
-            returnCell.Troops += player.CarriedTroops;
-        ResetCarriedTroops(player);
+        if (player.CarriedTroopsSourceQ is null || player.CarriedTroopsSourceR is null)
+        {
+            var ownedCell = state.Grid.Values.FirstOrDefault(cell => cell.OwnerId == player.Id);
+            if (ownedCell != null)
+            {
+                player.CarriedTroopsSourceQ = ownedCell.Q;
+                player.CarriedTroopsSourceR = ownedCell.R;
+            }
+        }
     }
 
     internal static void RefreshTerritoryCount(GameState state) => WinConditionService.RefreshTerritoryCountCore(state);

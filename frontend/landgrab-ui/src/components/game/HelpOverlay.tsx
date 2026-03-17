@@ -8,6 +8,12 @@ interface HelpOverlayProps {
 
 export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
   const { t } = useTranslation();
+  const beaconItems = [
+    t('guidance.helpBeaconBullet1'),
+    t('guidance.helpBeaconBullet2'),
+    t('guidance.helpBeaconBullet3'),
+    t('guidance.helpBeaconBullet4'),
+  ];
 
   return (
     <div className="hud-modal-sheet open help-overlay" onClick={(e) => e.stopPropagation()}>
@@ -31,6 +37,11 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
           <p>{t('guidance.helpAttack')}</p>
         </div>
 
+        <div className="help-section">
+          <h4>⚔️ {t('guidance.contestedZonesTitle' as never, { defaultValue: 'Contested Zones' })}</h4>
+          <p>{t('guidance.contestedZonesText' as never, { defaultValue: 'Red circles mark hexes that border enemy territory. These are frontline zones where combat can occur.' })}</p>
+        </div>
+
         {dynamics?.terrainEnabled && (
           <div className="help-section">
             <h4>⛰️ {t('guidance.terrainTitle')}</h4>
@@ -52,15 +63,21 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
 
         {dynamics?.beaconEnabled && (
           <div className="help-section">
-            <h4>📡 {t('dynamics.feature.beaconEnabled')}</h4>
-            <p>{t('dynamics.feature.beaconEnabledDesc')}</p>
+            <h4>📡 {t('guidance.beaconTitle')}</h4>
+            <p>{t('guidance.helpBeaconLegend' as never, { defaultValue: "Beacons extend your team's claiming range. In Adjacency Required mode, a teammate's beacon lets allies claim hexes within 2 hexes of the beacon, even without bordering territory. The beacon holder must stay within 1 hex of the beacon location." })}</p>
+            <p className="help-section-intro">{t('guidance.helpBeaconIntro')}</p>
+            <ul className="help-list">
+              {beaconItems.map((item) => (
+                <li key={item} className="help-list-item">{item}</li>
+              ))}
+            </ul>
           </div>
         )}
 
         {dynamics?.hqEnabled && (
           <div className="help-section">
-            <h4>🏛️ {t('dynamics.feature.hq')}</h4>
-            <p>{t('dynamics.feature.hqDesc')}</p>
+            <h4>🏛️ {t('guidance.hqLegendTitle' as never, { defaultValue: 'HQ' })}</h4>
+            <p>{t('guidance.hqLegendText' as never, { defaultValue: "Your alliance's headquarters. When enabled, HQ must be assigned in the lobby. Supply lines connect to HQ - disconnected territory may not regenerate troops. If your HQ is captured, claiming is temporarily frozen!" })}</p>
           </div>
         )}
 
@@ -73,8 +90,8 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
 
         {dynamics?.supplyLinesEnabled && (
           <div className="help-section">
-            <h4>🔗 {t('dynamics.feature.supplyLines')}</h4>
-            <p>{t('dynamics.feature.supplyLinesDesc')}</p>
+            <h4>📦 {t('guidance.supplyLinesLegendTitle' as never, { defaultValue: 'Supply Lines' })}</h4>
+            <p>{t('guidance.supplyLinesLegendText' as never, { defaultValue: "Dashed lines showing the connection from your HQ to your territory. Hexes disconnected from the supply network (not reachable from HQ via owned hexes) won't regenerate troops." })}</p>
           </div>
         )}
 
