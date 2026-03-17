@@ -8,7 +8,8 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  z-index: 2000; /* Above Leaflet controls */
+  z-index: 2000;
+  /* Above Leaflet controls */
   padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom)) 1rem;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -49,11 +50,16 @@
   font-weight: 800;
   line-height: 1.1;
   color: #fff;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-.stat-value.primary { color: #3498db; }
-.stat-value.secondary { color: #f1c40f; }
+.stat-value.primary {
+  color: #3498db;
+}
+
+.stat-value.secondary {
+  color: #f1c40f;
+}
 
 .stat-label {
   font-size: 0.65rem;
@@ -162,6 +168,7 @@
   transform: scale(0.97);
   background: rgba(255, 255, 255, 0.1);
 }
+
 .hud-btn.primary:active {
   background: #2980b9;
 }
@@ -182,7 +189,7 @@
   pointer-events: auto;
   transform: translateY(100%);
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
   max-height: 85vh;
   overflow-y: auto;
   z-index: 3000;
@@ -232,14 +239,22 @@
   margin: 1rem 0;
   width: 100%;
 }
+
 .pickup-controls input[type="range"] {
   flex: 1;
   accent-color: #3498db;
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Ensure map takes full height */
@@ -282,7 +297,7 @@
 .game-layout.hud-active .leaflet-control-attribution::before {
   content: '\00a9';
   font-size: 10px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .game-layout.hud-active .leaflet-control-attribution:hover,
@@ -290,7 +305,7 @@
   font-size: 10px !important;
   max-width: 100%;
   max-height: none;
-  background: rgba(255,255,255,0.85) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
   padding: 0 4px !important;
   opacity: 1;
 }
@@ -317,7 +332,8 @@
 }
 
 .top-status-bar {
-  background: rgba(15, 23, 42, 0.85); /* Tailwind slate-900 */
+  background: rgba(15, 23, 42, 0.85);
+  /* Tailwind slate-900 */
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   color: white;
   z-index: 1000;
@@ -371,12 +387,21 @@
   white-space: nowrap;
 }
 
-.hud-stats-flat .stat-value.primary { color: #3b82f6; } /* blue-500 */
-.hud-stats-flat .stat-value.secondary { color: #10b981; } /* emerald-500 */
+.hud-stats-flat .stat-value.primary {
+  color: #3b82f6;
+}
+
+/* blue-500 */
+.hud-stats-flat .stat-value.secondary {
+  color: #10b981;
+}
+
+/* emerald-500 */
 
 .hud-stats-flat .stat-label {
   font-size: 0.875rem;
-  color: #cbd5e1; /* slate-300 */
+  color: #cbd5e1;
+  /* slate-300 */
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -408,7 +433,7 @@
 }
 
 /* Make sure GameMap fills the remaining wrapper */
-.map-area-wrapper > .map-container {
+.map-area-wrapper>.map-container {
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -437,9 +462,10 @@
   flex-direction: column;
   gap: 0.75rem;
   align-items: center;
-  pointer-events: none; /* Let clicks pass through to map */
+  pointer-events: none;
+  /* Let clicks pass through to map */
   z-index: 1000;
-  background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
 }
 
 .player-hud__relation--team {

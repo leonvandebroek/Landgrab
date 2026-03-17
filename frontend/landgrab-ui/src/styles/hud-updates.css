@@ -63,12 +63,21 @@
   animation: troopRegen 0.6s ease-out;
 }
 
-.hud-stats-flat .stat-value.primary { color: #3b82f6; } /* blue-500 */
-.hud-stats-flat .stat-value.secondary { color: #10b981; } /* emerald-500 */
+.hud-stats-flat .stat-value.primary {
+  color: #3b82f6;
+}
+
+/* blue-500 */
+.hud-stats-flat .stat-value.secondary {
+  color: #10b981;
+}
+
+/* emerald-500 */
 
 .hud-stats-flat .stat-label {
   font-size: 0.75rem;
-  color: #cbd5e1; /* slate-300 */
+  color: #cbd5e1;
+  /* slate-300 */
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -100,7 +109,7 @@
 }
 
 /* Make sure GameMap fills the remaining wrapper */
-.map-area-wrapper > .map-container {
+.map-area-wrapper>.map-container {
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -154,8 +163,14 @@
   font-weight: 800;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
-.stat-value.danger { color: #ff4444; }
-.stat-value.warning { color: #ffaa00; }
+
+.stat-value.danger {
+  color: #ff4444;
+}
+
+.stat-value.warning {
+  color: #ffaa00;
+}
 
 /* --- Large Touch Targets (WCAG 2.5.5 — 44×44 minimum) --- */
 .hud-btn {
@@ -224,6 +239,7 @@
   border-color: #3498db;
   color: #5dade2;
 }
+
 .tile-action-btn.tone-primary:active {
   background: rgba(52, 152, 219, 0.5);
   transform: scale(0.97);
@@ -234,6 +250,7 @@
   border-color: #e74c3c;
   color: #ec7063;
 }
+
 .tile-action-btn.tone-danger:active {
   background: rgba(231, 76, 60, 0.5);
   transform: scale(0.97);
@@ -244,6 +261,7 @@
   border-color: #2ecc71;
   color: #58d68d;
 }
+
 .tile-action-btn.tone-info:active {
   background: rgba(46, 204, 113, 0.45);
   transform: scale(0.97);
@@ -256,6 +274,7 @@
   min-height: 44px;
   font-size: 0.95rem;
 }
+
 .tile-action-btn.tone-neutral:active {
   background: rgba(255, 255, 255, 0.16);
   transform: scale(0.97);
@@ -265,9 +284,11 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
 .tile-action-btn:disabled:active {
   transform: none;
 }
+
 .tile-action-btn:disabled .disabled-reason {
   font-size: 0.75rem;
   font-weight: 400;
@@ -285,8 +306,14 @@
   gap: 0.25rem;
   font-variant-numeric: tabular-nums;
 }
-.game-timer .timer-icon { font-size: 1rem; }
-.game-timer.urgent .stat-value { animation: pulse 1s infinite; }
+
+.game-timer .timer-icon {
+  font-size: 1rem;
+}
+
+.game-timer.urgent .stat-value {
+  animation: pulse 1s infinite;
+}
 
 
 /* ============================================================
@@ -301,6 +328,7 @@
   background: rgba(255, 255, 255, 0.2);
   outline: none;
 }
+
 .pickup-controls input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -312,6 +340,7 @@
   cursor: pointer;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
+
 .pickup-controls input[type="range"]::-moz-range-thumb {
   width: 36px;
   height: 36px;
@@ -328,42 +357,102 @@
    ============================================================ */
 
 @keyframes slideUpPanel {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes pulseSuccess {
-  0%   { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4); }
-  70%  { box-shadow: 0 0 0 15px rgba(46, 204, 113, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 15px rgba(46, 204, 113, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+  }
 }
 
 @keyframes shakeCombat {
-  0%, 100% { transform: translateX(0); }
-  10%, 50%, 90% { transform: translateX(-3px); }
-  30%, 70% { transform: translateX(3px); }
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10%,
+  50%,
+  90% {
+    transform: translateX(-3px);
+  }
+
+  30%,
+  70% {
+    transform: translateX(3px);
+  }
 }
 
 @keyframes fadeSlideIn {
-  from { transform: translateY(20px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes confettiBurst {
-  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(-200px) rotate(720deg); opacity: 0; }
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-200px) rotate(720deg);
+    opacity: 0;
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* ── Troop regeneration pulse — triggered when carried troop count increases ── */
 @keyframes troopRegen {
-  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
-  40%  { transform: scale(1.12); box-shadow: 0 0 0 6px rgba(46, 204, 113, 0);  }
-  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);   }
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+  }
+
+  40% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 6px rgba(46, 204, 113, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+  }
 }
 
 .player-hud__carried--pulse {
@@ -378,8 +467,13 @@
   letter-spacing: 0.01em;
 }
 
-.tile-claimed { animation: pulseSuccess 0.6s ease-out; }
-.combat-shake { animation: shakeCombat 0.4s ease-in-out; }
+.tile-claimed {
+  animation: pulseSuccess 0.6s ease-out;
+}
+
+.combat-shake {
+  animation: shakeCombat 0.4s ease-in-out;
+}
 
 
 /* ============================================================
@@ -407,9 +501,19 @@
 }
 
 @keyframes confettiFall {
-  0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
-  80%  { opacity: 1; }
-  100% { transform: translateY(100vh) rotate(720deg) scale(0.3); opacity: 0; }
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(100vh) rotate(720deg) scale(0.3);
+    opacity: 0;
+  }
 }
 
 
@@ -424,10 +528,21 @@
 }
 
 @keyframes trophyBounce {
-  0%   { transform: scale(0) rotate(-15deg); }
-  50%  { transform: scale(1.25) rotate(5deg); }
-  70%  { transform: scale(0.95) rotate(-2deg); }
-  100% { transform: scale(1) rotate(0deg); }
+  0% {
+    transform: scale(0) rotate(-15deg);
+  }
+
+  50% {
+    transform: scale(1.25) rotate(5deg);
+  }
+
+  70% {
+    transform: scale(0.95) rotate(-2deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
 }
 
 .winner-glow {
@@ -439,8 +554,15 @@
 }
 
 @keyframes glowPulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.75; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.75;
+  }
 }
 
 .gameover-card h1 {
@@ -498,7 +620,7 @@
   /* Slide animation base */
   transform: translateY(0);
   transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 0.28s ease;
+    opacity 0.28s ease;
   will-change: transform, opacity;
 }
 
@@ -518,6 +640,7 @@
     transform: translateY(100%);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -577,8 +700,15 @@
 }
 
 @keyframes enemy-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .action-dock__relation--neutral {
@@ -684,8 +814,8 @@
 
   /* Interaction transitions */
   transition: transform 0.12s ease,
-              box-shadow 0.18s ease,
-              filter 0.15s ease;
+    box-shadow 0.18s ease,
+    filter 0.15s ease;
 
   /* Prevent text selection while tapping fast */
   -webkit-user-select: none;
@@ -699,6 +829,7 @@
     opacity: 0;
     transform: scale(0.85) translateY(6px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -873,8 +1004,15 @@
 }
 
 @keyframes tile-info-slide-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .tile-info-card__header {
@@ -1154,8 +1292,15 @@
 }
 
 @keyframes hud-btn-enter {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .player-hud__btn:hover:not(:disabled) {
@@ -1307,8 +1452,15 @@
 }
 
 @keyframes pulse-target {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.3); }
-  50% { box-shadow: 0 0 0 4px rgba(231, 76, 60, 0); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(231, 76, 60, 0);
+  }
 }
 
 .player-hud__ability--cooldown {
