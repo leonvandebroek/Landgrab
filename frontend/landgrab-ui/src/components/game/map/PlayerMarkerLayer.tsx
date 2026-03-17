@@ -29,6 +29,7 @@ interface PlayerMarkerLayerOptions {
   markerSizeMultiplier: number;
   zoomScale: number;
   color: string;
+  isTacticalStrikeActive: boolean;
   lat: number;
   lng: number;
 }
@@ -57,7 +58,6 @@ export function renderPlayerMarkers({
   const effectivePlayerDisplayPrefs = playerDisplayPrefs ?? DEFAULT_PLAYER_PREFS;
   const playerMarkerSizeMultiplier = MARKER_SIZE_MULTIPLIER[effectivePlayerDisplayPrefs.markerSize] ?? 1;
   const markerZoomScale = getMarkerZoomScale(currentZoom);
-  const myPlayer = state.players.find(player => player.id === myUserId);
 
   for (const player of state.players) {
     const isMe = player.id === myUserId;
@@ -78,6 +78,7 @@ export function renderPlayerMarkers({
         markerSizeMultiplier: playerMarkerSizeMultiplier,
         markerStyle: effectivePlayerDisplayPrefs.markerStyle,
         myUserId,
+        isTacticalStrikeActive: Boolean(player.tacticalStrikeActive),
         player,
         zoomScale: markerZoomScale,
       });
@@ -124,7 +125,7 @@ export function renderPlayerMarkers({
       }
     }
 
-    if (shouldShowPlayerRadius && player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
+    if (player.isBeacon && player.beaconLat != null && player.beaconLng != null) {
       L.circle([player.beaconLat, player.beaconLng], {
         radius: state.tileSizeMeters * 2.5,
         color: player.allianceColor ?? player.color,
@@ -134,26 +135,46 @@ export function renderPlayerMarkers({
         fillOpacity: 0.08,
         interactive: false,
       }).addTo(layerGroup);
+
+      L.circleMarker([player.beaconLat, player.beaconLng], {
+        radius: 16,
+        color: player.allianceColor ?? player.color,
+        weight: 2,
+        fillColor: player.allianceColor ?? player.color,
+        fillOpacity: 0.16,
+        interactive: false,
+        className: 'beacon-pulse-ring',
+      }).addTo(layerGroup);
     }
-  }
 
-  if (shouldShowPlayerMarkers && myPlayer?.isCommandoActive && myPlayer.commandoTargetQ != null && myPlayer.commandoTargetR != null) {
-    const [targetLat, targetLng] = roomHexToLatLng(
-      myPlayer.commandoTargetQ,
-      myPlayer.commandoTargetR,
-      state.mapLat!,
-      state.mapLng!,
-      state.tileSizeMeters,
-    );
+    if (player.isCommandoActive && player.commandoTargetQ != null && player.commandoTargetR != null) {
+      const [targetLat, targetLng] = roomHexToLatLng(
+        player.commandoTargetQ,
+        player.commandoTargetR,
+        state.mapLat!,
+        state.mapLng!,
+        state.tileSizeMeters,
+      );
 
-    L.circleMarker([targetLat, targetLng], {
-      radius: 10,
-      color: '#e74c3c',
-      weight: 3,
-      fillColor: '#e74c3c',
-      fillOpacity: 0.2,
-      interactive: false,
-    }).addTo(layerGroup);
+      L.polyline([[effectiveLat, effectiveLng], [targetLat, targetLng]], {
+        color: '#ff5a4f',
+        weight: 3,
+        opacity: 0.9,
+        dashArray: '8 8',
+        interactive: false,
+        className: 'commando-raid-path',
+      }).addTo(layerGroup);
+
+      L.circleMarker([targetLat, targetLng], {
+        radius: 11,
+        color: '#ff5a4f',
+        weight: 3,
+        fillColor: '#ff5a4f',
+        fillOpacity: 0.16,
+        interactive: false,
+        className: 'commando-target-ring',
+      }).addTo(layerGroup);
+    }
   }
 }
 
@@ -164,6 +185,7 @@ function createPlayerMarkerLayer({
   markerSizeMultiplier,
   zoomScale,
   color,
+  isTacticalStrikeActive,
   lat,
   lng,
 }: PlayerMarkerLayerOptions): PlayerMarkerLayerResult {
@@ -171,6 +193,7 @@ function createPlayerMarkerLayer({
   const selfBoost = isCurrentPlayer ? 1.15 : 1;
   const scale = markerSizeMultiplier * zoomScale * selfBoost;
   const emoji = normalizeEmoji(player.emoji);
+  const markerEffectClassName = isTacticalStrikeActive ? ' tactical-strike-active' : '';
 
   if (markerStyle === 'pin') {
     const width = Math.round(24 * scale);
@@ -178,7 +201,7 @@ function createPlayerMarkerLayer({
     return {
       layer: L.marker([lat, lng], {
         icon: L.divIcon({
-          className: 'player-marker-icon player-marker-pin-wrapper',
+          className: `player-marker-icon player-marker-pin-wrapper${markerEffectClassName}`,
           html: buildPinMarkerHtml(color, width, height, emoji),
           iconSize: [width, height],
           iconAnchor: [Math.round(width / 2), Math.max(1, height - 2)],
@@ -196,7 +219,7 @@ function createPlayerMarkerLayer({
     return {
       layer: L.marker([lat, lng], {
         icon: L.divIcon({
-          className: 'player-marker-icon player-marker-avatar-wrapper',
+          className: `player-marker-icon player-marker-avatar-wrapper${markerEffectClassName}`,
           html: buildAvatarMarkerHtml(color, getPlayerInitial(player.name), size, emoji),
           iconSize: [size, size],
           iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
@@ -215,7 +238,7 @@ function createPlayerMarkerLayer({
     return {
       layer: L.marker([lat, lng], {
         icon: L.divIcon({
-          className: 'player-marker-icon player-marker-flag-wrapper',
+          className: `player-marker-icon player-marker-flag-wrapper${markerEffectClassName}`,
           html: buildFlagMarkerHtml(color, width, height, emoji),
           iconSize: [width, height],
           iconAnchor: [3, Math.max(1, height - 2)],
@@ -234,7 +257,7 @@ function createPlayerMarkerLayer({
   return {
     layer: L.marker([lat, lng], {
       icon: L.divIcon({
-        className: 'player-marker-icon player-marker-dot-wrapper',
+        className: `player-marker-icon player-marker-dot-wrapper${markerEffectClassName}`,
         html: buildDotMarkerHtml(color, diameter, emoji),
         iconSize: [diameter, diameter],
         iconAnchor: [radius, radius],

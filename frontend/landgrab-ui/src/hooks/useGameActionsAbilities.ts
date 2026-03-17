@@ -6,6 +6,11 @@ interface UseGameActionsAbilitiesResult {
   handleActivateBeacon: () => Promise<void>;
   handleDeactivateBeacon: () => Promise<void>;
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
+  handleActivateTacticalStrike: () => Promise<void>;
+  handleActivateReinforce: () => Promise<void>;
+  handleActivateShieldWall: () => Promise<void>;
+  handleActivateEmergencyRepair: () => Promise<void>;
+  handleStartDemolish: () => Promise<void>;
 }
 
 export function useGameActionsAbilities({
@@ -49,9 +54,74 @@ export function useGameActionsAbilities({
     }
   }, [invoke, setError]);
 
+  const handleActivateTacticalStrike = useCallback(async (): Promise<void> => {
+    if (!invoke) {
+      return;
+    }
+
+    try {
+      await invoke('ActivateTacticalStrike');
+    } catch (error) {
+      setError(String(error));
+    }
+  }, [invoke, setError]);
+
+  const handleActivateReinforce = useCallback(async (): Promise<void> => {
+    if (!invoke) {
+      return;
+    }
+
+    try {
+      await invoke('ActivateReinforce');
+    } catch (error) {
+      setError(String(error));
+    }
+  }, [invoke, setError]);
+
+  const handleActivateShieldWall = useCallback(async (): Promise<void> => {
+    if (!invoke) {
+      return;
+    }
+
+    try {
+      await invoke('ActivateShieldWall');
+    } catch (error) {
+      setError(String(error));
+    }
+  }, [invoke, setError]);
+
+  const handleActivateEmergencyRepair = useCallback(async (): Promise<void> => {
+    if (!invoke) {
+      return;
+    }
+
+    try {
+      await invoke('ActivateEmergencyRepair');
+    } catch (error) {
+      setError(String(error));
+    }
+  }, [invoke, setError]);
+
+  const handleStartDemolish = useCallback(async (): Promise<void> => {
+    if (!invoke) {
+      return;
+    }
+
+    try {
+      await invoke('StartDemolish');
+    } catch (error) {
+      setError(String(error));
+    }
+  }, [invoke, setError]);
+
   return {
     handleActivateBeacon,
     handleDeactivateBeacon,
     handleActivateCommandoRaid,
+    handleActivateTacticalStrike,
+    handleActivateReinforce,
+    handleActivateShieldWall,
+    handleActivateEmergencyRepair,
+    handleStartDemolish,
   };
 }

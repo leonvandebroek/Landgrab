@@ -9,7 +9,6 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
     private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private static bool IsHost(GameRoom room, string userId) => GameStateCommon.IsHost(room, userId);
-    private static IReadOnlyDictionary<string, List<CopresenceMode>> CopresencePresets => GameStateCommon.CopresencePresets;
 
     public (GameState? state, string? error) SetHostObserverMode(string roomCode, string userId, bool enabled)
     {
@@ -50,6 +49,8 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             if (room.State.Phase != GamePhase.Playing)
                 return (null, "Live dynamics changes require an active game.");
 
+            room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
+            room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
             room.State.Dynamics.TerrainEnabled = dynamics.TerrainEnabled;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
@@ -57,22 +58,6 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
             room.State.Dynamics.UnderdogPactEnabled = dynamics.UnderdogPactEnabled;
-
-            var preset = dynamics.CopresencePreset;
-            var isNamedPreset = preset != null && preset != "Aangepast";
-            if (isNamedPreset && !CopresencePresets.ContainsKey(preset!))
-                return (null, $"Unknown copresence preset: {preset}");
-
-            room.State.Dynamics.CopresencePreset = preset;
-            if (isNamedPreset && CopresencePresets.TryGetValue(preset!, out var presetModes))
-            {
-                room.State.Dynamics.ActiveCopresenceModes = [.. presetModes];
-            }
-            else
-            {
-                room.State.Dynamics.ActiveCopresenceModes = [.. (dynamics.ActiveCopresenceModes ?? [])
-                    .Where(m => m != CopresenceMode.None)];
-            }
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
@@ -103,97 +88,97 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             switch (eventType)
             {
                 case "Calamity":
-                {
-                    HexCell? target = null;
-                    if (targetQ.HasValue && targetR.HasValue)
                     {
-                        var key = $"{targetQ.Value},{targetR.Value}";
-                        room.State.Grid.TryGetValue(key, out target);
-                    }
-
-                    target ??= room.State.Grid.Values
-                        .Where(c => c.OwnerId is not null && !c.IsMasterTile && c.Troops > 0)
-                        .OrderBy(_ => Random.Shared.Next())
-                        .FirstOrDefault();
-
-                    if (target is not null)
-                    {
-                        target.Troops = 0;
-                        AppendEventLog(room.State, new GameEventLogEntry
+                        HexCell? target = null;
+                        if (targetQ.HasValue && targetR.HasValue)
                         {
-                            Type = "RandomEvent",
-                            Message = $"Calamity! Hex ({target.Q}, {target.R}) lost all troops.",
-                            Q = target.Q,
-                            R = target.R
-                        });
-                    }
-                    break;
-                }
+                            var key = $"{targetQ.Value},{targetR.Value}";
+                            room.State.Grid.TryGetValue(key, out target);
+                        }
 
-                case "Epidemic":
-                {
-                    var targetAlliance = targetAllianceId is not null
-                        ? room.State.Alliances.FirstOrDefault(a => a.Id == targetAllianceId)
-                        : room.State.Alliances.OrderByDescending(a => a.TerritoryCount).FirstOrDefault();
+                        target ??= room.State.Grid.Values
+                            .Where(c => c.OwnerId is not null && !c.IsMasterTile && c.Troops > 0)
+                            .OrderBy(_ => Random.Shared.Next())
+                            .FirstOrDefault();
 
-                    if (targetAlliance is not null)
-                    {
-                        var allianceHexes = room.State.Grid.Values
-                            .Where(c => c.OwnerAllianceId == targetAlliance.Id && c.Troops > 0 && !c.IsMasterTile)
-                            .ToList();
-                        if (allianceHexes.Count > 0)
+                        if (target is not null)
                         {
-                            var target = allianceHexes[Random.Shared.Next(allianceHexes.Count)];
-                            target.Troops = Math.Max(0, target.Troops - 2);
+                            target.Troops = 0;
                             AppendEventLog(room.State, new GameEventLogEntry
                             {
                                 Type = "RandomEvent",
-                                Message = $"Epidemic! {targetAlliance.Name} lost 2 troops at ({target.Q}, {target.R}).",
-                                AllianceId = targetAlliance.Id,
-                                AllianceName = targetAlliance.Name,
+                                Message = $"Calamity! Hex ({target.Q}, {target.R}) lost all troops.",
                                 Q = target.Q,
                                 R = target.R
                             });
                         }
+                        break;
                     }
-                    break;
-                }
+
+                case "Epidemic":
+                    {
+                        var targetAlliance = targetAllianceId is not null
+                            ? room.State.Alliances.FirstOrDefault(a => a.Id == targetAllianceId)
+                            : room.State.Alliances.OrderByDescending(a => a.TerritoryCount).FirstOrDefault();
+
+                        if (targetAlliance is not null)
+                        {
+                            var allianceHexes = room.State.Grid.Values
+                                .Where(c => c.OwnerAllianceId == targetAlliance.Id && c.Troops > 0 && !c.IsMasterTile)
+                                .ToList();
+                            if (allianceHexes.Count > 0)
+                            {
+                                var target = allianceHexes[Random.Shared.Next(allianceHexes.Count)];
+                                target.Troops = Math.Max(0, target.Troops - 2);
+                                AppendEventLog(room.State, new GameEventLogEntry
+                                {
+                                    Type = "RandomEvent",
+                                    Message = $"Epidemic! {targetAlliance.Name} lost 2 troops at ({target.Q}, {target.R}).",
+                                    AllianceId = targetAlliance.Id,
+                                    AllianceName = targetAlliance.Name,
+                                    Q = target.Q,
+                                    R = target.R
+                                });
+                            }
+                        }
+                        break;
+                    }
 
                 case "BonusTroops":
-                {
-                    var targetAlliances = targetAllianceId is not null
-                        ? room.State.Alliances.Where(a => a.Id == targetAllianceId).ToList()
-                        : room.State.Alliances.ToList();
-
-                    foreach (var alliance in targetAlliances)
                     {
-                        var hex = room.State.Grid.Values
-                            .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id && !c.IsMasterTile);
-                        if (hex is not null)
-                            hex.Troops += 2;
+                        var targetAlliances = targetAllianceId is not null
+                            ? room.State.Alliances.Where(a => a.Id == targetAllianceId).ToList()
+                            : room.State.Alliances.ToList();
+
+                        foreach (var alliance in targetAlliances)
+                        {
+                            var hex = room.State.Grid.Values
+                                .FirstOrDefault(c => c.OwnerAllianceId == alliance.Id && !c.IsMasterTile);
+                            if (hex is not null)
+                                hex.Troops += 2;
+                        }
+
+                        var msg = targetAllianceId is not null && targetAlliances.Count > 0
+                            ? $"Bonus Troops! {targetAlliances[0].Name} received +2 troops."
+                            : "Bonus Troops! Every team received +2 troops.";
+                        AppendEventLog(room.State, new GameEventLogEntry
+                        {
+                            Type = "RandomEvent",
+                            Message = msg
+                        });
+                        break;
                     }
 
-                    var msg = targetAllianceId is not null && targetAlliances.Count > 0
-                        ? $"Bonus Troops! {targetAlliances[0].Name} received +2 troops."
-                        : "Bonus Troops! Every team received +2 troops.";
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "RandomEvent",
-                        Message = msg
-                    });
-                    break;
-                }
-
                 case "RushHour":
-                {
-                    room.State.IsRushHour = true;
-                    AppendEventLog(room.State, new GameEventLogEntry
                     {
-                        Type = "RandomEvent",
-                        Message = "Rush Hour! Claimed hexes count double for 5 minutes."
-                    });
-                    break;
-                }
+                        room.State.IsRushHour = true;
+                        AppendEventLog(room.State, new GameEventLogEntry
+                        {
+                            Type = "RandomEvent",
+                            Message = "Rush Hour! Claimed hexes count double for 5 minutes."
+                        });
+                        break;
+                    }
 
                 default:
                     return (null, $"Unknown event type: {eventType}");

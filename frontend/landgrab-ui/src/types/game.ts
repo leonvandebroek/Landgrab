@@ -5,22 +5,18 @@ export type WinConditionType = 'TerritoryPercent' | 'Elimination' | 'TimedGame';
 export type GameAreaMode = 'Centered' | 'Drawn' | 'Pattern';
 export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starburst';
 
-export type CopresenceMode =
-  | 'None' | 'Standoff' | 'PresenceBonus' | 'Rally' | 'Drain'
-  | 'Beacon' | 'FrontLine' | 'Shepherd' | 'CommandoRaid';
-
 export type TerrainType = 'None' | 'Water' | 'Building' | 'Road' | 'Path' | 'Forest' | 'Park' | 'Hills' | 'Steep';
 
 export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Defender' | 'Engineer';
 
 export interface GameDynamics {
-  activeCopresenceModes: CopresenceMode[];
-  copresencePreset: string | null;
   terrainEnabled: boolean;
   playerRolesEnabled: boolean;
   fogOfWarEnabled: boolean;
+  beaconEnabled: boolean;
   supplyLinesEnabled: boolean;
   hqEnabled: boolean;
+  tileDecayEnabled: boolean;
   timedEscalationEnabled: boolean;
   underdogPactEnabled: boolean;
 }
@@ -106,6 +102,18 @@ export interface Player {
   commandoTargetR?: number;
   commandoDeadline?: string;
   commandoCooldownUntil?: string;
+  tacticalStrikeActive?: boolean;
+  tacticalStrikeExpiry?: string;
+  tacticalStrikeCooldownUntil?: string;
+  reinforceCooldownUntil?: string;
+  shieldWallActive?: boolean;
+  shieldWallExpiry?: string;
+  shieldWallCooldownUntil?: string;
+  emergencyRepairCooldownUntil?: string;
+  demolishActive?: boolean;
+  demolishTargetKey?: string;
+  demolishStartedAt?: string;
+  demolishCooldownUntil?: string;
 }
 
 export interface AllianceDto {

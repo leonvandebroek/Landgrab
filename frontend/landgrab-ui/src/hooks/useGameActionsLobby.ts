@@ -5,7 +5,6 @@ import { useGameplayStore } from '../stores/gameplayStore';
 import { useUiStore } from '../stores/uiStore';
 import type {
   ClaimMode,
-  CopresenceMode,
   GameAreaPattern,
   GameDynamics,
   HexCoordinate,
@@ -24,6 +23,8 @@ interface UseGameActionsLobbyResult {
   handleCreateRoom: () => void;
   handleJoinRoom: (code: string) => void;
   handleSetAlliance: (name: string) => void;
+  handleAssignPlayerRole: (targetPlayerId: string, role: string) => void;
+  handleRandomizeRoles: () => void;
   handleSetMapLocation: (lat: number, lng: number) => void;
   handleSetTileSize: (meters: number) => void;
   handleUseCenteredGameArea: () => void;
@@ -32,8 +33,8 @@ interface UseGameActionsLobbyResult {
   handleSetClaimMode: (mode: ClaimMode) => void;
   handleSetAllowSelfClaim: (allow: boolean) => Promise<void>;
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
-  handleSetCopresenceModes: (modes: CopresenceMode[]) => void;
-  handleSetCopresencePreset: (preset: string) => void;
+  handleSetBeaconEnabled: (enabled: boolean) => void;
+  handleSetTileDecayEnabled: (enabled: boolean) => void;
   handleSetGameDynamics: (dynamics: GameDynamics) => void;
   handleSetPlayerRole: (role: string) => Promise<void>;
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
@@ -119,6 +120,22 @@ export function useGameActionsLobby({
     }
 
     invoke('SetAlliance', name).catch(cause => setError(String(cause)));
+  }, [invoke, setError]);
+
+  const handleAssignPlayerRole = useCallback((targetPlayerId: string, role: string): void => {
+    if (!invoke) {
+      return;
+    }
+
+    invoke('AssignPlayerRole', targetPlayerId, role).catch(cause => setError(String(cause)));
+  }, [invoke, setError]);
+
+  const handleRandomizeRoles = useCallback((): void => {
+    if (!invoke) {
+      return;
+    }
+
+    invoke('RandomizeRoles').catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
   const handleSetMapLocation = useCallback((lat: number, lng: number): void => {
@@ -207,20 +224,20 @@ export function useGameActionsLobby({
     invoke('SetWinCondition', type, value).catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
-  const handleSetCopresenceModes = useCallback((modes: CopresenceMode[]): void => {
+  const handleSetBeaconEnabled = useCallback((enabled: boolean): void => {
     if (!invoke) {
       return;
     }
 
-    invoke('SetCopresenceModes', modes).catch(cause => setError(String(cause)));
+    invoke('SetBeaconEnabled', enabled).catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
-  const handleSetCopresencePreset = useCallback((preset: string): void => {
+  const handleSetTileDecayEnabled = useCallback((enabled: boolean): void => {
     if (!invoke) {
       return;
     }
 
-    invoke('SetCopresencePreset', preset).catch(cause => setError(String(cause)));
+    invoke('SetTileDecayEnabled', enabled).catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
   const handleSetGameDynamics = useCallback((dynamics: GameDynamics): void => {
@@ -359,6 +376,8 @@ export function useGameActionsLobby({
     handleCreateRoom,
     handleJoinRoom,
     handleSetAlliance,
+    handleAssignPlayerRole,
+    handleRandomizeRoles,
     handleSetMapLocation,
     handleSetTileSize,
     handleUseCenteredGameArea,
@@ -367,8 +386,8 @@ export function useGameActionsLobby({
     handleSetClaimMode,
     handleSetAllowSelfClaim,
     handleSetWinCondition,
-    handleSetCopresenceModes,
-    handleSetCopresencePreset,
+    handleSetBeaconEnabled,
+    handleSetTileDecayEnabled,
     handleSetGameDynamics,
     handleSetPlayerRole,
     handleSetAllianceHQ,

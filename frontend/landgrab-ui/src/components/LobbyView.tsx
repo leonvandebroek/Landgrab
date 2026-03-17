@@ -7,7 +7,6 @@ import { useGameStore } from '../stores/gameStore';
 import { useUiStore } from '../stores/uiStore';
 import type {
   ClaimMode,
-  CopresenceMode,
   GameAreaPattern,
   GameDynamics,
   HexCoordinate,
@@ -32,6 +31,8 @@ export interface LobbyViewActions {
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
   onSetAlliance: (name: string) => void;
+  onAssignPlayerRole: (targetPlayerId: string, role: string) => void;
+  onRandomizeRoles: () => void;
   onSetMapLocation: (lat: number, lng: number) => void;
   onSetTileSize: (meters: number) => void;
   onUseCenteredGameArea: () => void;
@@ -40,8 +41,8 @@ export interface LobbyViewActions {
   onSetClaimMode: (mode: ClaimMode) => void;
   onSetAllowSelfClaim: (allow: boolean) => Promise<void>;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
-  onSetCopresenceModes: (modes: CopresenceMode[]) => void;
-  onSetCopresencePreset: (preset: string) => void;
+  onSetBeaconEnabled: (enabled: boolean) => void;
+  onSetTileDecayEnabled: (enabled: boolean) => void;
   onSetGameDynamics: (dynamics: GameDynamics) => void;
   onSetPlayerRole: (role: string) => Promise<void>;
   onSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
@@ -121,6 +122,8 @@ export function LobbyView({
           onCreateRoom={actions.onCreateRoom}
           onJoinRoom={actions.onJoinRoom}
           onSetAlliance={actions.onSetAlliance}
+          onAssignPlayerRole={actions.onAssignPlayerRole}
+          onRandomizeRoles={actions.onRandomizeRoles}
           onSetMapLocation={actions.onSetMapLocation}
           onSetTileSize={actions.onSetTileSize}
           onUseCenteredGameArea={actions.onUseCenteredGameArea}
@@ -129,8 +132,8 @@ export function LobbyView({
           onSetClaimMode={actions.onSetClaimMode}
           onSetAllowSelfClaim={actions.onSetAllowSelfClaim}
           onSetWinCondition={actions.onSetWinCondition}
-          onSetCopresenceModes={actions.onSetCopresenceModes}
-          onSetCopresencePreset={actions.onSetCopresencePreset}
+          onSetBeaconEnabled={actions.onSetBeaconEnabled}
+          onSetTileDecayEnabled={actions.onSetTileDecayEnabled}
           onSetGameDynamics={actions.onSetGameDynamics}
           onSetPlayerRole={actions.onSetPlayerRole}
           onSetAllianceHQ={actions.onSetAllianceHQ}

@@ -5,7 +5,6 @@ import { roomHexToLatLng } from '../components/map/HexMath';
 import type {
   AuthState,
   ClaimMode,
-  CopresenceMode,
   GameAreaPattern,
   GameDynamics,
   GameState,
@@ -45,6 +44,8 @@ export interface UseGameActionsResult {
   handleCreateRoom: () => void;
   handleJoinRoom: (code: string) => void;
   handleSetAlliance: (name: string) => void;
+  handleAssignPlayerRole: (targetPlayerId: string, role: string) => void;
+  handleRandomizeRoles: () => void;
   handleSetMapLocation: (lat: number, lng: number) => void;
   handleSetTileSize: (meters: number) => void;
   handleUseCenteredGameArea: () => void;
@@ -53,14 +54,19 @@ export interface UseGameActionsResult {
   handleSetClaimMode: (mode: ClaimMode) => void;
   handleSetAllowSelfClaim: (allow: boolean) => Promise<void>;
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
-  handleSetCopresenceModes: (modes: CopresenceMode[]) => void;
-  handleSetCopresencePreset: (preset: string) => void;
+  handleSetBeaconEnabled: (enabled: boolean) => void;
+  handleSetTileDecayEnabled: (enabled: boolean) => void;
   handleSetGameDynamics: (dynamics: GameDynamics) => void;
   handleSetPlayerRole: (role: string) => Promise<void>;
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
   handleActivateBeacon: () => Promise<void>;
   handleDeactivateBeacon: () => Promise<void>;
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
+  handleActivateTacticalStrike: () => Promise<void>;
+  handleActivateReinforce: () => Promise<void>;
+  handleActivateShieldWall: () => Promise<void>;
+  handleActivateEmergencyRepair: () => Promise<void>;
+  handleStartDemolish: () => Promise<void>;
   handleSetMasterTile: (lat: number, lng: number) => void;
   handleSetMasterTileByHex: (q: number, r: number) => void;
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;

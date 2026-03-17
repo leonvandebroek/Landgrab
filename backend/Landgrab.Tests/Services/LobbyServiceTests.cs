@@ -158,6 +158,155 @@ public sealed class LobbyServiceTests
         error.Should().Be("Room not found.");
     }
 
+    [Fact]
+    public void AssignPlayerRole_HostAssignsScoutRole_UpdatesTargetPlayerRole()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer(hostId, "Alice")
+            .WithPlayerAsHost(hostId)
+            .AddPlayer("p2", "Bob")
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.AssignPlayerRole(ServiceTestContext.RoomCode, hostId, "p2", "Scout");
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        context.Player("p2").Role.Should().Be(PlayerRole.Scout);
+    }
+
+    [Fact]
+    public void AssignPlayerRole_NonHost_ReturnsError()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer(hostId, "Alice")
+            .WithPlayerAsHost(hostId)
+            .AddPlayer("p2", "Bob")
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.AssignPlayerRole(ServiceTestContext.RoomCode, "p2", "p2", "Scout");
+
+        result.Should().BeNull();
+        error.Should().Be("Only the host can assign player roles.");
+    }
+
+    [Fact]
+    public void AssignPlayerRole_TargetPlayerMissing_ReturnsError()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer(hostId, "Alice")
+            .WithPlayerAsHost(hostId)
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.AssignPlayerRole(ServiceTestContext.RoomCode, hostId, "missing", "Scout");
+
+        result.Should().BeNull();
+        error.Should().Be("Target player is not in the room.");
+    }
+
+    [Fact]
+    public void RandomizeRoles_WithFiveConnectedPlayers_AssignsFourUniqueRolesAndOneNone()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer(hostId, "Host")
+            .WithPlayerAsHost(hostId)
+            .AddPlayer("p2", "Bob")
+            .AddPlayer("p3", "Cara")
+            .AddPlayer("p4", "Daan")
+            .AddPlayer("p5", "Evi")
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.RandomizeRoles(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+
+        var assignedRoles = context.State.Players.Select(player => player.Role).ToList();
+        assignedRoles.Count(role => role == PlayerRole.None).Should().Be(1);
+        assignedRoles.Should().Contain(PlayerRole.Commander);
+        assignedRoles.Should().Contain(PlayerRole.Scout);
+        assignedRoles.Should().Contain(PlayerRole.Defender);
+        assignedRoles.Should().Contain(PlayerRole.Engineer);
+    }
+
+    [Fact]
+    public void RandomizeRoles_IgnoresDisconnectedPlayersAndClearsExistingRole()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer(hostId, "Host")
+            .WithPlayerAsHost(hostId)
+            .AddPlayer("p2", "Bob")
+            .AddPlayer("p3", "Cara")
+            .AddPlayer("p4", "Daan")
+            .WithPlayerRole("p4", PlayerRole.Engineer)
+            .Build();
+        state.Players.Single(player => player.Id == "p4").IsConnected = false;
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.RandomizeRoles(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        context.Player("p4").Role.Should().Be(PlayerRole.None);
+        context.State.Players.Where(player => player.IsConnected).Select(player => player.Role)
+            .Should().OnlyContain(role => role != PlayerRole.None);
+    }
+
+    [Fact]
+    public void RandomizeRoles_NonHost_ReturnsError()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer(hostId, "Host")
+            .WithPlayerAsHost(hostId)
+            .AddPlayer("p2", "Bob")
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.RandomizeRoles(ServiceTestContext.RoomCode, "p2");
+
+        result.Should().BeNull();
+        error.Should().Be("Only the host can randomize roles.");
+    }
+
     // ─── AssignStartingTile ─────────────────────────────────────────────
 
     [Fact]

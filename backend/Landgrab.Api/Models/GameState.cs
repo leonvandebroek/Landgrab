@@ -47,19 +47,6 @@ public enum GameAreaPattern
 
 public enum ReClaimMode { Alliance, Self, Abandon }
 
-public enum CopresenceMode
-{
-    None,
-    Standoff,
-    PresenceBonus,
-    Rally,
-    Drain,
-    Beacon,
-    FrontLine,
-    Shepherd,
-    CommandoRaid
-}
-
 public enum TerrainType
 {
     None,
@@ -84,8 +71,8 @@ public enum PlayerRole
 
 public class GameDynamics
 {
-    public List<CopresenceMode> ActiveCopresenceModes { get; set; } = [];
-    public string? CopresencePreset { get; set; }
+    public bool BeaconEnabled { get; set; }
+    public bool TileDecayEnabled { get; set; }
     public bool TerrainEnabled { get; set; }
     public bool PlayerRolesEnabled { get; set; }
     public bool FogOfWarEnabled { get; set; }
@@ -135,6 +122,24 @@ public class PlayerDto
     public int? CommandoTargetR { get; set; }
     public DateTime? CommandoDeadline { get; set; }
     public DateTime? CommandoCooldownUntil { get; set; }
+
+    // Commander abilities
+    public bool TacticalStrikeActive { get; set; }
+    public DateTime? TacticalStrikeExpiry { get; set; }
+    public DateTime? TacticalStrikeCooldownUntil { get; set; }
+    public DateTime? ReinforceCooldownUntil { get; set; }
+
+    // Defender abilities
+    public bool ShieldWallActive { get; set; }
+    public DateTime? ShieldWallExpiry { get; set; }
+    public DateTime? ShieldWallCooldownUntil { get; set; }
+
+    // Engineer abilities
+    public DateTime? EmergencyRepairCooldownUntil { get; set; }
+    public bool DemolishActive { get; set; }
+    public string? DemolishTargetKey { get; set; }
+    public DateTime? DemolishStartedAt { get; set; }
+    public DateTime? DemolishCooldownUntil { get; set; }
 }
 
 public class AllianceDto

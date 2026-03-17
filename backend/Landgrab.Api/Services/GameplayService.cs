@@ -49,30 +49,30 @@ public class GameplayService(
             var gridChanged = false;
             SetPlayerLocation(room.State, player, lat, lng);
 
+            if (room.State.Dynamics.PlayerRolesEnabled)
+                gridChanged |= UpdateDemolishProgress(room.State, player);
+
             // ── Phase 3: Rally — update IsFortified for all hexes ──
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Rally))
+            var ownedCells = room.State.Grid.Values
+                .Where(c => c.OwnerId != null)
+                .ToList();
+            var previousFortifiedStates = ownedCells.ToDictionary(
+                cell => HexService.Key(cell.Q, cell.R),
+                cell => cell.IsFortified);
+
+            foreach (var cell in ownedCells)
             {
-                var ownedCells = room.State.Grid.Values
-                    .Where(c => c.OwnerId != null)
-                    .ToList();
-                var previousFortifiedStates = ownedCells.ToDictionary(
-                    cell => HexService.Key(cell.Q, cell.R),
-                    cell => cell.IsFortified);
-
-                foreach (var cell in ownedCells)
-                {
-                    var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
-                    var alliedCount = playersInCell.Count(p =>
-                        cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId);
-                    cell.IsFortified = alliedCount >= 2;
-                }
-
-                gridChanged |= ownedCells.Any(cell =>
-                    previousFortifiedStates[HexService.Key(cell.Q, cell.R)] != cell.IsFortified);
+                var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
+                var alliedCount = playersInCell.Count(p =>
+                    cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId);
+                cell.IsFortified = alliedCount >= 2;
             }
 
+            gridChanged |= ownedCells.Any(cell =>
+                previousFortifiedStates[HexService.Key(cell.Q, cell.R)] != cell.IsFortified);
+
             // ── Phase 3: Shepherd — update LastVisitedAt for hexes player is in ──
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Shepherd))
+            if (room.State.Dynamics.TileDecayEnabled)
             {
                 foreach (var cell in room.State.Grid.Values.Where(c => c.OwnerId != null))
                 {
@@ -283,18 +283,9 @@ public class GameplayService(
 
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
 
-            // ── Dynamics: Standoff + Water blocking (non-own/non-allied hexes only) ──
+            // ── Dynamics: Water blocking (non-own/non-allied hexes only) ──
             if (cell.OwnerId != userId && !sameAllianceHex)
             {
-                // Standoff: hostile physical copresence blocks tile actions
-                if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Standoff))
-                {
-                    var playersInHex = GetPlayersInHex(room.State, q, r);
-                    if (playersInHex.Any(p => p.Id != userId
-                        && (player.AllianceId == null || p.AllianceId != player.AllianceId)))
-                        return (null, "Standoff! A hostile player is blocking this tile.", null, null);
-                }
-
                 // Water terrain is impassable
                 if (room.State.Dynamics.TerrainEnabled && cell.TerrainType == TerrainType.Water)
                     return (null, "Water terrain is impassable.", null, null);
@@ -342,10 +333,6 @@ public class GameplayService(
             var attackerBonus = 0;
             var defenderBonus = 0;
 
-            // PresenceBonus: attacker physically present gets +1 effective strength
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.PresenceBonus))
-                attackerBonus += 1;
-
             // Terrain defence bonus
             if (room.State.Dynamics.TerrainEnabled)
             {
@@ -357,22 +344,15 @@ public class GameplayService(
                 };
             }
 
-            // Phase 3: Rally — fortified hex gets +1 defence
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Rally) && cell.IsFortified)
+            var tacticalStrikeUsed = room.State.Dynamics.PlayerRolesEnabled && player.TacticalStrikeActive;
+
+            // Phase 4: Rally — fortified hex gets +1 defence
+            if (cell.IsFortified && !tacticalStrikeUsed)
                 defenderBonus += 1;
 
-            // Phase 3: FrontLine — count adjacent hexes with allied player present → +1 attack per hex
-            if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.FrontLine))
-            {
-                var frontLineBonus = HexService.Neighbors(q, r)
-                    .Count(n =>
-                    {
-                        var playersInNeighbor = GetPlayersInHex(room.State, n.q, n.r);
-                        return playersInNeighbor.Any(p => p.Id != userId
-                            && player.AllianceId != null && p.AllianceId == player.AllianceId);
-                    });
-                attackerBonus += frontLineBonus;
-            }
+            // Phase 4: Fort — permanent +1 defence bonus
+            if (cell.IsFort && !tacticalStrikeUsed)
+                defenderBonus += 1;
 
             // Phase 4: Commander — present in attacking hex gives +1 attack
             if (room.State.Dynamics.PlayerRolesEnabled)
@@ -381,11 +361,17 @@ public class GameplayService(
                 if (playersInAttackHex.Any(p => p.Role == PlayerRole.Commander
                     && p.AllianceId == player.AllianceId))
                     attackerBonus += 1;
-            }
 
-            // Phase 4: Fort — permanent +1 defence bonus
-            if (room.State.Dynamics.PlayerRolesEnabled && cell.IsFort)
-                defenderBonus += 1;
+                if (room.State.Players.Any(defender => defender.Role == PlayerRole.Defender
+                    && defender.ShieldWallActive
+                    && TryGetCurrentHex(room.State, defender, out var defenderQ, out var defenderR)
+                    && defenderQ == q
+                    && defenderR == r
+                    && IsFriendlyCell(defender, cell)))
+                {
+                    defenderBonus += 2;
+                }
+            }
 
             // Phase 8: Underdog Pact — attack bonus if target's alliance controls >60% hexes
             if (room.State.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
@@ -416,6 +402,11 @@ public class GameplayService(
             player.CarriedTroops -= deployedTroops;
             if (player.CarriedTroops == 0)
                 ResetCarriedTroops(player);
+            if (tacticalStrikeUsed)
+            {
+                player.TacticalStrikeActive = false;
+                player.TacticalStrikeExpiry = null;
+            }
             winConditionService.RefreshTerritoryCount(room.State);
             AppendEventLog(room.State, new GameEventLogEntry
             {
@@ -540,11 +531,12 @@ public class GameplayService(
             if (room.State.Phase != GamePhase.Playing)
                 return new ReinforcementTickResult(null, "Reinforcements only apply while the game is playing.", []);
 
+            ExpireTimedAbilities(room.State, DateTime.UtcNow);
+
             // Rush Hour auto-end: lasts only one regen cycle
             if (room.State.IsRushHour)
                 room.State.IsRushHour = false;
 
-            var drainEnabled = room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Drain);
             var terrainEnabled = room.State.Dynamics.TerrainEnabled;
 
             // Phase 8: Timed Escalation — increase regen after time thresholds
@@ -619,7 +611,7 @@ public class GameplayService(
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
             {
                 // Drain: skip regen if hostile player physically present
-                if (drainEnabled && cell.OwnerId != null && !cell.IsMasterTile)
+                if (cell.OwnerId != null && !cell.IsMasterTile)
                 {
                     var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
                     var hostilePresent = playersInHex.Any(p => p.Id != cell.OwnerId
@@ -640,7 +632,7 @@ public class GameplayService(
                 }
 
                 // Phase 3: Shepherd — owned tile unvisited >3 min decays instead of regenerating
-                if (room.State.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Shepherd)
+                if (room.State.Dynamics.TileDecayEnabled
                     && cell.OwnerId != null && !cell.IsMasterTile)
                 {
                     var unvisitedThreshold = DateTime.UtcNow.AddMinutes(-3);
@@ -729,23 +721,23 @@ public class GameplayService(
                     ResetCarriedTroops(player);
                 return null;
             case ClaimMode.AdjacencyRequired:
-            var isAdjacent = HexService.IsAdjacentToOwned(state.Grid, q, r, player.Id, player.AllianceId);
-            // Phase 5: Beacon — teammate beacon within 2 hexes extends adjacency
-            if (!isAdjacent && state.Dynamics.ActiveCopresenceModes.Contains(CopresenceMode.Beacon))
-            {
-                isAdjacent = state.Players.Any(p => p.IsBeacon
-                    && p.Id != player.Id
-                    && p.AllianceId == player.AllianceId
-                    && p.BeaconLat.HasValue && p.BeaconLng.HasValue
-                    && state.MapLat.HasValue && state.MapLng.HasValue
-                    && HexService.HexDistance(
-                        HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
-                            state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).q - q,
-                        HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
-                            state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).r - r) <= 2);
-            }
-            if (!isAdjacent)
-                return "This room requires neutral claims to border your territory.";
+                var isAdjacent = HexService.IsAdjacentToOwned(state.Grid, q, r, player.Id, player.AllianceId);
+                // Phase 5: Beacon — teammate beacon within 2 hexes extends adjacency
+                if (!isAdjacent && state.Dynamics.BeaconEnabled)
+                {
+                    isAdjacent = state.Players.Any(p => p.IsBeacon
+                        && p.Id != player.Id
+                        && p.AllianceId == player.AllianceId
+                        && p.BeaconLat.HasValue && p.BeaconLng.HasValue
+                        && state.MapLat.HasValue && state.MapLng.HasValue
+                        && HexService.HexDistance(
+                            HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
+                                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).q - q,
+                            HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
+                                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).r - r) <= 2);
+                }
+                if (!isAdjacent)
+                    return "This room requires neutral claims to border your territory.";
 
                 var adjacentTroopsPlaced = player.CarriedTroops > 0 ? player.CarriedTroops : 1;
                 if (claimForSelf)
@@ -794,8 +786,43 @@ public class GameplayService(
 
     internal static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r) =>
         state.Players
-            .Where(player => player.CurrentHexQ == q && player.CurrentHexR == r)
+            .Where(player => TryGetCurrentHex(state, player, out var playerQ, out var playerR)
+                && playerQ == q
+                && playerR == r)
             .ToList();
+
+    internal static bool TryGetCurrentHex(GameState state, PlayerDto player, out int q, out int r)
+    {
+        if (player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue)
+        {
+            q = player.CurrentHexQ.Value;
+            r = player.CurrentHexR.Value;
+            return true;
+        }
+
+        if (player.CurrentLat.HasValue && player.CurrentLng.HasValue && state.HasMapLocation)
+        {
+            var currentHex = HexService.LatLngToHexForRoom(
+                player.CurrentLat.Value,
+                player.CurrentLng.Value,
+                state.MapLat!.Value,
+                state.MapLng!.Value,
+                state.TileSizeMeters);
+            q = currentHex.q;
+            r = currentHex.r;
+            return true;
+        }
+
+        q = 0;
+        r = 0;
+        return false;
+    }
+
+    internal static bool IsFriendlyCell(PlayerDto player, HexCell cell)
+    {
+        return cell.OwnerId == player.Id
+            || (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId);
+    }
 
     internal static string? ValidateCoordinates(double lat, double lng)
     {
@@ -827,6 +854,64 @@ public class GameplayService(
 
         player.CurrentHexQ = currentHex.q;
         player.CurrentHexR = currentHex.r;
+    }
+
+    private static bool UpdateDemolishProgress(GameState state, PlayerDto player)
+    {
+        if (!player.DemolishActive || player.DemolishTargetKey == null || player.DemolishStartedAt == null)
+            return false;
+
+        if (!TryGetCurrentHex(state, player, out var currentQ, out var currentR))
+            return false;
+
+        var currentHexKey = HexService.Key(currentQ, currentR);
+        if (currentHexKey != player.DemolishTargetKey)
+        {
+            player.DemolishActive = false;
+            player.DemolishTargetKey = null;
+            player.DemolishStartedAt = null;
+            return false;
+        }
+
+        if ((DateTime.UtcNow - player.DemolishStartedAt.Value).TotalMinutes < 2)
+            return false;
+
+        if (state.Grid.TryGetValue(player.DemolishTargetKey, out var targetCell) && targetCell.IsFort)
+        {
+            targetCell.IsFort = false;
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "DemolishCompleted",
+                Message = $"{player.Name} demolished the fort at ({targetCell.Q}, {targetCell.R}).",
+                PlayerId = player.Id,
+                PlayerName = player.Name,
+                Q = targetCell.Q,
+                R = targetCell.R
+            });
+        }
+
+        player.DemolishActive = false;
+        player.DemolishTargetKey = null;
+        player.DemolishStartedAt = null;
+        return true;
+    }
+
+    private static void ExpireTimedAbilities(GameState state, DateTime now)
+    {
+        foreach (var player in state.Players)
+        {
+            if (player.TacticalStrikeActive && player.TacticalStrikeExpiry <= now)
+            {
+                player.TacticalStrikeActive = false;
+                player.TacticalStrikeExpiry = null;
+            }
+
+            if (player.ShieldWallActive && player.ShieldWallExpiry <= now)
+            {
+                player.ShieldWallActive = false;
+                player.ShieldWallExpiry = null;
+            }
+        }
     }
 
 

@@ -12,6 +12,7 @@ import { showTroopAnimations } from '../../utils/zoomThresholds';
 import { injectTerrainPatternSVG } from './TerrainPatternDefs';
 import { useGridDiff } from '../../hooks/useGridDiff';
 import { renderTroopAnimations } from './TroopAnimationLayer';
+import { TroopSplashLayer } from './TroopSplashLayer';
 import { MapLayerToggle, renderHexGridLayers, renderPlayerMarkers, TimeOverlay } from '../game/map';
 
 interface LocationPoint {
@@ -88,6 +89,7 @@ export function GameMap({
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
+  const [mapOverlayTick, setMapOverlayTick] = useState(0);
   const [layerPrefs, setLayerPrefs] = useState<MapLayerPreferences>(() => ({ ...DEFAULT_MAP_LAYER_PREFS }));
   const [basemapError, setBasemapError] = useState(false);
   const [basemapDismissed, setBasemapDismissed] = useState(false);
@@ -104,6 +106,7 @@ export function GameMap({
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const prevGridRef = useRef<Record<string, HexCell>>({});
   const onHexClickRef = useRef(onHexClick);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
   useEffect(() => {
     onHexClickRef.current = onHexClick;
@@ -133,32 +136,12 @@ export function GameMap({
   );
 
   const renderedGrid = gridOverride ?? state.grid;
+  const hasPendingMapOverlays = useMemo(
+    () => Object.values(renderedGrid).some(cell => Boolean(cell.engineerBuiltAt) && !cell.isFort)
+      || state.players.some(player => Boolean(player.demolishActive && player.demolishStartedAt)),
+    [renderedGrid, state.players],
+  );
   const inactiveHexKeySet = useMemo(() => new Set(inactiveHexKeys), [inactiveHexKeys]);
-  const hexRenderPlayersKey = useMemo(
-    () => state.players
-      .map(player => [
-        player.id,
-        player.isHost ? '1' : '0',
-        player.color ?? '',
-        player.allianceColor ?? '',
-        player.allianceId ?? '',
-      ].join(':'))
-      .join('|'),
-    [state.players],
-  );
-  const hexRenderPlayers = useMemo(() => state.players, [hexRenderPlayersKey]);
-  const hexRenderState = useMemo(
-    () => ({
-      alliances: state.alliances,
-      dynamics: state.dynamics,
-      mapLat: state.mapLat,
-      mapLng: state.mapLng,
-      players: hexRenderPlayers,
-      tileSizeMeters: state.tileSizeMeters,
-    }) as GameState,
-    [hexRenderPlayers, state.alliances, state.dynamics, state.mapLat, state.mapLng, state.tileSizeMeters],
-  );
-
   const applyBasemapError = useCallback((nextValue: boolean) => {
     if (basemapErrorRef.current === nextValue) {
       return;
@@ -211,9 +194,9 @@ export function GameMap({
 
     const basemapResetTimeoutId = basemapErrorRef.current || basemapDismissedRef.current
       ? window.setTimeout(() => {
-          applyBasemapError(false);
-          applyBasemapDismissed(false);
-        }, 0)
+        applyBasemapError(false);
+        applyBasemapDismissed(false);
+      }, 0)
       : null;
 
     const basemapEntries = [
@@ -272,6 +255,7 @@ export function GameMap({
     playerLayerGroupRef.current = L.layerGroup().addTo(map);
     animLayerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+    setMapInstance(map);
 
     if (navigateRef) {
       navigateRef.current = (lat: number, lng: number) => map.setView([lat, lng]);
@@ -306,6 +290,7 @@ export function GameMap({
       map.off();
       map.remove();
       mapRef.current = null;
+      setMapInstance(null);
       layerGroupRef.current = null;
       playerLayerGroupRef.current = null;
       animLayerGroupRef.current = null;
@@ -384,6 +369,18 @@ export function GameMap({
   }, []);
 
   useEffect(() => {
+    if (!hasPendingMapOverlays) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setMapOverlayTick(tick => tick + 1);
+    }, 1_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasPendingMapOverlays]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) {
       return;
@@ -455,7 +452,7 @@ export function GameMap({
 
   useEffect(() => {
     const layerGroup = layerGroupRef.current;
-    if (!layerGroup || hexRenderState.mapLat == null || hexRenderState.mapLng == null) {
+    if (!layerGroup || state.mapLat == null || state.mapLng == null) {
       return;
     }
 
@@ -471,11 +468,33 @@ export function GameMap({
       prevGridRef,
       renderedGrid,
       selectedHex,
-      state: hexRenderState,
+      state: {
+        alliances: state.alliances,
+        dynamics: state.dynamics,
+        mapLat: state.mapLat,
+        mapLng: state.mapLng,
+        players: state.players,
+        tileSizeMeters: state.tileSizeMeters,
+      } as GameState,
     });
 
     applyLayerPane(layerGroup, HEX_LAYER_PANE);
-  }, [currentHex, currentZoom, hexRenderState, inactiveHexKeySet, layerPrefs, myUserId, renderedGrid, selectedHex]);
+  }, [
+    currentHex,
+    currentZoom,
+    inactiveHexKeySet,
+    layerPrefs,
+    mapOverlayTick,
+    myUserId,
+    renderedGrid,
+    selectedHex,
+    state.alliances,
+    state.dynamics,
+    state.mapLat,
+    state.mapLng,
+    state.players,
+    state.tileSizeMeters,
+  ]);
 
   useEffect(() => {
     const playerLayerGroup = playerLayerGroupRef.current;
@@ -506,6 +525,7 @@ export function GameMap({
     layerPrefs,
     myUserId,
     playerDisplayPrefs,
+    state,
     state.mapLat,
     state.mapLng,
     state.players,
@@ -547,6 +567,14 @@ export function GameMap({
   return (
     <div className={`game-map-container time-${timePeriod}`}>
       <div ref={containerRef} className="leaflet-map" />
+      <TroopSplashLayer
+        key={state.roomCode}
+        events={state.eventLog}
+        map={mapInstance}
+        mapLat={state.mapLat}
+        mapLng={state.mapLng}
+        tileSizeMeters={state.tileSizeMeters}
+      />
       {layerPrefs.timeOverlay && <TimeOverlay timePeriod={timePeriod} />}
       {basemapError && !basemapDismissed && (
         <div className="basemap-error-banner" role="status" aria-live="polite">
@@ -559,14 +587,14 @@ export function GameMap({
             >
               {t('map.basemapRetry')}
             </button>
-              <button
-                type="button"
-                className="basemap-error-banner__dismiss"
-                aria-label={t('game.close')}
-                onClick={() => applyBasemapDismissed(true)}
-              >
-                ✕
-              </button>
+            <button
+              type="button"
+              className="basemap-error-banner__dismiss"
+              aria-label={t('game.close')}
+              onClick={() => applyBasemapDismissed(true)}
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}

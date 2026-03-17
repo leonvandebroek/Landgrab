@@ -2,13 +2,13 @@ import type { TFunction } from 'i18next';
 import type { GameDynamics, GameState } from '../types/game';
 
 const DEFAULT_GAME_DYNAMICS: GameDynamics = {
-  activeCopresenceModes: [],
-  copresencePreset: null,
   terrainEnabled: false,
   playerRolesEnabled: false,
   fogOfWarEnabled: false,
+  beaconEnabled: false,
   supplyLinesEnabled: false,
   hqEnabled: false,
+  tileDecayEnabled: false,
   timedEscalationEnabled: false,
   underdogPactEnabled: false,
 };

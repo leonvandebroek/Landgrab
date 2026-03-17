@@ -544,12 +544,10 @@ const nl = {
     terrainTitle: 'Terrein',
     fogOfWarTitle: 'Oorlogsmist',
     fogOfWarText: 'Vijandelijke troepenaantallen blijven verborgen totdat je dichtbij genoeg bent, en bossen kunnen ze nog langer verhullen.',
-    copresenceTitle: 'Dichte ontmoetingen',
     helpMovement: 'Loop rond in de echte wereld. Je positie wordt op de kaart getoond.',
     helpClaim: 'Stap op een neutrale hex om het voor je team te claimen.',
     helpAttack: 'Stap op een vijandige hex om aan te vallen. Gevechten verlopen automatisch op basis van troepaantallen.',
     helpTerrain: 'Verschillende terreintypen geven gevechts-bonussen of -straffen.',
-    helpCopresence: 'Als meerdere spelers op dezelfde hex staan, kunnen er speciale regels voor dichte ontmoetingen gelden op basis van de spelmodus.',
   },
   settings: {
     display: {
@@ -627,11 +625,6 @@ const nl = {
     },
     roles: {
       title: 'Spelersrollen',
-      body: 'Elke speler kiest een speciale rol met unieke vaardigheden. Gebruik de sterke punten van je rol strategisch!',
-    },
-    copresence: {
-      title: 'Dichte ontmoetingen',
-      body: 'Als meerdere spelers op dezelfde hex staan, gelden er speciale regels voor dichte ontmoetingen op basis van de ingeschakelde modi.',
     },
     timedEscalation: {
       title: 'Getimede Escalatie',
@@ -673,6 +666,9 @@ const nl = {
     teamsWaitingAssignment_other: 'Wachten tot {{count}} spelers een team kiezen.',
     teamsAllReady: 'Alle verbonden spelers zijn klaar voor de volgende stap.',
     teamsReady: 'Alle spelers hebben een alliantie!',
+    assignRole: 'Rol toewijzen',
+    randomizeRoles: 'Rollen willekeurig verdelen',
+    randomizeRolesDesc: 'Verdeel rollen willekeurig over alle spelers',
     rulesTitle: 'Spelregels',
     rulesDesc: 'Kies hoe het spel verloopt. De standaardwaarden staan al ingesteld — sla over als ze goed zijn.',
     rulesTileSizeLabel: 'Tegelgrootte',
@@ -788,27 +784,10 @@ const nl = {
     presetsLabel: 'Presets',
     presetsDesc: 'Kies een gameplay-preset om dichte ontmoetingen snel in te stellen.',
     presetIncludes: 'Bevat:',
-    presetNoModes: 'Geen copresence-modi — alleen klassieke regels',
     customLabel: 'Aangepaste Modi',
     customDesc: 'Selecteer individuele modi voor dichte ontmoetingen voor een eigen ervaring.',
     featuresLabel: 'Extra Functies',
     featuresDesc: 'Schakel optionele gameplay-lagen in of uit.',
-    preset: {
-      Klassiek: { title: 'Klassiek', detail: 'Klassieke regels — geen dichte ontmoetingen.' },
-      Territorium: { title: 'Territorium', detail: 'Gebiedscontrole met Herder en Drain.' },
-      Formatie: { title: 'Formatie', detail: 'Formatiespel met Frontlijn en Samenkomst.' },
-      Aangepast: { title: 'Aangepast', detail: 'Kies je eigen combinatie van modi voor dichte ontmoetingen.' },
-    },
-    mode: {
-      Standoff: { title: 'Standoff', detail: 'Vijandige spelers blokkeren gebiedacties.' },
-      PresenceBonus: { title: 'Aanwezigheidsbonus', detail: 'Fysiek aanwezig zijn geeft gevechtsdobbelsteenbonus.' },
-      Rally: { title: 'Samenkomst', detail: 'Meerdere bondgenoten op een gebied versterken deze.' },
-      Drain: { title: 'Drain', detail: 'Vijandige aanwezigheid stopt gebiedregeneratie.' },
-      Beacon: { title: 'Baken', detail: 'Markeer je positie om het claimbereik van bondgenoten te vergroten.' },
-      FrontLine: { title: 'Frontlijn', detail: 'Aangrenzende bondgenootaanwezigheid versterkt aanval.' },
-      Shepherd: { title: 'Herder', detail: 'Niet-bezochte eigen gebieden vervallen na verloop van tijd.' },
-      CommandoRaid: { title: 'Commando Raid', detail: 'Getimede raids omzeilen aangrenzendheidsregels.' },
-    },
     feature: {
       terrain: 'Terreineffecten',
       terrainDesc: 'Echt terrein beïnvloedt gevecht en beweging.',
@@ -816,10 +795,14 @@ const nl = {
       playerRolesDesc: 'Wijs speciale rollen toe met unieke vaardigheden.',
       fogOfWar: 'Fog of War',
       fogOfWarDesc: 'Zie alleen hexen nabij je territorium.',
+      beaconEnabled: 'Baken',
+      beaconEnabledDesc: 'Plaats bakens op de kaart die zichtbaar zijn voor alle teamleden.',
       supplyLines: 'Bevoorradingslijnen',
       supplyLinesDesc: 'Losgekoppeld territorium stopt met regenereren.',
       hq: 'HQ-mechaniek',
       hqDesc: 'Elk team heeft een inneembaar hoofdkwartier.',
+      tileDecayEnabled: 'Tegelverval',
+      tileDecayEnabledDesc: 'Onbezette tegels verliezen geleidelijk troepen over de tijd.',
       timedEscalation: 'Tijdsescalatie',
       timedEscalationDesc: 'Spelintensiteit neemt toe na verloop van tijd.',
       underdogPact: 'Underdogpact',
@@ -873,6 +856,109 @@ const nl = {
     fortDesc: 'Permanent +1 verdedigingsbonus.',
     commanderBonus: '+1 Commandant aanval',
     defenderBonus: 'Verdediger: dubbele regeneratie',
+  },
+  roles: {
+    status: {
+      activate: 'Activeren',
+      active: 'Actief',
+      cooldown: 'Afkoeltijd',
+      inProgress: 'Bezig',
+    },
+    Commander: {
+      title: 'Commandant',
+      intro: 'Ik leid door het goede voorbeeld te geven. Waar ik sta, winnen we.',
+      abilities: {
+        warBonus: {
+          title: 'Oorlogsbonus',
+          description: '+1 aanval wanneer fysiek aanwezig op gevechtshex',
+          shortDesc: 'Melee aanvalsboost',
+        },
+        tacticalStrike: {
+          title: 'Tactische Aanval',
+          description: 'Je volgende aanval negeert alle verdedigingsbonussen (forten, versterking)',
+          shortDesc: 'Negeert forten bij volgende aanval',
+          cooldown: '20 min afkoeltijd',
+        },
+        reinforce: {
+          title: 'Versterken',
+          description: 'Op een eigen hex: voeg direct +3 troepen toe',
+          shortDesc: '+3 troepen op huidige hex',
+          cooldown: '15 min afkoeltijd',
+        },
+      },
+    },
+    Scout: {
+      title: 'Verkenner',
+      intro: 'Ik ga waar niemand durft. Ik vind zwakheden.',
+      abilities: {
+        extendedVision: {
+          title: 'Uitgebreid Zicht',
+          description: '+3 mist-van-oorlog radius',
+          shortDesc: 'Verder zien',
+        },
+        firstStrike: {
+          title: 'Eerste Bezoek',
+          description: 'Eerste bezoek aan elke hex geeft +2 troepen aan dichtstbijzijnde eigen tegel',
+          shortDesc: 'Bonus bij eerste bezoek',
+        },
+        commandoRaid: {
+          title: 'Commando Aanval',
+          description: 'Claim een hex tot 3 hexen verderop, zonder aangrenzend te zijn',
+          shortDesc: 'Hex op afstand claimen',
+          cooldown: '30 min afkoeltijd',
+        },
+      },
+    },
+    Defender: {
+      title: 'Verdediger',
+      intro: 'Ik houd de lijn. Niets komt langs me terwijl ik hier sta.',
+      abilities: {
+        presenceShield: {
+          title: 'Aanwezigheidsschild',
+          description: 'Dubbele troepenregeneratie elke tick terwijl je op eigen hex staat',
+          shortDesc: 'Dubbele regen op eigen hex',
+        },
+        shieldWall: {
+          title: 'Schildmuur',
+          description: 'Vijandelijke aanval op jouw hex heeft +2 extra troepen nodig (5 minuten actief)',
+          shortDesc: '+2 verdediging voor 5 min',
+          cooldown: '20 min afkoeltijd',
+        },
+        lastStand: {
+          title: 'Laatste Verzet',
+          description: 'Als vijand jouw hex verovert, word je verplaatst naar dichtstbijzijnde eigen hex',
+          shortDesc: 'Gered bij verovering',
+        },
+      },
+    },
+    Engineer: {
+      title: 'Ingenieur',
+      intro: 'Ik bouw infrastructuur. Mijn versterkingen overleven iedereen.',
+      abilities: {
+        fortConstruction: {
+          title: 'Fortbouw',
+          description: 'Blijf 10 min op eigen hex om een permanent fort te bouwen (+1 verdediging)',
+          shortDesc: 'Bouw permanente forten',
+        },
+        emergencyRepair: {
+          title: 'Noodreparatie',
+          description: 'Herstel direct +3 troepen op huidige hex',
+          shortDesc: '+3 troepen direct',
+          cooldown: '15 min afkoeltijd',
+        },
+        demolish: {
+          title: 'Slopen',
+          description: 'Op een vijandelijk fort: verwijder het na 2 min fysieke aanwezigheid',
+          shortDesc: 'Vernietig vijandelijke forten',
+          cooldown: '30 min afkoeltijd',
+        },
+      },
+    },
+  },
+  roleModal: {
+    passive: 'Passief',
+    activate: 'Activeren',
+    gotIt: 'Begrepen!',
   },
   phase5: {
     beacon: 'Baken',

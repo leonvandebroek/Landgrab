@@ -16,7 +16,6 @@ export function ReviewSummary({ gameState, tileSizeText: _tileSizeText }: Props)
         t(`claimMode.${gameState.claimMode}.title`),
         t(`winCondition.${gameState.winConditionType}`),
     ].join(' · ');
-    const activeCopresenceModes = gameState.dynamics?.activeCopresenceModes ?? [];
     const activeFeatures = FEATURE_KEYS.filter(key => gameState.dynamics?.[featureField(key)]);
 
     return (
@@ -43,17 +42,9 @@ export function ReviewSummary({ gameState, tileSizeText: _tileSizeText }: Props)
                 {rulesText}
             </ReviewItem>
             <ReviewItem label={t('wizard.reviewDynamics' as never)}>
-                {activeCopresenceModes.length > 0
-                    ? activeCopresenceModes.map(mode => t(`dynamics.mode.${mode}.title` as never)).join(', ')
-                    : t('dynamics.presetNoModes' as never)}
-                {activeFeatures.length > 0 && (
-                    <>
-                        <br />
-                        <span className="wizard-review-helper">
-                            {activeFeatures.map(key => t(`dynamics.feature.${key}` as never)).join(', ')}
-                        </span>
-                    </>
-                )}
+                {activeFeatures.length > 0
+                    ? activeFeatures.map(key => t(`dynamics.feature.${key}` as never)).join(', ')
+                    : '—'}
             </ReviewItem>
         </div>
     );

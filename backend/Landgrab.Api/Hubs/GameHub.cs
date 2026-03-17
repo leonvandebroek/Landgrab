@@ -34,23 +34,9 @@ public partial class GameHub : Hub
     private const int MaxTemplateNameLength = 100;
     private const int MaxDescriptionLength = 500;
     private const int MaxCustomAreaCoordinates = 500;
-    private const int MaxModesCount = 20;
     private const int MaxTargetAllianceIdsCount = 20;
-    private const string CustomCopresencePreset = "Aangepast";
     private static readonly ConcurrentDictionary<string, DateTime> _lastLocationUpdate = new();
     private static readonly TimeSpan UpdatePlayerLocationInterval = TimeSpan.FromMilliseconds(500);
-    private static readonly HashSet<string> RemovedCopresenceModes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Duel",
-        "Stealth",
-        "Hostage",
-        "JagerProoi",
-        "Ambush",
-        "Toll",
-        "Scout",
-        "Relay",
-        "PresenceBattle"
-    };
     private static readonly HashSet<string> RemovedPlayerRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         "Saboteur"
@@ -173,74 +159,17 @@ public partial class GameHub : Hub
         ValidateStringLength(value, MaxShortStringLength) &&
         Enum.TryParse<TEnum>(value, true, out _);
 
-    private static bool ValidateCopresencePreset(string? preset) =>
-        !string.IsNullOrWhiteSpace(preset) &&
-        ValidateStringLength(preset, MaxShortStringLength) &&
-        (string.Equals(preset, CustomCopresencePreset, StringComparison.Ordinal) ||
-         (LobbyService.CopresencePresets.ContainsKey(preset) && !PresetContainsRemovedModes(preset)));
-
-    private static bool ValidateGameDynamics(GameDynamics? dynamics)
-    {
-        if (dynamics == null || dynamics.ActiveCopresenceModes == null)
-        {
-            return false;
-        }
-
-        if (dynamics.CopresencePreset != null && !ValidateCopresencePreset(dynamics.CopresencePreset))
-        {
-            return false;
-        }
-
-        if (dynamics.ActiveCopresenceModes.Count > MaxModesCount)
-        {
-            return false;
-        }
-
-        return dynamics.ActiveCopresenceModes.All(mode =>
-            Enum.IsDefined(mode) &&
-            mode != CopresenceMode.None &&
-            !RemovedCopresenceModes.Contains(mode.ToString()));
-    }
+    private static bool ValidateGameDynamics(GameDynamics? dynamics) => dynamics != null;
 
     private static bool IsSupportedPlayerRole(string? role) =>
         ValidateEnumString<PlayerRole>(role) && !RemovedPlayerRoles.Contains(role!);
 
-    private static bool PresetContainsRemovedModes(string preset)
-    {
-        if (!LobbyService.CopresencePresets.TryGetValue(preset, out var presetModes))
-        {
-            return false;
-        }
-
-        return presetModes.Any(mode => RemovedCopresenceModes.Contains(mode.ToString()));
-    }
-
-    private static bool IsRecognizedCopresenceMode(string? mode) =>
-        !string.IsNullOrWhiteSpace(mode) &&
-        ValidateStringLength(mode, MaxShortStringLength) &&
-        (ValidateEnumString<CopresenceMode>(mode) || RemovedCopresenceModes.Contains(mode));
-
-    private static bool IsSupportedCopresenceMode(string? mode) =>
-        ValidateEnumString<CopresenceMode>(mode) &&
-        !string.Equals(mode, nameof(CopresenceMode.None), StringComparison.OrdinalIgnoreCase) &&
-        !RemovedCopresenceModes.Contains(mode!);
-
     private static GameDynamics SanitizeGameDynamics(GameDynamics dynamics)
     {
-        var sanitizedModes = dynamics.ActiveCopresenceModes
-            .Where(mode => mode != CopresenceMode.None && !RemovedCopresenceModes.Contains(mode.ToString()))
-            .ToList();
-
-        var preset = dynamics.CopresencePreset;
-        if (!string.IsNullOrWhiteSpace(preset) && PresetContainsRemovedModes(preset))
-        {
-            preset = CustomCopresencePreset;
-        }
-
         return new GameDynamics
         {
-            ActiveCopresenceModes = sanitizedModes,
-            CopresencePreset = preset,
+            BeaconEnabled = dynamics.BeaconEnabled,
+            TileDecayEnabled = dynamics.TileDecayEnabled,
             TerrainEnabled = dynamics.TerrainEnabled,
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
             FogOfWarEnabled = dynamics.FogOfWarEnabled,

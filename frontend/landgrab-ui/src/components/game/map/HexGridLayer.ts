@@ -14,7 +14,7 @@ import {
 } from '../../../utils/zoomThresholds';
 import { findContestedEdges } from '../../../utils/contestedEdges';
 import { computeSupplyNetwork } from '../../../utils/supplyNetwork';
-import { roomHexCornerLatLngs } from '../../map/HexMath';
+import { latLngToRoomHex, roomHexCornerLatLngs } from '../../map/HexMath';
 import { buildHexTooltipHtml } from './HexTooltip';
 import {
   getHexBorderStyle,
@@ -30,6 +30,54 @@ import {
 } from './hexRendering';
 
 const DEFAULT_PLAYER_MARKER_COLOR = '#4f8cff';
+const FORT_BUILD_DURATION_MS = 10 * 60 * 1000;
+const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
+
+function getEngineerBuildProgress(engineerBuiltAt: string | undefined): number | null {
+  if (!engineerBuiltAt) {
+    return null;
+  }
+
+  const builtAtMs = Date.parse(engineerBuiltAt);
+  if (!Number.isFinite(builtAtMs)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, (Date.now() - builtAtMs) / FORT_BUILD_DURATION_MS));
+}
+
+function getTimedProgress(startedAt: string | undefined, durationMs: number): number | null {
+  if (!startedAt) {
+    return null;
+  }
+
+  const startedAtMs = Date.parse(startedAt);
+  if (!Number.isFinite(startedAtMs)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, (Date.now() - startedAtMs) / durationMs));
+}
+
+function getPlayerHexKey(player: GameState['players'][number], state: GameState): string | null {
+  if (player.currentHexQ != null && player.currentHexR != null) {
+    return `${player.currentHexQ},${player.currentHexR}`;
+  }
+
+  if (player.currentLat == null || player.currentLng == null || state.mapLat == null || state.mapLng == null) {
+    return null;
+  }
+
+  const [q, r] = latLngToRoomHex(
+    player.currentLat,
+    player.currentLng,
+    state.mapLat,
+    state.mapLng,
+    state.tileSizeMeters,
+  );
+
+  return `${q},${r}`;
+}
 
 interface RenderHexGridLayerOptions {
   currentHex: [number, number] | null;
@@ -79,6 +127,27 @@ export function renderHexGridLayers({
   const shouldShowContestEffects = layerPrefs.contestedEdges && showContestEffects(currentZoom);
   const shouldShowSupplyLines = layerPrefs.supplyLines && showSupplyLines(currentZoom);
   const shouldApplyFogOfWar = layerPrefs.fogOfWar;
+  const shieldWallHexKeys = new Set(
+    state.players
+      .filter((player) => player.shieldWallActive)
+      .map((player) => getPlayerHexKey(player, state))
+      .filter((key): key is string => key != null),
+  );
+  const demolishProgressByHexKey = new Map<string, number>();
+
+  for (const player of state.players) {
+    if (!player.demolishActive || !player.demolishTargetKey) {
+      continue;
+    }
+
+    const progress = getTimedProgress(player.demolishStartedAt, DEMOLISH_DURATION_MS);
+    if (progress == null) {
+      continue;
+    }
+
+    const currentProgress = demolishProgressByHexKey.get(player.demolishTargetKey) ?? 0;
+    demolishProgressByHexKey.set(player.demolishTargetKey, Math.max(currentProgress, progress));
+  }
 
   const supplyDisconnected = new Set<string>();
   let supplyEdges: Array<{ fromCenter: L.LatLngExpression; toCenter: L.LatLngExpression; teamColor: string }> = [];
@@ -113,6 +182,7 @@ export function renderHexGridLayers({
       pointerDownRef,
       renderedGrid,
       selectedHex,
+      shieldWallHexKeys,
       shouldApplyFogOfWar,
       shouldShowContestEffects,
       shouldShowBorderEffects,
@@ -122,6 +192,7 @@ export function renderHexGridLayers({
       shouldShowTerrainIcons,
       shouldShowTroopBadges,
       state,
+      demolishProgressByHexKey,
       supplyDisconnected,
     });
   }
@@ -147,6 +218,7 @@ interface RenderHexCellOptions {
   pointerDownRef: MutableRefObject<{ x: number; y: number } | null>;
   renderedGrid: Record<string, HexCell>;
   selectedHex: [number, number] | null;
+  shieldWallHexKeys: ReadonlySet<string>;
   shouldApplyFogOfWar: boolean;
   shouldShowContestEffects: boolean;
   shouldShowBorderEffects: boolean;
@@ -156,6 +228,7 @@ interface RenderHexCellOptions {
   shouldShowTerrainIcons: boolean;
   shouldShowTroopBadges: boolean;
   state: GameState;
+  demolishProgressByHexKey: ReadonlyMap<string, number>;
   supplyDisconnected: ReadonlySet<string>;
 }
 
@@ -175,6 +248,7 @@ function renderHexCell({
   pointerDownRef,
   renderedGrid,
   selectedHex,
+  shieldWallHexKeys,
   shouldApplyFogOfWar,
   shouldShowContestEffects,
   shouldShowBorderEffects,
@@ -184,6 +258,7 @@ function renderHexCell({
   shouldShowTerrainIcons,
   shouldShowTroopBadges,
   state,
+  demolishProgressByHexKey,
   supplyDisconnected,
 }: RenderHexCellOptions) {
   const cellKey = `${cell.q},${cell.r}`;
@@ -200,6 +275,8 @@ function renderHexCell({
   const isFriendlyAllianceCell = Boolean(myPlayer?.allianceId && cell.ownerAllianceId === myPlayer.allianceId);
   const { isFrontier, isContested } = getHexTerritoryStatus(cell, renderedGrid, isFriendlyAllianceCell);
   const isFogHidden = shouldApplyFogOfWar && isFogHiddenHex(cell, isInactive, state.dynamics?.fogOfWarEnabled);
+  const hasShieldWall = shieldWallHexKeys.has(cellKey);
+  const demolishProgress = demolishProgressByHexKey.get(cellKey) ?? null;
   const hasTerrain = Boolean(state.dynamics?.terrainEnabled && terrainType !== 'None');
   const { fillColor, fillOpacity } = getHexFillStyle({
     cell,
@@ -327,6 +404,30 @@ function renderHexCell({
     }).addTo(layerGroup);
   }
 
+  if (hasShieldWall && !isInactive) {
+    L.polygon(corners, {
+      className: 'hex-shield-wall-overlay',
+      color: '#3b82f6',
+      weight: 3,
+      opacity: 0.95,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.12,
+      interactive: false,
+      bubblingMouseEvents: false,
+    }).addTo(layerGroup);
+
+    L.marker([centerLat, centerLng], {
+      icon: L.divIcon({
+        className: 'hex-shield-wall-marker',
+        html: '<div class="hex-shield-wall-icon" aria-hidden="true">🛡️</div>',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+      }),
+      interactive: false,
+      zIndexOffset: 26,
+    }).addTo(layerGroup);
+  }
+
   if (shouldShowContestEffects && cell.troops > 0 && cell.ownerId && isContested && !isInactive && !isFogHidden) {
     L.circle([centerLat, centerLng], {
       radius: state.tileSizeMeters * 0.3,
@@ -367,6 +468,50 @@ function renderHexCell({
     }).addTo(layerGroup);
   }
 
+  const engineerBuildProgress = !cell.isFort && !isInactive && !isFogHidden
+    ? getEngineerBuildProgress(cell.engineerBuiltAt)
+    : null;
+
+  if (engineerBuildProgress != null) {
+    L.marker([centerLat, centerLng], {
+      icon: L.divIcon({
+        className: 'hex-fort-progress',
+        html: `<div class="fort-progress-ring" style="--progress:${engineerBuildProgress.toFixed(4)}"></div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      }),
+      interactive: false,
+      zIndexOffset: -15,
+    }).addTo(layerGroup);
+  }
+
+  if (demolishProgress != null && !isInactive) {
+    const remaining = Math.max(0, 1 - demolishProgress);
+    L.marker([centerLat, centerLng], {
+      icon: L.divIcon({
+        className: 'hex-demolish-progress',
+        html: `<div class="demolish-progress-ring" style="--progress:${demolishProgress.toFixed(4)};--remaining:${remaining.toFixed(4)}"></div>`,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
+      }),
+      interactive: false,
+      zIndexOffset: 28,
+    }).addTo(layerGroup);
+  }
+
+  if (cell.isFort && !isInactive && !isFogHidden) {
+    L.marker([centerLat, centerLng], {
+      icon: L.divIcon({
+        className: 'hex-fort-icon-wrapper',
+        html: '<div class="hex-fort-icon" aria-hidden="true">🏰</div>',
+        iconSize: [18, 18],
+        iconAnchor: [0, 18],
+      }),
+      interactive: false,
+      zIndexOffset: 18,
+    }).addTo(layerGroup);
+  }
+
   if (shouldShowBuildingIcons) {
     if (cell.isMasterTile && !isInactive && !isFogHidden) {
       L.marker([centerLat, centerLng], {
@@ -378,19 +523,6 @@ function renderHexCell({
         }),
         interactive: false,
         zIndexOffset: -12,
-      }).addTo(layerGroup);
-    }
-
-    if (cell.isFort && !isInactive && !isFogHidden) {
-      L.marker([centerLat, centerLng], {
-        icon: L.divIcon({
-          className: 'hex-building-icon',
-          html: '<div class="building fort">🏰</div>',
-          iconSize: [28, 28],
-          iconAnchor: [14, 28],
-        }),
-        interactive: false,
-        zIndexOffset: -10,
       }).addTo(layerGroup);
     }
 

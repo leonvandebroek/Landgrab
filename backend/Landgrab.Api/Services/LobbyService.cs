@@ -12,7 +12,6 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
     internal static int MinimumDrawnHexCount => GameStateCommon.MinimumDrawnHexCount;
     internal static string[] Colors => GameStateCommon.Colors;
     internal static string[] AllianceColors => GameStateCommon.AllianceColors;
-    internal static IReadOnlyDictionary<string, List<CopresenceMode>> CopresencePresets => GameStateCommon.CopresencePresets;
 
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
@@ -42,6 +41,86 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Invalid role.");
 
             player.Role = parsedRole;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) AssignPlayerRole(string roomCode, string hostId, string targetPlayerId, string role)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, hostId))
+                return (null, "Only the host can assign player roles.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Roles can only be assigned during lobby.");
+            if (!room.State.Dynamics.PlayerRolesEnabled)
+                return (null, "Player roles are not enabled for this game.");
+
+            var player = room.State.Players.FirstOrDefault(p => p.Id == targetPlayerId);
+            if (player == null)
+                return (null, "Target player is not in the room.");
+
+            if (!Enum.TryParse<PlayerRole>(role, out var parsedRole))
+                return (null, "Invalid role.");
+
+            player.Role = parsedRole;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) RandomizeRoles(string roomCode, string hostId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, hostId))
+                return (null, "Only the host can randomize roles.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Roles can only be randomized during lobby.");
+            if (!room.State.Dynamics.PlayerRolesEnabled)
+                return (null, "Player roles are not enabled for this game.");
+
+            foreach (var player in room.State.Players)
+            {
+                player.Role = PlayerRole.None;
+            }
+
+            var shuffledRoles = new List<PlayerRole>
+            {
+                PlayerRole.Commander,
+                PlayerRole.Scout,
+                PlayerRole.Defender,
+                PlayerRole.Engineer
+            };
+
+            for (var index = shuffledRoles.Count - 1; index > 0; index--)
+            {
+                var swapIndex = Random.Shared.Next(index + 1);
+                (shuffledRoles[index], shuffledRoles[swapIndex]) = (shuffledRoles[swapIndex], shuffledRoles[index]);
+            }
+
+            var connectedPlayers = room.State.Players
+                .Where(player => player.IsConnected)
+                .ToList();
+
+            for (var index = 0; index < connectedPlayers.Count; index++)
+            {
+                connectedPlayers[index].Role = index < shuffledRoles.Count
+                    ? shuffledRoles[index]
+                    : PlayerRole.None;
+            }
+
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);

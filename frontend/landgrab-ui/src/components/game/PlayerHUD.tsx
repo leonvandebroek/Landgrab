@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import { getTileActionDisabledReasonText } from './tileInteraction';
@@ -6,6 +6,7 @@ import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
 import { useSecondTick } from '../../hooks/useSecondTick';
 import { terrainDefendBonus } from '../../utils/terrainColors';
+import { AbilityInfoSheet } from './AbilityInfoSheet';
 
 /* ═══════════════════════════════════════════════════════════════════════
    PlayerHUD — Unified bottom-of-screen HUD
@@ -30,7 +31,36 @@ interface PlayerHUDProps {
   dynamics?: GameDynamics;
   onActivateBeacon: () => void;
   onDeactivateBeacon: () => void;
+  onActivateTacticalStrike: () => void;
+  onActivateReinforce: () => void;
+  onActivateShieldWall: () => void;
+  onActivateEmergencyRepair: () => void;
+  onStartDemolish: () => void;
 }
+
+interface AbilityButtonConfig {
+  key: string;
+  icon: string;
+  title: string;
+  description: string;
+  shortDescription?: string;
+  status: string;
+  className: string;
+  accentColor?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+  role?: AbilityRole;
+  abilityKey?: string;
+}
+
+type AbilityRole = 'Commander' | 'Scout' | 'Defender' | 'Engineer';
+
+const ROLE_ACCENT_COLORS: Record<AbilityRole, string> = {
+  Commander: '#f6c453',
+  Scout: '#6bc5ff',
+  Defender: '#72e0b5',
+  Engineer: '#ffb366',
+};
 
 type HexRelation = 'own' | 'team' | 'allied' | 'enemy' | 'neutral';
 
@@ -64,13 +94,31 @@ const TERRAIN_ICONS: Record<string, string> = {
   Steep: '🏔️',
 };
 
-function formatCountdown(isoDate: string | undefined): string | null {
-  if (!isoDate) return null;
-  const remaining = new Date(isoDate).getTime() - Date.now();
+const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
+
+function formatTimeRemaining(until: string | undefined): string | null {
+  if (!until) return null;
+
+  const remaining = new Date(until).getTime() - Date.now();
   if (remaining <= 0) return null;
+
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function formatDurationRemaining(startedAt: string | undefined, durationMs: number): string | null {
+  if (!startedAt) {
+    return null;
+  }
+
+  const startTime = new Date(startedAt).getTime();
+
+  if (Number.isNaN(startTime)) {
+    return null;
+  }
+
+  return formatTimeRemaining(new Date(startTime + durationMs).toISOString());
 }
 
 export function PlayerHUD({
@@ -88,20 +136,44 @@ export function PlayerHUD({
   dynamics,
   onActivateBeacon,
   onDeactivateBeacon,
+  onActivateTacticalStrike,
+  onActivateReinforce,
+  onActivateShieldWall,
+  onActivateEmergencyRepair,
+  onStartDemolish,
 }: PlayerHUDProps) {
   const { t } = useTranslation();
   const commandoTargetingMode = useGameplayStore((state) => state.commandoTargetingMode);
   const setCommandoTargetingMode = useGameplayStore((state) => state.setCommandoTargetingMode);
   const [, setTick] = useState(0);
+  const [infoSheet, setInfoSheet] = useState<{ role: AbilityRole; abilityKey: string } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
 
-  const modes = dynamics?.activeCopresenceModes ?? [];
-  const showBeacon = modes.includes('Beacon');
-  const showCommando = modes.includes('CommandoRaid');
-  const hasAbilities = showBeacon || showCommando;
-
-  const hasActiveCountdown = Boolean(
-    player && (player.commandoDeadline || player.commandoCooldownUntil),
-  );
+  const showBeacon = Boolean(dynamics?.beaconEnabled);
+  const rolesEnabled = Boolean(dynamics?.playerRolesEnabled);
+  const tacticalStrikeTime = formatTimeRemaining(player?.tacticalStrikeExpiry);
+  const tacticalStrikeCooldownTime = formatTimeRemaining(player?.tacticalStrikeCooldownUntil);
+  const reinforceCooldownTime = formatTimeRemaining(player?.reinforceCooldownUntil);
+  const shieldWallTime = formatTimeRemaining(player?.shieldWallExpiry);
+  const shieldWallCooldownTime = formatTimeRemaining(player?.shieldWallCooldownUntil);
+  const emergencyRepairCooldownTime = formatTimeRemaining(player?.emergencyRepairCooldownUntil);
+  const demolishProgressTime = formatDurationRemaining(player?.demolishStartedAt, DEMOLISH_DURATION_MS);
+  const demolishCooldownTime = formatTimeRemaining(player?.demolishCooldownUntil);
+  const commandoDeadlineTime = formatTimeRemaining(player?.commandoDeadline);
+  const commandoCooldownTime = formatTimeRemaining(player?.commandoCooldownUntil);
+  const hasActiveCountdown = [
+    tacticalStrikeTime,
+    tacticalStrikeCooldownTime,
+    reinforceCooldownTime,
+    shieldWallTime,
+    shieldWallCooldownTime,
+    emergencyRepairCooldownTime,
+    demolishProgressTime,
+    demolishCooldownTime,
+    commandoDeadlineTime,
+    commandoCooldownTime,
+  ].some((value) => value !== null);
 
   useSecondTick(() => {
     if (!hasActiveCountdown) {
@@ -126,6 +198,214 @@ export function PlayerHUD({
 
   const relation = getHexRelation(targetCell, myUserId, myAllianceId);
   const accentColor = RELATION_ACCENT[relation];
+
+  const formatStatus = (statusKey: 'activate' | 'active' | 'cooldown' | 'inProgress', time?: string | null): string => {
+    const label = t(`roles.status.${statusKey}` as never);
+    return time ? `${label} (${time})` : label;
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => clearLongPressTimer, []);
+
+  const handleAbilityPointerDown = (ability: AbilityButtonConfig) => {
+    if (!ability.role || !ability.abilityKey) {
+      return;
+    }
+
+    const { role, abilityKey } = ability;
+
+    longPressTriggeredRef.current = false;
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setInfoSheet({ role, abilityKey });
+    }, 500);
+  };
+
+  const handleAbilityPointerEnd = () => {
+    clearLongPressTimer();
+  };
+
+  const handleAbilityClick = (ability: AbilityButtonConfig) => {
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      return;
+    }
+
+    if (ability.disabled || !ability.onClick) {
+      return;
+    }
+
+    ability.onClick();
+  };
+
+  const abilityButtons: AbilityButtonConfig[] = [];
+
+  if (rolesEnabled && player?.role === 'Commander') {
+    const tacticalStrikeActive = Boolean(player.tacticalStrikeActive && tacticalStrikeTime);
+    const tacticalStrikeOnCooldown = !tacticalStrikeActive && tacticalStrikeCooldownTime !== null;
+
+    abilityButtons.push({
+      key: 'tactical-strike',
+      icon: '⚡',
+      title: t('roles.Commander.abilities.tacticalStrike.title' as never),
+      description: t('roles.Commander.abilities.tacticalStrike.description' as never),
+      shortDescription: t('roles.Commander.abilities.tacticalStrike.shortDesc' as never),
+      status: tacticalStrikeActive
+        ? formatStatus('active', tacticalStrikeTime)
+        : tacticalStrikeOnCooldown
+          ? formatStatus('cooldown', tacticalStrikeCooldownTime)
+          : formatStatus('activate'),
+      className: `player-hud__ability ${tacticalStrikeActive ? 'player-hud__ability--active ability-btn-active' : ''} ${tacticalStrikeOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      accentColor: ROLE_ACCENT_COLORS.Commander,
+      disabled: tacticalStrikeActive || tacticalStrikeOnCooldown,
+      onClick: tacticalStrikeActive || tacticalStrikeOnCooldown ? undefined : onActivateTacticalStrike,
+      role: 'Commander',
+      abilityKey: 'tacticalStrike',
+    });
+
+    abilityButtons.push({
+      key: 'reinforce',
+      icon: '🔄',
+      title: t('roles.Commander.abilities.reinforce.title' as never),
+      description: t('roles.Commander.abilities.reinforce.description' as never),
+      shortDescription: t('roles.Commander.abilities.reinforce.shortDesc' as never),
+      status: reinforceCooldownTime !== null
+        ? formatStatus('cooldown', reinforceCooldownTime)
+        : formatStatus('activate'),
+      className: `player-hud__ability ${reinforceCooldownTime !== null ? 'player-hud__ability--cooldown' : ''}`,
+      accentColor: ROLE_ACCENT_COLORS.Commander,
+      disabled: reinforceCooldownTime !== null,
+      onClick: reinforceCooldownTime !== null ? undefined : onActivateReinforce,
+      role: 'Commander',
+      abilityKey: 'reinforce',
+    });
+  }
+
+  if (rolesEnabled && player?.role === 'Scout') {
+    const commandoActive = Boolean(player.isCommandoActive && commandoDeadlineTime);
+    const commandoOnCooldown = !commandoActive && commandoCooldownTime !== null;
+
+    if (commandoTargetingMode) {
+      abilityButtons.push({
+        key: 'commando-targeting',
+        icon: '🎯',
+        title: t('roles.Scout.abilities.commandoRaid.title' as never),
+        description: t('roles.Scout.abilities.commandoRaid.description' as never),
+        shortDescription: t('roles.Scout.abilities.commandoRaid.shortDesc' as never),
+        status: t('phase6.commandoSelectTarget' as never),
+        className: 'player-hud__ability player-hud__ability--targeting',
+        accentColor: ROLE_ACCENT_COLORS.Scout,
+        onClick: () => setCommandoTargetingMode(false),
+        role: 'Scout',
+        abilityKey: 'commandoRaid',
+      });
+    } else {
+      abilityButtons.push({
+        key: 'commando-raid',
+        icon: '🎯',
+        title: t('roles.Scout.abilities.commandoRaid.title' as never),
+        description: t('roles.Scout.abilities.commandoRaid.description' as never),
+        shortDescription: t('roles.Scout.abilities.commandoRaid.shortDesc' as never),
+        status: commandoActive
+          ? formatStatus('active', commandoDeadlineTime)
+          : commandoOnCooldown
+            ? formatStatus('cooldown', commandoCooldownTime)
+            : formatStatus('activate'),
+        className: `player-hud__ability ${commandoActive ? 'player-hud__ability--active ability-btn-active' : ''} ${commandoOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+        accentColor: ROLE_ACCENT_COLORS.Scout,
+        disabled: commandoActive || commandoOnCooldown,
+        onClick: commandoActive || commandoOnCooldown ? undefined : () => setCommandoTargetingMode(true),
+        role: 'Scout',
+        abilityKey: 'commandoRaid',
+      });
+    }
+  }
+
+  if (rolesEnabled && player?.role === 'Defender') {
+    const shieldWallActive = Boolean(player.shieldWallActive && shieldWallTime);
+    const shieldWallOnCooldown = !shieldWallActive && shieldWallCooldownTime !== null;
+
+    abilityButtons.push({
+      key: 'shield-wall',
+      icon: '🛡️',
+      title: t('roles.Defender.abilities.shieldWall.title' as never),
+      description: t('roles.Defender.abilities.shieldWall.description' as never),
+      shortDescription: t('roles.Defender.abilities.shieldWall.shortDesc' as never),
+      status: shieldWallActive
+        ? formatStatus('active', shieldWallTime)
+        : shieldWallOnCooldown
+          ? formatStatus('cooldown', shieldWallCooldownTime)
+          : formatStatus('activate'),
+      className: `player-hud__ability ${shieldWallActive ? 'player-hud__ability--active ability-btn-active' : ''} ${shieldWallOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      accentColor: ROLE_ACCENT_COLORS.Defender,
+      disabled: shieldWallActive || shieldWallOnCooldown,
+      onClick: shieldWallActive || shieldWallOnCooldown ? undefined : onActivateShieldWall,
+      role: 'Defender',
+      abilityKey: 'shieldWall',
+    });
+  }
+
+  if (rolesEnabled && player?.role === 'Engineer') {
+    const demolishInProgress = Boolean(player.demolishActive && demolishProgressTime);
+    const demolishOnCooldown = !demolishInProgress && demolishCooldownTime !== null;
+
+    abilityButtons.push({
+      key: 'emergency-repair',
+      icon: '🔧',
+      title: t('roles.Engineer.abilities.emergencyRepair.title' as never),
+      description: t('roles.Engineer.abilities.emergencyRepair.description' as never),
+      shortDescription: t('roles.Engineer.abilities.emergencyRepair.shortDesc' as never),
+      status: emergencyRepairCooldownTime !== null
+        ? formatStatus('cooldown', emergencyRepairCooldownTime)
+        : formatStatus('activate'),
+      className: `player-hud__ability ${emergencyRepairCooldownTime !== null ? 'player-hud__ability--cooldown' : ''}`,
+      accentColor: ROLE_ACCENT_COLORS.Engineer,
+      disabled: emergencyRepairCooldownTime !== null,
+      onClick: emergencyRepairCooldownTime !== null ? undefined : onActivateEmergencyRepair,
+      role: 'Engineer',
+      abilityKey: 'emergencyRepair',
+    });
+
+    abilityButtons.push({
+      key: 'demolish',
+      icon: '💣',
+      title: t('roles.Engineer.abilities.demolish.title' as never),
+      description: t('roles.Engineer.abilities.demolish.description' as never),
+      shortDescription: t('roles.Engineer.abilities.demolish.shortDesc' as never),
+      status: demolishInProgress
+        ? formatStatus('inProgress', demolishProgressTime)
+        : demolishOnCooldown
+          ? formatStatus('cooldown', demolishCooldownTime)
+          : formatStatus('activate'),
+      className: `player-hud__ability ${demolishInProgress ? 'player-hud__ability--active ability-btn-active' : ''} ${demolishOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      accentColor: ROLE_ACCENT_COLORS.Engineer,
+      disabled: demolishInProgress || demolishOnCooldown,
+      onClick: demolishInProgress || demolishOnCooldown ? undefined : onStartDemolish,
+      role: 'Engineer',
+      abilityKey: 'demolish',
+    });
+  }
+
+  if (showBeacon && player) {
+    abilityButtons.push({
+      key: 'beacon',
+      icon: '📡',
+      title: t('phase5.beacon' as never),
+      description: t('phase5.beaconDesc' as never),
+      status: player.isBeacon ? formatStatus('active') : formatStatus('activate'),
+      className: `player-hud__ability ${player.isBeacon ? 'player-hud__ability--active ability-btn-active' : ''}`,
+      onClick: player.isBeacon ? onDeactivateBeacon : onActivateBeacon,
+    });
+  }
+
+  const hasAbilities = abilityButtons.length > 0;
 
   const terrainType = targetCell?.terrainType;
   const terrainLabel =
@@ -240,61 +520,45 @@ export function PlayerHUD({
 
       {hasAbilities && (
         <div className="player-hud__abilities">
-          {showBeacon && player && (
+          {abilityButtons.map((ability) => (
             <button
+              key={ability.key}
               type="button"
-              className={`player-hud__ability ${player.isBeacon ? 'player-hud__ability--active' : ''}`}
-              onClick={player.isBeacon ? onDeactivateBeacon : onActivateBeacon}
-              title={t('dynamics.mode.Beacon.detail' as never)}
+              className={ability.className}
+              onClick={() => handleAbilityClick(ability)}
+              onPointerDown={() => handleAbilityPointerDown(ability)}
+              onPointerUp={handleAbilityPointerEnd}
+              onPointerCancel={handleAbilityPointerEnd}
+              onPointerLeave={handleAbilityPointerEnd}
+              title={ability.description}
+              aria-disabled={ability.disabled || undefined}
             >
-              <span className="player-hud__ability-icon">📡</span>
-              <span className="player-hud__ability-label">
-                {player.isBeacon ? t('phase5.beaconDeactivate' as never) : t('phase5.beaconActivate' as never)}
-              </span>
-            </button>
-          )}
-
-          {showCommando && player && (() => {
-            const deadlineTime = formatCountdown(player.commandoDeadline);
-            const cooldownTime = formatCountdown(player.commandoCooldownUntil);
-            const isActive = player.isCommandoActive && deadlineTime !== null;
-            const isOnCooldown = !isActive && cooldownTime !== null;
-
-            if (commandoTargetingMode) {
-              return (
-                <button
-                  type="button"
-                  className="player-hud__ability player-hud__ability--targeting"
-                  onClick={() => setCommandoTargetingMode(false)}
-                >
-                  <span className="player-hud__ability-icon">🎯</span>
-                  <span className="player-hud__ability-label">{t('phase6.commandoSelectTarget' as never)}</span>
-                </button>
-              );
-            }
-
-            return (
-              <button
-                type="button"
-                className={`player-hud__ability ${isActive ? 'player-hud__ability--active' : ''} ${isOnCooldown ? 'player-hud__ability--cooldown' : ''}`}
-                onClick={!isActive && !isOnCooldown ? () => setCommandoTargetingMode(true) : undefined}
-                disabled={isActive || isOnCooldown}
-              >
-                <span className="player-hud__ability-icon">⚔️</span>
-                <span className="player-hud__ability-label">
-                  {isActive
-                    ? t('phase6.commandoActive' as never, { time: deadlineTime })
-                    : isOnCooldown
-                      ? t('phase6.commandoCooldown' as never)
-                      : t('phase6.commandoActivate' as never)}
+              <span className="player-hud__ability-main">
+                <span className="player-hud__ability-title-group">
+                  <span
+                    className="player-hud__ability-icon"
+                    style={{ '--ability-accent': ability.accentColor } as React.CSSProperties}
+                  >
+                    {ability.icon}
+                  </span>
+                  <span className="player-hud__ability-label">{ability.title}</span>
                 </span>
-                {isOnCooldown && cooldownTime && (
-                  <span className="player-hud__countdown">{cooldownTime}</span>
-                )}
-              </button>
-            );
-          })()}
+                <span className="player-hud__countdown">{ability.status}</span>
+              </span>
+              {ability.shortDescription && (
+                <span className="ability-subtitle">{ability.shortDescription}</span>
+              )}
+            </button>
+          ))}
         </div>
+      )}
+
+      {infoSheet && (
+        <AbilityInfoSheet
+          role={infoSheet.role}
+          abilityKey={infoSheet.abilityKey}
+          onClose={() => setInfoSheet(null)}
+        />
       )}
 
       {!hasActions && !hasAbilities && (

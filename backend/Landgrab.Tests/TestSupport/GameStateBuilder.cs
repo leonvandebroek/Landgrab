@@ -92,9 +92,15 @@ internal sealed class GameStateBuilder
         return this;
     }
 
-    public GameStateBuilder WithCopresenceModes(params CopresenceMode[] modes)
+    public GameStateBuilder WithBeaconEnabled(bool enabled = true)
     {
-        _state.Dynamics.ActiveCopresenceModes = [.. modes];
+        _state.Dynamics.BeaconEnabled = enabled;
+        return this;
+    }
+
+    public GameStateBuilder WithTileDecayEnabled(bool enabled = true)
+    {
+        _state.Dynamics.TileDecayEnabled = enabled;
         return this;
     }
 
@@ -195,6 +201,8 @@ internal sealed class GameStateBuilder
         var (lat, lng) = HexService.HexToLatLng(q, r, _state.MapLat!.Value, _state.MapLng!.Value, _state.TileSizeMeters);
         player.CurrentLat = lat;
         player.CurrentLng = lng;
+        player.CurrentHexQ = q;
+        player.CurrentHexR = r;
         return this;
     }
 

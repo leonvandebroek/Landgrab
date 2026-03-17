@@ -38,6 +38,11 @@ export interface GameViewActions {
   onConfirmAttack: () => Promise<void>;
   onActivateBeacon: () => Promise<void>;
   onDeactivateBeacon: () => Promise<void>;
+  onActivateTacticalStrike: () => Promise<void>;
+  onActivateReinforce: () => Promise<void>;
+  onActivateShieldWall: () => Promise<void>;
+  onActivateEmergencyRepair: () => Promise<void>;
+  onStartDemolish: () => Promise<void>;
   onSetObserverMode: (enabled: boolean) => void;
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
@@ -199,6 +204,11 @@ export function GameView({
           onConfirmAttack={actions.onConfirmAttack}
           onActivateBeacon={actions.onActivateBeacon}
           onDeactivateBeacon={actions.onDeactivateBeacon}
+          onActivateTacticalStrike={actions.onActivateTacticalStrike}
+          onActivateReinforce={actions.onActivateReinforce}
+          onActivateShieldWall={actions.onActivateShieldWall}
+          onActivateEmergencyRepair={actions.onActivateEmergencyRepair}
+          onStartDemolish={actions.onStartDemolish}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}

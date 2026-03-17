@@ -37,6 +37,11 @@ interface Props {
   onConfirmAttack: () => void;
   onActivateBeacon?: () => void;
   onDeactivateBeacon?: () => void;
+  onActivateTacticalStrike?: () => void;
+  onActivateReinforce?: () => void;
+  onActivateShieldWall?: () => void;
+  onActivateEmergencyRepair?: () => void;
+  onStartDemolish?: () => void;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -64,6 +69,11 @@ export function PlayingHud({
   onConfirmAttack,
   onActivateBeacon,
   onDeactivateBeacon,
+  onActivateTacticalStrike,
+  onActivateReinforce,
+  onActivateShieldWall,
+  onActivateEmergencyRepair,
+  onStartDemolish,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   currentPlayerName,
@@ -271,8 +281,8 @@ export function PlayingHud({
 
   const showRemoteTileInfoCard = Boolean(
     selectedHex
-      && !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1])
-      && onDismissTileActions,
+    && !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1])
+    && onDismissTileActions,
   );
 
   if (!state) {
@@ -664,7 +674,7 @@ export function PlayingHud({
 
       <PlayerHUD
         actions={currentHexActions ?? []}
-        onAction={onCurrentHexAction ?? (() => {})}
+        onAction={onCurrentHexAction ?? (() => { })}
         currentHex={currentHex}
         targetCell={currentHexCell}
         carriedTroops={carriedTroops}
@@ -675,8 +685,13 @@ export function PlayingHud({
         myAllianceName={myAlliance?.name}
         player={me}
         dynamics={state.dynamics}
-        onActivateBeacon={onActivateBeacon ?? (() => {})}
-        onDeactivateBeacon={onDeactivateBeacon ?? (() => {})}
+        onActivateBeacon={onActivateBeacon ?? (() => { })}
+        onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
+        onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
+        onActivateReinforce={onActivateReinforce ?? (() => { })}
+        onActivateShieldWall={onActivateShieldWall ?? (() => { })}
+        onActivateEmergencyRepair={onActivateEmergencyRepair ?? (() => { })}
+        onStartDemolish={onStartDemolish ?? (() => { })}
       />
 
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (

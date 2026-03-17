@@ -1,30 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import type { GameState } from '../../types/game';
-import type { CopresenceMode } from '../../types/game';
 
 interface HelpOverlayProps {
   dynamics?: GameState['dynamics'];
   onClose: () => void;
 }
 
-const copresenceIcons: Record<CopresenceMode, string> = {
-  None: '',
-  Standoff: '🚫',
-  PresenceBonus: '⚔️',
-  Rally: '🛡️',
-  Drain: '⚡',
-  Beacon: '📡',
-  FrontLine: '🎯',
-  Shepherd: '🐑',
-  CommandoRaid: '🎖️',
-};
-
 export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
   const { t } = useTranslation();
-
-  const activeModes = (dynamics?.activeCopresenceModes ?? []).filter(
-    (m): m is Exclude<CopresenceMode, 'None'> => m !== 'None',
-  );
 
   return (
     <div className="hud-modal-sheet open help-overlay" onClick={(e) => e.stopPropagation()}>
@@ -37,7 +20,7 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
           <h4>🗺️ {t('guidance.movementTitle')}</h4>
           <p>{t('guidance.helpMovement')}</p>
         </div>
-        
+
         <div className="help-section">
           <h4>⛳ {t('guidance.claimingTitle')}</h4>
           <p>{t('guidance.helpClaim')}</p>
@@ -67,17 +50,24 @@ export function HelpOverlay({ dynamics, onClose }: HelpOverlayProps) {
           <p>{t('guidance.helpTroops' as never, { defaultValue: 'Pick up troops from your team\'s tiles and carry them in your backpack. Reinforce friendly tiles or use carried troops to attack enemies. You need more troops than the defender to capture a tile.' })}</p>
         </div>
 
-        {activeModes.map((mode) => (
-          <div className="help-section" key={mode}>
-            <h4>{copresenceIcons[mode]} {t(`dynamics.mode.${mode}.title`)}</h4>
-            <p>{t(`dynamics.mode.${mode}.detail`)}</p>
+        {dynamics?.beaconEnabled && (
+          <div className="help-section">
+            <h4>📡 {t('dynamics.feature.beaconEnabled')}</h4>
+            <p>{t('dynamics.feature.beaconEnabledDesc')}</p>
           </div>
-        ))}
+        )}
 
         {dynamics?.hqEnabled && (
           <div className="help-section">
             <h4>🏛️ {t('dynamics.feature.hq')}</h4>
             <p>{t('dynamics.feature.hqDesc')}</p>
+          </div>
+        )}
+
+        {dynamics?.tileDecayEnabled && (
+          <div className="help-section">
+            <h4>⌛ {t('dynamics.feature.tileDecayEnabled')}</h4>
+            <p>{t('dynamics.feature.tileDecayEnabledDesc')}</p>
           </div>
         )}
 

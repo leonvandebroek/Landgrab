@@ -1,14 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
-import {
-  DYNAMICS_PRESETS as PRESETS,
-  PRESET_MODES,
-  COPRESENCE_MODES,
-  FEATURE_KEYS,
-  featureField,
-} from '../../utils/dynamics';
-import type { DynamicsPreset, FeatureKey } from '../../utils/dynamics';
+import type { GameDynamics, GameState } from '../../types/game';
+import { FEATURE_KEYS, featureField } from '../../utils/dynamics';
+import type { FeatureKey } from '../../utils/dynamics';
 import { GameEventLog } from './GameEventLog';
 import { ScoreRow } from './PlayerPanel';
 
@@ -51,20 +45,6 @@ export function HostControlPlane({
     onUpdateDynamics({ ...dynamics, [featureField(key)]: checked });
   }, [dynamics, onUpdateDynamics]);
 
-  const handlePresetChange = useCallback((preset: DynamicsPreset) => {
-    const modes = preset === 'Aangepast'
-      ? dynamics.activeCopresenceModes
-      : PRESET_MODES[preset];
-    onUpdateDynamics({ ...dynamics, copresencePreset: preset, activeCopresenceModes: modes });
-  }, [dynamics, onUpdateDynamics]);
-
-  const handleModeToggle = useCallback((mode: CopresenceMode, checked: boolean) => {
-    const next = checked
-      ? [...dynamics.activeCopresenceModes, mode]
-      : dynamics.activeCopresenceModes.filter((currentMode) => currentMode !== mode);
-    onUpdateDynamics({ ...dynamics, activeCopresenceModes: next });
-  }, [dynamics, onUpdateDynamics]);
-
   const handleSendMessage = useCallback(() => {
     const trimmedMessage = messageText.trim();
     if (!trimmedMessage) return;
@@ -81,8 +61,6 @@ export function HostControlPlane({
         : [...currentSelection, id]
     ));
   }, []);
-
-  const activePreset = dynamics.copresencePreset ?? 'Klassiek';
 
   return (
     <div className="game-layout hud-active">
@@ -158,52 +136,6 @@ export function HostControlPlane({
           <button className="hud-modal-close" onClick={() => setActivePanel(null)}>×</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.5rem' }}>
-          <div className="wizard-rule-card" style={{ margin: 0 }}>
-            <h4>{t('dynamics.presetsLabel')}</h4>
-            <div className="claim-mode-grid preset-grid">
-              {PRESETS.map((preset) => (
-                <label
-                  key={preset}
-                  className={`claim-mode-option preset-option${activePreset === preset ? ' active' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="observer-preset"
-                    checked={activePreset === preset}
-                    onChange={() => handlePresetChange(preset)}
-                  />
-                  <span className="claim-mode-copy">
-                    <strong>{t(`dynamics.preset.${preset}.title`)}</strong>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {activePreset === 'Aangepast' && (
-            <div className="wizard-rule-card" style={{ margin: 0 }}>
-              <h4>{t('dynamics.customLabel')}</h4>
-              <div className="toggle-grid">
-                {COPRESENCE_MODES.map((mode) => {
-                  const checked = dynamics.activeCopresenceModes.includes(mode);
-                  return (
-                    <label key={mode} className={`toggle-card${checked ? ' active' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => handleModeToggle(mode, event.target.checked)}
-                      />
-                      <span className="toggle-card-copy">
-                        <strong>{t(`dynamics.mode.${mode}.title`)}</strong>
-                        <span>{t(`dynamics.mode.${mode}.detail`)}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <div className="wizard-rule-card" style={{ margin: 0 }}>
             <h4>{t('dynamics.featuresLabel')}</h4>
             {FEATURE_KEYS.map((key) => (

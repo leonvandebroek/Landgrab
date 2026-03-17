@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { ROLE_CARDS } from '../lobby/roleModalUtils';
 import type { GameState } from '../../types/game';
 
 interface GameRulesPageProps {
@@ -10,7 +11,6 @@ interface GameRulesPageProps {
 export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRulesPageProps) {
   const { t } = useTranslation();
   const dynamics = gameState.dynamics;
-  const hasActiveCopresence = (dynamics.activeCopresenceModes ?? []).some((mode) => mode !== 'None');
 
   const claimModeText =
     gameState.claimMode === 'PresenceOnly'
@@ -71,22 +71,6 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
     });
   }
 
-  if (dynamics.playerRolesEnabled) {
-    matchSpecificItems.push({
-      key: 'roles',
-      label: t('rules.roles.title'),
-      body: t('rules.roles.body'),
-    });
-  }
-
-  if (hasActiveCopresence) {
-    matchSpecificItems.push({
-      key: 'copresence',
-      label: t('rules.copresence.title'),
-      body: t('rules.copresence.body'),
-    });
-  }
-
   if (dynamics.timedEscalationEnabled) {
     matchSpecificItems.push({
       key: 'timed-escalation',
@@ -137,13 +121,37 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
         </ul>
       </section>
 
+      {dynamics.playerRolesEnabled && (
+        <section className="rules-section rules-roles-section">
+          <h3 className="rules-section-title">🧩 {t('rules.roles.title')}</h3>
+          <div className="role-cards-grid">
+            {ROLE_CARDS.map(({ role, emoji, abilities }) => (
+              <div key={role} className="role-card">
+                <h4>
+                  {emoji} {t(`roles.${role}.title` as never)}
+                </h4>
+                <ul className="role-abilities-list">
+                  {abilities.map(({ key, icon, type }) => (
+                    <li key={key}>
+                      <span className="ability-icon" aria-hidden="true">{icon}</span>
+                      <span className="ability-name">{t(`roles.${role}.abilities.${key}.title` as never)}</span>
+                      <span className={`ability-type ${type}`}>
+                        {type === 'passive' ? t('roleModal.passive') : t('roleModal.activate')}
+                      </span>
+                      <p className="ability-desc">{t(`roles.${role}.abilities.${key}.description` as never)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="rules-section">
         <h3 className="rules-section-title">🧠 {t('rules.advanced.title')}</h3>
         <ul className="rules-list">
           <li className="rules-list-item">{t('rules.advanced.observer')}</li>
-          {hasActiveCopresence && (
-            <li className="rules-list-item">{t('rules.advanced.closeEncounters')}</li>
-          )}
         </ul>
       </section>
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, RoomSummary, WinConditionType } from '../../types/game';
+import type { ClaimMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, RoomSummary, WinConditionType } from '../../types/game';
 import { SetupWizard } from './SetupWizard';
 import { GuestWizardView } from './GuestWizardView';
 
@@ -23,6 +23,8 @@ interface Props {
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
   onSetAlliance: (name: string) => void;
+  onAssignPlayerRole: (targetPlayerId: string, role: string) => void;
+  onRandomizeRoles: () => void;
   onSetMapLocation: (lat: number, lng: number) => void;
   onSetTileSize: (meters: number) => void;
   onUseCenteredGameArea: () => void;
@@ -31,8 +33,8 @@ interface Props {
   onSetClaimMode: (mode: ClaimMode) => void;
   onSetAllowSelfClaim: (allow: boolean) => void;
   onSetWinCondition: (type: WinConditionType, value: number) => void;
-  onSetCopresenceModes: (modes: CopresenceMode[]) => void;
-  onSetCopresencePreset: (preset: string) => void;
+  onSetBeaconEnabled: (enabled: boolean) => void;
+  onSetTileDecayEnabled: (enabled: boolean) => void;
   onSetGameDynamics: (dynamics: GameDynamics) => void;
   onSetPlayerRole?: (role: string) => void;
   onSetMasterTile: (lat: number, lng: number) => void;
@@ -63,6 +65,8 @@ export function GameLobby({
   onCreateRoom,
   onJoinRoom,
   onSetAlliance,
+  onAssignPlayerRole,
+  onRandomizeRoles,
   onConfigureAlliances,
   onDistributePlayers,
   onSetMapLocation,
@@ -73,8 +77,8 @@ export function GameLobby({
   onSetClaimMode,
   onSetAllowSelfClaim,
   onSetWinCondition,
-  onSetCopresenceModes,
-  onSetCopresencePreset,
+  onSetBeaconEnabled,
+  onSetTileDecayEnabled,
   onSetGameDynamics,
   onSetPlayerRole,
   onSetMasterTileByHex,
@@ -246,6 +250,8 @@ export function GameLobby({
         locationLoading={locationLoading}
         onSetMapLocation={onSetMapLocation}
         onSetAlliance={onSetAlliance}
+        onAssignPlayerRole={onAssignPlayerRole}
+        onRandomizeRoles={onRandomizeRoles}
         onConfigureAlliances={onConfigureAlliances}
         onDistributePlayers={onDistributePlayers}
         onSetTileSize={onSetTileSize}
@@ -255,8 +261,8 @@ export function GameLobby({
         onSetClaimMode={onSetClaimMode}
         onSetAllowSelfClaim={onSetAllowSelfClaim}
         onSetWinCondition={onSetWinCondition}
-        onSetCopresenceModes={onSetCopresenceModes}
-        onSetCopresencePreset={onSetCopresencePreset}
+        onSetBeaconEnabled={onSetBeaconEnabled}
+        onSetTileDecayEnabled={onSetTileDecayEnabled}
         onSetGameDynamics={onSetGameDynamics}
         onSetPlayerRole={onSetPlayerRole}
         onSetMasterTileByHex={onSetMasterTileByHex}
@@ -279,6 +285,8 @@ export function GameLobby({
       authToken={authToken}
       currentLocation={currentLocation}
       onSetAlliance={onSetAlliance}
+      onAssignPlayerRole={onAssignPlayerRole}
+      onRandomizeRoles={onRandomizeRoles}
       onSetPlayerRole={onSetPlayerRole}
       onSetMasterTileByHex={onSetMasterTileByHex}
       onAssignStartingTile={onAssignStartingTile}

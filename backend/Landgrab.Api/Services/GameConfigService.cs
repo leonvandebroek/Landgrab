@@ -95,16 +95,8 @@ public class GameConfigService(IGameRoomProvider roomProvider, GameStateService 
         }
     }
 
-    public (GameState? state, string? error) SetCopresenceModes(string roomCode, string userId, List<string> modes)
+    public (GameState? state, string? error) SetBeaconEnabled(string roomCode, string userId, bool enabled)
     {
-        var parsed = new List<CopresenceMode>();
-        foreach (var mode in modes)
-        {
-            if (!Enum.TryParse<CopresenceMode>(mode, true, out var parsedMode) || parsedMode == CopresenceMode.None)
-                return (null, $"Invalid copresence mode: {mode}");
-            parsed.Add(parsedMode);
-        }
-
         var room = GetRoom(roomCode);
         if (room == null)
             return (null, "Room not found.");
@@ -112,23 +104,19 @@ public class GameConfigService(IGameRoomProvider roomProvider, GameStateService 
         lock (room.SyncRoot)
         {
             if (!GameStateCommon.IsHost(room, userId))
-                return (null, "Only the host can change copresence modes.");
+                return (null, "Only the host can change beacon settings.");
             if (room.State.Phase != GamePhase.Lobby)
-                return (null, "Copresence modes can only be changed in the lobby.");
+                return (null, "Beacon settings can only be changed in the lobby.");
 
-            room.State.Dynamics.ActiveCopresenceModes = parsed;
-            room.State.Dynamics.CopresencePreset = "Aangepast";
+            room.State.Dynamics.BeaconEnabled = enabled;
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
         }
     }
 
-    public (GameState? state, string? error) SetCopresencePreset(string roomCode, string userId, string preset)
+    public (GameState? state, string? error) SetTileDecayEnabled(string roomCode, string userId, bool enabled)
     {
-        if (preset != "Aangepast" && !GameStateCommon.CopresencePresets.ContainsKey(preset))
-            return (null, $"Unknown preset: {preset}");
-
         var room = GetRoom(roomCode);
         if (room == null)
             return (null, "Room not found.");
@@ -136,14 +124,11 @@ public class GameConfigService(IGameRoomProvider roomProvider, GameStateService 
         lock (room.SyncRoot)
         {
             if (!GameStateCommon.IsHost(room, userId))
-                return (null, "Only the host can change the copresence preset.");
+                return (null, "Only the host can change tile decay settings.");
             if (room.State.Phase != GamePhase.Lobby)
-                return (null, "Copresence preset can only be changed in the lobby.");
+                return (null, "Tile decay settings can only be changed in the lobby.");
 
-            room.State.Dynamics.CopresencePreset = preset;
-            if (preset != "Aangepast" && GameStateCommon.CopresencePresets.TryGetValue(preset, out var presetModes))
-                room.State.Dynamics.ActiveCopresenceModes = [.. presetModes];
-
+            room.State.Dynamics.TileDecayEnabled = enabled;
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -163,6 +148,8 @@ public class GameConfigService(IGameRoomProvider roomProvider, GameStateService 
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Game dynamics can only be changed in the lobby.");
 
+            room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
+            room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
             room.State.Dynamics.TerrainEnabled = dynamics.TerrainEnabled;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;

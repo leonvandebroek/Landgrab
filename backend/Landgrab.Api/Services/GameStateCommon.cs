@@ -20,13 +20,6 @@ internal static class GameStateCommon
     internal static readonly string[] PlayerEmojis =
         ["🐺", "🦊", "🐻", "🦁", "🐯", "🐸", "🦅", "🐬", "🦝", "🦨"];
 
-    internal static readonly Dictionary<string, List<CopresenceMode>> CopresencePresets = new()
-    {
-        ["Klassiek"] = [],
-        ["Territorium"] = [CopresenceMode.Shepherd, CopresenceMode.Drain],
-        ["Formatie"] = [CopresenceMode.FrontLine, CopresenceMode.Rally],
-    };
-
     internal static void AppendEventLog(GameState state, GameEventLogEntry entry)
     {
         state.EventLog.Add(entry);
@@ -71,7 +64,19 @@ internal static class GameStateCommon
                 CommandoTargetQ = player.CommandoTargetQ,
                 CommandoTargetR = player.CommandoTargetR,
                 CommandoDeadline = player.CommandoDeadline,
-                CommandoCooldownUntil = player.CommandoCooldownUntil
+                CommandoCooldownUntil = player.CommandoCooldownUntil,
+                TacticalStrikeActive = player.TacticalStrikeActive,
+                TacticalStrikeExpiry = player.TacticalStrikeExpiry,
+                TacticalStrikeCooldownUntil = player.TacticalStrikeCooldownUntil,
+                ReinforceCooldownUntil = player.ReinforceCooldownUntil,
+                ShieldWallActive = player.ShieldWallActive,
+                ShieldWallExpiry = player.ShieldWallExpiry,
+                ShieldWallCooldownUntil = player.ShieldWallCooldownUntil,
+                EmergencyRepairCooldownUntil = player.EmergencyRepairCooldownUntil,
+                DemolishActive = player.DemolishActive,
+                DemolishTargetKey = player.DemolishTargetKey,
+                DemolishStartedAt = player.DemolishStartedAt,
+                DemolishCooldownUntil = player.DemolishCooldownUntil
             }).ToList(),
             Alliances = state.Alliances.Select(alliance => new AllianceDto
             {
@@ -132,8 +137,8 @@ internal static class GameStateCommon
             AllowSelfClaim = state.AllowSelfClaim,
             Dynamics = new GameDynamics
             {
-                ActiveCopresenceModes = [.. state.Dynamics.ActiveCopresenceModes],
-                CopresencePreset = state.Dynamics.CopresencePreset,
+                BeaconEnabled = state.Dynamics.BeaconEnabled,
+                TileDecayEnabled = state.Dynamics.TileDecayEnabled,
                 TerrainEnabled = state.Dynamics.TerrainEnabled,
                 PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
                 FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
@@ -210,11 +215,11 @@ internal static class GameStateCommon
             cell.IsMasterTile = false;
         }
 
-            foreach (var player in state.Players)
-            {
-                GameplayService.ResetCarriedTroops(player);
-                player.TerritoryCount = 0;
-            }
+        foreach (var player in state.Players)
+        {
+            GameplayService.ResetCarriedTroops(player);
+            player.TerritoryCount = 0;
+        }
 
         foreach (var alliance in state.Alliances)
             alliance.TerritoryCount = 0;

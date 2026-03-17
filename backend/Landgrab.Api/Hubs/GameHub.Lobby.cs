@@ -380,17 +380,8 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task SetCopresenceModes(List<string> modes)
+    public async Task SetBeaconEnabled(bool enabled)
     {
-        if (modes == null ||
-            modes.Count > MaxModesCount ||
-            modes.Any(mode => !IsRecognizedCopresenceMode(mode) ||
-                string.Equals(mode, nameof(CopresenceMode.None), StringComparison.OrdinalIgnoreCase)))
-        {
-            await SendError(InvalidRequestCode, "Invalid copresence modes.");
-            return;
-        }
-
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -398,12 +389,7 @@ public partial class GameHub
             return;
         }
 
-        var supportedModes = modes
-            .Where(IsSupportedCopresenceMode)
-            .Select(mode => Enum.Parse<CopresenceMode>(mode, true))
-            .ToList();
-
-        var (state, error) = gameService.SetCopresenceModes(room.Code, UserId, supportedModes.Select(mode => mode.ToString()).ToList());
+        var (state, error) = gameService.SetBeaconEnabled(room.Code, UserId, enabled);
         if (error != null)
         {
             await SendError(error);
@@ -413,14 +399,8 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task SetCopresencePreset(string preset)
+    public async Task SetTileDecayEnabled(bool enabled)
     {
-        if (!ValidateCopresencePreset(preset))
-        {
-            await SendError(InvalidRequestCode, "Invalid copresence preset.");
-            return;
-        }
-
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -428,7 +408,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.SetCopresencePreset(room.Code, UserId, preset);
+        var (state, error) = gameService.SetTileDecayEnabled(room.Code, UserId, enabled);
         if (error != null)
         {
             await SendError(error);
@@ -486,6 +466,50 @@ public partial class GameHub
         }
 
         var (state, error) = gameService.SetPlayerRole(room.Code, UserId, role);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task AssignPlayerRole(string targetPlayerId, string role)
+    {
+        if (!ValidateIdentifier(targetPlayerId) || !IsSupportedPlayerRole(role))
+        {
+            await SendError(InvalidRequestCode, "Invalid player identifier or role.");
+            return;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.AssignPlayerRole(room.Code, UserId, targetPlayerId, role);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task RandomizeRoles()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.RandomizeRoles(room.Code, UserId);
         if (error != null)
         {
             await SendError(error);

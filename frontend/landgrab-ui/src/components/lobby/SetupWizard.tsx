@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ClaimMode, CopresenceMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, WinConditionType } from '../../types/game';
+import type { ClaimMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, WinConditionType } from '../../types/game';
 import { LocationStep } from './LocationStep';
 import { TeamsStep } from './TeamsStep';
 import { RulesStep } from './RulesStep';
@@ -21,6 +21,8 @@ interface Props {
     locationLoading: boolean;
     onSetMapLocation: (lat: number, lng: number) => void;
     onSetAlliance: (name: string) => void;
+    onAssignPlayerRole: (targetPlayerId: string, role: string) => void;
+    onRandomizeRoles: () => void;
     onConfigureAlliances: (names: string[]) => void;
     onDistributePlayers: () => void;
     onSetTileSize: (meters: number) => void;
@@ -30,8 +32,8 @@ interface Props {
     onSetClaimMode: (mode: ClaimMode) => void;
     onSetAllowSelfClaim: (allow: boolean) => void;
     onSetWinCondition: (type: WinConditionType, value: number) => void;
-    onSetCopresenceModes: (modes: CopresenceMode[]) => void;
-    onSetCopresencePreset: (preset: string) => void;
+    onSetBeaconEnabled: (enabled: boolean) => void;
+    onSetTileDecayEnabled: (enabled: boolean) => void;
     onSetGameDynamics: (dynamics: GameDynamics) => void;
     onSetPlayerRole?: (role: string) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
@@ -60,6 +62,8 @@ export function SetupWizard({
     locationLoading,
     onSetMapLocation,
     onSetAlliance,
+    onAssignPlayerRole,
+    onRandomizeRoles,
     onConfigureAlliances,
     onDistributePlayers,
     onSetTileSize,
@@ -69,10 +73,9 @@ export function SetupWizard({
     onSetClaimMode,
     onSetAllowSelfClaim,
     onSetWinCondition,
-    onSetCopresenceModes,
-    onSetCopresencePreset,
+    onSetBeaconEnabled,
+    onSetTileDecayEnabled,
     onSetGameDynamics,
-    onSetPlayerRole,
     onSetMasterTileByHex,
     onAssignStartingTile,
     onSetAllianceHQ,
@@ -263,9 +266,10 @@ export function SetupWizard({
                             myUserId={myUserId}
                             isHost={isHost}
                             onSetAlliance={onSetAlliance}
+                            onAssignPlayerRole={onAssignPlayerRole}
+                            onRandomizeRoles={onRandomizeRoles}
                             onConfigureAlliances={onConfigureAlliances}
                             onDistributePlayers={onDistributePlayers}
-                            onSetPlayerRole={onSetPlayerRole}
                         />
                     )}
                     {step === 2 && (
@@ -283,8 +287,8 @@ export function SetupWizard({
                         <DynamicsStep
                             gameState={gameState}
                             isHost={isHost}
-                            onSetCopresenceModes={onSetCopresenceModes}
-                            onSetCopresencePreset={onSetCopresencePreset}
+                            onSetBeaconEnabled={onSetBeaconEnabled}
+                            onSetTileDecayEnabled={onSetTileDecayEnabled}
                             onSetGameDynamics={onSetGameDynamics}
                         />
                     )}

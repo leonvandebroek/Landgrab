@@ -120,35 +120,10 @@ export function getTileActions({
 
   /* ── Enemy tile ── */
   if (isEnemy) {
-    const standoffActive = state.dynamics?.activeCopresenceModes?.includes('Standoff');
-
-    if (standoffActive) {
-      const hasEnemyPresence = state.players.some((otherPlayer) => (
-        otherPlayer.id !== player.id
-        && (!player.allianceId || otherPlayer.allianceId !== player.allianceId)
-        && otherPlayer.currentHexQ === targetHex[0]
-        && otherPlayer.currentHexR === targetHex[1]
-      ));
-
-      if (hasEnemyPresence) {
-        actions.push({
-          type: 'attack',
-          label: 'game.tileAction.attackBtn',
-          icon: '⚔️',
-          tone: 'danger',
-          enabled: false,
-          disabledReason: 'game.tileAction.standoffBlocked',
-        });
-        return actions;
-      }
-    }
-
-    const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
     const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
-    const rallyBonus = state.dynamics?.activeCopresenceModes?.includes('Rally') && targetCell.isFortified ? 1 : 0;
     const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
-    const effectiveAttack = carriedTroops + attackerBonus;
-    const effectiveDefence = targetCell.troops + defenderBonusVal + rallyBonus + fortBonus;
+    const effectiveAttack = carriedTroops;
+    const effectiveDefence = targetCell.troops + defenderBonusVal + fortBonus;
     const canAttack = effectiveAttack > effectiveDefence;
     actions.push({
       type: 'attack',
@@ -326,16 +301,16 @@ export function getTileInteractionStatus({
     if (state.claimMode === 'PresenceWithTroop') {
       return carriedTroops > 0
         ? {
-            action: 'place',
-            tone: 'info',
-            message: t('game.tileAction.neutralClaimWithTroop'),
-            placeOutcome: 'claim'
-          }
+          action: 'place',
+          tone: 'info',
+          message: t('game.tileAction.neutralClaimWithTroop'),
+          placeOutcome: 'claim'
+        }
         : {
-            action: 'none',
-            tone: 'error',
-            message: t('game.tileAction.neutralNeedsTroop')
-          };
+          action: 'none',
+          tone: 'error',
+          message: t('game.tileAction.neutralNeedsTroop')
+        };
     }
 
     const adjacencyDisabledReason = state.claimMode === 'AdjacencyRequired'
@@ -358,30 +333,10 @@ export function getTileInteractionStatus({
     };
   }
 
-  const attackerBonus = state.dynamics?.activeCopresenceModes?.includes('PresenceBonus') ? 1 : 0;
   const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
-  const rallyBonus = state.dynamics?.activeCopresenceModes?.includes('Rally') && targetCell.isFortified ? 1 : 0;
   const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
-  const effectiveAttack = carriedTroops + attackerBonus;
-  const effectiveDefence = targetCell.troops + defenderBonusVal + rallyBonus + fortBonus;
-
-  const standoffActive = state.dynamics?.activeCopresenceModes?.includes('Standoff');
-  if (standoffActive) {
-    const hasEnemyPresence = state.players.some((otherPlayer) => (
-      otherPlayer.id !== player.id
-      && (!player.allianceId || otherPlayer.allianceId !== player.allianceId)
-      && otherPlayer.currentHexQ === targetHex[0]
-      && otherPlayer.currentHexR === targetHex[1]
-    ));
-
-    if (hasEnemyPresence) {
-      return {
-        action: 'none',
-        tone: 'error',
-        message: t('game.tileAction.standoffBlocked')
-      };
-    }
-  }
+  const effectiveAttack = carriedTroops;
+  const effectiveDefence = targetCell.troops + defenderBonusVal + fortBonus;
 
   if (effectiveAttack <= effectiveDefence) {
     return {
@@ -423,7 +378,7 @@ function hasOwnedTerritory(
 ): boolean {
   return Object.values(grid).some((cell) => (
     cell.ownerId === player.id
-      || Boolean(player.allianceId && cell.ownerAllianceId === player.allianceId)
+    || Boolean(player.allianceId && cell.ownerAllianceId === player.allianceId)
   ));
 }
 

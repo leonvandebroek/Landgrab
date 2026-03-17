@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Landgrab.Api.Models;
+using Landgrab.Api.Services;
 using Landgrab.Tests.TestSupport;
 
 namespace Landgrab.Tests.Services;
@@ -7,11 +8,11 @@ namespace Landgrab.Tests.Services;
 public sealed class AbilityServiceTests
 {
     [Fact]
-    public void ActivateBeacon_WhenBeaconModeEnabled_Succeeds()
+    public void ActivateBeacon_WhenBeaconIsEnabled_Succeeds()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Beacon)
+            .WithBeaconEnabled()
             .AddPlayer("p1", "Alice")
             .WithPlayerPosition("p1", 0, 0)
             .Build();
@@ -29,7 +30,7 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateBeacon_WhenBeaconModeIsDisabled_Fails()
+    public void ActivateBeacon_WhenBeaconIsDisabled_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -50,7 +51,7 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
-            .WithCopresenceModes(CopresenceMode.Beacon)
+            .WithBeaconEnabled()
             .AddPlayer("p1", "Alice")
             .Build();
         var context = new ServiceTestContext(state);
@@ -102,8 +103,9 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
-            .WithCopresenceModes(CopresenceMode.CommandoRaid)
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Scout)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
         var context = new ServiceTestContext(state);
@@ -120,7 +122,7 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateCommandoRaid_WhenModeDisabled_Fails()
+    public void ActivateCommandoRaid_WhenPlayerRolesAreDisabled_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
@@ -140,8 +142,9 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(4)
-            .WithCopresenceModes(CopresenceMode.CommandoRaid)
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Scout)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
         var context = new ServiceTestContext(state);
@@ -158,8 +161,9 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
-            .WithCopresenceModes(CopresenceMode.CommandoRaid)
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Scout)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
         state.Players.Single(player => player.Id == "p1").IsCommandoActive = true;
@@ -171,13 +175,31 @@ public sealed class AbilityServiceTests
         result.error.Should().Be("You already have an active commando raid.");
     }
 
+    [Fact]
+    public void ActivateCommandoRaid_WhenPlayerIsNotScout_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Commander)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Commando raids can only be performed by Scouts.");
+    }
+
 
     [Fact]
     public void ActivateBeacon_WhenAnotherPlayerAlreadyHasBeacon_BeaconsCanCoexist()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
-            .WithCopresenceModes(CopresenceMode.Beacon)
+            .WithBeaconEnabled()
             .AddPlayer("p1", "Alice", "a1")
             .AddPlayer("p2", "Bob", "a1")
             .AddAlliance("a1", "Alpha", "p1", "p2")
@@ -205,7 +227,7 @@ public sealed class AbilityServiceTests
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
             .WithClaimMode(ClaimMode.AdjacencyRequired)
-            .WithCopresenceModes(CopresenceMode.Beacon)
+            .WithBeaconEnabled()
             .AddPlayer("p1", "Alice", "a1")
             .AddPlayer("p2", "Bob", "a1")
             .AddAlliance("a1", "Alpha", "p1", "p2")
@@ -229,8 +251,9 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(4)
-            .WithCopresenceModes(CopresenceMode.CommandoRaid)
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Scout)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
         var context = new ServiceTestContext(state);
@@ -248,8 +271,9 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
-            .WithCopresenceModes(CopresenceMode.CommandoRaid)
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Scout)
             .AddPlayer("p2", "Bob")
             .WithPlayerPosition("p1", 0, 0)
             .OwnHex(2, 0, "p2", troops: 3)
@@ -269,8 +293,9 @@ public sealed class AbilityServiceTests
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
-            .WithCopresenceModes(CopresenceMode.CommandoRaid)
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Scout)
             .WithPlayerPosition("p1", 0, 0)
             .WithCarriedTroops("p1", 4, 0, 0)
             .Build();
@@ -306,6 +331,117 @@ public sealed class AbilityServiceTests
         context.Player("p1").IsBeacon.Should().BeFalse();
         context.Player("p1").BeaconLat.Should().BeNull();
         context.Player("p1").BeaconLng.Should().BeNull();
+    }
+
+    [Fact]
+    public void ActivateTacticalStrike_WhenCommanderUsesAbility_Succeeds()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Commander)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var beforeActivation = DateTime.UtcNow;
+
+        var result = context.AbilityService.ActivateTacticalStrike(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        context.Player("p1").TacticalStrikeActive.Should().BeTrue();
+        context.Player("p1").TacticalStrikeExpiry.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(10));
+        context.Player("p1").TacticalStrikeCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(20), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void ActivateReinforce_OnFriendlyHex_AddsTroopsAndStartsCooldown()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1")
+            .AddAlliance("a1", "Alpha", "p1")
+            .WithPlayerRole("p1", PlayerRole.Commander)
+            .OwnHex(0, 0, "p1", "a1", troops: 2)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var beforeActivation = DateTime.UtcNow;
+
+        var result = context.AbilityService.ActivateReinforce(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(5);
+        context.Player("p1").ReinforceCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void ActivateShieldWall_WhenDefenderUsesAbility_Succeeds()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice")
+            .WithPlayerRole("p1", PlayerRole.Defender)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var beforeActivation = DateTime.UtcNow;
+
+        var result = context.AbilityService.ActivateShieldWall(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        context.Player("p1").ShieldWallActive.Should().BeTrue();
+        context.Player("p1").ShieldWallExpiry.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(10));
+        context.Player("p1").ShieldWallCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(20), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void ActivateEmergencyRepair_OnFriendlyHex_AddsTroopsAndStartsCooldown()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1")
+            .AddAlliance("a1", "Alpha", "p1")
+            .WithPlayerRole("p1", PlayerRole.Engineer)
+            .OwnHex(0, 0, "p1", "a1", troops: 1)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var beforeActivation = DateTime.UtcNow;
+
+        var result = context.AbilityService.ActivateEmergencyRepair(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(4);
+        context.Player("p1").EmergencyRepairCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void StartDemolish_OnEnemyFort_StartsChannelAndCooldown()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerRole("p1", PlayerRole.Engineer)
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        state.Grid[HexService.Key(1, 0)].IsFort = true;
+        var context = new ServiceTestContext(state);
+        var beforeActivation = DateTime.UtcNow;
+
+        var result = context.AbilityService.StartDemolish(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        context.Player("p1").DemolishActive.Should().BeTrue();
+        context.Player("p1").DemolishTargetKey.Should().Be(HexService.Key(1, 0));
+        context.Player("p1").DemolishStartedAt.Should().BeCloseTo(beforeActivation, TimeSpan.FromSeconds(10));
+        context.Player("p1").DemolishCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(30), TimeSpan.FromSeconds(10));
     }
 
 }

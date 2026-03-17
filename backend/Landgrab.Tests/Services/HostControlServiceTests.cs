@@ -72,7 +72,7 @@ public sealed class HostControlServiceTests
     }
 
     [Fact]
-    public void UpdateGameDynamicsLive_WithCustomPreset_UpdatesFlagsAndFiltersNoneMode()
+    public void UpdateGameDynamicsLive_UpdatesFlags()
     {
         var hostId = Guid.NewGuid().ToString();
         var state = ServiceTestContext.CreateBuilder()
@@ -89,9 +89,7 @@ public sealed class HostControlServiceTests
             SupplyLinesEnabled = true,
             HQEnabled = true,
             TimedEscalationEnabled = true,
-            UnderdogPactEnabled = true,
-            CopresencePreset = "Aangepast",
-            ActiveCopresenceModes = [CopresenceMode.None, CopresenceMode.Standoff, CopresenceMode.Rally]
+            UnderdogPactEnabled = true
         };
 
         var result = service.UpdateGameDynamicsLive(ServiceTestContext.RoomCode, hostId, dynamics);
@@ -105,37 +103,9 @@ public sealed class HostControlServiceTests
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.TimedEscalationEnabled.Should().BeTrue();
         context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
-        context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
         context.State.EventLog.Should().ContainSingle(entry =>
             entry.Type == "HostAction" &&
             entry.Message == "Host updated game dynamics.");
-    }
-
-    [Fact]
-    public void UpdateGameDynamicsLive_WithNamedPreset_UsesServerPresetModes()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-        var dynamics = new GameDynamics
-        {
-            CopresencePreset = "Territorium",
-            ActiveCopresenceModes = [CopresenceMode.Rally]
-        };
-
-        var result = service.UpdateGameDynamicsLive(ServiceTestContext.RoomCode, hostId, dynamics);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        context.State.Dynamics.CopresencePreset.Should().Be("Territorium");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(
-            CopresenceMode.Shepherd,
-            CopresenceMode.Drain);
     }
 
     [Fact]
@@ -177,28 +147,6 @@ public sealed class HostControlServiceTests
         context.State.EventLog.Should().BeEmpty();
     }
 
-    [Fact]
-    public void UpdateGameDynamicsLive_WithUnknownNamedPreset_Fails()
-    {
-        var hostId = Guid.NewGuid().ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer(hostId, "Host")
-            .WithPlayerAsHost(hostId)
-            .Build();
-        var (context, service) = CreateService(state, hostId);
-        var dynamics = new GameDynamics
-        {
-            CopresencePreset = "UnknownPreset"
-        };
-
-        var result = service.UpdateGameDynamicsLive(ServiceTestContext.RoomCode, hostId, dynamics);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Unknown copresence preset: UnknownPreset");
-        context.State.Dynamics.CopresencePreset.Should().BeNull();
-        context.State.EventLog.Should().BeEmpty();
-    }
 
     [Fact]
     public void SendHostMessage_ToAllPlayers_AppendsBroadcastMessage()

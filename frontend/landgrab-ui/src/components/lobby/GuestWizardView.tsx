@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GameState } from '../../types/game';
+import type { GameState, PlayerRole } from '../../types/game';
+import { RoleModal } from './RoleModal';
 import { TeamsStep } from './TeamsStep';
 import { ReviewStep } from './ReviewStep';
 import { WizardToast } from './WizardToast';
+import { isRoleModalRole, type RoleModalRole } from './roleModalUtils';
 
 interface LocationPoint {
     lat: number;
@@ -16,6 +18,8 @@ interface Props {
     authToken: string;
     currentLocation: LocationPoint | null;
     onSetAlliance: (name: string) => void;
+    onAssignPlayerRole: (targetPlayerId: string, role: string) => void;
+    onRandomizeRoles: () => void;
     onSetPlayerRole?: (role: string) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
     onAssignStartingTile: (q: number, r: number, playerId: string) => void;
@@ -48,7 +52,8 @@ export function GuestWizardView({
     authToken,
     currentLocation,
     onSetAlliance,
-    onSetPlayerRole,
+    onAssignPlayerRole,
+    onRandomizeRoles,
     onSetMasterTileByHex,
     onAssignStartingTile,
     onStartGame,
@@ -65,7 +70,10 @@ export function GuestWizardView({
         [gameState.players, myUserId],
     );
     const [toastSequence, setToastSequence] = useState(0);
+    const [showRoleModal, setShowRoleModal] = useState<RoleModalRole | null>(null);
     const previousStepRef = useRef<number | null>(null);
+    const myRole = me?.role ?? 'None';
+    const previousRoleRef = useRef<PlayerRole>(myRole);
 
     const guestStep = useMemo(() => {
         if (typeof gameState.currentWizardStep === 'number') {
@@ -99,6 +107,23 @@ export function GuestWizardView({
             window.clearTimeout(timer);
         };
     }, [guestStep]);
+
+    useEffect(() => {
+        const previousRole = previousRoleRef.current;
+        previousRoleRef.current = myRole;
+
+        if (isRoleModalRole(previousRole) || !isRoleModalRole(myRole)) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setShowRoleModal(myRole);
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [myRole]);
 
     return (
         <div className="wizard-page">
@@ -140,10 +165,12 @@ export function GuestWizardView({
                             gameState={gameState}
                             myUserId={myUserId}
                             isHost={false}
+                            enableAssignedRoleModal={false}
                             onSetAlliance={onSetAlliance}
-                            onConfigureAlliances={() => {}}
-                            onDistributePlayers={() => {}}
-                            onSetPlayerRole={onSetPlayerRole}
+                            onAssignPlayerRole={onAssignPlayerRole}
+                            onRandomizeRoles={onRandomizeRoles}
+                            onConfigureAlliances={() => { }}
+                            onDistributePlayers={() => { }}
                         />
                     )}
                     {guestStep === 2 && (
@@ -166,9 +193,9 @@ export function GuestWizardView({
                             isHost={false}
                             currentLocation={currentLocation}
                             canStart={false}
-                            onUseCenteredGameArea={() => {}}
-                            onSetPatternGameArea={() => {}}
-                            onSetCustomGameArea={() => {}}
+                            onUseCenteredGameArea={() => { }}
+                            onSetPatternGameArea={() => { }}
+                            onSetCustomGameArea={() => { }}
                             onSetMasterTileByHex={onSetMasterTileByHex}
                             onAssignStartingTile={onAssignStartingTile}
                             onStartGame={onStartGame}
@@ -191,6 +218,10 @@ export function GuestWizardView({
                     <button type="button" className="btn-ghost" onClick={onLogout}>{t('lobby.leaveSignOut')}</button>
                 </div>
             </div>
+
+            {showRoleModal && (
+                <RoleModal role={showRoleModal} onDismiss={() => setShowRoleModal(null)} />
+            )}
         </div>
     );
 }

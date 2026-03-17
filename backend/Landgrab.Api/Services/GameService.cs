@@ -55,10 +55,12 @@ public class GameService(
     public (GameState? state, string? error) SetClaimMode(string roomCode, string userId, string claimMode) => gameConfigService.SetClaimMode(roomCode, userId, claimMode);
     public (GameState? state, string? error) SetAllowSelfClaim(string roomCode, string userId, bool allow) => gameConfigService.SetAllowSelfClaim(roomCode, userId, allow);
     public (GameState? state, string? error) SetWinCondition(string roomCode, string userId, string winConditionType, int value) => gameConfigService.SetWinCondition(roomCode, userId, winConditionType, value);
-    public (GameState? state, string? error) SetCopresenceModes(string roomCode, string userId, List<string> modes) => gameConfigService.SetCopresenceModes(roomCode, userId, modes);
-    public (GameState? state, string? error) SetCopresencePreset(string roomCode, string userId, string preset) => gameConfigService.SetCopresencePreset(roomCode, userId, preset);
+    public (GameState? state, string? error) SetBeaconEnabled(string roomCode, string userId, bool enabled) => gameConfigService.SetBeaconEnabled(roomCode, userId, enabled);
+    public (GameState? state, string? error) SetTileDecayEnabled(string roomCode, string userId, bool enabled) => gameConfigService.SetTileDecayEnabled(roomCode, userId, enabled);
     public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics) => gameConfigService.SetGameDynamics(roomCode, userId, dynamics);
     public (GameState? state, string? error) SetPlayerRole(string roomCode, string userId, string role) => lobbyService.SetPlayerRole(roomCode, userId, role);
+    public (GameState? state, string? error) AssignPlayerRole(string roomCode, string userId, string targetPlayerId, string role) => lobbyService.AssignPlayerRole(roomCode, userId, targetPlayerId, role);
+    public (GameState? state, string? error) RandomizeRoles(string roomCode, string userId) => lobbyService.RandomizeRoles(roomCode, userId);
     public (GameState? state, string? error) SetWizardStep(string roomCode, string userId, int step) => lobbyService.SetWizardStep(roomCode, userId, step);
     public (GameState? state, string? error) SetAllianceHQ(string roomCode, string userId, int q, int r, string allianceId) => allianceConfigService.SetAllianceHQ(roomCode, userId, q, r, allianceId);
     public (GameState? state, string? error) SetMasterTile(string roomCode, string userId, double lat, double lng) => mapAreaService.SetMasterTile(roomCode, userId, lat, lng);
@@ -69,6 +71,11 @@ public class GameService(
     public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId) => abilityService.ActivateBeacon(roomCode, userId);
     public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => abilityService.DeactivateBeacon(roomCode, userId);
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
+    public (GameState? state, string? error) ActivateTacticalStrike(string roomCode, string userId) => abilityService.ActivateTacticalStrike(roomCode, userId);
+    public (GameState? state, string? error) ActivateReinforce(string roomCode, string userId) => abilityService.ActivateReinforce(roomCode, userId);
+    public (GameState? state, string? error) ActivateShieldWall(string roomCode, string userId) => abilityService.ActivateShieldWall(roomCode, userId);
+    public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId) => abilityService.ActivateEmergencyRepair(roomCode, userId);
+    public (GameState? state, string? error) StartDemolish(string roomCode, string userId) => abilityService.StartDemolish(roomCode, userId);
     public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)
     {
         return gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);

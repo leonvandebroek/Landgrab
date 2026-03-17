@@ -544,12 +544,10 @@ const en = {
     terrainTitle: 'Terrain',
     fogOfWarTitle: 'Fog of War',
     fogOfWarText: 'Enemy troop counts stay hidden until you get close enough, and forests can keep them concealed for longer.',
-    copresenceTitle: 'Close encounters',
     helpMovement: 'Walk around in the real world. Your position is shown on the map.',
     helpClaim: 'Step on a neutral hex to claim it for your team.',
     helpAttack: 'Step on an enemy hex to attack. Combat is automatic based on troop counts.',
     helpTerrain: 'Different terrain types give combat bonuses or penalties.',
-    helpCopresence: 'When multiple players are on the same hex, special close encounter rules may apply based on the game mode.',
   },
   settings: {
     display: {
@@ -627,11 +625,6 @@ const en = {
     },
     roles: {
       title: 'Player Roles',
-      body: 'Each player chooses a special role with unique abilities. Use your role\'s strengths strategically!',
-    },
-    copresence: {
-      title: 'Close encounters',
-      body: 'When multiple players are on the same hex, special close encounter rules apply based on the enabled modes.',
     },
     timedEscalation: {
       title: 'Timed Escalation',
@@ -673,6 +666,9 @@ const en = {
     teamsWaitingAssignment_other: 'Waiting for {{count}} players to choose a team.',
     teamsAllReady: 'All connected players are ready for the next step.',
     teamsReady: 'All players have an alliance!',
+    assignRole: 'Assign role',
+    randomizeRoles: 'Randomize roles',
+    randomizeRolesDesc: 'Randomly distribute roles across all players',
     rulesTitle: 'Game rules',
     rulesDesc: 'Choose how the match plays out. Defaults are already set — skip ahead if they look good.',
     rulesTileSizeLabel: 'Tile size',
@@ -788,27 +784,10 @@ const en = {
     presetsLabel: 'Presets',
     presetsDesc: 'Choose a gameplay preset to quickly configure close encounter modes.',
     presetIncludes: 'Includes:',
-    presetNoModes: 'No copresence modes — classic rules only',
     customLabel: 'Custom Modes',
     customDesc: 'Select individual close encounter modes for a custom experience.',
     featuresLabel: 'Additional Features',
     featuresDesc: 'Toggle optional gameplay layers.',
-    preset: {
-      Klassiek: { title: 'Classic', detail: 'Classic rules — no close encounters.' },
-      Territorium: { title: 'Territory', detail: 'Territory control with Shepherd and Drain.' },
-      Formatie: { title: 'Formation', detail: 'Formation play with FrontLine and Rally.' },
-      Aangepast: { title: 'Custom', detail: 'Pick your own combination of close encounter modes.' },
-    },
-    mode: {
-      Standoff: { title: 'Standoff', detail: 'Hostile players block tile actions.' },
-      PresenceBonus: { title: 'Presence Bonus', detail: 'Being physically present gives combat dice bonuses.' },
-      Rally: { title: 'Rally', detail: 'Multiple allies on a tile fortify it.' },
-      Drain: { title: 'Drain', detail: 'Enemy presence stops tile regeneration.' },
-      Beacon: { title: 'Beacon', detail: 'Mark your position to extend ally claim range.' },
-      FrontLine: { title: 'Front Line', detail: 'Adjacent allied presence boosts attack.' },
-      Shepherd: { title: 'Shepherd', detail: 'Unvisited own tiles decay over time.' },
-      CommandoRaid: { title: 'Commando Raid', detail: 'Timed raids bypass adjacency rules.' },
-    },
     feature: {
       terrain: 'Terrain Effects',
       terrainDesc: 'Real-world terrain affects combat and movement.',
@@ -816,10 +795,14 @@ const en = {
       playerRolesDesc: 'Assign special roles with unique abilities.',
       fogOfWar: 'Fog of War',
       fogOfWarDesc: 'Only see hexes near your territory.',
+      beaconEnabled: 'Beacon',
+      beaconEnabledDesc: 'Place beacons on the map that are visible to all team members.',
       supplyLines: 'Supply Lines',
       supplyLinesDesc: 'Disconnected territory stops regenerating.',
       hq: 'HQ Mechanic',
       hqDesc: 'Each team has a capturable headquarters.',
+      tileDecayEnabled: 'Tile decay',
+      tileDecayEnabledDesc: 'Unoccupied tiles gradually lose troops over time.',
       timedEscalation: 'Timed Escalation',
       timedEscalationDesc: 'Game intensity increases over time.',
       underdogPact: 'Underdog Pact',
@@ -873,6 +856,109 @@ const en = {
     fortDesc: 'Permanent +1 defence bonus.',
     commanderBonus: '+1 Commander attack',
     defenderBonus: 'Defender: double regen',
+  },
+  roles: {
+    status: {
+      activate: 'Activate',
+      active: 'Active',
+      cooldown: 'Cooldown',
+      inProgress: 'In Progress',
+    },
+    Commander: {
+      title: 'Commander',
+      intro: 'I lead by example. Where I stand, we win.',
+      abilities: {
+        warBonus: {
+          title: 'War Bonus',
+          description: '+1 attack when physically present in combat hex',
+          shortDesc: 'Melee attack boost',
+        },
+        tacticalStrike: {
+          title: 'Tactical Strike',
+          description: 'Your next attack ignores all defense bonuses (forts, fortification)',
+          shortDesc: 'Ignores forts on next attack',
+          cooldown: '20 min cooldown',
+        },
+        reinforce: {
+          title: 'Reinforce',
+          description: 'Standing on a friendly hex: instantly add +3 troops to it',
+          shortDesc: '+3 troops to current hex',
+          cooldown: '15 min cooldown',
+        },
+      },
+    },
+    Scout: {
+      title: 'Scout',
+      intro: 'I go where nobody dares. I find weaknesses.',
+      abilities: {
+        extendedVision: {
+          title: 'Extended Vision',
+          description: '+3 fog-of-war radius',
+          shortDesc: 'See further',
+        },
+        firstStrike: {
+          title: 'First Strike',
+          description: 'First visit to any hex gives +2 troops to nearest owned tile',
+          shortDesc: 'Bonus on first visit',
+        },
+        commandoRaid: {
+          title: 'Commando Raid',
+          description: 'Claim a hex up to 3 hexes away, bypassing adjacency',
+          shortDesc: 'Remote hex claim',
+          cooldown: '30 min cooldown',
+        },
+      },
+    },
+    Defender: {
+      title: 'Defender',
+      intro: 'I hold the line. Nothing gets past me while I\'m here.',
+      abilities: {
+        presenceShield: {
+          title: 'Presence Shield',
+          description: 'Double troop regen every tick while standing on own hex',
+          shortDesc: 'Double regen on own hex',
+        },
+        shieldWall: {
+          title: 'Shield Wall',
+          description: 'Any enemy attack on your current hex needs +2 extra troops while active (5 minutes)',
+          shortDesc: '+2 defense for 5 min',
+          cooldown: '20 min cooldown',
+        },
+        lastStand: {
+          title: 'Last Stand',
+          description: 'If enemy captures your hex, you relocate to the nearest friendly hex',
+          shortDesc: 'Rescued when captured',
+        },
+      },
+    },
+    Engineer: {
+      title: 'Engineer',
+      intro: 'I build infrastructure. My fortifications outlast everyone.',
+      abilities: {
+        fortConstruction: {
+          title: 'Fort Construction',
+          description: 'Stay 10 min on own hex to build a permanent fort (+1 defense)',
+          shortDesc: 'Build permanent forts',
+        },
+        emergencyRepair: {
+          title: 'Emergency Repair',
+          description: 'Instantly restore +3 troops to current hex',
+          shortDesc: '+3 troops instantly',
+          cooldown: '15 min cooldown',
+        },
+        demolish: {
+          title: 'Demolish',
+          description: 'Standing on an enemy fort: remove it after 2 min physical presence',
+          shortDesc: 'Destroy enemy forts',
+          cooldown: '30 min cooldown',
+        },
+      },
+    },
+  },
+  roleModal: {
+    passive: 'Passive',
+    activate: 'Activate',
+    gotIt: 'Got it!',
   },
   phase5: {
     beacon: 'Beacon',

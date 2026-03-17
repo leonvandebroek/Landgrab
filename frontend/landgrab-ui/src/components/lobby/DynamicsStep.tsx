@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { CopresenceMode, GameDynamics, GameState } from '../../types/game';
-import { DYNAMICS_PRESETS as PRESETS, PRESET_MODES, COPRESENCE_MODES, FEATURE_KEYS, featureField } from '../../utils/dynamics';
+import type { GameDynamics, GameState } from '../../types/game';
+import { FEATURE_KEYS, featureField } from '../../utils/dynamics';
 import type { FeatureKey } from '../../utils/dynamics';
 
 /* ── Component ────────────────────────────────────────────────────────── */
@@ -8,34 +8,36 @@ import type { FeatureKey } from '../../utils/dynamics';
 interface Props {
     gameState: GameState;
     isHost: boolean;
-    onSetCopresenceModes: (modes: CopresenceMode[]) => void;
-    onSetCopresencePreset: (preset: string) => void;
+    onSetBeaconEnabled: (enabled: boolean) => void;
+    onSetTileDecayEnabled: (enabled: boolean) => void;
     onSetGameDynamics: (dynamics: GameDynamics) => void;
 }
 
 export function DynamicsStep({
     gameState,
     isHost,
-    onSetCopresenceModes,
-    onSetCopresencePreset,
+    onSetBeaconEnabled,
+    onSetTileDecayEnabled,
     onSetGameDynamics,
 }: Props) {
     const { t } = useTranslation();
     const { dynamics } = gameState;
-    const activePreset = dynamics.copresencePreset ?? 'Klassiek';
 
     /* ── Handlers ──────────────────────────────────────────────────── */
 
-    const handleModeToggle = (mode: CopresenceMode, checked: boolean) => {
-        if (!isHost) return;
-        const next = checked
-            ? [...dynamics.activeCopresenceModes, mode]
-            : dynamics.activeCopresenceModes.filter(m => m !== mode);
-        onSetCopresenceModes(next);
-    };
-
     const handleFeatureToggle = (key: FeatureKey, checked: boolean) => {
         if (!isHost) return;
+
+        if (key === 'beaconEnabled') {
+            onSetBeaconEnabled(checked);
+            return;
+        }
+
+        if (key === 'tileDecayEnabled') {
+            onSetTileDecayEnabled(checked);
+            return;
+        }
+
         onSetGameDynamics({ ...dynamics, [featureField(key)]: checked });
     };
 
@@ -50,67 +52,6 @@ export function DynamicsStep({
 
             <div className="wizard-step-body">
                 <p className="wizard-hint">{t('wizard.dynamicsDefaultsNote')}</p>
-
-                {/* ── Presets ──────────────────────────────────────── */}
-                <div className="wizard-rule-card">
-                    <h3>{t('dynamics.presetsLabel')}</h3>
-                    <p className="wizard-hint">{t('dynamics.presetsDesc')}</p>
-
-                    <div className="claim-mode-grid preset-grid">
-                        {PRESETS.map(preset => {
-                            const modes = PRESET_MODES[preset];
-                            return (
-                                <label
-                                    key={preset}
-                                    className={`claim-mode-option preset-option${activePreset === preset ? ' active' : ''}`}
-                                >
-                                    <input
-                                        type="radio"
-                                        name="dynamics-preset"
-                                        checked={activePreset === preset}
-                                        onChange={() => isHost && onSetCopresencePreset(preset)}
-                                        disabled={!isHost}
-                                    />
-                                    <span className="claim-mode-copy">
-                                        <strong>{t(`dynamics.preset.${preset}.title`)}</strong>
-                                        <span>{t(`dynamics.preset.${preset}.detail`)}</span>
-                                        {modes.length > 0
-                                            ? <span className="preset-modes-preview">{t('dynamics.presetIncludes' as never)} {modes.map(mode => t(`dynamics.mode.${mode}.title` as never)).join(', ')}</span>
-                                            : <span className="preset-modes-preview">{t('dynamics.presetNoModes' as never)}</span>}
-                                    </span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* ── Custom copresence modes (visible when "Aangepast") ── */}
-                {activePreset === 'Aangepast' && (
-                    <div className="wizard-rule-card">
-                        <h3>{t('dynamics.customLabel')}</h3>
-                        <p className="wizard-hint">{t('dynamics.customDesc')}</p>
-
-                        <div className="toggle-grid">
-                            {COPRESENCE_MODES.map(mode => {
-                                const checked = dynamics.activeCopresenceModes.includes(mode);
-                                return (
-                                    <label key={mode} className={`toggle-card${checked ? ' active' : ''}`}>
-                                        <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={e => handleModeToggle(mode, e.target.checked)}
-                                            disabled={!isHost}
-                                        />
-                                        <span className="toggle-card-copy">
-                                            <strong>{t(`dynamics.mode.${mode}.title`)}</strong>
-                                            <span>{t(`dynamics.mode.${mode}.detail`)}</span>
-                                        </span>
-                                    </label>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
 
                 {/* ── Feature toggles ─────────────────────────────── */}
                 <div className="wizard-rule-card">

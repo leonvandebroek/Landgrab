@@ -222,123 +222,9 @@ public sealed class GameConfigServiceTests
     }
 
     [Fact]
-    public void SetCopresenceModes_ValidModes_UpdatesModesAndMarksPresetAsCustom()
+    public void SetGameDynamics_FullDynamicsObject_AppliesAllFlags()
     {
         var (context, sut) = CreateContext();
-
-        var result = sut.SetCopresenceModes(ServiceTestContext.RoomCode, HostUserId, ["Standoff", "Rally"]);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
-        result.state.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
-        context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
-    }
-
-    [Theory]
-    [InlineData("InvalidMode")]
-    [InlineData("None")]
-    public void SetCopresenceModes_InvalidMode_ReturnsError(string mode)
-    {
-        var (context, sut) = CreateContext(builder =>
-        {
-            builder.WithCopresenceModes(CopresenceMode.Standoff);
-        });
-        context.State.Dynamics.CopresencePreset = "Chaos";
-
-        var result = sut.SetCopresenceModes(ServiceTestContext.RoomCode, HostUserId, [mode]);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be($"Invalid copresence mode: {mode}");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff);
-        context.State.Dynamics.CopresencePreset.Should().Be("Chaos");
-    }
-
-    [Fact]
-    public void SetCopresenceModes_NonHost_ReturnsError()
-    {
-        var (context, sut) = CreateContext();
-
-        var result = sut.SetCopresenceModes(ServiceTestContext.RoomCode, GuestUserId, ["Standoff"]);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Only the host can change copresence modes.");
-        context.State.Dynamics.ActiveCopresenceModes.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void SetCopresencePreset_KnownPreset_UpdatesPresetAndModes()
-    {
-        var (context, sut) = CreateContext();
-
-        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Territorium");
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.Dynamics.CopresencePreset.Should().Be("Territorium");
-        result.state.Dynamics.ActiveCopresenceModes.Should().Equal(
-            CopresenceMode.Shepherd,
-            CopresenceMode.Drain);
-        context.State.Dynamics.CopresencePreset.Should().Be("Territorium");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(
-            CopresenceMode.Shepherd,
-            CopresenceMode.Drain);
-    }
-
-    [Fact]
-    public void SetCopresencePreset_CustomPreset_PreservesExistingModes()
-    {
-        var (context, sut) = CreateContext(builder =>
-        {
-            builder.WithCopresenceModes(CopresenceMode.Standoff, CopresenceMode.Rally);
-        });
-        context.State.Dynamics.CopresencePreset = "Chaos";
-
-        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Aangepast");
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        result.state.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
-        context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
-    }
-
-    [Fact]
-    public void SetCopresencePreset_InvalidPreset_ReturnsError()
-    {
-        var (context, sut) = CreateContext();
-
-        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "UnknownPreset");
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Unknown preset: UnknownPreset");
-        context.State.Dynamics.CopresencePreset.Should().BeNull();
-        context.State.Dynamics.ActiveCopresenceModes.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void SetCopresencePreset_WhenNotInLobby_ReturnsError()
-    {
-        var (context, sut) = CreateContext(phase: GamePhase.Playing);
-
-        var result = sut.SetCopresencePreset(ServiceTestContext.RoomCode, HostUserId, "Territorium");
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Copresence preset can only be changed in the lobby.");
-        context.State.Dynamics.CopresencePreset.Should().BeNull();
-        context.State.Dynamics.ActiveCopresenceModes.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void SetGameDynamics_FullDynamicsObject_AppliesAllFlagsWithoutChangingCopresenceSettings()
-    {
-        var (context, sut) = CreateContext(builder =>
-        {
-            builder.WithCopresenceModes(CopresenceMode.Standoff, CopresenceMode.Rally);
-        });
-        context.State.Dynamics.CopresencePreset = "Aangepast";
 
         var dynamics = new GameDynamics
         {
@@ -348,9 +234,7 @@ public sealed class GameConfigServiceTests
             SupplyLinesEnabled = false,
             HQEnabled = true,
             TimedEscalationEnabled = false,
-            UnderdogPactEnabled = true,
-            ActiveCopresenceModes = [CopresenceMode.Standoff],
-            CopresencePreset = "Territorium"
+            UnderdogPactEnabled = true
         };
 
         var result = sut.SetGameDynamics(ServiceTestContext.RoomCode, HostUserId, dynamics);
@@ -364,10 +248,13 @@ public sealed class GameConfigServiceTests
         result.state.Dynamics.HQEnabled.Should().BeTrue();
         result.state.Dynamics.TimedEscalationEnabled.Should().BeFalse();
         result.state.Dynamics.UnderdogPactEnabled.Should().BeTrue();
-        result.state.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
-        result.state.Dynamics.CopresencePreset.Should().Be("Aangepast");
-        context.State.Dynamics.ActiveCopresenceModes.Should().Equal(CopresenceMode.Standoff, CopresenceMode.Rally);
-        context.State.Dynamics.CopresencePreset.Should().Be("Aangepast");
+        context.State.Dynamics.TerrainEnabled.Should().BeTrue();
+        context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
+        context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
+        context.State.Dynamics.SupplyLinesEnabled.Should().BeFalse();
+        context.State.Dynamics.HQEnabled.Should().BeTrue();
+        context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
+        context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
     }
 
     [Fact]

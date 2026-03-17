@@ -76,9 +76,8 @@ export function AbilityBar({
   const { t } = useTranslation();
   const [, setTick] = useState(0);
 
-  const modes = dynamics.activeCopresenceModes ?? [];
-  const showBeacon = modes.includes('Beacon');
-  const showCommando = modes.includes('CommandoRaid');
+  const showBeacon = dynamics.beaconEnabled;
+  const showCommando = dynamics.playerRolesEnabled && player.role === 'Scout';
 
   const hasActiveCountdown = Boolean(
     player.commandoDeadline || player.commandoCooldownUntil
