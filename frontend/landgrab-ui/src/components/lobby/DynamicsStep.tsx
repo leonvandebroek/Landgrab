@@ -125,18 +125,41 @@ export function DynamicsStep({
                     <p className="wizard-hint">{t('dynamics.featuresDesc')}</p>
 
                     {FEATURE_KEYS.map(key => (
-                        <label key={key} className="toggle-row">
-                            <input
-                                type="checkbox"
-                                checked={isFeatureEnabled(key)}
-                                onChange={e => handleFeatureToggle(key, e.target.checked)}
-                                disabled={!isHost}
-                            />
-                            <span className="toggle-row-copy">
-                                <strong>{t(`dynamics.feature.${key}`)}</strong>
-                                <span>{t(`dynamics.feature.${key}Desc`)}</span>
-                            </span>
-                        </label>
+                        <div key={key}>
+                            <label className="toggle-row">
+                                <input
+                                    type="checkbox"
+                                    checked={isFeatureEnabled(key)}
+                                    onChange={e => handleFeatureToggle(key, e.target.checked)}
+                                    disabled={!isHost}
+                                />
+                                <span className="toggle-row-copy">
+                                    <strong>{t(`dynamics.feature.${key}`)}</strong>
+                                    <span>{t(`dynamics.feature.${key}Desc`)}</span>
+                                </span>
+                            </label>
+                            {key === 'hq' && dynamics.hqEnabled && (
+                                <>
+                                    <label className="toggle-row" style={{ paddingLeft: '1.5rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={dynamics.hqAutoAssign ?? true}
+                                            onChange={e => updateDynamics({ hqAutoAssign: e.target.checked })}
+                                            disabled={!isHost}
+                                        />
+                                        <span className="toggle-row-copy">
+                                            <strong>{t('dynamics.feature.hqAutoAssign')}</strong>
+                                            <span>{t('dynamics.feature.hqAutoAssignDesc')}</span>
+                                        </span>
+                                    </label>
+                                    {dynamics.hqAutoAssign && (
+                                        <p className="wizard-hint" style={{ color: '#6ec6ff', paddingLeft: '1.5rem' }}>
+                                            {t('dynamics.info.hqAutoAssignNote')}
+                                        </p>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     ))}
 
                     {showSupplyLinesHqWarning && (
@@ -157,27 +180,6 @@ export function DynamicsStep({
                                     count: alliancesMissingHq.length,
                                     defaultValue: 'HQ is enabled, but {{count}} alliances still need an HQ assigned in Review.',
                                 })}
-                        </p>
-                    )}
-
-                    {dynamics.hqEnabled && (
-                        <label className="toggle-row" style={{ marginTop: '0.25rem', paddingLeft: '1.5rem' }}>
-                            <input
-                                type="checkbox"
-                                checked={dynamics.hqAutoAssign ?? true}
-                                onChange={e => updateDynamics({ hqAutoAssign: e.target.checked })}
-                                disabled={!isHost}
-                            />
-                            <span className="toggle-row-copy">
-                                <strong>{t('dynamics.feature.hqAutoAssign')}</strong>
-                                <span>{t('dynamics.feature.hqAutoAssignDesc')}</span>
-                            </span>
-                        </label>
-                    )}
-
-                    {dynamics.hqEnabled && dynamics.hqAutoAssign && (
-                        <p className="wizard-hint" style={{ color: '#6ec6ff', paddingLeft: '1.5rem' }}>
-                            {t('dynamics.info.hqAutoAssignNote')}
                         </p>
                     )}
                 </div>

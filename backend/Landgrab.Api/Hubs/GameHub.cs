@@ -176,6 +176,7 @@ public partial class GameHub : Hub
             FogOfWarEnabled = dynamics.FogOfWarEnabled,
             SupplyLinesEnabled = dynamics.SupplyLinesEnabled,
             HQEnabled = dynamics.HQEnabled,
+            HQAutoAssign = dynamics.HQAutoAssign,
             TimedEscalationEnabled = dynamics.TimedEscalationEnabled,
             UnderdogPactEnabled = dynamics.UnderdogPactEnabled,
         };
