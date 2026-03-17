@@ -397,12 +397,6 @@ export function PlayingHud({
           {children}
         </div>
 
-        <GuidanceBanner
-          carriedTroops={carriedTroops}
-          isInOwnHex={isInOwnHex}
-          hasLocation={hasLocation}
-        />
-
         <div className="bottom-hud-overlay">
           {pickupPrompt && (
             <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
@@ -462,10 +456,21 @@ export function PlayingHud({
             />
           )}
 
-          {!pickupPrompt && !reinforcePrompt && !showRemoteTileInfoCard && interactionStatus && interactionStatus.action !== 'none' && (
-            <div className={`glass-panel hud-context-pill context-${interactionStatus.tone === 'error' ? 'danger' : 'info'}`}>
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-              {interactionStatus.message}
+          {!pickupPrompt && !reinforcePrompt && !showRemoteTileInfoCard && (
+            <div className="hud-context-area">
+              <GuidanceBanner
+                carriedTroops={carriedTroops}
+                isInOwnHex={isInOwnHex}
+                hasLocation={hasLocation}
+              />
+              {interactionStatus && interactionStatus.action !== 'none' && (
+                <div className={`context-item action-prompt enter-active ${interactionStatus.tone === 'error' ? 'context-danger' : ''}`}>
+                  <span className="context-icon" aria-hidden="true">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                  </span>
+                  <span>{interactionStatus.message}</span>
+                </div>
+              )}
             </div>
           )}
         </div>

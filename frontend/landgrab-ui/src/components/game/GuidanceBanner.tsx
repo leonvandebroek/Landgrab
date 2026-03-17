@@ -152,9 +152,9 @@ export function GuidanceBanner({
   }, [computedHint, hint, isCarryingTroops]);
 
   return (
-    <div className={`guidance-banner ${isVisible ? 'visible' : ''}`}>
-      <span className="guidance-icon">💡</span>
-      <span className="guidance-text">{hint}</span>
+    <div className={`context-item guidance-tip ${isVisible ? 'enter-active' : ''}`}>
+      <span className="context-icon" aria-hidden="true">💡</span>
+      <span>{hint}</span>
     </div>
   );
 }

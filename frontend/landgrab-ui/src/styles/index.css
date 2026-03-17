@@ -1,6 +1,7 @@
 @import './glassmorphism.css';
 @import './hud-updates.css';
 @import './info-ledge.css';
+@import './guidance-hud.css';
 
 /* ── Reset & base ──────────────────────────────────────────────────────── */
 *,
@@ -4227,51 +4228,6 @@ input:checked+.display-settings-slider:before {
 
 .display-settings-slider.round:before {
   border-radius: 50%;
-}
-
-/* ── Guidance Banner ────────────────────────────────────────────────────── */
-.guidance-banner {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%) translateY(-10px);
-  background: rgba(10, 18, 32, 0.93);
-  border: 1px solid rgba(143, 214, 255, 0.2);
-  padding: 0.5rem 0.9rem;
-  border-radius: 18px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  z-index: 2000;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.5);
-  max-width: min(360px, 88%);
-  width: auto;
-}
-
-.guidance-banner.visible {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-.guidance-icon {
-  font-size: 1rem;
-  line-height: 1;
-  filter: drop-shadow(0 2px 4px rgba(255, 255, 255, 0.2));
-  flex-shrink: 0;
-}
-
-.guidance-text {
-  font-size: 0.77rem;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.35;
-  text-align: left;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-  white-space: normal;
-  word-break: break-word;
 }
 
 /* ── Help Overlay ───────────────────────────────────────────────────────── */

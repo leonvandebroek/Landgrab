@@ -1,0 +1,102 @@
+/* ── Contextual Action Area ─────────────────────────────────────────────
+   Groups guidance hints + action prompts into a single bottom-centered
+   area just above the bottom HUD overlay content.
+   ──────────────────────────────────────────────────────────────────── */
+
+.hud-context-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    pointer-events: none;
+}
+
+/* Shared base for both guidance and action items */
+.context-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 24px;
+    background: rgba(10, 18, 32, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    max-width: min(380px, 90vw);
+    text-align: left;
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+    pointer-events: none;
+}
+
+.context-item.enter-active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* 1. Passive Guidance Tip — muted, informational */
+.guidance-tip {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    line-height: 1.35;
+}
+
+.guidance-tip .context-icon {
+    color: rgba(255, 204, 0, 0.8);
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+/* 2. Active Action Prompt — prominent, glowing */
+.action-prompt {
+    border: 1px solid rgba(52, 152, 219, 0.5);
+    background:
+        linear-gradient(180deg, rgba(52, 152, 219, 0.05) 0%, rgba(52, 152, 219, 0) 100%),
+        rgba(14, 22, 38, 0.9);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.5),
+        0 0 12px rgba(52, 152, 219, 0.25);
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.35;
+}
+
+.action-prompt .context-icon {
+    color: #3498db;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.action-prompt.context-danger {
+    border-color: rgba(231, 76, 60, 0.5);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.5),
+        0 0 12px rgba(231, 76, 60, 0.25);
+}
+
+.action-prompt.context-danger .context-icon {
+    color: #e74c3c;
+}
+
+@media (max-width: 428px) {
+    .context-item {
+        padding: 6px 14px;
+    }
+
+    .guidance-tip {
+        font-size: 0.7rem;
+    }
+
+    .action-prompt {
+        font-size: 0.78rem;
+    }
+}
