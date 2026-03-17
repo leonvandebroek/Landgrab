@@ -243,7 +243,7 @@ public sealed class AbilityServiceTests
         beaconResult.error.Should().BeNull();
         placeResult.error.Should().BeNull();
         context.Cell(2, 0).OwnerId.Should().Be("p1");
-        context.Cell(2, 0).Troops.Should().Be(1);
+        context.Cell(2, 0).Troops.Should().Be(0);
     }
 
     [Fact]

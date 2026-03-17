@@ -90,7 +90,7 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PickUpTroops_WhenAlreadyCarryingFromDifferentHex_Fails()
+    public void PickUpTroops_WhenAlreadyCarryingFromDifferentHex_AccumulatesTroops()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -105,13 +105,15 @@ public sealed class GameplayServiceTests
 
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 1, lat, lng);
 
-        result.error.Should().Be("Place your carried troops before picking up from a different hex.");
-        context.Cell(0, 0).Troops.Should().Be(5);
-        context.Player("p1").CarriedTroops.Should().Be(2);
+        result.error.Should().BeNull();
+        context.Cell(0, 0).Troops.Should().Be(4);
+        context.Player("p1").CarriedTroops.Should().Be(3);
+        context.Player("p1").CarriedTroopsSourceQ.Should().Be(0);
+        context.Player("p1").CarriedTroopsSourceR.Should().Be(0);
     }
 
     [Fact]
-    public void PlaceTroops_OnAdjacentNeutralHex_ClaimsHex()
+    public void PlaceTroops_OnAdjacentNeutralHex_ClaimsHexWithoutDroppingCarriedTroops()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -128,8 +130,8 @@ public sealed class GameplayServiceTests
         result.previousOwnerId.Should().BeNull();
         result.combatResult.Should().BeNull();
         context.Cell(1, 0).OwnerId.Should().Be("p1");
-        context.Cell(1, 0).Troops.Should().Be(2);
-        context.Player("p1").CarriedTroops.Should().Be(0);
+        context.Cell(1, 0).Troops.Should().Be(0);
+        context.Player("p1").CarriedTroops.Should().Be(2);
     }
 
     [Fact]
@@ -225,6 +227,7 @@ public sealed class GameplayServiceTests
             .WithTroops(1, 0, 2)
             .WithCarriedTroops("p1", 4, 0, 0)
             .Build();
+        state.Dynamics.CombatMode = CombatMode.Classic;
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
@@ -237,12 +240,14 @@ public sealed class GameplayServiceTests
         result.combatResult.HexCaptured.Should().BeTrue();
         result.combatResult.DefenderLost.Should().Be(2);
         context.Cell(1, 0).OwnerId.Should().Be("p1");
-        context.Cell(1, 0).Troops.Should().Be(2);
-        context.Player("p1").CarriedTroops.Should().Be(0);
+        context.Cell(1, 0).Troops.Should().Be(0);
+        context.Player("p1").CarriedTroops.Should().Be(2);
+        context.Player("p1").CarriedTroopsSourceQ.Should().Be(1);
+        context.Player("p1").CarriedTroopsSourceR.Should().Be(0);
     }
 
     [Fact]
-    public void PlaceTroops_OnEnemyHexWithInferiorForce_Fails()
+    public void PlaceTroops_OnEnemyHexWithInferiorForce_ReturnsCombatRepelledResult()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -253,16 +258,21 @@ public sealed class GameplayServiceTests
             .WithTroops(1, 0, 3)
             .WithCarriedTroops("p1", 3, 0, 0)
             .Build();
+        state.Dynamics.CombatMode = CombatMode.Classic;
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
         var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("You need more effective strength to overcome the defenders.");
+        result.state.Should().NotBeNull();
+        result.error.Should().BeNull();
+        result.previousOwnerId.Should().BeNull();
+        result.combatResult.Should().NotBeNull();
+        result.combatResult!.AttackerWon.Should().BeFalse();
+        result.combatResult.HexCaptured.Should().BeFalse();
         context.Cell(1, 0).OwnerId.Should().Be("p2");
         context.Cell(1, 0).Troops.Should().Be(3);
-        context.Player("p1").CarriedTroops.Should().Be(3);
+        context.Player("p1").CarriedTroops.Should().Be(1);
     }
 
     [Fact]
@@ -507,17 +517,20 @@ public sealed class GameplayServiceTests
             .WithTroops(1, 0, 3)
             .WithCarriedTroops("p1", 4, 0, 0)
             .Build();
+        state.Dynamics.CombatMode = CombatMode.Classic;
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
         var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("You need more effective strength to overcome the defenders.");
-        result.combatResult.Should().BeNull();
+        result.state.Should().NotBeNull();
+        result.error.Should().BeNull();
+        result.combatResult.Should().NotBeNull();
+        result.combatResult!.AttackerWon.Should().BeFalse();
+        result.combatResult.DefenderBonus.Should().Be(2);
         context.Cell(1, 0).OwnerId.Should().Be("p2");
         context.Cell(1, 0).Troops.Should().Be(3);
-        context.Player("p1").CarriedTroops.Should().Be(4);
+        context.Player("p1").CarriedTroops.Should().Be(2);
     }
 
     [Fact]
@@ -532,6 +545,7 @@ public sealed class GameplayServiceTests
             .WithTroops(1, 0, 3)
             .WithCarriedTroops("p1", 4, 0, 0)
             .Build();
+        state.Dynamics.CombatMode = CombatMode.Classic;
         state.Grid[HexService.Key(1, 0)].IsFort = true;
 
         var context = new ServiceTestContext(state);
@@ -539,12 +553,14 @@ public sealed class GameplayServiceTests
 
         var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("You need more effective strength to overcome the defenders.");
-        result.combatResult.Should().BeNull();
+        result.state.Should().NotBeNull();
+        result.error.Should().BeNull();
+        result.combatResult.Should().NotBeNull();
+        result.combatResult!.AttackerWon.Should().BeFalse();
+        result.combatResult.DefenderBonus.Should().Be(1);
         context.Cell(1, 0).OwnerId.Should().Be("p2");
         context.Cell(1, 0).Troops.Should().Be(3);
-        context.Player("p1").CarriedTroops.Should().Be(4);
+        context.Player("p1").CarriedTroops.Should().Be(2);
     }
 
     [Fact]
@@ -772,6 +788,7 @@ public sealed class GameplayServiceTests
             .WithCarriedTroops("p1", 3, 0, 0)
             .WithPlayerPosition("p2", 1, 0)
             .Build();
+        state.Dynamics.CombatMode = CombatMode.Classic;
         state.Players.Single(player => player.Id == "p2").Role = PlayerRole.Defender;
         state.Players.Single(player => player.Id == "p2").ShieldWallActive = true;
         state.Players.Single(player => player.Id == "p2").ShieldWallExpiry = DateTime.UtcNow.AddMinutes(5);
@@ -780,9 +797,13 @@ public sealed class GameplayServiceTests
 
         var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("You need more effective strength to overcome the defenders.");
+        result.state.Should().NotBeNull();
+        result.error.Should().BeNull();
+        result.combatResult.Should().NotBeNull();
+        result.combatResult!.AttackerWon.Should().BeFalse();
+        result.combatResult.DefenderBonus.Should().Be(2);
         context.Cell(1, 0).OwnerId.Should().Be("p2");
+        context.Player("p1").CarriedTroops.Should().Be(1);
     }
 
     [Fact]

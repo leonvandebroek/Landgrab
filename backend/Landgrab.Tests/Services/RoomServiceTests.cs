@@ -283,7 +283,7 @@ public sealed class RoomServiceTests
     }
 
     [Fact]
-    public void RemoveConnection_LastConnection_MarksDisconnectedClearsLocationReturnsTroopsAndLogsLeft()
+    public void RemoveConnection_LastConnection_MarksDisconnectedClearsLocationPreservesCarriedTroopsAndLogsLeft()
     {
         var roomService = CreateRoomService();
         var room = roomService.CreateRoom(Guid.NewGuid().ToString(), "Host", "host-conn");
@@ -304,10 +304,10 @@ public sealed class RoomServiceTests
         player.IsConnected.Should().BeFalse();
         player.CurrentLat.Should().BeNull();
         player.CurrentLng.Should().BeNull();
-        player.CarriedTroops.Should().Be(0);
-        player.CarriedTroopsSourceQ.Should().BeNull();
-        player.CarriedTroopsSourceR.Should().BeNull();
-        sourceCell.Troops.Should().Be(8);
+    player.CarriedTroops.Should().Be(3);
+    player.CarriedTroopsSourceQ.Should().Be(0);
+    player.CarriedTroopsSourceR.Should().Be(0);
+    sourceCell.Troops.Should().Be(5);
         room.ConnectionMap.Should().NotContainKey("conn-1");
         room.State.EventLog.Should().HaveCount(joinEventCount + 1);
         room.State.EventLog.Last().Should().BeEquivalentTo(new
@@ -320,7 +320,7 @@ public sealed class RoomServiceTests
     }
 
     [Fact]
-    public void RemoveConnection_LastConnectionWithReturnedToLobby_LogsReturnedToLobby()
+    public void RemoveConnection_LastConnectionWithReturnedToLobby_PreservesCarriedTroopsAndLogsReturnedToLobby()
     {
         var roomService = CreateRoomService();
         var room = roomService.CreateRoom(Guid.NewGuid().ToString(), "Host", "host-conn");
@@ -337,8 +337,10 @@ public sealed class RoomServiceTests
         roomService.RemoveConnection(room, "conn-1", returnedToLobby: true);
 
         player.IsConnected.Should().BeFalse();
-        player.CarriedTroops.Should().Be(0);
-        fallbackCell.Troops.Should().Be(6);
+    player.CarriedTroops.Should().Be(4);
+    player.CarriedTroopsSourceQ.Should().Be(99);
+    player.CarriedTroopsSourceR.Should().Be(99);
+    fallbackCell.Troops.Should().Be(2);
         room.State.EventLog.Should().HaveCount(joinEventCount + 1);
         room.State.EventLog.Last().Should().BeEquivalentTo(new
         {
