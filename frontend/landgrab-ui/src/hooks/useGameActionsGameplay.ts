@@ -557,7 +557,6 @@ export function useGameActionsGameplay({
         coordinates.lat,
         coordinates.lng,
         currentReinforceCount,
-        false,
       );
       setMapFeedback({
         tone: 'success',
@@ -603,7 +602,7 @@ export function useGameActionsGameplay({
 
     try {
       const troopCount = myPlayer?.carriedTroops ?? currentCombatPreview.preview.attackerTroops;
-      await invoke('PlaceTroops', currentCombatPreview.q, currentCombatPreview.r, coordinates.lat, coordinates.lng, troopCount, false);
+      await invoke('PlaceTroops', currentCombatPreview.q, currentCombatPreview.r, coordinates.lat, coordinates.lng, troopCount);
       playSound('attack');
       setCombatPreview(null);
     } catch (error) {
@@ -633,7 +632,7 @@ export function useGameActionsGameplay({
     }
 
     try {
-      await invoke('PlaceTroops', combatResult.q, combatResult.r, coordinates.lat, coordinates.lng, count, false);
+      await invoke('PlaceTroops', combatResult.q, combatResult.r, coordinates.lat, coordinates.lng, count);
       playSound('reinforce');
       setCombatResult(null);
     } catch (error) {
@@ -663,7 +662,7 @@ export function useGameActionsGameplay({
     }
 
     try {
-      await invoke('PlaceTroops', neutralClaimResult.q, neutralClaimResult.r, coordinates.lat, coordinates.lng, count, false);
+      await invoke('PlaceTroops', neutralClaimResult.q, neutralClaimResult.r, coordinates.lat, coordinates.lng, count);
       playSound('reinforce');
       setNeutralClaimResult(null);
     } catch (error) {
