@@ -777,6 +777,59 @@ public class GameplayService(
         }
     }
 
+    public void ResolveActiveSabotages(string roomCode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null) return;
+
+        lock (room.SyncRoot)
+        {
+            var now = DateTime.UtcNow;
+            var engineers = room.State.Players
+                .Where(p => p.SabotageActive && p.SabotageTargetQ.HasValue)
+                .ToList();
+
+            foreach (var engineer in engineers)
+            {
+                var key = HexService.Key(engineer.SabotageTargetQ!.Value, engineer.SabotageTargetR!.Value);
+                if (!room.State.Grid.TryGetValue(key, out var cell)) { engineer.SabotageActive = false; continue; }
+
+                var stillPresent = TryGetCurrentHex(room.State, engineer, out var eq, out var er)
+                    && eq == engineer.SabotageTargetQ && er == engineer.SabotageTargetR;
+
+                if (!stillPresent)
+                {
+                    engineer.SabotageActive = false;
+                    engineer.SabotageStartedAt = null;
+                    AppendEventLog(room.State, new GameEventLogEntry
+                    {
+                        Type = "SabotageCancelled",
+                        Message = $"{engineer.Name}'s sabotage was interrupted.",
+                        Q = engineer.SabotageTargetQ, R = engineer.SabotageTargetR
+                    });
+                    continue;
+                }
+
+                if (engineer.SabotageStartedAt.HasValue &&
+                    (now - engineer.SabotageStartedAt.Value).TotalMinutes >= 1)
+                {
+                    cell.SabotagedUntil = now.AddMinutes(10);
+                    engineer.SabotageActive = false;
+                    engineer.SabotageStartedAt = null;
+                    engineer.SabotageTargetQ = null;
+                    engineer.SabotageTargetR = null;
+
+                    AppendEventLog(room.State, new GameEventLogEntry
+                    {
+                        Type = "SabotageComplete",
+                        Message = $"Sabotage complete! ({cell.Q}, {cell.R}) will not regenerate troops for 10 minutes.",
+                        Q = cell.Q, R = cell.R
+                    });
+                }
+            }
+        }
+    }
+
     public void ResolveExpiredRallyPoints(string roomCode)
     {
         var room = GetRoom(roomCode);
@@ -885,6 +938,14 @@ public class GameplayService(
                         // Never visited since Shepherd enabled — don't decay yet, just skip bonus regen
                         // Normal regen still applies
                     }
+                }
+
+                // Phase: Sabotage — sabotaged hexes skip regen
+                if (cell.SabotagedUntil.HasValue)
+                {
+                    if (cell.SabotagedUntil > now)
+                        continue;
+                    cell.SabotagedUntil = null;
                 }
 
                 cell.Troops++;

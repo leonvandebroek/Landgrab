@@ -721,6 +721,35 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
+    public void ResolveSabotage_EngineerStaysOneMinute_DisablesHexRegen()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Engineer)
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .OwnHex(1, 0, "p2", allianceId: "a2")
+            .WithTroops(1, 0, 3)
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+        var engineer = state.Players.First(p => p.Id == "p1");
+        engineer.CurrentLat = lat;
+        engineer.CurrentLng = lng;
+        engineer.SabotageActive = true;
+        engineer.SabotageStartedAt = DateTime.UtcNow.AddMinutes(-1).AddSeconds(-1);
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.ResolveActiveSabotages(ServiceTestContext.RoomCode);
+
+        context.Cell(1, 0).SabotagedUntil.Should().NotBeNull();
+        context.Cell(1, 0).SabotagedUntil!.Value.Should().BeCloseTo(
+            DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(10));
+        engineer.SabotageActive.Should().BeFalse();
+    }
+
+    [Fact]
     public void ResolveRallyPoint_AlliesArrive_AddTroopsScaledToPlatoon()
     {
         var state = ServiceTestContext.CreateBuilder()

@@ -94,6 +94,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public GameplayService.ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
     public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode) => gameplayService.ResolveExpiredCommandoRaids(roomCode);
     public void ResolveExpiredRallyPoints(string roomCode) => gameplayService.ResolveExpiredRallyPoints(roomCode);
+    public void ResolveActiveSabotages(string roomCode) => gameplayService.ResolveActiveSabotages(roomCode);
 
     public void AppendEventLogPublic(GameState state, GameEventLogEntry entry) => gameStateService.AppendEventLog(state, entry);
     public GameState SnapshotStatePublic(GameState state) => gameStateService.SnapshotState(state);

@@ -352,25 +352,28 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateEmergencyRepair_OnFriendlyHex_AddsTroopsAndStartsCooldown()
+    public void ActivateEmergencyRepair_OnEnemyHex_StartsSabotage()
     {
         var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
+            .WithGrid(3)
             .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .WithPlayerRole("p1", PlayerRole.Engineer)
-            .OwnHex(0, 0, "p1", "a1", troops: 1)
-            .WithPlayerPosition("p1", 0, 0)
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Engineer)
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .OwnHex(1, 0, "p2", allianceId: "a2")
+            .WithTroops(1, 0, 3)
             .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
         var context = new ServiceTestContext(state);
-        var beforeActivation = DateTime.UtcNow;
 
         var result = context.AbilityService.ActivateEmergencyRepair(ServiceTestContext.RoomCode, "p1");
 
         result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(4);
-        context.Player("p1").EmergencyRepairCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
+        var engineer = result.state!.Players.First(p => p.Id == "p1");
+        engineer.SabotageActive.Should().BeTrue();
+        engineer.SabotageTargetQ.Should().Be(1);
+        engineer.SabotageTargetR.Should().Be(0);
     }
 
     [Fact]

@@ -136,7 +136,11 @@ public class PlayerDto
     public int? RallyPointR { get; set; }
 
     // Engineer abilities
-    public DateTime? EmergencyRepairCooldownUntil { get; set; }
+    public bool SabotageActive { get; set; }
+    public DateTime? SabotageStartedAt { get; set; }
+    public int? SabotageTargetQ { get; set; }
+    public int? SabotageTargetR { get; set; }
+    public DateTime? SabotageCooldownUntil { get; set; }
     public bool DemolishActive { get; set; }
     public string? DemolishTargetKey { get; set; }
     public DateTime? DemolishStartedAt { get; set; }

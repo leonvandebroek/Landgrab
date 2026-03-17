@@ -241,39 +241,38 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
     public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId)
     {
         var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
+        if (room == null) return (null, "Room not found.");
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Emergency Repair only works during gameplay.");
+                return (null, "Sabotage only works during gameplay.");
             if (!room.State.Dynamics.PlayerRolesEnabled)
                 return (null, "Player roles are not active.");
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
+            if (player == null) return (null, "Player not in room.");
             if (player.Role != PlayerRole.Engineer)
-                return (null, "Emergency Repair can only be performed by Engineers.");
-            if (player.EmergencyRepairCooldownUntil.HasValue && player.EmergencyRepairCooldownUntil > DateTime.UtcNow)
-                return (null, "Emergency Repair is on cooldown.");
+                return (null, "Sabotage can only be performed by an Engineer.");
+            if (player.SabotageCooldownUntil.HasValue && player.SabotageCooldownUntil > DateTime.UtcNow)
+                return (null, "Sabotage is on cooldown.");
             if (!TryGetCurrentHex(room.State, player, out var currentCell))
-                return (null, "Your location is required to use Emergency Repair.");
-            if (!IsFriendlyCell(player, currentCell))
-                return (null, "Emergency Repair can only target a friendly hex.");
+                return (null, "Your location is required to sabotage a hex.");
+            if (IsFriendlyCell(player, currentCell) || currentCell.OwnerId == null)
+                return (null, "You can only sabotage an enemy hex.");
 
-            currentCell.Troops += 3;
-            player.EmergencyRepairCooldownUntil = DateTime.UtcNow.AddMinutes(15);
+            player.SabotageActive = true;
+            player.SabotageStartedAt = DateTime.UtcNow;
+            player.SabotageTargetQ = currentCell.Q;
+            player.SabotageTargetR = currentCell.R;
+            player.SabotageCooldownUntil = DateTime.UtcNow.AddMinutes(20);
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
-                Type = "EmergencyRepairActivated",
-                Message = $"{player.Name} repaired hex ({currentCell.Q}, {currentCell.R}).",
-                PlayerId = userId,
-                PlayerName = player.Name,
-                Q = currentCell.Q,
-                R = currentCell.R
+                Type = "SabotageStarted",
+                Message = $"{player.Name} is sabotaging ({currentCell.Q}, {currentCell.R})! Defend it!",
+                PlayerId = userId, PlayerName = player.Name,
+                Q = currentCell.Q, R = currentCell.R
             });
 
             var snapshot = SnapshotState(room.State);
