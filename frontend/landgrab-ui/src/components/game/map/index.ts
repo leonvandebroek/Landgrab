@@ -1,5 +1,5 @@
 export { buildHexTooltipHtml, escapeHtml } from './HexTooltip';
-export { renderHexGridLayers, updateProgressOverlays } from './HexGridLayer';
+export { renderHexGridLayers } from './HexGridLayer';
 export { MapLayerToggle } from './MapLayerToggle';
 export { renderPlayerMarkers } from './PlayerMarkerLayer';
 export { TimeOverlay } from './TimeOverlay';

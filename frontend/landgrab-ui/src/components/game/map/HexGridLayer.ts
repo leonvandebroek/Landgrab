@@ -112,10 +112,10 @@ export function renderHexGridLayers({
   const activeRaidHexKeys = new Set(
     (state.activeRaids ?? []).map((raid) => `${raid.targetQ}:${raid.targetR}`),
   );
-  const demolishProgressByHexKey = new Map<string, { progress: number; startedAt: string }>();
+  const demolishProgressByHexKey = new Map<string, number>();
 
   for (const player of state.players) {
-    if (!player.demolishActive || !player.demolishTargetKey || !player.demolishStartedAt) {
+    if (!player.demolishActive || !player.demolishTargetKey) {
       continue;
     }
 
@@ -124,10 +124,8 @@ export function renderHexGridLayers({
       continue;
     }
 
-    const existing = demolishProgressByHexKey.get(player.demolishTargetKey);
-    if (!existing || progress > existing.progress) {
-      demolishProgressByHexKey.set(player.demolishTargetKey, { progress, startedAt: player.demolishStartedAt });
-    }
+    const currentProgress = demolishProgressByHexKey.get(player.demolishTargetKey) ?? 0;
+    demolishProgressByHexKey.set(player.demolishTargetKey, Math.max(currentProgress, progress));
   }
 
   const supplyDisconnected = new Set<string>();
@@ -209,7 +207,7 @@ interface RenderHexCellOptions {
   shouldShowTerrainIcons: boolean;
   shouldShowTroopBadges: boolean;
   state: GameState;
-  demolishProgressByHexKey: ReadonlyMap<string, { progress: number; startedAt: string }>;
+  demolishProgressByHexKey: ReadonlyMap<string, number>;
   supplyDisconnected: ReadonlySet<string>;
 }
 
@@ -263,7 +261,7 @@ function renderHexCell({
   const { isFrontier, isContested } = getHexTerritoryStatus(cell, renderedGrid, isFriendlyAllianceCell);
   const isFogHidden = shouldApplyFogOfWar && isFogHiddenHex(cell, isInactive, state.dynamics?.fogOfWarEnabled);
   const hasActiveRaid = activeRaidHexKeys.has(cellKey);
-  const demolishEntry = demolishProgressByHexKey.get(cellKey) ?? null;
+  const demolishProgress = demolishProgressByHexKey.get(cellKey) ?? null;
   const hasTerrain = Boolean(state.dynamics?.terrainEnabled && terrainType !== 'None');
   const { fillColor, fillOpacity } = getHexFillStyle({
     cell,
@@ -483,7 +481,7 @@ function renderHexCell({
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
         className: 'hex-fort-progress',
-        html: `<div class="fort-progress-ring" data-built-at="${cell.engineerBuiltAt}" style="--progress:${engineerBuildProgress.toFixed(4)}"></div>`,
+        html: `<div class="fort-progress-ring" style="--progress:${engineerBuildProgress.toFixed(4)}"></div>`,
         iconSize: [36, 36],
         iconAnchor: [18, 18],
       }),
@@ -492,13 +490,12 @@ function renderHexCell({
     }).addTo(layerGroup);
   }
 
-  if (demolishEntry != null && !isInactive) {
-    const demolishProgress = demolishEntry.progress;
+  if (demolishProgress != null && !isInactive) {
     const remaining = Math.max(0, 1 - demolishProgress);
     L.marker([centerLat, centerLng], {
       icon: L.divIcon({
         className: 'hex-demolish-progress',
-        html: `<div class="demolish-progress-ring" data-started-at="${demolishEntry.startedAt}" style="--progress:${demolishProgress.toFixed(4)};--remaining:${remaining.toFixed(4)}"></div>`,
+        html: `<div class="demolish-progress-ring" style="--progress:${demolishProgress.toFixed(4)};--remaining:${remaining.toFixed(4)}"></div>`,
         iconSize: [42, 42],
         iconAnchor: [21, 21],
       }),
@@ -671,41 +668,4 @@ function getChangedHexKeys(
   }
 
   return { newlyClaimedKeys, newlyRevealedKeys };
-}
-
-/**
- * Updates CSS custom properties on already-rendered fort and demolish progress
- * rings without triggering a full hex layer re-render. Call this on every tick
- * when there are pending overlays.
- */
-export function updateProgressOverlays(container: HTMLElement): void {
-  const now = Date.now();
-
-  for (const el of container.querySelectorAll<HTMLElement>('.fort-progress-ring[data-built-at]')) {
-    const builtAt = el.dataset.builtAt;
-    if (!builtAt) {
-      continue;
-    }
-    const builtAtMs = Date.parse(builtAt);
-    if (!Number.isFinite(builtAtMs)) {
-      continue;
-    }
-    const progress = Math.max(0, Math.min(1, (now - builtAtMs) / FORT_BUILD_DURATION_MS));
-    el.style.setProperty('--progress', progress.toFixed(4));
-  }
-
-  for (const el of container.querySelectorAll<HTMLElement>('.demolish-progress-ring[data-started-at]')) {
-    const startedAt = el.dataset.startedAt;
-    if (!startedAt) {
-      continue;
-    }
-    const startedAtMs = Date.parse(startedAt);
-    if (!Number.isFinite(startedAtMs)) {
-      continue;
-    }
-    const progress = Math.max(0, Math.min(1, (now - startedAtMs) / DEMOLISH_DURATION_MS));
-    const remaining = Math.max(0, 1 - progress);
-    el.style.setProperty('--progress', progress.toFixed(4));
-    el.style.setProperty('--remaining', remaining.toFixed(4));
-  }
 }
