@@ -750,60 +750,6 @@ public class GameplayService(
         };
     }
 
-    public (GameState? state, string? error) ReClaimHex(string roomCode, string userId,
-        int q, int r, ReClaimMode mode)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        if (room.State.IsPaused)
-            return (null, "Game is paused.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "This action is only available while the game is playing.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-
-            if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
-                return (null, "Invalid hex.");
-
-            if (cell.OwnerId != userId)
-                return (null, "You can only reclaim your own hexes.");
-
-            if (mode == ReClaimMode.Self && !room.State.AllowSelfClaim)
-                return (null, "Self-claiming is not allowed in this game.");
-
-            switch (mode)
-            {
-                case ReClaimMode.Alliance:
-                    cell.OwnerAllianceId = player.AllianceId;
-                    cell.OwnerColor = player.AllianceColor ?? player.Color;
-                    break;
-                case ReClaimMode.Self:
-                    cell.OwnerAllianceId = null;
-                    cell.OwnerColor = player.Color;
-                    break;
-                case ReClaimMode.Abandon:
-                    cell.OwnerId = null;
-                    cell.OwnerName = null;
-                    cell.OwnerAllianceId = null;
-                    cell.OwnerColor = null;
-                    cell.Troops = 0;
-                    break;
-            }
-
-            winConditionService.RefreshTerritoryCount(room.State);
-            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
-            var snapshot = SnapshotState(room.State);
-            QueuePersistence(room, snapshot);
-            return (snapshot, null);
-        }
-    }
 
     public ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode)
     {

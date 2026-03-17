@@ -45,7 +45,6 @@ public enum GameAreaPattern
     Starburst
 }
 
-public enum ReClaimMode { Alliance, Self, Abandon }
 
 public enum CombatMode
 {

@@ -294,85 +294,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void ReClaimHex_ToAllianceClaim_Succeeds()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 3)
-            .Build();
-        state.Grid[HexService.Key(0, 0)].OwnerAllianceId = null;
-        state.Grid[HexService.Key(0, 0)].OwnerColor = state.Players.Single(player => player.Id == "p1").Color;
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Alliance);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).OwnerAllianceId.Should().Be("a1");
-        context.Cell(0, 0).OwnerColor.Should().Be("#a1");
-    }
-
-    [Fact]
-    public void ReClaimHex_WhenHexIsNotOwnedByPlayer_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Alliance);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("You can only reclaim your own hexes.");
-    }
-
-    [Fact]
-    public void ReClaimHex_SelfClaimDisallowed_Fails()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .WithAllowSelfClaim(false)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .OwnHex(0, 0, "p1", "a1")
-            .WithTroops(0, 0, 3)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Self);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Self-claiming is not allowed in this game.");
-        context.Cell(0, 0).OwnerAllianceId.Should().Be("a1");
-    }
-
-    [Fact]
-    public void ReClaimHex_Abandon_ClearsOwnershipAndTroops()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 5)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Abandon);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).OwnerId.Should().BeNull();
-        context.Cell(0, 0).OwnerName.Should().BeNull();
-        context.Cell(0, 0).OwnerAllianceId.Should().BeNull();
-        context.Cell(0, 0).OwnerColor.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(0);
-    }
-
-    [Fact]
     public void AddReinforcementsToAllHexes_AddsOneToOwnedAndMasterTiles()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -641,29 +562,6 @@ public sealed class GameplayServiceTests
         result.state.WinnerId.Should().Be("p1");
         result.state.WinnerName.Should().Be("Alice");
         context.State.EventLog.Should().Contain(entry => entry.Type == "GameOver" && entry.WinnerId == "p1");
-    }
-
-    [Fact]
-    public void ReClaimHex_ToSelfClaim_ClearsAllianceOwnership()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddAlliance("a1", "Alpha", "p1")
-            .OwnHex(0, 0, "p1", "a1")
-            .WithTroops(0, 0, 3)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var player = context.Player("p1");
-
-        var result = context.GameplayService.ReClaimHex(ServiceTestContext.RoomCode, "p1", 0, 0, ReClaimMode.Self);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).OwnerId.Should().Be("p1");
-        context.Cell(0, 0).OwnerAllianceId.Should().BeNull();
-        context.Cell(0, 0).OwnerColor.Should().Be(player.Color);
-        context.Cell(0, 0).Troops.Should().Be(3);
     }
 
     [Fact]
