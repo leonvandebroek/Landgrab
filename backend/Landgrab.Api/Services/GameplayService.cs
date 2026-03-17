@@ -342,6 +342,14 @@ public class GameplayService(
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
                 return (null, "You cannot attack an allied hex.", null, null);
 
+            // HQ tiles are immune to normal combat — must be captured via CommandoRaid
+            if (room.State.Dynamics.HQEnabled)
+            {
+                var isHQHex = room.State.Alliances.Any(a => a.HQHexQ == q && a.HQHexR == r);
+                if (isHQHex)
+                    return (null, "This is an HQ hex — it can only be captured via a CommandoRaid.", null, null);
+            }
+
             var deployedTroops = troopCount ?? player.CarriedTroops;
             if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
                 return (null, "Troop count must be between 1 and your carried troops.", null, null);

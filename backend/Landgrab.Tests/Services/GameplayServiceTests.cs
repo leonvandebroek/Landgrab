@@ -696,6 +696,31 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
+    public void PlaceTroops_OnEnemyHQHex_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 5)
+            .OwnHex(1, 0, "p2", allianceId: "a2")
+            .WithTroops(1, 0, 2)
+            .WithCarriedTroops("p1", 5, 0, 0)
+            .Build();
+        state.Alliances.Add(new AllianceDto { Id = "a2", HQHexQ = 1, HQHexR = 0 });
+        state.Dynamics.HQEnabled = true;
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+
+        var (result, error, _, _) = context.GameplayService.PlaceTroops(
+            ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        error.Should().Contain("CommandoRaid");
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void ResolveCommandoRaid_AttackersWinWithTwoPlusPresence_CapturesHexAndTransfersTroops()
     {
         var state = ServiceTestContext.CreateBuilder()
