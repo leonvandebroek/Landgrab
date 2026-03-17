@@ -80,23 +80,15 @@ public class GameplayService(
                 gridChanged |= UpdateDemolishProgress(room.State, player);
 
             // ── Phase 3: Rally — update IsFortified for all hexes ──
-            var ownedCells = room.State.Grid.Values
-                .Where(c => c.OwnerId != null)
-                .ToList();
-            var previousFortifiedStates = ownedCells.ToDictionary(
-                cell => HexService.Key(cell.Q, cell.R),
-                cell => cell.IsFortified);
-
-            foreach (var cell in ownedCells)
+            foreach (var cell in room.State.Grid.Values.Where(c => c.OwnerId != null))
             {
                 var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
                 var alliedCount = playersInCell.Count(p =>
                     cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId);
+                var wasFortified = cell.IsFortified;
                 cell.IsFortified = alliedCount >= 2;
+                gridChanged |= cell.IsFortified != wasFortified;
             }
-
-            gridChanged |= ownedCells.Any(cell =>
-                previousFortifiedStates[HexService.Key(cell.Q, cell.R)] != cell.IsFortified);
 
             // ── Phase 3: Shepherd — update LastVisitedAt for hexes player is in ──
             if (room.State.Dynamics.TileDecayEnabled)
@@ -551,14 +543,13 @@ public class GameplayService(
         }
 
         var effectiveAttack = deployedTroops + attackerBonuses.Sum(bonus => bonus.Value);
-        var baseDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
+        var effectiveDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
         if (combatMode == CombatMode.Siege)
         {
-            var siegeBonus = (int)Math.Ceiling(baseDefence * 0.25);
+            var siegeBonus = (int)Math.Ceiling(effectiveDefence * 0.25);
             AddBonus(defenderBonuses, "Siege Defender Advantage", siegeBonus);
+            effectiveDefence += siegeBonus;
         }
-
-        var effectiveDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
         var attackerWinProbability = CalculateAttackerWinProbability(effectiveAttack, effectiveDefence, combatMode);
         var defenderAllianceName = cell.OwnerAllianceId == null
             ? null
@@ -728,12 +719,9 @@ public class GameplayService(
         var key = HexService.Key(raid.TargetQ, raid.TargetR);
         if (!state.Grid.TryGetValue(key, out var cell)) return;
 
-        var attackers = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
-            .Where(p => p.AllianceId == raid.InitiatorAllianceId)
-            .ToList();
-        var defenders = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
-            .Where(p => p.AllianceId != raid.InitiatorAllianceId)
-            .ToList();
+        var playersInHex = GetPlayersInHex(state, raid.TargetQ, raid.TargetR);
+        var attackers = playersInHex.Where(p => p.AllianceId == raid.InitiatorAllianceId).ToList();
+        var defenders = playersInHex.Where(p => p.AllianceId != raid.InitiatorAllianceId).ToList();
 
         var attackerWins = attackers.Count >= 2 && attackers.Count > defenders.Count;
 
@@ -901,10 +889,11 @@ public class GameplayService(
 
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
             {
+                var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
+
                 // Drain: skip regen if hostile player physically present
                 if (cell.OwnerId != null && !cell.IsMasterTile)
                 {
-                    var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
                     var hostilePresent = playersInHex.Any(p => p.Id != cell.OwnerId
                         && (cell.OwnerAllianceId == null || p.AllianceId != cell.OwnerAllianceId));
                     if (hostilePresent)
@@ -949,8 +938,7 @@ public class GameplayService(
                 }
 
                 // Presence bonus: 3× regen if a friendly player is physically on this hex
-                var friendlyPresent = GetPlayersInHex(room.State, cell.Q, cell.R)
-                    .Any(p => IsFriendlyCell(p, cell));
+                var friendlyPresent = playersInHex.Any(p => IsFriendlyCell(p, cell));
                 var presenceMultiplier = friendlyPresent ? 3 : 1;
                 cell.Troops += presenceMultiplier;
 
@@ -999,18 +987,17 @@ public class GameplayService(
             case ClaimMode.AdjacencyRequired:
                 var isAdjacent = HexService.IsAdjacentToOwned(state.Grid, q, r, player.Id, player.AllianceId);
                 // Phase 5: Beacon — teammate beacon within 2 hexes extends adjacency
-                if (!isAdjacent && state.Dynamics.BeaconEnabled)
+                if (!isAdjacent && state.Dynamics.BeaconEnabled && state.MapLat.HasValue && state.MapLng.HasValue)
                 {
-                    isAdjacent = state.Players.Any(p => p.IsBeacon
-                        && p.Id != player.Id
-                        && p.AllianceId == player.AllianceId
-                        && p.BeaconLat.HasValue && p.BeaconLng.HasValue
-                        && state.MapLat.HasValue && state.MapLng.HasValue
-                        && HexService.HexDistance(
-                            HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
-                                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).q - q,
-                            HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
-                                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).r - r) <= 2);
+                    isAdjacent = state.Players.Any(p =>
+                    {
+                        if (!p.IsBeacon || p.Id == player.Id || p.AllianceId != player.AllianceId
+                            || !p.BeaconLat.HasValue || !p.BeaconLng.HasValue)
+                            return false;
+                        var beaconHex = HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
+                            state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters);
+                        return HexService.HexDistance(beaconHex.q - q, beaconHex.r - r) <= 2;
+                    });
                 }
                 if (!isAdjacent)
                     return "This room requires neutral claims to border your territory.";
