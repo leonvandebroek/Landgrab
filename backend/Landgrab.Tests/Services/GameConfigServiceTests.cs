@@ -11,6 +11,13 @@ public sealed class GameConfigServiceTests
     private static readonly string HostUserId = HostGuid.ToString();
     private static readonly string GuestUserId = Guid.Parse("00000000-0000-0000-0000-000000000002").ToString();
 
+    [Fact]
+    public void NewGame_DefaultClaimMode_IsPresenceOnly()
+    {
+        var state = new GameState();
+        state.ClaimMode.Should().Be(ClaimMode.PresenceOnly);
+    }
+
     [Theory]
     [InlineData("PresenceOnly", ClaimMode.PresenceOnly)]
     [InlineData("presencewithtroop", ClaimMode.PresenceWithTroop)]

@@ -142,6 +142,7 @@ public sealed class GameplayServiceTests
             .AddPlayer("p1", "Alice")
             .OwnHex(0, 0, "p1")
             .WithCarriedTroops("p1", 2, 0, 0)
+            .WithClaimMode(ClaimMode.AdjacencyRequired)
             .Build();
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(2, 0);

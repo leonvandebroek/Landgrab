@@ -195,7 +195,7 @@ public class GameState
     public GameAreaMode GameAreaMode { get; set; } = GameAreaMode.Centered;
     public GameAreaPattern? GameAreaPattern { get; set; }
     public int TileSizeMeters { get; set; } = 25;
-    public ClaimMode ClaimMode { get; set; } = ClaimMode.AdjacencyRequired;
+    public ClaimMode ClaimMode { get; set; } = ClaimMode.PresenceOnly;
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;
 public GameDynamics Dynamics { get; set; } = new();
