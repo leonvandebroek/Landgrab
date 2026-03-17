@@ -320,7 +320,7 @@ public class GameplayService(
 
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(
         string roomCode, string userId, int q, int r, double playerLat, double playerLng,
-        int? troopCount = null, bool claimForSelf = false)
+        int? troopCount = null)
     {
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
@@ -343,10 +343,6 @@ public class GameplayService(
                 return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
             SetPlayerLocation(room.State, player, playerLat, playerLng);
-
-            // Silently downgrade self-claim to alliance claim when disallowed
-            if (claimForSelf && !room.State.AllowSelfClaim)
-                claimForSelf = false;
 
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
 
@@ -386,7 +382,7 @@ public class GameplayService(
 
             if (cell.OwnerId == null)
             {
-                var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r, claimForSelf);
+                var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r);
                 if (neutralClaimError != null)
                     return (null, neutralClaimError, null, null);
 
@@ -425,10 +421,7 @@ public class GameplayService(
 
             if (combatResolution.AttackerWon)
             {
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
 
                 // The winner carries all surviving troops and chooses later how many to drop.
                 cell.Troops = 0;
@@ -906,8 +899,7 @@ public class GameplayService(
         }
     }
 
-    private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r,
-        bool claimForSelf = false)
+    private static string? ClaimNeutralHex(GameState state, PlayerDto player, HexCell cell, int q, int r)
     {
         // Phase 4: HQ claim freeze check
         if (state.Dynamics.HQEnabled && player.AllianceId != null)
@@ -920,20 +912,14 @@ public class GameplayService(
         switch (state.ClaimMode)
         {
             case ClaimMode.PresenceOnly:
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
                 cell.Troops = 0;
                 return null;
             case ClaimMode.PresenceWithTroop:
                 if (player.CarriedTroops < 1)
                     return "You must be carrying at least 1 troop to claim a neutral hex in this room.";
 
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
                 cell.Troops = 1;
                 player.CarriedTroops -= 1;
                 if (player.CarriedTroops == 0)
@@ -958,10 +944,7 @@ public class GameplayService(
                 if (!isAdjacent)
                     return "This room requires neutral claims to border your territory.";
 
-                if (claimForSelf)
-                    SetCellOwnerForSelf(cell, player);
-                else
-                    SetCellOwner(cell, player);
+                SetCellOwner(cell, player);
                 cell.Troops = 0;
                 return null;
             default:
@@ -1133,14 +1116,6 @@ public class GameplayService(
         cell.OwnerAllianceId = player.AllianceId;
         cell.OwnerName = player.Name;
         cell.OwnerColor = player.AllianceColor ?? player.Color;
-    }
-
-    internal static void SetCellOwnerForSelf(HexCell cell, PlayerDto player)
-    {
-        cell.OwnerId = player.Id;
-        cell.OwnerName = player.Name;
-        cell.OwnerColor = player.Color;
-        cell.OwnerAllianceId = null;
     }
 
     internal static void ResetCarriedTroops(PlayerDto player)

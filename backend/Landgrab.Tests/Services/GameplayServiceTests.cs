@@ -509,34 +509,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PlaceTroops_WhenClaimingForSelfAfterCapture_ClearsAllianceOwnership()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithGameMode(GameMode.Alliances)
-            .AddPlayer("p1", "Alice", "a1")
-            .AddPlayer("p2", "Bob", "a2")
-            .AddAlliance("a1", "Alpha", "p1")
-            .AddAlliance("a2", "Beta", "p2")
-            .OwnHex(0, 0, "p1", "a1")
-            .OwnHex(1, 0, "p2", "a2")
-            .WithTroops(1, 0, 2)
-            .WithCarriedTroops("p1", 4, 0, 0)
-            .Build();
-        var context = new ServiceTestContext(state);
-        var player = context.Player("p1");
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng, claimForSelf: true);
-
-        result.error.Should().BeNull();
-        result.previousOwnerId.Should().Be("p2");
-        context.Cell(1, 0).OwnerId.Should().Be("p1");
-        context.Cell(1, 0).OwnerAllianceId.Should().BeNull();
-        context.Cell(1, 0).OwnerColor.Should().Be(player.Color);
-    }
-
-    [Fact]
     public void PlaceTroops_WhenCaptureMeetsWinCondition_EndsTheGame()
     {
         var state = ServiceTestContext.CreateBuilder()

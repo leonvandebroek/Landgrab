@@ -131,7 +131,6 @@ internal static class GameStateCommon
             ClaimMode = state.ClaimMode,
             WinConditionType = state.WinConditionType,
             WinConditionValue = state.WinConditionValue,
-            AllowSelfClaim = state.AllowSelfClaim,
             Dynamics = new GameDynamics
             {
                 BeaconEnabled = state.Dynamics.BeaconEnabled,

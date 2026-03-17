@@ -191,7 +191,6 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             ClaimMode = fullSnapshot.ClaimMode,
             WinConditionType = fullSnapshot.WinConditionType,
             WinConditionValue = fullSnapshot.WinConditionValue,
-            AllowSelfClaim = fullSnapshot.AllowSelfClaim,
             Dynamics = fullSnapshot.Dynamics,
             GameDurationMinutes = fullSnapshot.GameDurationMinutes,
             MasterTileQ = fullSnapshot.MasterTileQ,

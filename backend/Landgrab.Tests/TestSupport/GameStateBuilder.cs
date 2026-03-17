@@ -80,13 +80,7 @@ internal sealed class GameStateBuilder
         return this;
     }
 
-    public GameStateBuilder WithAllowSelfClaim(bool allowSelfClaim)
-    {
-        _state.AllowSelfClaim = allowSelfClaim;
-        return this;
-    }
-
-    public GameStateBuilder WithPaused(bool isPaused = true)
+public GameStateBuilder WithPaused(bool isPaused = true)
     {
         _state.IsPaused = isPaused;
         return this;

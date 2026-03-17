@@ -264,7 +264,7 @@ public partial class GameHub
     }
 
     public async Task PlaceTroops(int q, int r, double playerLat, double playerLng,
-        int? troopCount = null, bool claimForSelf = false)
+        int? troopCount = null)
     {
         if (!ValidateCoordRange(q, r) ||
             !ValidateLatLng(playerLat, playerLng) ||
@@ -286,7 +286,7 @@ public partial class GameHub
             && existingCell.OwnerId == null;
 
         var (state, error, previousOwnerId, combatResult) = gameService.PlaceTroops(
-            room.Code, UserId, q, r, playerLat, playerLng, troopCount, claimForSelf);
+            room.Code, UserId, q, r, playerLat, playerLng, troopCount);
         if (error != null)
         {
             await SendError(error);

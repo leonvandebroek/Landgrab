@@ -65,56 +65,6 @@ public sealed class GameConfigServiceTests
     }
 
     [Fact]
-    public void SetAllowSelfClaim_SetToFalse_UpdatesState()
-    {
-        var (context, sut) = CreateContext(builder => builder.WithAllowSelfClaim(true));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, HostUserId, false);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.AllowSelfClaim.Should().BeFalse();
-        context.State.AllowSelfClaim.Should().BeFalse();
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_SetToTrue_UpdatesState()
-    {
-        var (context, sut) = CreateContext(builder => builder.WithAllowSelfClaim(false));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, HostUserId, true);
-
-        result.error.Should().BeNull();
-        result.state.Should().NotBeNull();
-        result.state!.AllowSelfClaim.Should().BeTrue();
-        context.State.AllowSelfClaim.Should().BeTrue();
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_NonHost_ReturnsError()
-    {
-        var (context, sut) = CreateContext(builder => builder.WithAllowSelfClaim(true));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, GuestUserId, false);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Only the host can change self-claim settings.");
-        context.State.AllowSelfClaim.Should().BeTrue();
-    }
-
-    [Fact]
-    public void SetAllowSelfClaim_WhenNotInLobby_ReturnsError()
-    {
-        var (context, sut) = CreateContext(phase: GamePhase.Playing, configure: builder => builder.WithAllowSelfClaim(true));
-
-        var result = sut.SetAllowSelfClaim(ServiceTestContext.RoomCode, HostUserId, false);
-
-        result.state.Should().BeNull();
-        result.error.Should().Be("Self-claim settings can only be changed in the lobby.");
-        context.State.AllowSelfClaim.Should().BeTrue();
-    }
-
-    [Fact]
     public void SetWinCondition_TerritoryPercent_ValidThreshold_UpdatesState()
     {
         var (context, sut) = CreateContext();
