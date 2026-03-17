@@ -777,6 +777,50 @@ public class GameplayService(
         }
     }
 
+    public void ResolveExpiredRallyPoints(string roomCode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null) return;
+
+        lock (room.SyncRoot)
+        {
+            var now = DateTime.UtcNow;
+            var commanders = room.State.Players
+                .Where(p => p.RallyPointActive && p.RallyPointDeadline <= now)
+                .ToList();
+
+            foreach (var commander in commanders)
+            {
+                if (commander.RallyPointQ == null || commander.RallyPointR == null) continue;
+                var key = HexService.Key(commander.RallyPointQ.Value, commander.RallyPointR.Value);
+                if (!room.State.Grid.TryGetValue(key, out var cell)) continue;
+
+                var alliance = room.State.Alliances.FirstOrDefault(a => a.Id == commander.AllianceId);
+                var platoonSize = alliance?.MemberIds.Count ?? 1;
+                var maxTroops = platoonSize * 2;
+
+                var alliesAtRally = GetPlayersInHex(room.State, commander.RallyPointQ.Value, commander.RallyPointR.Value)
+                    .Where(p => p.AllianceId == commander.AllianceId)
+                    .ToList();
+
+                var troopsToAdd = Math.Min(alliesAtRally.Count * 2, maxTroops);
+                cell.Troops += troopsToAdd;
+
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "RallyPointResolved",
+                    Message = $"Rally Point complete — {alliesAtRally.Count} scouts arrived, +{troopsToAdd} troops at ({commander.RallyPointQ}, {commander.RallyPointR}).",
+                    Q = commander.RallyPointQ, R = commander.RallyPointR
+                });
+
+                commander.RallyPointActive = false;
+                commander.RallyPointDeadline = null;
+                commander.RallyPointQ = null;
+                commander.RallyPointR = null;
+            }
+        }
+    }
+
     public ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode)
     {
         var room = GetRoom(roomCode);

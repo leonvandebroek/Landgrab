@@ -195,39 +195,38 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
     public (GameState? state, string? error) ActivateReinforce(string roomCode, string userId)
     {
         var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
+        if (room == null) return (null, "Room not found.");
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return (null, "Reinforce only works during gameplay.");
+                return (null, "Rally Point only works during gameplay.");
             if (!room.State.Dynamics.PlayerRolesEnabled)
                 return (null, "Player roles are not active.");
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
+            if (player == null) return (null, "Player not in room.");
             if (player.Role != PlayerRole.Commander)
-                return (null, "Reinforce can only be performed by Commanders.");
-            if (player.ReinforceCooldownUntil.HasValue && player.ReinforceCooldownUntil > DateTime.UtcNow)
-                return (null, "Reinforce is on cooldown.");
+                return (null, "Rally Point can only be activated by a Commander.");
+            if (player.RallyPointCooldownUntil.HasValue && player.RallyPointCooldownUntil > DateTime.UtcNow)
+                return (null, "Rally Point is on cooldown.");
             if (!TryGetCurrentHex(room.State, player, out var currentCell))
-                return (null, "Your location is required to use Reinforce.");
+                return (null, "Your location is required to activate a Rally Point.");
             if (!IsFriendlyCell(player, currentCell))
-                return (null, "Reinforce can only target a friendly hex.");
+                return (null, "Rally Point must be activated on a friendly hex.");
 
-            currentCell.Troops += 3;
-            player.ReinforceCooldownUntil = DateTime.UtcNow.AddMinutes(15);
+            player.RallyPointActive = true;
+            player.RallyPointDeadline = DateTime.UtcNow.AddMinutes(3);
+            player.RallyPointCooldownUntil = DateTime.UtcNow.AddMinutes(15);
+            player.RallyPointQ = currentCell.Q;
+            player.RallyPointR = currentCell.R;
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
-                Type = "ReinforceActivated",
-                Message = $"{player.Name} reinforced hex ({currentCell.Q}, {currentCell.R}).",
-                PlayerId = userId,
-                PlayerName = player.Name,
-                Q = currentCell.Q,
-                R = currentCell.R
+                Type = "RallyPointActivated",
+                Message = $"{player.Name} called a rally at ({currentCell.Q}, {currentCell.R})! Converge for bonus troops!",
+                PlayerId = userId, PlayerName = player.Name,
+                Q = currentCell.Q, R = currentCell.R
             });
 
             var snapshot = SnapshotState(room.State);

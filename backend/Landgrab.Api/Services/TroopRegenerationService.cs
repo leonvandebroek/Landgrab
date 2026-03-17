@@ -27,6 +27,7 @@ public sealed class TroopRegenerationService(
                     if (room.State.IsPaused) continue;
 
                     gameService.ResolveExpiredCommandoRaids(roomCode);
+                    gameService.ResolveExpiredRallyPoints(roomCode);
                     var result = gameService.AddReinforcementsToAllHexes(roomCode);
                     var state = result.state;
                     if (result.error != null || state == null)

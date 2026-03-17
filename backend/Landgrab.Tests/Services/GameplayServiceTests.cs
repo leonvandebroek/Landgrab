@@ -721,6 +721,32 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
+    public void ResolveRallyPoint_AlliesArrive_AddTroopsScaledToPlatoon()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddPlayer("p3", "Carol", allianceId: "a1")
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithTroops(0, 0, 2)
+            .Build();
+        state.Alliances.Add(new AllianceDto { Id = "a1", MemberIds = ["p1", "p2", "p3"] });
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+        foreach (var p in state.Players) { p.CurrentLat = lat; p.CurrentLng = lng; }
+        state.Players.First(p => p.Id == "p1").RallyPointActive = true;
+        state.Players.First(p => p.Id == "p1").RallyPointQ = 0;
+        state.Players.First(p => p.Id == "p1").RallyPointR = 0;
+        state.Players.First(p => p.Id == "p1").RallyPointDeadline = DateTime.UtcNow.AddSeconds(-1);
+        var context = new ServiceTestContext(state);
+
+        context.GameplayService.ResolveExpiredRallyPoints(ServiceTestContext.RoomCode);
+
+        context.Cell(0, 0).Troops.Should().Be(8); // 2 base + 6 rally (3 allies × 2)
+    }
+
+    [Fact]
     public void ResolveCommandoRaid_AttackersWinWithTwoPlusPresence_CapturesHexAndTransfersTroops()
     {
         var state = ServiceTestContext.CreateBuilder()

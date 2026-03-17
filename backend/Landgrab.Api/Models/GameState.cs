@@ -129,7 +129,11 @@ public class PlayerDto
     public bool TacticalStrikeActive { get; set; }
     public DateTime? TacticalStrikeExpiry { get; set; }
     public DateTime? TacticalStrikeCooldownUntil { get; set; }
-    public DateTime? ReinforceCooldownUntil { get; set; }
+    public bool RallyPointActive { get; set; }
+    public DateTime? RallyPointDeadline { get; set; }
+    public DateTime? RallyPointCooldownUntil { get; set; }
+    public int? RallyPointQ { get; set; }
+    public int? RallyPointR { get; set; }
 
     // Engineer abilities
     public DateTime? EmergencyRepairCooldownUntil { get; set; }

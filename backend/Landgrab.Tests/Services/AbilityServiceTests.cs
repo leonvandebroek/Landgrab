@@ -184,6 +184,46 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
+    public void ActivateReinforce_ByNonCommander_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateReinforce(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().Contain("Commander");
+    }
+
+    [Fact]
+    public void ActivateReinforce_ByCommander_ActivatesRallyPoint()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .Build();
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+        state.Players.First(p => p.Id == "p1").CurrentLat = lat;
+        state.Players.First(p => p.Id == "p1").CurrentLng = lng;
+        var context = new ServiceTestContext(state);
+        var beforeActivation = DateTime.UtcNow;
+
+        var (result, error) = context.AbilityService.ActivateReinforce(ServiceTestContext.RoomCode, "p1");
+
+        error.Should().BeNull();
+        var commander = result!.Players.First(p => p.Id == "p1");
+        commander.RallyPointActive.Should().BeTrue();
+        commander.RallyPointDeadline.Should().BeCloseTo(beforeActivation.AddMinutes(3), TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public void ActivateBeacon_ByNonScout_WhenPlayerRolesEnabled_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -290,14 +330,13 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateReinforce_OnFriendlyHex_AddsTroopsAndStartsCooldown()
+    public void ActivateReinforce_OnFriendlyHex_ActivatesRallyPointAndStartsCooldown()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
             .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Commander)
             .AddAlliance("a1", "Alpha", "p1")
-            .WithPlayerRole("p1", PlayerRole.Commander)
             .OwnHex(0, 0, "p1", "a1", troops: 2)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
@@ -307,8 +346,9 @@ public sealed class AbilityServiceTests
         var result = context.AbilityService.ActivateReinforce(ServiceTestContext.RoomCode, "p1");
 
         result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(5);
-        context.Player("p1").ReinforceCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
+        // Troops not added immediately — rally resolves on deadline
+        context.Player("p1").RallyPointActive.Should().BeTrue();
+        context.Player("p1").RallyPointCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(15), TimeSpan.FromSeconds(10));
     }
 
     [Fact]

@@ -93,6 +93,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount);
     public GameplayService.ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
     public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode) => gameplayService.ResolveExpiredCommandoRaids(roomCode);
+    public void ResolveExpiredRallyPoints(string roomCode) => gameplayService.ResolveExpiredRallyPoints(roomCode);
 
     public void AppendEventLogPublic(GameState state, GameEventLogEntry entry) => gameStateService.AppendEventLog(state, entry);
     public GameState SnapshotStatePublic(GameState state) => gameStateService.SnapshotState(state);
