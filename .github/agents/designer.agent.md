@@ -1,7 +1,7 @@
 ---
 name: Designer
 description: Handles all UI/UX design tasks.
-model: Gemini 3.1 Pro (Preview) (copilot)
+model: gemini-3-pro-preview
 tools: ['vscode', 'execute', 'read', 'agent', 'io.github.upstash/context7/*', 'edit', 'search', 'web', 'vscode/memory', 'todo']
 ---
 

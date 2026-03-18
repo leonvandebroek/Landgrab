@@ -1,7 +1,7 @@
 ---
 name: Orchestrator
 description: Coordinates all Landgrab specialist agents — delegates planning, coding, design, debugging, database, testing and i18n work
-model: Claude Opus 4.6 (copilot)
+model: claude-opus-4.6
 tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/runCommand, vscode/switchAgent, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, read/getTaskOutput, agent/runSubagent, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/textSearch, search/searchSubagent, search/usages, web/fetch, web/githubRepo, ms-vscode.vscode-websearchforcopilot/websearch, todo]
 ---
 
