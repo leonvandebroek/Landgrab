@@ -1,0 +1,489 @@
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3 ARCHITECTURE VISUAL GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+1. DATA FLOW DIAGRAM
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         SignalR Server                                  │
+│                  (sends GameState updates)                              │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               │ onStateUpdated(state)
+                               ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    useSignalRHandlers Hook                              │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │ onStateUpdated:                                                │    │
+│  │  1. normalizeGameState(state, previousState)                  │    │
+│  │  2. useGameStore.setGameState(normalizedState)                │    │
+│  │  3. Check event log for new Phase 3 events                    │    │
+│  │  4. Push new events to infoLedgeStore (toasts)                │    │
+│  │  5. Handle rally point activation/expiry                      │    │
+│  └────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               │ gameState updates
+                               ▼
+     ┌─────────────────────────────────────────────────────┐
+     │        useGameStore (Canonical Source)              │
+     │  gameState: {                                       │
+     │    grid: Record<"q,r", HexCell>,                    │
+     │    players: Player[],                               │
+     │    eventLog: GameEventLogEntry[],                   │
+     │    ...                                              │
+     │  }                                                  │
+     └─────────────────────────────────────────────────────┘
+                               │
+                ┌──────────────┼──────────────┐
+                │              │              │
+                ▼              ▼              ▼
+      ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+      │  useMapOrc.  │  │  useMapOrc.  │  │  useMapOrc.  │
+      │  (Rally Pts) │  │  (Fortif.)   │  │  (Beacons)   │
+      └───────┬──────┘  └───────┬──────┘  └───────┬──────┘
+              │                 │                  │
+              ▼                 ▼                  ▼
+      ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+      │ tileOverlay  │  │ tileOverlay  │  │ playerLayer  │
+      │ Store        │  │ Store        │  │ Store        │
+      │              │  │              │  │              │
+      │ rally        │  │ fortified    │  │ beacon       │
+      │ PointHexKey  │  │ HexKeys      │  │ Locations    │
+      └──────────────┘  └──────────────┘  └──────────────┘
+              │                 │                  │
+              └──────────────┬──────────────────────┘
+                             │
+                             ▼
+      ┌─────────────────────────────────────────┐
+      │         GameMap Component               │
+      │  (Renders visual effects)               │
+      │  - Rally point hex highlight            │
+      │  - Fortified hex overlays                │
+      │  - Beacon positions                      │
+      │  - Troop movement arrows                 │
+      └─────────────────────────────────────────┘
+
+
+2. TROOP MOVEMENT DETECTION (useGridDiff)
+═══════════════════════════════════════════════════════════════════════════════
+
+ATTACK:  Hex ownership changed + adjacent friendly lost troops
+────────────────────────────────────────────────────────────
+
+  BEFORE:                    AFTER:
+  ┌───┐                      ┌───┐
+  │ B │  5 troops            │ R │  10 troops
+  │ 2 │                      │ 2 │
+  └───┘                      └───┘
+    │                          ▲
+    │  attacked from           │  arrow from
+    │                          │
+  ┌───┐                      ┌───┐
+  │ R │  10 troops           │ R │  5 troops
+  │ 1 │  (attacker)          │ 1 │  (attacker)
+  └───┘                      └───┘
+
+  MOVEMENT DETECTED:
+  {
+    fromHex: "r=1",
+    toHex: "q=2",
+    count: 5,
+    type: "attack",
+    teamColor: "#ff0000"  (red)
+  }
+
+
+TRANSFER: Same owner, hex gained troops from adjacent friendly
+────────────────────────────────────────────────────────────
+
+  BEFORE:                    AFTER:
+  ┌───┐                      ┌───┐
+  │ B │  10 troops           │ B │  5 troops
+  │ 1 │  (source)            │ 1 │  (source)
+  └───┘                      └───┘
+    │                          │
+    │  moved from              │ arrow from
+    │                          │
+  ┌───┐                      ┌───┐
+  │ B │  5 troops            │ B │  10 troops
+  │ 2 │  (destination)        │ 2 │  (destination)
+  └───┘                      └───┘
+
+  MOVEMENT DETECTED:
+  {
+    fromHex: "r=1",
+    toHex: "q=2",
+    count: 5,
+    type: "transfer",
+    teamColor: "#0000ff"  (blue)
+  }
+
+
+3. RALLY POINT LIFECYCLE
+═══════════════════════════════════════════════════════════════════════════════
+
+USER ACTIVATES RALLY POINT
+           │
+           ▼
+   SignalR: GameState
+   {
+     players: [{
+       rallyPointActive: true,
+       rallyPointQ: 5,
+       rallyPointR: -3,
+       rallyPointDeadline: "2024-01-15T10:30:00Z"
+     }]
+   }
+           │
+           ▼
+   useSignalRHandlers:
+   → normalizeGameState()
+   → useGameStore.setGameState()
+           │
+           ▼
+   useMapOrchestrator:
+   → Detect myPlayer.rallyPointActive === true
+   → Extract Q/R and deadline
+   → useTileOverlayStore.setRallyPointHexKey("5,-3", deadline)
+           │
+           ▼
+   GameMap Renders:
+   → Hex at (5,-3) highlighted in special color
+   → Countdown timer shows remaining time
+           │
+           ▼
+   Server resolves rally point (success/fail)
+           │
+           ▼
+   SignalR: GameEventLogEntry
+   {
+     type: "RallyPointResolved",
+     message: "Rally point succeeded!",
+     ...
+   }
+           │
+           ▼
+   useSignalRHandlers:
+   → Detect new event log entry
+   → useInfoLedgeStore.push() → toast appears
+           │
+           ▼
+   Next update: rallyPointActive === false
+           │
+           ▼
+   useMapOrchestrator:
+   → useTileOverlayStore.setRallyPointHexKey(null)
+   → GameMap removes highlight
+
+
+4. HEX CELL STATE TRANSITION
+═══════════════════════════════════════════════════════════════════════════════
+
+  NEUTRAL
+    │ claim with troops
+    ▼
+  OWNED (by Player A)
+    │ [optional] fortify
+    ├─────────────────────────────┐
+    ▼                             ▼
+  FORTIFIED                    UNFORTIFIED
+    │                             │
+    │ [rally point activated]     │ [attacked by Player B]
+    └─────────────────────────────┤
+                                  │
+                                  ▼
+                            CAPTURED BY B
+                                  │
+                                  ▼
+                            OWNED (by Player B)
+
+  STATE FIELDS INVOLVED:
+  ├─ ownerId: string | undefined
+  ├─ ownerColor: string
+  ├─ troops: number
+  ├─ isFortified: boolean         ← Phase 3
+  ├─ isMasterTile: boolean
+  ├─ lastVisitedAt: string | undefined  ← Phase 3: Shepherd
+  └─ terrainType: TerrainType
+
+
+5. STORE UPDATE SEQUENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+   SignalR Message Arrives
+           │
+           ▼
+   useSignalRHandlers.onStateUpdated()
+           │
+      ┌────┴────────────────────────────────────────────┐
+      │ STEP 1: Normalize                               │
+      │  ┌──────────────────────────────────────────┐   │
+      │  │ normalizeGameState(state, previousState) │   │
+      │  │ (ensures consistency, aligns timestamps) │   │
+      │  └──────────────────────────────────────────┘   │
+      └────┬────────────────────────────────────────────┘
+           │
+      ┌────▼─────────────────────────────────────────────┐
+      │ STEP 2: Update Source of Truth                  │
+      │  ┌──────────────────────────────────────────┐   │
+      │  │ useGameStore.setGameState(normalizedState)  │
+      │  │ (triggers all downstream useEffects)    │   │
+      │  └──────────────────────────────────────────┘   │
+      └────┬────────────────────────────────────────────┘
+           │
+      ┌────▼─────────────────────────────────────────────┐
+      │ STEP 3: Orchestrator Triggers (automatic)        │
+      │  ┌──────────────────────────────────────────┐   │
+      │  │ useMapOrchestrator Dependencies:         │   │
+      │  │  - gameState (changed) → triggers effect │   │
+      │  │  - useGridDiff(grid) → detects movement │   │
+      │  │  - players changed → rally point check  │   │
+      │  └──────────────────────────────────────────┘   │
+      └────┬────────────────────────────────────────────┘
+           │
+      ┌────▼─────────────────────────────────────────────┐
+      │ STEP 4: Sync to Effect Stores                    │
+      │  ┌────────────────────────┐                      │
+      │  │ useEffectsStore        │                      │
+      │  │.setTroopMovements()    │ (animations)         │
+      │  └────────────────────────┘                      │
+      │  ┌────────────────────────┐                      │
+      │  │ useTileOverlayStore    │                      │
+      │  │.updateTiles()          │ (display state)      │
+      │  │.setRallyPointHexKey()  │                      │
+      │  │.setFortifiedHexKeys()  │                      │
+      │  └────────────────────────┘                      │
+      │  ┌────────────────────────┐                      │
+      │  │ usePlayerLayerStore    │                      │
+      │  │.setBeaconLocations()   │ (beacon positions)   │
+      │  └────────────────────────┘                      │
+      └────┬────────────────────────────────────────────┘
+           │
+      ┌────▼─────────────────────────────────────────────┐
+      │ STEP 5: Event Log Messages                       │
+      │  ┌──────────────────────────────────────────┐   │
+      │  │ Check new eventLog entries:              │   │
+      │  │  for (entry of newEntries)               │   │
+      │  │    useInfoLedgeStore.push(toast)         │   │
+      │  └──────────────────────────────────────────┘   │
+      └────┬────────────────────────────────────────────┘
+           │
+      ┌────▼─────────────────────────────────────────────┐
+      │ STEP 6: Component Re-render (automatic)          │
+      │  ┌──────────────────────────────────────────┐   │
+      │  │ GameView re-renders (dependencies changed)  │
+      │  │ GameMap renders updated stores          │   │
+      │  │ Animations begin (arrows, highlights)   │   │
+      │  └──────────────────────────────────────────┘   │
+      └────────────────────────────────────────────────────┘
+
+
+6. EVENT LOG ENTRY TYPES
+═══════════════════════════════════════════════════════════════════════════════
+
+  EXISTING (Phase 1-2):
+  ├─ TileClaimed
+  ├─ TileCaptured
+  ├─ CombatEngaged
+  ├─ CombatWon / CombatLost
+  ├─ CommandoRaidStarted
+  ├─ CommandoRaidSuccess
+  ├─ CommandoRaidFailed
+  └─ ...
+
+  NEW (Phase 3A: Rally):
+  ├─ RallyPointActivated
+  ├─ RallyPointResolved    (success)
+  ├─ RallyPointExpired     (timeout)
+  └─ RallyPointFailed      (interrupted)
+
+  NEW (Phase 3B: Fortification):
+  ├─ TileFortified
+  └─ TileDeFortified
+
+  NEW (Phase 3C: Shepherd):
+  ├─ ShepherdBeaconSighted
+  ├─ BeaconLocationTracked
+  └─ BeaconLost
+
+
+7. KEY PATTERNS & ANTI-PATTERNS
+═══════════════════════════════════════════════════════════════════════════════
+
+  ✓ PATTERN: Always normalize state first
+    useGameStore.setGameState(normalizeGameState(state, gameState))
+    ✗ vs: useGameStore.setGameState(state)  [WRONG]
+
+  ✓ PATTERN: Use hex key format "${q},${r}"
+    const hexKey = `${q},${r}`;
+    ✗ vs: `${q}:${r}` or `${q}_${r}`  [WRONG]
+
+  ✓ PATTERN: Spread state in Zustand updates
+    set({ ...state, tiles: { ...state.tiles, [key]: newTile } })
+    ✗ vs: state.tiles[key] = newTile; set(state)  [WRONG]
+
+  ✓ PATTERN: Use useMemo for derived dependencies
+    const grid = useMemo(() => gameState?.grid ?? {}, [gameState?.grid]);
+    useEffect(() => { /* use grid */ }, [grid]);
+    ✗ vs: useEffect(() => { /* use gameState.grid */ }, [gameState.grid])  [WRONG]
+
+  ✓ PATTERN: Check array length before slicing
+    if (newLog.length > prevLog.length) {
+      const newEntries = newLog.slice(prevLog.length);
+    }
+    ✗ vs: const newEntries = newLog.slice(prevLog.length);  [BUG if shorter]
+
+  ✓ PATTERN: Cleanup timers on unmount
+    useEffect(() => {
+      return () => { if (timer) clearTimeout(timer); };
+    }, []);
+    ✗ vs: No cleanup  [MEMORY LEAK]
+
+  ✓ PATTERN: Store refs in useRef, not useState
+    const timerRef = useRef<number | null>(null);
+    ✗ vs: const [timer, setTimer] = useState(null);  [WRONG TYPE]
+
+  ✓ PATTERN: Only first neighbor match in movement detection
+    for (...) {
+      if (condition) {
+        movements.push(...);
+        break;  // ← IMPORTANT
+      }
+    }
+    ✗ vs: No break  [DUPLICATE MOVEMENTS]
+
+
+8. DEPENDENCY GRAPH
+═══════════════════════════════════════════════════════════════════════════════
+
+  Top Level:
+  ┌─────────────────────────┐
+  │      App.tsx            │
+  │  (main orchestrator)    │
+  └────────┬────────────────┘
+           │
+     ┌─────┼─────┬─────────┐
+     │     │     │         │
+     ▼     ▼     ▼         ▼
+  useAuth  useSignalR  useGameActions  useGeolocation
+     │          │
+     │          ├─→ useSignalRHandlers ──────┐
+     │          │                            │
+     │          └─→ GameEvents interface     │
+     │                                       │
+     └─────────────────→ GameView.tsx ◄──────┘
+                           │
+                    ┌──────┼──────┐
+                    │      │      │
+                    ▼      ▼      ▼
+                  GameMap  PlayingHud  ...
+                    │
+                    ├──→ useMapOrchestrator [NEW]
+                    │      │
+                    │      ├──→ useGridDiff
+                    │      ├──→ useTileOverlayStore
+                    │      ├──→ useEffectsStore
+                    │      └──→ usePlayerLayerStore
+                    │
+                    └──→ Renders visual effects
+
+  CIRCULAR DEPENDENCIES TO AVOID:
+  ✗ GameView → useMapOrchestrator → GameView
+     (OK as long as no direct props passing down)
+
+  ✗ useMapOrchestrator → useGameActions → useMapOrchestrator
+     (Avoid by keeping useMapOrchestrator focused on state)
+
+
+9. TIMING DIAGRAM
+═══════════════════════════════════════════════════════════════════════════════
+
+  Event: SignalR receives grid update with troop movement
+
+  T=0ms    SignalR hub receives message
+           │
+  T=1ms    │→ Dispatch onStateUpdated handler
+           │
+  T=2ms    │  → normalizeGameState() [sync, <1ms]
+           │  → useGameStore.setGameState() [sync, <1ms]
+           │
+  T=3ms    │  → React schedules all useEffect() that depend on gameState
+           │
+  T=4ms    │  → useMapOrchestrator useEffect runs
+           │    → useGridDiff calculates movements [<50ms]
+           │    → setTroopMovements() [sync, <1ms]
+           │    → Component re-renders
+           │
+  T=10ms   │  → setRallyPointHexKey() [sync, <1ms]
+           │  → Re-render scheduled
+           │
+  T=16ms   │  → GameMap renders with new visual state
+           │
+  T=20ms   │  → Animation begins (arrows, colors fade)
+           │
+  T=1500ms │  → AUTO-CLEAR: movements array empties
+           │  → Another re-render
+           │
+  T=1520ms │  → Animation completes, arrows vanish
+
+  CRITICAL: Keep diff calculation under 50ms to avoid jank
+
+
+10. ERROR HANDLING FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+  ERROR: Unknown event type in event log
+
+    onStateUpdated receives:
+    {
+      eventLog: [{
+        type: "UnknownPhase3Event",  ← NEW EVENT NOT YET HANDLED
+        message: "...",
+        ...
+      }]
+    }
+           │
+           ▼
+    Loop through newEntries:
+    for (const entry of newEntries) {
+      if (entry.type === 'RallyPointActivated' || ...) {
+        // Handle Phase 3
+      }
+      // ← If type doesn't match, event silently ignored
+    }
+           │
+           ▼
+    ✗ No error thrown
+    ✗ Event not displayed
+    ✓ Application doesn't crash
+
+  FIX: Add new event type to conditional check
+
+
+  ERROR: formatHexKey returns "5:3" instead of "5,-3"
+
+    setRallyPointHexKey("5:3") [WRONG]
+           │
+           ▼
+    GameMap looks up hex: grid["5:3"]
+           │
+           ▼
+    ✗ Undefined — hex not found
+    ✓ Visual doesn't render
+    ✗ Silent failure — no error thrown
+
+  FIX: Verify hex key format everywhere
+
+
+═══════════════════════════════════════════════════════════════════════════════
+
+LEGEND:
+───────
+→   Data flow / message passing
+│   Continuation
+┌─┐ Boundary / component/hook
+✓   Correct / expected
+✗   Wrong / anti-pattern / error
+

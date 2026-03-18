@@ -5,7 +5,7 @@ import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
 import { hexKey } from '../map/HexMath';
 import { useSound } from '../../hooks/useSound';
 import { useGameStore } from '../../stores/gameStore';
-import { useGameplayStore } from '../../stores/gameplayStore';
+import { useGameplayStore } from '../../stores';
 import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import { useUiStore } from '../../stores/uiStore';
 import { GameEventLog } from './GameEventLog';
@@ -81,7 +81,7 @@ export function PlayingHud({
   const { t } = useTranslation();
   const { toggleSound } = useSound();
   const state = useGameStore((store) => store.gameState);
-  const selectedHex = useGameplayStore((store) => store.selectedHex);
+  const selectedHexKey = useGameplayStore((store) => store.selectedHexKey);
   const interactionFeedback = useGameplayStore((store) => store.mapFeedback);
   const pickupPrompt = useGameplayStore((store) => store.pickupPrompt);
   const pickupCount = useGameplayStore((store) => store.pickupCount);
@@ -102,6 +102,13 @@ export function PlayingHud({
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
   const effectiveShowReturnConfirm = activeModal === 'menu' && showReturnConfirm;
   const me = state?.players.find((player) => player.id === myUserId);
+  const selectedHex = useMemo<[number, number] | null>(() => {
+    if (!selectedHexKey) {
+      return null;
+    }
+
+    return selectedHexKey.split(',').map(Number) as [number, number];
+  }, [selectedHexKey]);
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
   const needsClock = Boolean(
     state
@@ -279,8 +286,8 @@ export function PlayingHud({
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
 
-    const targetCell = selectedHex
-      ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
+    const targetCell = selectedHexKey
+      ? state.grid[selectedHexKey] ?? undefined
       : undefined;
 
     return getTileInteractionStatus({
@@ -291,10 +298,10 @@ export function PlayingHud({
       currentHex,
       t,
     });
-  }, [currentHex, me, pickupPrompt, reinforcePrompt, selectedHex, state, t]);
+  }, [currentHex, me, pickupPrompt, reinforcePrompt, selectedHex, selectedHexKey, state, t]);
 
-  const selectedCell: HexCell | undefined = state && selectedHex
-    ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
+  const selectedCell: HexCell | undefined = state && selectedHexKey
+    ? state.grid[selectedHexKey] ?? undefined
     : undefined;
 
   const showRemoteTileInfoCard = Boolean(

@@ -210,6 +210,9 @@ export interface GameState {
   hostObserverMode?: boolean;
   isPaused?: boolean;
   activeRaids?: ActiveCommandoRaid[];
+  contestedEdges?: ContestedEdgeDto[] | null;
+  supplyEdges?: SupplyEdgeDto[] | null;
+  disconnectedHexKeys?: string[] | null;
 }
 
 export interface ActiveCommandoRaid {
@@ -327,6 +330,21 @@ export interface UpdateMapTemplateRequest {
   tileSizeMeters?: number;
   centerLat?: number;
   centerLng?: number;
+}
+
+export interface ContestedEdgeDto {
+  hexKeyA: string;
+  hexKeyB: string;
+  neighborIndex: number;
+  teamAColor: string;
+  teamBColor: string;
+  intensity: number;
+}
+
+export interface SupplyEdgeDto {
+  fromKey: string;
+  toKey: string;
+  teamColor: string;
 }
 
 export interface HostMessage {

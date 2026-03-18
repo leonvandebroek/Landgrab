@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../common/GameIcon';
 import { hexAreAdjacent } from '../map/HexMath';
 import { useGameStore } from '../../stores/gameStore';
-import { useGameplayStore } from '../../stores/gameplayStore';
+import { useGameplayStore } from '../../stores';
 
 interface GuidanceBannerProps {
   carriedTroops: number;

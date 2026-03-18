@@ -163,7 +163,7 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
                 : CreateHiddenFogCell(cell);
         }
 
-        return CreateSnapshotEnvelope(fullSnapshot, fogGrid);
+        return CreateSnapshotEnvelope(fullSnapshot, fogGrid, visibleKeys);
     }
 
     public IReadOnlyDictionary<string, HexCell> CreateHiddenFogCellsForBroadcast(GameState fullSnapshot)
@@ -195,8 +195,38 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
         };
     }
 
-    private static GameState CreateSnapshotEnvelope(GameState fullSnapshot, Dictionary<string, HexCell> fogGrid)
+    private static GameState CreateSnapshotEnvelope(
+        GameState fullSnapshot,
+        Dictionary<string, HexCell> fogGrid,
+        HashSet<string> visibleKeys)
     {
+        var contestedEdges = fullSnapshot.ContestedEdges?
+            .Where(edge => visibleKeys.Contains(edge.HexKeyA) && visibleKeys.Contains(edge.HexKeyB))
+            .Select(edge => new ContestedEdgeDto
+            {
+                HexKeyA = edge.HexKeyA,
+                HexKeyB = edge.HexKeyB,
+                NeighborIndex = edge.NeighborIndex,
+                TeamAColor = edge.TeamAColor,
+                TeamBColor = edge.TeamBColor,
+                Intensity = edge.Intensity
+            })
+            .ToList();
+
+        var supplyEdges = fullSnapshot.SupplyEdges?
+            .Where(edge => visibleKeys.Contains(edge.FromKey) && visibleKeys.Contains(edge.ToKey))
+            .Select(edge => new SupplyEdgeDto
+            {
+                FromKey = edge.FromKey,
+                ToKey = edge.ToKey,
+                TeamColor = edge.TeamColor
+            })
+            .ToList();
+
+        var disconnectedHexKeys = fullSnapshot.DisconnectedHexKeys?
+            .Where(visibleKeys.Contains)
+            .ToList();
+
         return new GameState
         {
             RoomCode = fullSnapshot.RoomCode,
@@ -230,6 +260,9 @@ public class GameStateService(IGameRoomProvider roomProvider, RoomPersistenceSer
             HostObserverMode = fullSnapshot.HostObserverMode,
             IsPaused = fullSnapshot.IsPaused,
             ActiveRaids = fullSnapshot.ActiveRaids,
+            ContestedEdges = contestedEdges,
+            SupplyEdges = supplyEdges,
+            DisconnectedHexKeys = disconnectedHexKeys,
         };
     }
 

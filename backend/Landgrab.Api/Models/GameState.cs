@@ -215,7 +215,7 @@ public class GameState
     public ClaimMode ClaimMode { get; set; } = ClaimMode.PresenceOnly;
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;
-public GameDynamics Dynamics { get; set; } = new();
+    public GameDynamics Dynamics { get; set; } = new();
     public int? GameDurationMinutes { get; set; }
     public int? MasterTileQ { get; set; }
     public int? MasterTileR { get; set; }
@@ -224,6 +224,9 @@ public GameDynamics Dynamics { get; set; } = new();
     public string? WinnerName { get; set; }
     public bool IsAllianceVictory { get; set; }
     public List<Achievement> Achievements { get; set; } = [];
+    public List<ContestedEdgeDto>? ContestedEdges { get; set; }
+    public List<SupplyEdgeDto>? SupplyEdges { get; set; }
+    public List<string>? DisconnectedHexKeys { get; set; }
 
     // Host settings
     public bool HostBypassGps { get; set; } = false;

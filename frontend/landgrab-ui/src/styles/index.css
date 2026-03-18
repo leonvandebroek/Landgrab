@@ -4927,7 +4927,6 @@ input:checked+.display-settings-slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: translate(-50%, -50%);
   border-radius: 50%;
   background: rgba(10, 18, 30, 0.88);
   border: 1.5px solid rgba(255, 255, 255, 0.18);
@@ -5471,11 +5470,13 @@ input:checked+.display-settings-slider:before {
 }
 
 /* 10. Night mode hex border boost */
+.time-night .hex-polygon,
 .time-night .hex-polygon path {
   stroke: rgba(150, 200, 255, 0.3);
   stroke-width: 1.5px;
 }
 
+.time-night .hex-polygon.is-frontier,
 .time-night .hex-polygon.is-frontier path {
   stroke: var(--hex-owner-color, rgba(150, 200, 255, 0.4));
   stroke-width: 2px;
@@ -6618,5 +6619,116 @@ input:checked+.display-settings-slider:before {
   .troop-dot,
   .btn-confirm {
     animation: none !important;
+  }
+}
+
+/* === Zoom-level visibility (data-zoom-level on SVG container) === */
+
+/* Strategic zoom (< 14): only colored polygons, hide all overlays */
+[data-zoom-level="strategic"] .hex-fo-badge,
+[data-zoom-level="strategic"] .hex-fo-terrain,
+[data-zoom-level="strategic"] .hex-fo-building {
+  display: none;
+}
+
+/* Tactical zoom (14-15): show badges, hide terrain/building icons */
+[data-zoom-level="tactical"] .hex-fo-terrain,
+[data-zoom-level="tactical"] .hex-fo-building {
+  display: none;
+}
+
+/* Detailed zoom (16+): everything visible — no rules needed */
+
+/* === Layer preference toggles (classes on .hex-overlay-svg) === */
+.hex-overlay-svg.hide-troop-badges .hex-fo-badge {
+  display: none;
+}
+
+.hex-overlay-svg.hide-terrain-icons .hex-fo-terrain {
+  display: none;
+}
+
+.hex-overlay-svg.hide-building-icons .hex-fo-building {
+  display: none;
+}
+
+.hex-overlay-svg.hide-border-effects .is-frontier {
+  filter: none !important;
+}
+
+/* === SVG foreignObject elements === */
+.hex-fo-badge,
+.hex-fo-terrain,
+.hex-fo-building {
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Safari foreignObject fixes */
+.hex-overlay-svg foreignObject {
+  overflow: visible;
+}
+
+.hex-overlay-svg foreignObject > div {
+  -webkit-transform: translateZ(0);
+}
+
+/* Contested edge lines */
+.contested-edge {
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+/* Supply lines */
+.supply-line {
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  opacity: 0.5;
+}
+
+/* Selection/current overlays */
+.hex-selection-overlay,
+.hex-selected-overlay {
+  fill: rgba(255, 255, 255, 0.3);
+  stroke: #fff;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.hex-current-overlay,
+.hex-active-player.is-current-player-hex {
+  fill: rgba(0, 150, 255, 0.2);
+  stroke: #0096ff;
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+  pointer-events: none;
+}
+
+/* Fort build progress ring — CSS animation over build duration */
+.hex-build-progress {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: build-progress 600s linear forwards;
+}
+
+@keyframes build-progress {
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Demolish progress ring */
+.hex-demolish-progress {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: demolish-progress 120s linear forwards;
+}
+
+@keyframes demolish-progress {
+
+  to {
+    stroke-dashoffset: 0;
   }
 }

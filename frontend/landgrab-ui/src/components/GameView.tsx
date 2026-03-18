@@ -7,7 +7,7 @@ import { HostControlPlane } from './game/HostControlPlane';
 import { LoadingFallback } from './LoadingFallback';
 import { TroopDeployModal } from './game/TroopDeployModal';
 import { useGameStore } from '../stores/gameStore';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type { GameDynamics, HexCell } from '../types/game';
 import type { PlayerDisplayPreferences } from '../types/playerPreferences';
@@ -74,7 +74,7 @@ export interface GameViewProps {
 /**
  * Renders the full in-game UI for `view === 'game'`.
  *
- * Reads gameState, selectedHex, combatPreview, combatResult, hasAcknowledgedRules, error,
+ * Reads gameState, selectedHexKey, combatPreview, combatResult, hasAcknowledgedRules, error,
  * setMainMapBounds and setSelectedHexScreenPos directly from Zustand stores.
  * Delegates everything else through props to keep App as a thin orchestrator.
  */
@@ -94,7 +94,7 @@ export function GameView({
 }: GameViewProps) {
   // ── Store reads ─────────────────────────────────────────────────────────
   const gameState = useGameStore(state => state.gameState);
-  const selectedHex = useGameplayStore(state => state.selectedHex);
+  const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
   const combatPreview = useGameplayStore(state => state.combatPreview);
   const combatResult = useGameplayStore(state => state.combatResult);
   const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
@@ -131,6 +131,13 @@ export function GameView({
     if (!gameState) return null;
     return gameState.players.find(p => p.id === userId) ?? null;
   }, [gameState, userId]);
+  const selectedHex = useMemo<[number, number] | null>(() => {
+    if (!selectedHexKey) {
+      return null;
+    }
+
+    return selectedHexKey.split(',').map(Number) as [number, number];
+  }, [selectedHexKey]);
   const isHost = myPlayer?.isHost ?? false;
 
   // Host GPS-bypass: suppress location error banner when host is bypassing GPS

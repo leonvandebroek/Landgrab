@@ -178,7 +178,23 @@ internal static class GameStateCommon
                 InitiatorPlayerName = r.InitiatorPlayerName,
                 Deadline = r.Deadline,
                 IsHQRaid = r.IsHQRaid
-            }).ToList()
+            }).ToList(),
+            ContestedEdges = state.ContestedEdges?.Select(edge => new ContestedEdgeDto
+            {
+                HexKeyA = edge.HexKeyA,
+                HexKeyB = edge.HexKeyB,
+                NeighborIndex = edge.NeighborIndex,
+                TeamAColor = edge.TeamAColor,
+                TeamBColor = edge.TeamBColor,
+                Intensity = edge.Intensity
+            }).ToList(),
+            SupplyEdges = state.SupplyEdges?.Select(edge => new SupplyEdgeDto
+            {
+                FromKey = edge.FromKey,
+                ToKey = edge.ToKey,
+                TeamColor = edge.TeamColor
+            }).ToList(),
+            DisconnectedHexKeys = state.DisconnectedHexKeys?.ToList()
         };
     }
 

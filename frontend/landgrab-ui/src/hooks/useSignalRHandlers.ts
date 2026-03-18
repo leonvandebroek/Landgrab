@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { TFunction } from 'i18next';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import type { SavedSession } from '../stores/gameStore';
 import { useGameStore } from '../stores/gameStore';
 import { useInfoLedgeStore } from '../stores/infoLedgeStore';
@@ -13,6 +13,7 @@ import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, Reinfor
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
+import { useMapOrchestrator } from './useMapOrchestrator';
 
 type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
@@ -151,6 +152,7 @@ export function useSignalRHandlers({
   playSound,
 }: UseSignalRHandlersOptions): GameEvents {
   const gameState = useGameStore(state => state.gameState);
+  const { dispatchStateToLayers, dispatchPlayersOnly } = useMapOrchestrator();
 
   return useMemo<GameEvents>(() => ({
     onRoomCreated: (code, state) => {
@@ -159,10 +161,12 @@ export function useSignalRHandlers({
       saveSession(roomCode);
       resolveResumeFromState(normalizedState);
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       useUiStore.getState().setView('lobby');
       useGameplayStore.getState().clearGameplayUi();
+      useGameplayStore.getState().setSelectedHexKey(null);
       useUiStore.getState().clearError();
     },
     onPlayerJoined: (state) => {
@@ -172,11 +176,13 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       if (state.phase === 'Lobby') {
         useUiStore.getState().setView('lobby');
         useGameplayStore.getState().clearGameplayUi();
+        useGameplayStore.getState().setSelectedHexKey(null);
       } else if (normalizedState.phase === 'Playing') {
         restorePersistedDebugLocation(normalizedState.roomCode);
         useUiStore.getState().setView('game');
@@ -192,6 +198,7 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       restorePersistedDebugLocation(normalizedState.roomCode);
@@ -227,6 +234,7 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       if (shouldClearPickup) {
         gameplayState.setPickupPrompt(null);
       }
@@ -247,6 +255,7 @@ export function useSignalRHandlers({
       } else if (normalizedState.phase === 'GameOver') {
         useUiStore.getState().setView('gameover');
         useGameplayStore.getState().clearGameplayUi();
+        useGameplayStore.getState().setSelectedHexKey(null);
       }
       useUiStore.getState().clearError();
 
@@ -279,11 +288,13 @@ export function useSignalRHandlers({
           players,
         };
       });
+      dispatchPlayersOnly(players);
     },
     onGameOver: () => {
       playSound('victory');
       vibrate(HAPTIC.victory);
       useGameplayStore.getState().clearGameplayUi();
+      useGameplayStore.getState().setSelectedHexKey(null);
       useUiStore.getState().setView('gameover');
     },
     onCombatResult: (result) => {
@@ -391,5 +402,5 @@ export function useSignalRHandlers({
         // Silently ignore — the justConnected auto-resume flow also attempts rejoin.
       });
     },
-  }), [gameState, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
+  }), [dispatchPlayersOnly, dispatchStateToLayers, gameState, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
 }

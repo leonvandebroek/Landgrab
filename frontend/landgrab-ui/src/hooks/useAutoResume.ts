@@ -4,7 +4,7 @@ import type { TFunction } from 'i18next';
 import type { AuthState, GameState } from '../types/game';
 import { useGameStore } from '../stores/gameStore';
 import type { SavedSession } from '../stores/gameStore';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import {
   getErrorMessage,
@@ -239,6 +239,7 @@ export function useAutoResume({
           setGameState(null);
           setPickupPrompt(null);
           clearGameplayUi();
+          useGameplayStore.getState().setSelectedHexKey(null);
           setView('lobby');
           setError(t('errors.roomNoLongerAvailable'));
         } else if (joinOutcome.status === 'error') {
@@ -254,6 +255,7 @@ export function useAutoResume({
         setGameState(null);
         setPickupPrompt(null);
         clearGameplayUi();
+        useGameplayStore.getState().setSelectedHexKey(null);
         setView('lobby');
         setError(t('errors.roomNoLongerAvailable'));
       } else if (rejoinOutcome.status === 'error') {

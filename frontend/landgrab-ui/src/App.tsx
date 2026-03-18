@@ -21,7 +21,7 @@ import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import type { GameState, RoomSummary } from './types/game';
 import { useGameStore } from './stores/gameStore';
 import type { SavedSession } from './stores/gameStore';
-import { useGameplayStore } from './stores/gameplayStore';
+import { useGameplayStore } from './stores';
 import { useInfoLedgeStore } from './stores/infoLedgeStore';
 import { useUiStore } from './stores/uiStore';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
@@ -405,6 +405,7 @@ export default function App() {
     setGameState(null);
     setPickupPrompt(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
   }, [
     clearGameplayUi,

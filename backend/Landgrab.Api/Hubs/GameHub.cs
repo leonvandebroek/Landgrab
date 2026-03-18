@@ -20,6 +20,7 @@ public partial class GameHub : Hub
     private readonly GameService gameService;
     private readonly GlobalMapService globalMap;
     private readonly TerrainFetchService terrainFetchService;
+    private readonly DerivedMapStateService derivedMapStateService;
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
 
@@ -46,12 +47,14 @@ public partial class GameHub : Hub
         GameService gameService,
         GlobalMapService globalMap,
         TerrainFetchService terrainFetchService,
+        DerivedMapStateService derivedMapStateService,
         IServiceScopeFactory scopeFactory,
         ILogger<GameHub> logger)
     {
         this.gameService = gameService;
         this.globalMap = globalMap;
         this.terrainFetchService = terrainFetchService;
+        this.derivedMapStateService = derivedMapStateService;
         this.scopeFactory = scopeFactory;
         this.logger = logger;
     }
@@ -86,6 +89,11 @@ public partial class GameHub : Hub
         if (!string.IsNullOrWhiteSpace(aliasEvent))
         {
             await Clients.Group(roomCode).SendAsync(aliasEvent, state);
+        }
+
+        if (state.Phase == GamePhase.Playing)
+        {
+            derivedMapStateService.ComputeAndAttach(state);
         }
 
         if (state.Dynamics.FogOfWarEnabled && state.Phase == GamePhase.Playing)
