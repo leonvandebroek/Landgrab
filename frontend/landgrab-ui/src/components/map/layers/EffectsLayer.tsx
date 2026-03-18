@@ -127,15 +127,28 @@ function EffectsLayerComponent({
       const endCorner = corners[endCornerIndex];
       const startPoint = map.latLngToLayerPoint([startCorner[0], startCorner[1]]);
       const endPoint = map.latLngToLayerPoint([endCorner[0], endCorner[1]]);
-      const opacity = clampOpacity(0.35 + edge.intensity * 0.55, 0.35, 0.9);
+      const opacity = clampOpacity(0.5 + edge.intensity * 0.5, 0.5, 1.0);
       const intensityClass = edge.intensity > 0.6 ? ' contested-edge-intense' : '';
 
+      // Premium effect: render two lines for the "clash"
+      // Dark Arcade: Red danger zone base + colored clash
       return [{
-        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}`,
-        className: `contested-edge${intensityClass}`,
-        stroke: edge.teamAColor,
-        opacity,
-        strokeWidth: 3,
+        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:base`,
+        className: `contested-edge-base${intensityClass}`,
+        stroke: '#ef4444', // Red danger base
+        opacity: 0.3,
+        strokeWidth: 8,
+        x1: startPoint.x,
+        y1: startPoint.y,
+        x2: endPoint.x,
+        y2: endPoint.y,
+      }, {
+        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:clash`,
+        className: `contested-edge-clash${intensityClass}`,
+        stroke: '#ffffff', // White clash marks for max contrast
+        opacity: 0.8,
+        strokeWidth: 4,
+        strokeDasharray: '4 6', // Sharp dashes
         x1: startPoint.x,
         y1: startPoint.y,
         x2: endPoint.x,
@@ -147,15 +160,36 @@ function EffectsLayerComponent({
   const supplyLines = useMemo<ProjectedLine[]>(() => {
     void projectionTick;
 
-    return supplyEdges.map((edge: SupplyEdgeDto) => ({
-      key: `${edge.fromKey}:${edge.toKey}`,
-      className: 'supply-line',
-      stroke: edge.teamColor,
-      opacity: 0.55,
-      strokeWidth: 2.5,
-      strokeDasharray: '8 4',
-      ...projectCenterLine(map, edge.fromKey, edge.toKey, mapLat, mapLng, tileSizeMeters),
-    }));
+    return supplyEdges.flatMap((edge: SupplyEdgeDto) => {
+      const coords = projectCenterLine(map, edge.fromKey, edge.toKey, mapLat, mapLng, tileSizeMeters);
+      
+      // Premium effect: Base rail + flowing energy
+      // Pattern: 6 dash, 12 gap = 18 total length
+      // Dark Arcade: Shadow Casing + Neon Rail + White Energy
+      return [{
+        key: `${edge.fromKey}:${edge.toKey}:casing`,
+        className: 'supply-line-casing',
+        stroke: '#000000', // Deep shadow for lift
+        opacity: 0.6,
+        strokeWidth: 12,
+        ...coords,
+      }, {
+        key: `${edge.fromKey}:${edge.toKey}:rail`,
+        className: 'supply-line-rail',
+        stroke: edge.teamColor, // Solid team color core
+        opacity: 1.0,
+        strokeWidth: 6,
+        ...coords,
+      }, {
+        key: `${edge.fromKey}:${edge.toKey}:flow`,
+        className: 'supply-line-flow',
+        stroke: '#ffffff', // White electricity
+        opacity: 0.8,
+        strokeWidth: 2, 
+        strokeDasharray: '4 6', 
+        ...coords,
+      }];
+    });
   }, [map, mapLat, mapLng, projectionTick, supplyEdges, tileSizeMeters]);
 
   const troopMovementLines = useMemo<ProjectedLine[]>(() => {
@@ -165,9 +199,9 @@ function EffectsLayerComponent({
       key: `${movement.fromHex}:${movement.toHex}:${movement.type}:${index}`,
       className: `troop-flow troop-flow-${movement.type}`,
       stroke: movement.teamColor,
-      opacity: 0.8,
-      strokeWidth: 3,
-      strokeDasharray: '6 6',
+      opacity: 1.0, // Max visibility
+      strokeWidth: 4, // Thicker line
+      strokeDasharray: '8 6', // Longer dashes
       ...projectCenterLine(map, movement.fromHex, movement.toHex, mapLat, mapLng, tileSizeMeters),
     }));
   }, [map, mapLat, mapLng, projectionTick, tileSizeMeters, troopMovements]);

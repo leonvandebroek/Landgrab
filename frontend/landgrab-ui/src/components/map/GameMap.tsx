@@ -554,7 +554,14 @@ export const GameMap = memo(function GameMap({
           aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
           disabled={!currentLocation}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+          {/* Navigation/Compass Icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {isFollowingMe ? (
+              <path d="M12 2L2 22l10-3 10 3L12 2z" fill="currentColor" fillOpacity="0.2" />
+            ) : (
+              <polygon points="3 11 22 2 13 21 11 13 3 11" />
+            )}
+          </svg>
         </button>
         <button
           type="button"
@@ -564,7 +571,12 @@ export const GameMap = memo(function GameMap({
           aria-label={t('game.zoomToLocation')}
           disabled={!currentLocation}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"></circle><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 6.9 8 11.7z"></path></svg>
+          {/* Crosshair/Focus Icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
         </button>
       </div>
       <MapLayerToggle prefs={layerPrefs} onPrefsChange={setLayerPrefs} />

@@ -178,16 +178,29 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
       {projectedPlayers.map((projectedPlayer) => {
         const markerX = projectedPlayer.point.x - projectedPlayer.width / 2;
         const markerY = projectedPlayer.point.y - PLAYER_MARKER_HEIGHT / 2;
-        const labelColor = projectedPlayer.isCurrentUser ? 'rgba(255, 255, 255, 0.98)' : 'rgba(240, 247, 255, 0.96)';
-        const markerBackground = projectedPlayer.isCurrentUser
-          ? 'rgba(12, 24, 44, 0.96)'
-          : 'rgba(10, 18, 32, 0.92)';
-        const markerBorder = projectedPlayer.isCurrentUser
-          ? `2px solid ${projectedPlayer.color}`
-          : '1px solid rgba(255, 255, 255, 0.18)';
-        const markerShadow = projectedPlayer.isCurrentUser
-          ? `0 8px 22px rgba(0, 0, 0, 0.42), 0 0 0 3px ${withAlpha(projectedPlayer.color, 0.22)}`
-          : '0 6px 18px rgba(0, 0, 0, 0.34)';
+        
+        // Playful styling variables
+        const isMe = projectedPlayer.isCurrentUser;
+        const baseColor = projectedPlayer.color;
+        
+        // Playful Dark Arcade Pill Style
+        const markerBackground = isMe
+          ? `linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))` // Slate-800 to Slate-900
+          : `linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9))`;
+
+        // Colored border for pop - Thicker neon
+        const markerBorder = isMe
+          ? `2px solid ${baseColor}`
+          : `2px solid ${withAlpha(baseColor, 0.7)}`;
+          
+        // Bouncy shadow + Neon Glow
+        const markerShadow = isMe
+          ? `0 0 15px ${withAlpha(baseColor, 0.5)}, 0 4px 8px rgba(0,0,0,0.4)`
+          : `0 0 10px ${withAlpha(baseColor, 0.3)}, 0 4px 6px rgba(0,0,0,0.3)`;
+
+        // Text styling - White for dark mode
+        const labelColor = '#f1f5f9'; // Slate-100
+        const labelShadow = '0 1px 2px rgba(0,0,0,0.8)';
 
         return (
           <foreignObject
@@ -197,44 +210,50 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
             width={projectedPlayer.width}
             height={PLAYER_MARKER_HEIGHT}
             pointerEvents="none"
+            className={isMe ? 'player-marker-me' : 'player-marker-other'}
           >
             <div
               style={{
                 alignItems: 'center',
                 background: markerBackground,
                 border: markerBorder,
-                borderRadius: 999,
+                borderRadius: '99px', // Pill shape
                 boxShadow: markerShadow,
                 color: labelColor,
                 display: 'flex',
                 gap: 8,
                 height: '100%',
-                padding: '0 12px 0 8px',
+                padding: '0 12px 0 4px', 
                 width: '100%',
+                transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                position: 'relative',
+                overflow: 'hidden',
               }}
             >
+              {/* Avatar Circle */}
               <div
                 aria-hidden="true"
                 style={{
                   alignItems: 'center',
-                  background: projectedPlayer.color,
-                  border: '2px solid rgba(255, 255, 255, 0.95)',
+                  background: baseColor,
+                  border: '2px solid white',
                   borderRadius: '50%',
-                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.28)',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
                   color: '#ffffff',
                   display: 'flex',
                   flex: '0 0 auto',
-                  fontSize: projectedPlayer.emoji ? 15 : 12,
-                  fontWeight: 800,
-                  height: 24,
+                  fontSize: projectedPlayer.emoji ? 16 : 13,
+                  fontWeight: 700,
+                  height: 32, 
+                  width: 32,
                   justifyContent: 'center',
                   lineHeight: 1,
-                  marginTop: 6,
-                  width: 24,
                 }}
               >
                 {projectedPlayer.emoji ?? projectedPlayer.initials}
               </div>
+
+              {/* Name & Label */}
               <div
                 style={{
                   display: 'flex',
@@ -247,38 +266,56 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
                 <div
                   style={{
                     fontSize: 13,
-                    fontWeight: projectedPlayer.isCurrentUser ? 800 : 700,
-                    lineHeight: 1.1,
+                    fontWeight: isMe ? 700 : 600,
+                    letterSpacing: '0.01em',
+                    lineHeight: 1.2,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.35)',
+                    textShadow: labelShadow,
                     whiteSpace: 'nowrap',
+                    fontFamily: '"Fredoka", system-ui, sans-serif',
                   }}
                 >
                   {projectedPlayer.label}
                 </div>
               </div>
+
+              {/* Beacon Icon */}
               {projectedPlayer.player.isBeacon && getValidLocation(projectedPlayer.player.beaconLat, projectedPlayer.player.beaconLng) ? (
-                <div
-                  aria-label="Beacon enabled"
+                 <div
+                  aria-label="Beacon active"
+                  className="beacon-pulse-icon" // Animated via CSS
                   style={{
                     alignItems: 'center',
-                    background: withAlpha(projectedPlayer.color, 0.18),
-                    border: `1px solid ${withAlpha(projectedPlayer.color, 0.35)}`,
-                    borderRadius: 999,
-                    color: '#ffffff',
+                    background: 'rgba(34, 197, 94, 0.2)', // Green-500 tint
+                    border: '1px solid rgba(34, 197, 94, 0.5)',
+                    borderRadius: '50%',
+                    color: '#4ade80', // Green-400
                     display: 'flex',
                     flex: '0 0 auto',
                     fontSize: 12,
                     height: 20,
-                    justifyContent: 'center',
-                    marginTop: 8,
                     width: 20,
+                    justifyContent: 'center',
+                    marginLeft: 4,
                   }}
                 >
                   📡
                 </div>
               ) : null}
+              
+              {/* Sheen effect for premium feel */}
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '50%',
+                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.07), transparent)',
+                  pointerEvents: 'none',
+                }}
+              />
             </div>
           </foreignObject>
         );

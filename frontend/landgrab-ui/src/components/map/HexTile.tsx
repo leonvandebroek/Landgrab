@@ -116,6 +116,32 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     return grid;
   }, [cell, hexId, neighborCells]);
 
+  const radius = useMemo(() => {
+    const firstPoint = geometry.points.split(' ')[0];
+    if (!firstPoint) return 30;
+    const [x, y] = firstPoint.split(',').map(Number);
+    const dx = x - geometry.center[0];
+    const dy = y - geometry.center[1];
+    return Math.sqrt(dx * dx + dy * dy);
+  }, [geometry]);
+
+  // Scale elements if hex is small to prevent overlap
+  const scale = Math.min(1.0, Math.max(0.5, radius / 35));
+
+  const slots = useMemo(() => {
+    const R = radius;
+    // Push further out (0.6) to avoid badge overlap, but scale ensures fit
+    const f = 0.6; 
+    
+    return {
+      center: { x: geometry.center[0], y: geometry.center[1] },
+      topRight: { x: geometry.center[0] + R * f, y: geometry.center[1] - R * f },
+      topLeft: { x: geometry.center[0] - R * f, y: geometry.center[1] - R * f },
+      bottomLeft: { x: geometry.center[0] - R * f, y: geometry.center[1] + R * f },
+      bottomRight: { x: geometry.center[0] + R * f, y: geometry.center[1] + R * f },
+    };
+  }, [geometry.center, radius]);
+
   if (!cell) {
     return null;
   }
@@ -256,6 +282,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
         />
       ) : null}
 
+      {/* Raid Marker: Top Left */}
       {hasActiveRaid && !isInactive ? (
         <>
           <polygon
@@ -271,67 +298,71 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
           />
           {renderForeignObject({
             className: 'hex-fo-raid hex-commando-raid-marker',
-            x: geometry.center[0] - 13,
-            y: geometry.center[1] - 13,
-            width: 26,
-            height: 26,
+            x: slots.topLeft.x - (13 * scale),
+            y: slots.topLeft.y - (13 * scale),
+            width: 26 * scale,
+            height: 26 * scale,
             html: iconHtml('archeryTarget'),
           })}
         </>
       ) : null}
 
+      {/* Terrain Icon: Top Right */}
       {terrainMarkerHtml ? renderForeignObject({
-        className: `hex-fo-terrain hex-terrain-icon${showTroopBadge ? ' hex-terrain-icon--offset' : ''}`,
-        x: showTroopBadge ? geometry.center[0] + 4 : geometry.center[0] - 11,
-        y: showTroopBadge ? geometry.center[1] - 24 : geometry.center[1] - 11,
-        width: showTroopBadge ? 18 : 22,
-        height: showTroopBadge ? 18 : 22,
+        className: 'hex-fo-terrain hex-terrain-icon',
+        x: slots.topRight.x - (11 * scale),
+        y: slots.topRight.y - (11 * scale),
+        width: 22 * scale,
+        height: 22 * scale,
         html: terrainMarkerHtml,
       }) : null}
 
+      {/* Fort Progress: Center (under badge) */}
       {engineerBuildProgress != null ? renderForeignObject({
         className: 'hex-fo-progress hex-fort-progress',
-        x: geometry.center[0] - 18,
-        y: geometry.center[1] - 18,
-        width: 36,
-        height: 36,
+        x: slots.center.x - (18 * scale),
+        y: slots.center.y - (18 * scale),
+        width: 36 * scale,
+        height: 36 * scale,
         html: `<div class="fort-progress-ring" style="--progress:${engineerBuildProgress.toFixed(4)}"></div>`,
       }) : null}
 
+      {/* Buildings (Fort/HQ/Master): Bottom Left */}
       {cell.isFort && !isInactive && !isFogHidden ? renderForeignObject({
         className: 'hex-fo-fort hex-fort-icon-wrapper',
-        x: geometry.center[0] - 9,
-        y: geometry.center[1] - 9,
-        width: 18,
-        height: 18,
+        x: slots.bottomLeft.x - (9 * scale),
+        y: slots.bottomLeft.y - (9 * scale),
+        width: 18 * scale,
+        height: 18 * scale,
         html: iconHtml('fort', 'sm'),
       }) : null}
 
       {cell.isMasterTile && !isInactive && !isFogHidden ? renderForeignObject({
         className: 'hex-fo-building hex-building-icon',
-        x: geometry.center[0] - 14,
-        y: geometry.center[1] - 14,
-        width: 28,
-        height: 28,
+        x: slots.bottomLeft.x - (14 * scale),
+        y: slots.bottomLeft.y - (14 * scale),
+        width: 28 * scale,
+        height: 28 * scale,
         html: `<div class="building master" aria-hidden="true">${gameIcons.master}</div>`,
       }) : null}
 
       {isHQ && !cell.isMasterTile && !isInactive && !isFogHidden ? renderForeignObject({
         className: 'hex-fo-building hex-building-icon',
-        x: geometry.center[0] - 14,
-        y: geometry.center[1] - 14,
-        width: 28,
-        height: 28,
+        x: slots.bottomLeft.x - (14 * scale),
+        y: slots.bottomLeft.y - (14 * scale),
+        width: 28 * scale,
+        height: 28 * scale,
         html: iconHtml('hq'),
       }) : null}
 
+      {/* Troop Badge: Always Center */}
       {showTroopBadge ? (
         <foreignObject
           className="hex-fo-badge"
-          x={geometry.center[0] - 19}
-          y={geometry.center[1] - 19}
-          width={38}
-          height={38}
+          x={slots.center.x - (19 * scale)}
+          y={slots.center.y - (19 * scale)}
+          width={38 * scale}
+          height={38 * scale}
           pointerEvents="none"
         >
           <div
@@ -341,6 +372,8 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              transform: `scale(${scale})`,
+              transformOrigin: 'center center',
             }}
           >
             <TroopBadge
@@ -415,6 +448,8 @@ function renderForeignObject({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          fontSize: `${height}px`, // Ensure 1em SVGs fill the container
+          fontFamily: '"Rajdhani", system-ui, sans-serif',
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />

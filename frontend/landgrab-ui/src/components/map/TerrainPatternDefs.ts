@@ -1,6 +1,13 @@
 export function injectTerrainPatternSVG(mapContainer: HTMLElement): void {
-  const svg = mapContainer.querySelector('.leaflet-overlay-pane svg');
-  if (!svg || svg.querySelector('#terrain-patterns-defs')) return;
+  // Check if we already have our global defs
+  if (mapContainer.querySelector('#landgrab-map-defs')) return;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'landgrab-map-defs';
+  svg.style.position = 'absolute';
+  svg.style.width = '0';
+  svg.style.height = '0';
+  svg.style.pointerEvents = 'none';
 
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
   defs.id = 'terrain-patterns-defs';
@@ -46,6 +53,11 @@ export function injectTerrainPatternSVG(mapContainer: HTMLElement): void {
       size: 8,
       content: '<circle cx="2" cy="4" r="0.8" fill="#c2b280" opacity="0.3"/><circle cx="6" cy="4" r="0.8" fill="#c2b280" opacity="0.3"/>',
     },
+    {
+      id: 'pattern-fog',
+      size: 16,
+      content: '<path d="M0 0h16v16H0z" fill="#f1f5f9"/><path d="M0 16L16 0M-4 4l8-8M12 20l8-8" stroke="#cbd5e1" stroke-width="2"/>',
+    },
   ];
 
   for (const p of patterns) {
@@ -58,5 +70,6 @@ export function injectTerrainPatternSVG(mapContainer: HTMLElement): void {
     defs.appendChild(pattern);
   }
 
-  svg.insertBefore(defs, svg.firstChild);
+  svg.appendChild(defs);
+  mapContainer.appendChild(svg);
 }

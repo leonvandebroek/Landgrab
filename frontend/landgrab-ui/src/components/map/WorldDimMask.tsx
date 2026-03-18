@@ -47,8 +47,8 @@ export const WorldDimMask = memo(function WorldDimMask({
     <path
       className="grid-dim-mask"
       d={path}
-      fill="#0a1220"
-      fillOpacity={0.55}
+      fill="#ffffff" 
+      fillOpacity={0.7}
       fillRule="evenodd"
       pointerEvents="none"
     />
