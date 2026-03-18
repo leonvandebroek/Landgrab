@@ -1,7 +1,7 @@
 import { roomHexCornerLatLngs, roomHexToLatLng } from '../../map/HexMath';
 import type { GameState, HexCell, TerrainType } from '../../../types/game';
-import { terrainFillColors, terrainFillOpacity } from '../../../utils/terrainColors';
-import { hexToHSL, scaleTroopColor, scaleTroopOpacity } from '../../../utils/hexColorUtils';
+import { terrainFillColors } from '../../../utils/terrainColors';
+import { scaleTroopColor, hexToHSL } from '../../../utils/hexColorUtils';
 import { gameIcons } from '../../../utils/gameIcons';
 import { escapeHtml } from './HexTooltip';
 
@@ -186,10 +186,6 @@ export function getHexFillStyle({
     ? terrainFillColors[terrainType]
     : (isInactive ? '#1e293b' : '#0f172a'); // Slate-800 / Slate-900
 
-  const neutralOpacity = hasTerrain && !isInactive
-    ? terrainFillOpacity[terrainType]
-    : scaleTroopOpacity(0, false);
-
   return {
     fillColor: isFogHidden
       ? 'url(#pattern-fog)' // Patterned fog
@@ -226,33 +222,35 @@ export function getHexBorderStyle({
       ? '#334155' // Slate-700
       : (isFogHidden ? '#1e293b' : '#475569')); // Slate-800 / Slate-600
   
-  let borderWeight = cell.ownerId ? 3 : (isInactive ? 1 : 2); // Slightly thinner than light mode
-  const borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : ((isInactive || isFogHidden) ? 0.3 : 0.5);
+  let borderWeight = cell.ownerId ? 4 : (isInactive ? 2 : 3); // Thicker base for mobile visibility
+  const borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : ((isInactive || isFogHidden) ? 0.3 : 0.6);
   let dashArray: string | undefined;
 
   if (cell.isMasterTile) {
     borderColor = '#fbbf24'; // Amber-400
-    borderWeight = 5;
+    borderWeight = 6;
   }
   if (isCurrentHex) {
-    borderColor = '#4ade80'; // Green-400
-    borderWeight = Math.max(borderWeight, 4);
+    // Current location is handled heavily by CSS .is-current-player-hex
+    // But we set base SVG props here too as a fallback/reinforcement
+    borderColor = '#22d3ee'; // Cyan-400 (Bright Neon)
+    borderWeight = 8; // Ultra Thick for visibility
   }
   if (isSelected) {
     borderColor = isHostile ? '#ef4444' : '#38bdf8'; // Red-500 : Sky-400
-    borderWeight = Math.max(borderWeight, 5);
+    borderWeight = Math.max(borderWeight, 6);
   }
   if (cell.isFortified && !isInactive) {
     borderColor = '#f59e0b'; // Amber-500
-    borderWeight = Math.max(borderWeight, 4);
+    borderWeight = Math.max(borderWeight, 5);
   }
   if (cell.isFort && !isInactive) {
     borderColor = '#e879f9'; // Fuchsia-400
-    borderWeight = Math.max(borderWeight, 5);
+    borderWeight = Math.max(borderWeight, 6);
   }
   if (isHQ && !isInactive) {
     borderColor = '#fbbf24'; // Amber-400
-    borderWeight = Math.max(borderWeight, 6);
+    borderWeight = Math.max(borderWeight, 7);
   }
   if (isInactive) {
     dashArray = '4 6'; // Chunky dash
@@ -285,6 +283,7 @@ export function getHexPolygonClassName({
     cell.ownerId ? 'is-owned' : 'is-neutral',
     isMine ? 'is-mine' : '',
     isCurrentHex ? 'is-current' : '',
+    // This class triggers the intense neon pulse animation in index.css
     isCurrentHex ? 'is-current-player-hex' : '',
     isSelected ? 'is-selected' : '',
     isInactive ? 'is-inactive' : '',
@@ -380,12 +379,13 @@ export function getTroopBadgeDescriptor({
       : '');
   const { h: badgeHue, s: badgeSaturation } = hexToHSL(ownerColor);
   
-  // Playful Badge: Solid color, white border, drop shadow
-  const badgeBg = `hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,55%)`; // Lighter for neon pop
+  // Playful Candy Button Look (Dark Arcade Mode) - MATCHING TroopBadge.tsx
+  // Gradient: Vibrant top-down light-to-dark for volume
+  const badgeBg = `linear-gradient(180deg, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,65%) 0%, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,45%) 100%)`;
   const badgeBorderColor = '#ffffff';
   
-  // Pop shadow - stronger for dark mode
-  const badgeGlow = '0 0 10px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.2)';
+  // Pop shadow: Outer white glow for separation from dark map + Hard shadow for 3D + Inset highlight
+  const badgeGlow = '0 0 15px rgba(255, 255, 255, 0.25), 0 4px 0 rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.2)';
     
   const badgeClass = [
     'hex-troop-badge',
@@ -399,7 +399,7 @@ export function getTroopBadgeDescriptor({
   // Use Fredoka font
   return {
     badgeSize,
-    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border: 3px solid ${badgeBorderColor};box-shadow:${badgeGlow};border-radius:50%;--troop-count-size:${countFontSize}px;font-family:'Fredoka',sans-serif;font-weight:600;display:flex;align-items:center;justify-content:center;color:white;">
+    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border: 3px solid ${badgeBorderColor};box-shadow:${badgeGlow};border-radius:50%;--troop-count-size:${countFontSize}px;font-family:'Fredoka',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;color:white;">
   <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true" style="position:absolute;top:-3px;left:-3px;width:calc(100% + 6px);height:calc(100% + 6px);pointer-events:none;">
     <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="4"
             stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="1" stroke-linecap="round" />

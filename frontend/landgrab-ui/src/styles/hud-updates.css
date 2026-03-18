@@ -288,9 +288,14 @@
   transform: scale(0.97);
 }
 
+/* Disabled Tile Action */
 .tile-action-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.75;
   cursor: not-allowed;
+  filter: grayscale(100%) brightness(0.7);
+  background: #334155;
+  color: rgba(255,255,255,0.6);
+  pointer-events: none;
 }
 
 .tile-action-btn:disabled:active {
@@ -859,10 +864,15 @@
 }
 
 /* ── Disabled ── */
-.action-dock__btn:disabled {
-  opacity: 0.4;
+.action-dock__btn:disabled,
+.hud-btn:disabled {
+  opacity: 0.75; /* Boosted from 0.6 */
   cursor: not-allowed;
-  filter: saturate(0.3);
+  filter: grayscale(100%) brightness(0.7); /* Fully desaturate */
+  pointer-events: none;
+  background: #334155 !important;
+  color: rgba(255,255,255,0.6) !important;
+  box-shadow: none !important;
 }
 
 /* ── Icon and label ── */
@@ -1490,8 +1500,10 @@
 }
 
 .player-hud__ability--cooldown {
-  opacity: 0.4;
+  opacity: 0.75; /* Much more visible than 0.4 */
   cursor: not-allowed;
+  filter: grayscale(80%) brightness(80%);
+  background: #334155; /* Slate-700 background */
 }
 
 .player-hud__countdown {

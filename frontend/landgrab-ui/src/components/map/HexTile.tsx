@@ -31,7 +31,10 @@ const DEFAULT_OWNER_COLOR = '#4f8cff';
 const DEFAULT_HOST_COLOR = '#f1c40f';
 const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const FORT_BUILD_DURATION_MS = 10 * 60 * 1000;
-type HexPolygonStyle = CSSProperties & { '--hex-owner-color': string };
+type HexPolygonStyle = CSSProperties & { 
+  '--hex-owner-color': string;
+  '--hex-player-highlight-color'?: string;
+};
 const EMPTY_NEIGHBORS: Array<HexCell | undefined> = [];
 
 let cachedPlayers: Player[] = [];
@@ -211,7 +214,8 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
   const terrainMarkerHtml = shouldShowTerrainMarker && terrainIcon ? iconHtml(terrainIcon, 'sm') : null;
   const polygonStyle: HexPolygonStyle = {
     '--hex-owner-color': ownerColor,
-  };
+    '--hex-player-highlight-color': myPlayer?.allianceColor ?? myPlayer?.color ?? '#22d3ee', // Default to Cyan if unknown
+  } as HexPolygonStyle;
 
   return (
     <g

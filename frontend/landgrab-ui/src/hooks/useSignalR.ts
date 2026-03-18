@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
 import type { GameState, CombatResult, GameDynamics, NeutralClaimResult, Player } from '../types/game';
+import { recordAgentEvent, setAgentConnectionStatus } from '../testing/agentBridge';
 
 const AUTO_RECONNECT_DELAYS = [0, 1000, 2000, 5000, 10000, 15000, 30000, 30000, 30000, 30000, 60000, 60000, 60000];
 const MANUAL_RECONNECT_DELAY_MS = 15000;
@@ -145,6 +146,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
         clearManualReconnect();
         setConnected(false);
         setReconnecting(true);
+        setAgentConnectionStatus(false, true);
+        recordAgentEvent('SignalRConnectionStateChanged', { state: 'reconnecting' });
       }
     });
 
@@ -153,6 +156,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
         clearManualReconnect();
         setConnected(true);
         setReconnecting(false);
+        setAgentConnectionStatus(true, false);
+        recordAgentEvent('SignalRConnectionStateChanged', { state: 'connected' });
         eventsRef.current.onReconnected?.();
       }
     });
@@ -161,6 +166,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
       if (!disposed) {
         setConnected(false);
         setReconnecting(true);
+        setAgentConnectionStatus(false, true);
+        recordAgentEvent('SignalRConnectionStateChanged', { state: 'disconnected' });
         scheduleManualReconnect(conn, isDisposed);
       }
     });
@@ -176,11 +183,15 @@ export function useSignalR(token: string | null, events: GameEvents) {
           clearManualReconnect();
           setConnected(true);
           setReconnecting(false);
+          setAgentConnectionStatus(true, false);
+          recordAgentEvent('SignalRConnectionStateChanged', { state: 'connected' });
         }
       } catch (err) {
         if (!disposed && !isExpectedStartAbort(err)) {
           setConnected(false);
           setReconnecting(true);
+          setAgentConnectionStatus(false, true);
+          recordAgentEvent('SignalRConnectionStateChanged', { state: 'reconnecting' });
           scheduleManualReconnect(conn, isDisposed);
         }
       }
@@ -195,6 +206,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
       }
       setConnected(false);
       setReconnecting(false);
+      setAgentConnectionStatus(false, false);
       void conn.stop();
     };
   }, [clearManualReconnect, scheduleManualReconnect, token]);

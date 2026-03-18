@@ -1,7 +1,6 @@
 import { memo, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { gameIcons } from '../../utils/gameIcons';
-import { hexToHSL } from '../../utils/hexColorUtils';
 
 interface TroopBadgeProps {
   troops: number;
@@ -36,18 +35,24 @@ export const TroopBadge = memo(function TroopBadge({
       
     const ringPct = Math.min(100, troops * 2);
     const prefixMarkup = getPrefixMarkup(isMasterTile, isHQ);
-    const { h: badgeHue, s: badgeSaturation } = hexToHSL(ownerColor);
     
     // Playful Candy Button Look (Dark Arcade Mode)
-    // Gradient: Vibrant top-down light-to-dark for volume
-    const badgeBg = `linear-gradient(180deg, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,65%) 0%, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,45%) 100%)`;
-    const badgeBorderColor = '#ffffff';
+    // Updated to MATCH PlayerLayer.tsx exactly: Slate Glass + Neon Border
     
-    // Pop shadow: Outer white glow for separation from dark map + Hard shadow for 3D + Inset highlight
-    const badgeGlow = '0 0 15px rgba(255, 255, 255, 0.25), 0 4px 0 rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.2)';
+    // Instead of colored fill, use Slate Glass gradient like PlayerLayer
+    // PlayerLayer uses: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))
+    const badgeBg = `linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))`;
+    
+    // Neon Border (PlayerLayer uses 2px solid baseColor)
+    // We use slightly thicker 2.5px for badge visibility
+    const badgeBorderColor = ownerColor; 
+    
+    // Pop shadow: Neon glow matching PlayerLayer
+    // PlayerLayer uses: 0 0 15px ${withAlpha(baseColor, 0.5)}
+    const badgeGlow = `0 0 12px ${ownerColor}, 0 4px 8px rgba(0,0,0,0.5)`;
 
     return {
-      badgeSize,
+      badgeSize: Math.max(30, badgeSize), // Ensure minimum tappable/readable size
       badgeBg,
       badgeBorderColor,
       badgeGlow,
@@ -72,7 +77,7 @@ export const TroopBadge = memo(function TroopBadge({
     background: badge.badgeBg,
     borderColor: badge.badgeBorderColor,
     boxShadow: badge.badgeGlow,
-    borderWidth: '3px',
+    borderWidth: '2.5px', 
     borderStyle: 'solid',
     borderRadius: '50%',
     fontFamily: '"Fredoka", system-ui, sans-serif',
@@ -80,38 +85,28 @@ export const TroopBadge = memo(function TroopBadge({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'white',
+    color: '#f1f5f9', // Slate-100 (same as PlayerLayer)
+    position: 'relative', 
+    zIndex: 700,
     [TROOP_COUNT_SIZE_VAR]: `${badge.countFontSize}px`,
   } satisfies CSSProperties & Record<typeof TROOP_COUNT_SIZE_VAR, string>;
 
+  // Inner sheen for that "glass" look
+  const sheenStyle: CSSProperties = {
+    position: 'absolute',
+    top: '0',
+    left: '0',
+    right: '0',
+    bottom: '0',
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 60%)',
+    borderRadius: '50%',
+    pointerEvents: 'none',
+  };
+
   return (
     <div className={badgeClassName} style={badgeStyle}>
-      <svg 
-        className="troop-ring" 
-        viewBox="0 0 36 36" 
-        aria-hidden="true"
-        style={{
-          position: 'absolute',
-          top: '-3px',
-          left: '-3px',
-          width: 'calc(100% + 6px)',
-          height: 'calc(100% + 6px)',
-          pointerEvents: 'none',
-        }}
-      >
-        <circle
-          cx="18"
-          cy="18"
-          r="16"
-          fill="none"
-          stroke="rgba(255,255,255,0.4)"
-          strokeWidth="4"
-          strokeDasharray={`${badge.ringPct} ${100 - badge.ringPct}`}
-          strokeDashoffset="25"
-          opacity="1"
-          strokeLinecap="round"
-        />
-      </svg>
+       <div style={sheenStyle} />
+       
       {badge.prefixMarkup ? (
         <span
           className="troop-badge-prefix"

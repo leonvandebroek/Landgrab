@@ -21,6 +21,16 @@ Use this skill when the playtester needs to:
 - Frontend running at `http://localhost:5173`
 - A browser session created for the host player (via `session_create` MCP tool or Playwright)
 
+## Preferred MCP shortcuts
+
+When the goal is to reach a valid multiplayer game quickly, prefer these tools before falling back to manual wizard clicks:
+
+- `room_wait_until_joinable` — verify the host room code and lobby readiness
+- `room_configure_defaults` — apply a fast preset, centered area, alliances, and review-step progression
+- `room_set_rules` / `room_set_dynamics` — adjust rules and dynamics without hunting for individual controls
+- `room_assign_players` — configure alliances and optionally pin specific sessions to alliances
+- `state_wait_for` — wait for wizard step, player count, or phase changes after each host action
+
 ## Workflow
 
 ### Step 1 — Register or log in the host
@@ -42,6 +52,8 @@ Use this skill when the playtester needs to:
 4. **Verify**: The wizard is visible and the room code is a 6-character string.
 5. **Evidence**: Screenshot the wizard with the room code.
 
+Fast path: after room creation, prefer `room_wait_until_joinable` to confirm the session is ready and the room code is stable.
+
 ### Step 3 — Setup Wizard: Location (Step 0)
 
 1. The location step retrieves GPS or uses debug GPS.
@@ -49,6 +61,8 @@ Use this skill when the playtester needs to:
 3. The wizard auto-advances to Step 1 when the location is set.
 4. If location does not resolve automatically, use the debug GPS panel (`data-testid="debug-gps-panel"`) to step into a valid hex.
 5. **Verify**: Wizard advances past the location step.
+
+Fast path: `room_configure_defaults` will set a map location, centered area, master tile, and push the wizard forward for deterministic local playtests.
 
 ### Step 4 — Setup Wizard: Teams (Step 1)
 
@@ -70,12 +84,16 @@ Use this skill when the playtester needs to:
 2. For default playtests, accept the defaults and click next (`data-testid="wizard-next-btn"`).
 3. **Verify**: Wizard advances to dynamics step.
 
+Fast path: use `room_set_rules` for tile size, claim mode, host GPS bypass, win condition, and footprint updates.
+
 ### Step 6 — Setup Wizard: Dynamics (Step 3)
 
 1. Select a copresence preset or leave the default.
 2. Optionally toggle feature flags (terrain, fog of war, supply lines, etc.).
 3. Click next (`data-testid="wizard-next-btn"`).
 4. **Verify**: Wizard advances to the review step.
+
+Fast path: use `room_set_dynamics` for preset toggles and live-compatible dynamics payloads.
 
 ### Step 7 — Setup Wizard: Review and Start (Step 4)
 
@@ -86,6 +104,12 @@ Use this skill when the playtester needs to:
 5. Wait for the `GameStarted` SignalR event or the game phase to transition to `Playing`.
 6. **Verify**: The game view is visible and the phase is `Playing`.
 7. **Evidence**: Screenshot the game-started state.
+
+Recommended verification after each host-side action:
+
+- `state_wait_for` with `currentWizardStep`, `minPlayers`, or `phase`
+- `state_last_events` to inspect `RoomCreated`, `PlayerJoined`, `GameStarted`, or `StateUpdated`
+- `evidence_checkpoint` at room-created and game-started transitions
 
 ## Key SignalR Methods
 

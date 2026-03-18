@@ -30,6 +30,7 @@ import {
   persistDebugLocation,
   readPersistedDebugLocation,
 } from './utils/debugLocationSession';
+import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
@@ -513,6 +514,63 @@ export default function App() {
     handleSetMasterTile, handleSetMasterTileByHex, handleAssignStartingTile,
     handleConfigureAlliances, handleDistributePlayers, handleAssignAllianceStartingTile,
     handleStartGame, handleReturnToLobby, handleSetObserverMode,
+  ]);
+
+  useEffect(() => {
+    installAgentBridge({
+      auth,
+      connected,
+      reconnecting,
+      currentLocation,
+      currentHex,
+      currentPlayerName,
+      isHostBypass,
+      invoke,
+      mapNavigate: (lat, lng) => {
+        mapNavigateRef.current?.(lat, lng);
+      },
+      applyDebugLocation,
+      disableDebugLocation,
+      stepDebugLocationByHex,
+      handleHexClick,
+      handleSetAlliance,
+      handleSetMapLocation,
+      handleSetTileSize,
+      handleUseCenteredGameArea,
+      handleSetClaimMode,
+      handleSetWinCondition,
+      handleSetGameDynamics,
+      handleConfigureAlliances,
+      handleDistributePlayers,
+      handleUpdateDynamicsLive,
+    });
+
+    return () => {
+      uninstallAgentBridge();
+    };
+  }, [
+    auth,
+    connected,
+    reconnecting,
+    currentLocation,
+    currentHex,
+    currentPlayerName,
+    isHostBypass,
+    invoke,
+    applyDebugLocation,
+    disableDebugLocation,
+    stepDebugLocationByHex,
+    handleHexClick,
+    handleSetAlliance,
+    handleSetMapLocation,
+    handleSetTileSize,
+    handleUseCenteredGameArea,
+    handleSetClaimMode,
+    handleSetWinCondition,
+    handleSetGameDynamics,
+    handleConfigureAlliances,
+    handleDistributePlayers,
+    handleUpdateDynamicsLive,
   ]);
 
   // ── Render ───────────────────────────────────────────────────────────────

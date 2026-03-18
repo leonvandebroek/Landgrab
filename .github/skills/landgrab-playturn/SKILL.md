@@ -25,6 +25,16 @@ Use this skill when the playtester needs to:
 - The debug GPS panel is available and enabled (`data-testid="debug-gps-toggle"`).
 - The player has troops to spend (check `carriedTroops` in state).
 
+## Preferred MCP shortcuts
+
+Use these tools first during gameplay; they wrap the real UI/gameplay flow but avoid brittle map clicking:
+
+- `state_game_snapshot`, `state_hex_snapshot`, `state_player_snapshot`
+- `player_select_hex`, `player_claim_hex`, `player_attack_hex`, `player_pickup_troops`, `player_reclaim_hex`
+- `map_center_on_player`, `map_pan_to_hex`, `map_get_visible_hexes`, `map_select_hex_near_player`
+- `state_wait_for`, `state_wait_for_event`, `assert_hex_state`, `assert_player_state`, `assert_sessions_in_sync`
+- `evidence_checkpoint` after significant actions
+
 ## Workflow
 
 ### Step 1 — Get the current state
@@ -33,6 +43,8 @@ Use this skill when the playtester needs to:
 2. Identify the active player, their current hex position, carried troops, and owned tiles.
 3. Identify the target hex for the next action.
 4. **Verify**: The game phase is `Playing` and the player has a valid position on the grid.
+
+Recommended first call: `state_game_snapshot` or `state_player_snapshot` for the acting session.
 
 ### Step 2 — Move via debug GPS
 
@@ -48,18 +60,16 @@ Use this skill when the playtester needs to:
 6. **Verify**: The player's position on the hex map updates after each step.
 7. **Evidence**: Screenshot the player's position after movement.
 
+Use `state_wait_for` with `playerHexQ` / `playerHexR` after movement instead of assuming the step completed.
+
 ### Step 3 — Claim a hex
 
 To claim an unowned tile or reinforce an owned tile:
 
 1. Click the target hex on the map to select it.
 2. The action panel shows available actions based on tile ownership and player state.
-3. For an unowned tile: select the Claim action.
-   - Invokes `PlaceTroops(q, r, lat, lng, null, false)`.
-4. For an already-owned tile: select the Reinforce action.
-   - Invokes `PlaceTroops(q, r, lat, lng, null, false)`.
-5. For claiming for yourself in alliance mode: select Claim Self.
-   - Invokes `PlaceTroops(q, r, lat, lng, null, true)`.
+3. Prefer `player_claim_hex` for claim or reinforce flows.
+4. If you need to inspect the target first, use `state_hex_snapshot` before acting.
 6. Wait for the `StateUpdated` event confirming the tile ownership change.
 7. **Verify**: The hex color/ownership changes in the UI and `carriedTroops` decreases by 1.
 8. **Evidence**: Screenshot the claimed hex.
@@ -70,13 +80,11 @@ To attack a hex owned by another player or alliance:
 
 1. Click the enemy hex on the map to select it.
 2. The action panel shows the Attack action with troop counts.
-3. Choose the number of troops to attack with (up to available carried troops).
-4. Confirm the attack.
-   - Invokes `PlaceTroops(q, r, lat, lng, attackCount, false)`.
+3. Prefer `player_attack_hex`, which requests a combat preview and then performs the attack through the current gameplay flow.
 5. Wait for the `CombatResult` SignalR event: `{q, r, winnerId, winnerName}`.
 6. If the attacker wins:
    - The hex ownership transfers.
-   - Optionally reclaim via `ReClaimHex(q, r, mode)`.
+   - If follow-up deployment is needed, use `player_reclaim_hex` (implemented through the current `PlaceTroops` flow; the old dedicated `ReClaimHex` hub method is no longer active).
 7. If the defender wins:
    - The hex remains with the defender.
    - The attacker loses the committed troops.
@@ -95,6 +103,12 @@ To collect troops from a tile:
 5. **Verify**: `carriedTroops` increases and the tile's troop count decreases.
 6. **Evidence**: Screenshot after pickup.
 
+Recommended verification:
+
+- `state_wait_for_event` for `CombatResult`, `NeutralClaimResult`, or `StateUpdated`
+- `assert_hex_state` on the affected hex
+- `assert_sessions_in_sync` across at least two sessions after each major action
+
 ### Step 6 — Verify state synchronization
 
 After each action, verify that all player sessions reflect the same state:
@@ -112,7 +126,6 @@ After each action, verify that all player sessions reflect the same state:
 | Invoke | `UpdatePlayerLocation(lat, lng)` | Broadcast location (sent by debug GPS) |
 | Invoke | `PlaceTroops(q, r, lat, lng, attackCount, claimForSelf)` | Claim, reinforce, or attack |
 | Invoke | `PickUpTroops(q, r, count, lat, lng)` | Pick up troops from tile |
-| Invoke | `ReClaimHex(q, r, mode)` | Reclaim hex after combat loss |
 | Event | `StateUpdated(state)` | State change broadcast |
 | Event | `CombatResult(result)` | Combat outcome: winnerId, winnerName |
 | Event | `TileLost(data)` | Notification that a tile was captured |
@@ -151,6 +164,7 @@ Adapt the sequence based on the specific test scenario requested.
 
 - If a claim is rejected, check claim mode rules (PresenceOnly, PresenceWithTroop, AdjacencyRequired) and whether the player has troops.
 - If an attack fails, check that the target hex is enemy-owned and the player has sufficient troops.
+- If a follow-up deployment seems wrong, inspect `combatResult`, `currentHexActions`, and the target hex with `state_game_snapshot` / `state_hex_snapshot` before retrying.
 - If debug GPS steps do not update position, check that the toggle is enabled and the game phase is `Playing`.
 - If state desynchronization is detected, capture evidence from all sessions and report the mismatch.
 - If a `TileLost` event fires unexpectedly, capture the event data and hex state as evidence.

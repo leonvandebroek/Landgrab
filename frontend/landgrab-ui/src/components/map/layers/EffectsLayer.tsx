@@ -45,10 +45,6 @@ function parseHexKey(hexKey: string): [number, number] {
   return [Number(qText), Number(rText)];
 }
 
-function clampOpacity(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 function projectCenterLine(
   map: L.Map,
   fromKey: string,
@@ -127,7 +123,6 @@ function EffectsLayerComponent({
       const endCorner = corners[endCornerIndex];
       const startPoint = map.latLngToLayerPoint([startCorner[0], startCorner[1]]);
       const endPoint = map.latLngToLayerPoint([endCorner[0], endCorner[1]]);
-      const opacity = clampOpacity(0.5 + edge.intensity * 0.5, 0.5, 1.0);
       const intensityClass = edge.intensity > 0.6 ? ' contested-edge-intense' : '';
 
       // Premium effect: render two lines for the "clash"
