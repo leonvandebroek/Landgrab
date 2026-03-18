@@ -6673,6 +6673,13 @@ input:checked+.display-settings-slider:before {
   -webkit-transform: translateZ(0);
 }
 
+/* Prevent any CSS transform on the SVG itself — Safari mispositions
+   foreignObject HTML when CSS transforms exist on the SVG element. */
+.hex-overlay-svg {
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
 /* Contested edge lines */
 .contested-edge {
   stroke-width: 3;

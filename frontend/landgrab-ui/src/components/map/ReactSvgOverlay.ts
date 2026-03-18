@@ -24,6 +24,7 @@ export class ReactSvgOverlay extends L.Layer {
     this._svg.style.position = 'absolute';
     this._svg.style.overflow = 'visible';
     this._svg.style.pointerEvents = 'none';
+    this._svg.style.transform = 'none';
 
     this._rootG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     this._rootG.style.pointerEvents = 'auto';
@@ -66,13 +67,23 @@ export class ReactSvgOverlay extends L.Layer {
       return;
     }
 
-    const topLeft = map.containerPointToLayerPoint([0, 0]);
-    L.DomUtil.setPosition(this._svg as unknown as HTMLElement, topLeft);
+    // Position SVG at pane origin with NO CSS transform.
+    // The Leaflet pane's own CSS transform handles pan/zoom.
+    // Layer-point coordinates in children map correctly through the pane.
+    // This avoids Safari's foreignObject misposition bug where CSS transforms
+    // on an SVG element cause HTML content inside foreignObject to render
+    // at wrong coordinates.
+    this._svg.style.transform = 'none';
+    this._svg.style.left = '0px';
+    this._svg.style.top = '0px';
 
     const size = map.getSize();
     this._svg.setAttribute('width', String(size.x));
     this._svg.setAttribute('height', String(size.y));
-    this._rootG.setAttribute('transform', `translate(${-topLeft.x},${-topLeft.y})`);
+
+    // No <g> transform needed — layer-point coordinates work directly
+    // since the pane handles the pixel-space-to-screen mapping.
+    this._rootG.removeAttribute('transform');
   }
 
   private _buildClassName(): string {
