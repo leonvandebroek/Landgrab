@@ -72,10 +72,11 @@ function GameOverlayLayerComponent({
     layerPreferences.terrainIcons,
     layerPreferences.troopBadges,
   ]);
+  const initialOverlayClassNameRef = useRef(overlayClassName);
 
   useEffect(() => {
     const pane = map.getPane(HEX_PANE) ? HEX_PANE : OVERLAY_PANE;
-    const overlay = new ReactSvgOverlay({ pane, className: overlayClassName });
+    const overlay = new ReactSvgOverlay({ pane, className: initialOverlayClassNameRef.current });
     overlayRef.current = overlay;
     overlay.addTo(map);
     const frameId = window.requestAnimationFrame(() => {
@@ -103,7 +104,7 @@ function GameOverlayLayerComponent({
       overlay.remove();
       map.off('zoomend moveend viewreset', handleUpdate);
     };
-  }, [map, overlayClassName]);
+  }, [map]);
 
   useEffect(() => {
     overlayRef.current?.setClassName(overlayClassName);

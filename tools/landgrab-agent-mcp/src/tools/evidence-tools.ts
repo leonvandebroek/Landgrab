@@ -35,6 +35,25 @@ export function registerEvidenceTools(server: McpServer): void {
   );
 
   server.tool(
+    'evidence_aria_snapshot',
+    'Capture a Playwright ARIA snapshot for the current page or a specific selector. Returns the YAML accessibility tree for the matching element scope.',
+    {
+      sessionId: z.string(),
+      selector: z.string().optional().describe('Optional CSS selector to scope the snapshot. Defaults to body.'),
+      timeout: z.number().int().min(500).max(30_000).optional().default(10_000),
+    },
+    async ({ sessionId, selector = 'body', timeout }) => {
+      const session = getSession(sessionId);
+      const locator = session.page.locator(selector).first();
+      await locator.waitFor({ state: 'attached', timeout });
+      const snapshot = await locator.ariaSnapshot();
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ sessionId, selector, snapshot }, null, 2) }],
+      };
+    },
+  );
+
+  server.tool(
     'evidence_console_errors',
     'Get all console errors captured for a session.',
     { sessionId: z.string() },

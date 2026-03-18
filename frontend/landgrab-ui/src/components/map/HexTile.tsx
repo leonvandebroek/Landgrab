@@ -64,11 +64,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     const [q, r] = parsed;
     return HEX_NEIGHBOR_OFFSETS.map(([dq, dr]) => grid[`${q + dq},${r + dr}`]) as Array<HexCell | undefined>;
   }));
-  const isInactive = useEffectsStore((state) => state.disconnectedHexKeys.has(hexId));
   const isSupplyDisconnected = useEffectsStore((state) => state.disconnectedHexKeys.has(hexId));
-  const isContested = useEffectsStore(
-    (state) => state.contestedEdges.some((edge) => edge.hexKeyA === hexId || edge.hexKeyB === hexId),
-  );
+  const hasGridOverride = useGameStore((state) => state.gridOverride !== null);
+  // isInactive = full fading (ReviewStep preview only); supply disconnection uses subtle overlay
+  const isInactive = isSupplyDisconnected && hasGridOverride;
+  const isContested = useEffectsStore((state) => state.contestedHexKeys.has(hexId));
   const hasActiveRaid = useGameStore(
     (state) => (state.gameState?.activeRaids ?? []).some(
       (raid) => `${raid.targetQ},${raid.targetR}` === hexId,
@@ -171,7 +171,6 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     terrainIcon,
     terrainType,
     terrainEnabled: dynamics?.terrainEnabled,
-    shouldShowTroopBadges: true,
   });
   const isForestBlind = shouldHideTroopCountInForest({
     cell,
@@ -179,7 +178,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     myUserId,
     terrainEnabled: dynamics?.terrainEnabled,
   });
-  const showTroopBadge = !isInactive && !isFogHidden && (cell.troops > 0 || cell.isMasterTile);
+  const showTroopBadge = !isInactive && !isFogHidden && (Boolean(cell.ownerId) || cell.isMasterTile);
   const engineerBuildProgress = !cell.isFort && !isInactive && !isFogHidden
     ? getEngineerBuildProgress(cell.engineerBuiltAt)
     : null;
@@ -282,11 +281,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
       ) : null}
 
       {terrainMarkerHtml ? renderForeignObject({
-        className: 'hex-fo-terrain hex-terrain-icon',
-        x: geometry.center[0] - 11,
-        y: geometry.center[1] - 11,
-        width: 22,
-        height: 22,
+        className: `hex-fo-terrain hex-terrain-icon${showTroopBadge ? ' hex-terrain-icon--offset' : ''}`,
+        x: showTroopBadge ? geometry.center[0] + 4 : geometry.center[0] - 11,
+        y: showTroopBadge ? geometry.center[1] - 24 : geometry.center[1] - 11,
+        width: showTroopBadge ? 18 : 22,
+        height: showTroopBadge ? 18 : 22,
         html: terrainMarkerHtml,
       }) : null}
 

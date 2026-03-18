@@ -16,7 +16,7 @@ An automated playtesting stack that enables AI agents to play Landgrab through r
 │   ├─ Auth tools              │  auth_register / auth_login
 │   ├─ Room tools              │  room_create / room_join / room_start
 │   ├─ Movement tools          │  player_step_hex / player_move_steps
-│   └─ Evidence tools          │  evidence_screenshot / state_snapshot
+│   └─ Evidence tools          │  evidence_screenshot / evidence_aria_snapshot / state_snapshot
 └──────────┬───────────────────┘
            │ Playwright browser automation
 ┌──────────▼───────────────────┐
@@ -51,7 +51,7 @@ Located in `tools/landgrab-agent-mcp/`:
 - **Auth tools** — Register/login via API or UI
 - **Room tools** — Create, join, configure, and start games
 - **Movement tools** — Debug GPS hex stepping
-- **Evidence tools** — Screenshots, console capture, state snapshots
+- **Evidence tools** — Screenshots, ARIA snapshots, console capture, state snapshots
 
 ### 4. Copilot Agent & Skills
 - **Agent**: `.github/agents/landgrab-playtester.agent.md`
@@ -109,6 +109,7 @@ The `landgrab-playtester` agent is available in GitHub Copilot. It uses the MCP 
 | `player_move_steps` | Move multiple hex steps |
 | `evidence_screenshot` | Capture screenshot to file |
 | `evidence_screenshot_base64` | Capture screenshot as base64 |
+| `evidence_aria_snapshot` | Capture a Playwright ARIA snapshot for the page or a selector |
 | `evidence_console_errors` | Get console errors |
 | `evidence_console_all` | Get all console output |
 | `evidence_summary` | Generate evidence markdown |

@@ -11,6 +11,7 @@ export interface TroopMovement {
 
 interface EffectsStore {
   contestedEdges: ContestedEdgeDto[];
+  contestedHexKeys: Set<string>;
   supplyEdges: SupplyEdgeDto[];
   disconnectedHexKeys: Set<string>;
   troopMovements: TroopMovement[];
@@ -25,10 +26,16 @@ interface EffectsStore {
 
 export const useEffectsStore = create<EffectsStore>((set) => ({
   contestedEdges: [],
+  contestedHexKeys: new Set<string>(),
   supplyEdges: [],
   disconnectedHexKeys: new Set<string>(),
   troopMovements: [],
 
-  setEffects: (effects) => set(effects),
+  setEffects: (effects) => set({
+    ...effects,
+    contestedHexKeys: new Set(
+      effects.contestedEdges.flatMap((edge) => [edge.hexKeyA, edge.hexKeyB]),
+    ),
+  }),
   setTroopMovements: (movements) => set({ troopMovements: movements }),
 }));

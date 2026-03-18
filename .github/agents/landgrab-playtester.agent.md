@@ -47,7 +47,7 @@ High-level orchestration tools that operate on **named sessions** (host, guest1,
 - `auth_*` — register/login players
 - `room_*` — create/join/advance wizard/start game
 - `player_*` — debug GPS enable and movement
-- `evidence_*` — screenshots, console capture, state snapshots, reports
+- `evidence_*` — screenshots, ARIA snapshots, console capture, state snapshots, reports
 
 Use `session_click`, `session_fill`, `session_wait_for`, `session_get_text`, `session_get_html` to interact with named sessions for any UI action not covered by a dedicated high-level tool (e.g., creating an alliance, filling a custom form, clicking a wizard-step-specific button).
 
@@ -95,7 +95,7 @@ Do not skip steps or rely on assumptions from a prior run.
 ## Operating rules
 
 - Always prefer high-level landgrab tools. Only drop to `session_click`/`session_fill` when no dedicated tool exists.
-- Before using `session_click`, use `session_get_html` or `evidence_screenshot_base64` to confirm the selector is present.
+- Before using `session_click`, use `session_get_html`, `evidence_aria_snapshot`, or `evidence_screenshot_base64` to confirm the selector is present and the UI is in the expected state.
 - After every significant action, verify the visible UI and the latest state update before proceeding.
 - Treat SignalR updates as the source of action completion; do not assume a click succeeded until the UI reflects it.
 

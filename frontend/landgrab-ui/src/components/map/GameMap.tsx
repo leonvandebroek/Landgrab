@@ -180,11 +180,11 @@ export const GameMap = memo(function GameMap({
   }, [gridOverride]);
 
   useEffect(() => {
-    const disconnectedHexKeys = gridOverride ? inactiveHexKeys : (state.disconnectedHexKeys ?? []);
+    if (!gridOverride) return;
     useEffectsStore.getState().setEffects({
       contestedEdges: state.contestedEdges ?? [],
       supplyEdges: state.supplyEdges ?? [],
-      disconnectedHexKeys: new Set(disconnectedHexKeys),
+      disconnectedHexKeys: new Set(inactiveHexKeys),
     });
   }, [gridOverride, inactiveHexKeys, state.contestedEdges, state.disconnectedHexKeys, state.supplyEdges]);
 

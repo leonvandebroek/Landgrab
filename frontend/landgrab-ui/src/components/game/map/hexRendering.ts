@@ -58,7 +58,6 @@ interface TerrainIconVisibilityOptions {
   terrainIcon: string;
   terrainType: TerrainType;
   terrainEnabled: boolean | undefined;
-  shouldShowTroopBadges: boolean;
 }
 
 interface ForestBlindOptions {
@@ -296,7 +295,6 @@ export function getHexPolygonClassName({
 }
 
 export function shouldRenderTerrainIcon({
-  cell,
   isFogHidden,
   isInactive,
   shouldShowBuildingIcons,
@@ -304,7 +302,6 @@ export function shouldRenderTerrainIcon({
   terrainIcon,
   terrainType,
   terrainEnabled,
-  shouldShowTroopBadges,
 }: TerrainIconVisibilityOptions): boolean {
   const hasTerrain = terrainEnabled && terrainType !== 'None';
   if (!hasTerrain || isInactive || !terrainIcon || isFogHidden) {
@@ -317,7 +314,7 @@ export function shouldRenderTerrainIcon({
     return false;
   }
 
-  return !(shouldShowTroopBadges && Boolean(cell.ownerId) && cell.troops > 0);
+  return true;
 }
 
 export function shouldHideTroopCountInForest({
