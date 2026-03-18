@@ -101,8 +101,22 @@ interface PlayerLayerStore {
 
 ### Modify existing stores:
 - **`gameStore.ts`** — Keep for session management (`savedSession`, `myRooms`, `autoResuming`) and the full `GameState` for non-map consumers (lobby, HUD, game-over screen, ReviewStep). The map layers will NOT subscribe to `gameStore.gameState` directly.
-- **`gameplayStore.ts`** — Keep for UI interaction state (prompts, combatResult, commandoTargetingMode). Remove `selectedHex` — it moves to `tileOverlayStore.selectedHexKey` since it's now a map rendering concern. Add a derived getter or keep a mirror for non-map consumers.
+- **`gameplayStore.ts`** — Keep for UI interaction state (prompts, combatResult, commandoTargetingMode). Remove `selectedHex` / `selectedHexKey` — they move to `tileOverlayStore.selectedHexKey`. Non-map consumers that need selectedHex will subscribe to `tileOverlayStore` directly.
 - **`notificationStore.ts`** / **`infoLedgeStore.ts`** — Keep as-is (already separate)
+
+### selectedHex migration — consumer updates
+
+Moving `selectedHex` from `gameplayStore` to `tileOverlayStore.selectedHexKey` requires updating these consumers:
+
+| File | Current usage | Migration |
+|---|---|---|
+| `stores/gameplayStore.ts` | `selectedHex: [number, number] \| null`, `selectedHexKey` getter, `setSelectedHex()` | Remove `selectedHex`, `selectedHexKey`, `setSelectedHex`. Consumers switch to `tileOverlayStore`. |
+| `hooks/useGameActionsGameplay.ts` (line 69) | `useGameplayStore(state => state.selectedHex)` | Change to `useTileOverlayStore(state => state.selectedHexKey)`. In `handleHexClick()`, call `tileOverlayStore.setSelectedHexKey(key)`. |
+| `components/GameView.tsx` (line 97) | `useGameplayStore(state => state.selectedHex)` | Change to `useTileOverlayStore(state => state.selectedHexKey)`. Derive `[q, r]` tuple from key when needed for `onHexScreenPosition`. |
+| `components/game/PlayingHud.tsx` (line 84) | `useGameplayStore(store => store.selectedHex)` | Change to `useTileOverlayStore(state => state.selectedHexKey)`. Derive `[q, r]` from key for TileInfoCard. |
+| `components/game/GuidanceBanner.tsx` (line 22) | `useGameplayStore(state => state.selectedHexKey)` | Change to `useTileOverlayStore(state => state.selectedHexKey)` — same shape, just different store. |
+
+**Note:** `ReviewStep.tsx` uses its own LOCAL `selectedHex` state (not gameplayStore) and passes it as a prop to `GameMap`. This is unaffected by the migration — ReviewStep never writes to gameplayStore.
 
 ### Files to create:
 - `frontend/landgrab-ui/src/stores/tileOverlayStore.ts`
@@ -111,7 +125,11 @@ interface PlayerLayerStore {
 
 ### Files to modify:
 - `frontend/landgrab-ui/src/stores/index.ts` — Add new store exports
-- `frontend/landgrab-ui/src/stores/gameplayStore.ts` — Remove `selectedHex`/`selectedHexKey`, add redirect or keep in sync
+- `frontend/landgrab-ui/src/stores/gameplayStore.ts` — Remove `selectedHex`/`selectedHexKey`/`setSelectedHex`
+- `frontend/landgrab-ui/src/hooks/useGameActionsGameplay.ts` — Switch selectedHex to tileOverlayStore
+- `frontend/landgrab-ui/src/components/GameView.tsx` — Switch selectedHex to tileOverlayStore
+- `frontend/landgrab-ui/src/components/game/PlayingHud.tsx` — Switch selectedHex to tileOverlayStore
+- `frontend/landgrab-ui/src/components/game/GuidanceBanner.tsx` — Switch selectedHexKey to tileOverlayStore
 
 ---
 
@@ -173,7 +191,21 @@ if (state.Phase == GamePhase.Playing)
 }
 ```
 
-This runs once per broadcast, not once per client. For fog-of-war per-player snapshots, the derived state should be computed on the full state first, then the per-player snapshot filters it as needed (contested edges between visible hexes only).
+This runs once per broadcast, not once per client.
+
+**Fog-of-war per-player filtering:** Derived state is computed on the FULL grid first (once), then filtered per player in `BroadcastState()`:
+
+1. `DerivedMapStateService.ComputeAndAttach(state)` runs on the full game state — produces all contested edges, supply edges, disconnected hex keys.
+2. In the fog-of-war path (`GameHub.cs:84-123`), where `GetPlayerSnapshot()` already creates per-player snapshots with `hiddenFogCells`:
+   - Filter `ContestedEdges` to only include edges where BOTH `HexKeyA` and `HexKeyB` are in the player's visible hex set
+   - Filter `SupplyEdges` to only include edges where BOTH `FromKey` and `ToKey` are visible
+   - Filter `DisconnectedHexKeys` to only include keys that are visible
+3. Modify `GameStateService.GetPlayerSnapshot()` to accept the full derived state and filter it using the same `visibleHexKeys` set already computed for fog filtering.
+
+This ensures:
+- No information leaks about hidden hex ownership through contested/supply edges
+- Each player sees only the edges within their visible territory
+- The expensive BFS/neighbor-scan runs once per broadcast, not once per player
 
 **5. Register service**
 
@@ -212,7 +244,8 @@ disconnectedHexKeys?: string[] | null;
 
 ### Files to modify:
 - `backend/Landgrab.Api/Models/GameState.cs` — Add derived state fields
-- `backend/Landgrab.Api/Hubs/GameHub.cs` — Call derived state computation in `BroadcastState()`
+- `backend/Landgrab.Api/Hubs/GameHub.cs` — Call derived state computation in `BroadcastState()`, filter derived state in fog-of-war per-player path
+- `backend/Landgrab.Api/Services/GameStateService.cs` — Add derived state filtering to `GetPlayerSnapshot()` using existing `visibleHexKeys` set
 - `backend/Landgrab.Api/Program.cs` — Register `DerivedMapStateService`
 - `frontend/landgrab-ui/src/types/game.ts` — Add DTO types, extend GameState
 
@@ -418,6 +451,99 @@ const HexTile = memo(function HexTile({ hexId }: { hexId: string }) {
 
 **Key: Per-tile selector isolation.** Each `HexTile` subscribes to `state.tiles[hexId]` — a stable reference that only changes when THAT hex's data changes. When hex "4,7" gets captured, only the `HexTile` for "4,7" re-renders.
 
+### TroopBadge JSX Component
+
+Currently `getTroopBadgeDescriptor()` in `hexRendering.ts:338-388` returns `{ badgeSize: number; html: string }` — an HTML string. Replace with a React component:
+
+Create `frontend/landgrab-ui/src/components/map/TroopBadge.tsx`:
+```tsx
+const TroopBadge = memo(function TroopBadge({ troops, ownerColor, isFort, isHQ, isMasterTile, isForestBlind }: Props) {
+  // Port logic from getTroopBadgeDescriptor:
+  // - badgeSize: 20-38px based on log scale of troops
+  // - SVG circle ring indicator
+  // - Master/HQ icon prefix
+  // - Troop count label (or "?" if forest-blind)
+  // Returns JSX <div> (rendered inside <foreignObject>)
+});
+```
+
+This eliminates `dangerouslySetInnerHTML` for badges. The `getTroopBadgeDescriptor` function remains available as a fallback for non-React contexts if needed.
+
+### Click Handling & Drag Detection
+
+Port the existing drag detection from `HexGridLayer.ts:343-353`:
+
+```tsx
+// In GameOverlayLayer or a shared hook:
+const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
+
+// On the SVG container:
+onPointerDown={(e) => { pointerDownRef.current = { x: e.clientX, y: e.clientY }; }}
+
+// In HexTile onClick:
+function handleClick(e: React.MouseEvent) {
+  const down = pointerDownRef.current;
+  if (down) {
+    const dx = e.clientX - down.x;
+    const dy = e.clientY - down.y;
+    if (dx * dx + dy * dy > 100) return; // drag threshold ~10px
+  }
+  onHexClick(tile.q, tile.r);
+}
+```
+
+The `pointerDownRef` must be shared from `GameOverlayLayer` to all `HexTile` children (via context or ref prop). Currently set in `GameMap.tsx:270-272` on the map container's `pointerdown` event.
+
+### Commando Targeting Mode
+
+When `commandoTargetingMode` is `true` (from `gameplayStore`), hex clicks must be intercepted for commando raid targeting instead of normal selection. This is currently handled in `useGameActionsGameplay.ts:290-295`.
+
+In the new architecture, `HexTile` doesn't need to know about commando mode — the `onHexClick` callback passed from `GameOverlayLayer` delegates to `useGameActionsGameplay.handleHexClick()`, which already checks `commandoTargetingMode` and routes accordingly. No HexTile changes needed.
+
+### onHexScreenPosition Callback
+
+`GameView.tsx:222` passes `setSelectedHexScreenPos` to `GameMap`, which computes the screen position of the selected hex for UI overlays (TileInfoCard positioning).
+
+In the new architecture, this stays in `GameMap.tsx`:
+```tsx
+useEffect(() => {
+  const selectedKey = useTileOverlayStore.getState().selectedHexKey;
+  if (!selectedKey || !mapInstance) { onHexScreenPosition?.(null); return; }
+  const [q, r] = selectedKey.split(',').map(Number);
+  const latLng = roomHexToLatLng(q, r, mapLat, mapLng, tileSizeMeters);
+  const point = mapInstance.latLngToContainerPoint(latLng);
+  onHexScreenPosition?.({ x: point.x, y: point.y });
+}, [selectedHexKey, mapInstance]); // + update on zoom/move
+```
+
+### Custom Tooltip (replacing Leaflet `bindTooltip`)
+
+Leaflet's `bindTooltip()` won't work with React SVG polygons. Replace with a custom tooltip:
+
+Create `frontend/landgrab-ui/src/components/map/HexTooltipOverlay.tsx`:
+```tsx
+function HexTooltipOverlay({ map }: { map: L.Map }) {
+  const [hoveredHex, setHoveredHex] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+  // Listen to mousemove/mouseenter/mouseleave on the hex SVG container
+  // Use event delegation on the <g> root — check e.target for data-hex attribute
+  // Position a fixed <div> tooltip at cursor position (outside SVG, in DOM)
+  // Content generated by a JSX version of buildHexTooltipHtml()
+}
+```
+
+This uses **event delegation** on the SVG container rather than individual event handlers per tile (better performance with 200+ tiles). The tooltip is a regular HTML `<div>` positioned absolutely over the map, not inside SVG.
+
+Port `HexTooltip.ts:buildHexTooltipHtml()` to return JSX instead of an HTML string. The function signature stays the same — it just returns `ReactNode` instead of `string`.
+
+### foreignObject Mobile Considerations
+
+`<foreignObject>` has known quirks on older iOS Safari (pre-16.4):
+- Touch events may not propagate correctly through foreignObject
+- Workaround: Place an invisible SVG `<rect>` over each hex tile as the click target, sized to match the hex polygon. The rect captures all pointer events; the foreignObject content (badges, icons) has `pointer-events: none`.
+- This is already partially the pattern — the `<polygon>` element handles clicks, and badges/icons are non-interactive overlays.
+
 ### CSS-Level Zoom Thresholds and Layer Preferences
 
 Apply data attributes and classes to the SVG overlay container. Individual child elements use CSS to show/hide based on these:
@@ -591,18 +717,26 @@ return (
 - Zoom tracking, bounds change, grid fitting, follow-me logic
 - `currentHex` computation (writes result to `tileOverlayStore.setCurrentHexKey()`)
 - `gridOverride`/`inactiveHexKeys` handling for ReviewStep
+- `onHexScreenPosition` — compute screen coords of selected hex via `map.latLngToContainerPoint()`, subscribe to `tileOverlayStore.selectedHexKey`
+- `onBoundsChange` — feeds MiniMap via `uiStore.mainMapBounds`
+- `navigateRef` — allows MiniMap to pan the map
+- `constrainViewportToGrid` — viewport bounds enforcement
+
+**Add to GameMap.tsx:**
+- `<HexTooltipOverlay map={mapInstance} />` — custom tooltip component replaces Leaflet `bindTooltip()`
 
 ### Reuse existing utilities:
-- `hexRendering.ts` — All pure functions: `getHexFillStyle`, `getHexBorderStyle`, `getHexPolygonClassName`, `getTroopBadgeDescriptor`, `getHexOwnerColor`, `getHexTerritoryStatus`, `isFogHiddenHex`, `shouldRenderTerrainIcon`, `shouldHideTroopCountInForest`. These work with any rendering approach.
+- `hexRendering.ts` — All pure functions: `getHexFillStyle`, `getHexBorderStyle`, `getHexPolygonClassName`, `getHexOwnerColor`, `getHexTerritoryStatus`, `isFogHiddenHex`, `shouldRenderTerrainIcon`, `shouldHideTroopCountInForest`. These work with any rendering approach. `getTroopBadgeDescriptor` is replaced by `TroopBadge.tsx` but can be kept as fallback.
 - `HexMath.ts` — `roomHexCornerLatLngs`, `roomHexToLatLng`, `latLngToRoomHex`
-- `HexTooltip.ts` — Adapt to return JSX instead of HTML string (for use in SVG `<foreignObject>` tooltip)
 - `zoomThresholds.ts` — Reuse threshold functions for the zoom level classifier
-- `terrainIcons.ts`, `gameIcons.ts` — Reuse as-is (HTML strings used in `dangerouslySetInnerHTML`)
+- `terrainIcons.ts`, `gameIcons.ts` — Reuse as-is. These return HTML strings; use via `dangerouslySetInnerHTML` inside `<foreignObject>` divs. Converting to JSX components is optional (low priority — only a few static SVG icons).
 - `hexColorUtils.ts` — Reuse `hexToHSL`, `scaleTroopColor`, `scaleTroopOpacity`
 
 ### Files to create:
 - `frontend/landgrab-ui/src/components/map/ReactSvgOverlay.ts`
 - `frontend/landgrab-ui/src/components/map/HexTile.tsx`
+- `frontend/landgrab-ui/src/components/map/TroopBadge.tsx` — JSX replacement for `getTroopBadgeDescriptor` HTML strings
+- `frontend/landgrab-ui/src/components/map/HexTooltipOverlay.tsx` — Custom tooltip replacing Leaflet `bindTooltip()`
 - `frontend/landgrab-ui/src/components/map/WorldDimMask.tsx`
 - `frontend/landgrab-ui/src/components/map/layers/GameOverlayLayer.tsx`
 - `frontend/landgrab-ui/src/components/map/layers/EffectsLayer.tsx`
@@ -611,8 +745,8 @@ return (
 - `frontend/landgrab-ui/src/hooks/useHexGeometries.ts`
 
 ### Files to modify:
-- `frontend/landgrab-ui/src/components/map/GameMap.tsx` — Replace imperative rendering with React layers
-- `frontend/landgrab-ui/src/components/game/map/HexTooltip.ts` — Return JSX instead of HTML string
+- `frontend/landgrab-ui/src/components/map/GameMap.tsx` — Replace imperative rendering with React layers, add HexTooltipOverlay
+- `frontend/landgrab-ui/src/components/game/map/HexTooltip.ts` — Convert `buildHexTooltipHtml()` to return `ReactNode` instead of HTML string
 - `frontend/landgrab-ui/src/styles/index.css` — Add zoom-level CSS rules, foreignObject styling
 
 ### Files to eventually remove (after migration complete):
@@ -652,6 +786,27 @@ return (
 /* etc. for all 12 preferences */
 ```
 
+### CSS breaking change: night-mode selectors
+
+Two CSS selectors in `index.css` target `<path>` descendants of `.hex-polygon`:
+
+| Line | Selector | Issue |
+|---|---|---|
+| 5474 | `.time-night .hex-polygon path` | Targets `<path>` inside Leaflet SVG polygon |
+| 5479 | `.time-night .hex-polygon.is-frontier path` | Same issue |
+
+With React rendering, hex polygons are `<polygon>` SVG elements — there's no child `<path>`. Fix:
+
+```css
+/* Before (Leaflet creates <path> inside polygon wrapper): */
+.time-night .hex-polygon path { stroke: rgba(150, 200, 255, 0.3); stroke-width: 1.5px; }
+.time-night .hex-polygon.is-frontier path { stroke: var(--hex-owner-color, rgba(150, 200, 255, 0.4)); stroke-width: 2px; }
+
+/* After (target the polygon element directly): */
+.time-night .hex-polygon { stroke: rgba(150, 200, 255, 0.3); stroke-width: 1.5px; }
+.time-night .hex-polygon.is-frontier { stroke: var(--hex-owner-color, rgba(150, 200, 255, 0.4)); stroke-width: 2px; }
+```
+
 ### Animation strategy
 
 - Existing CSS animations (`border-pulse`, `current-player-hex-pulse`, `is-just-claimed`, `is-revealing`) in `index.css` continue to work since they target CSS classes which the React HexTile applies
@@ -659,7 +814,7 @@ return (
 - Fort build progress and demolish progress rings use CSS `@keyframes` driven by `--progress` custom property set once (not every second)
 
 ### Files to modify:
-- `frontend/landgrab-ui/src/styles/index.css` — Add zoom-level and layer-preference CSS rules
+- `frontend/landgrab-ui/src/styles/index.css` — Add zoom-level and layer-preference CSS rules, fix `.time-night .hex-polygon path` selectors
 
 ---
 
@@ -749,7 +904,8 @@ Each phase results in a working app. Phases 1-3 can coexist with the old renderi
 
 ### Backend — Modify:
 - `backend/Landgrab.Api/Models/GameState.cs`
-- `backend/Landgrab.Api/Hubs/GameHub.cs`
+- `backend/Landgrab.Api/Hubs/GameHub.cs` — Derived state computation + fog-of-war filtering
+- `backend/Landgrab.Api/Services/GameStateService.cs` — Filter derived state in `GetPlayerSnapshot()`
 - `backend/Landgrab.Api/Program.cs`
 
 ### Frontend — Create:
@@ -761,6 +917,8 @@ Each phase results in a working app. Phases 1-3 can coexist with the old renderi
 - `frontend/landgrab-ui/src/utils/gridDiff.ts`
 - `frontend/landgrab-ui/src/components/map/ReactSvgOverlay.ts`
 - `frontend/landgrab-ui/src/components/map/HexTile.tsx`
+- `frontend/landgrab-ui/src/components/map/TroopBadge.tsx`
+- `frontend/landgrab-ui/src/components/map/HexTooltipOverlay.tsx`
 - `frontend/landgrab-ui/src/components/map/WorldDimMask.tsx`
 - `frontend/landgrab-ui/src/components/map/layers/GameOverlayLayer.tsx`
 - `frontend/landgrab-ui/src/components/map/layers/EffectsLayer.tsx`
@@ -768,14 +926,17 @@ Each phase results in a working app. Phases 1-3 can coexist with the old renderi
 - `frontend/landgrab-ui/src/components/map/layers/index.ts`
 
 ### Frontend — Modify:
-- `frontend/landgrab-ui/src/stores/index.ts`
-- `frontend/landgrab-ui/src/stores/gameplayStore.ts` — selectedHex migration
-- `frontend/landgrab-ui/src/types/game.ts`
-- `frontend/landgrab-ui/src/hooks/useSignalRHandlers.ts`
-- `frontend/landgrab-ui/src/hooks/useGameActionsGameplay.ts` — selectedHex wiring
-- `frontend/landgrab-ui/src/components/map/GameMap.tsx` (major refactor)
-- `frontend/landgrab-ui/src/components/game/map/HexTooltip.ts`
-- `frontend/landgrab-ui/src/styles/index.css`
+- `frontend/landgrab-ui/src/stores/index.ts` — Add new store exports
+- `frontend/landgrab-ui/src/stores/gameplayStore.ts` — Remove selectedHex/selectedHexKey/setSelectedHex
+- `frontend/landgrab-ui/src/types/game.ts` — Add DTO types, extend GameState
+- `frontend/landgrab-ui/src/hooks/useSignalRHandlers.ts` — Integrate orchestrator dispatch
+- `frontend/landgrab-ui/src/hooks/useGameActionsGameplay.ts` — Switch selectedHex to tileOverlayStore
+- `frontend/landgrab-ui/src/components/GameView.tsx` — Switch selectedHex to tileOverlayStore
+- `frontend/landgrab-ui/src/components/game/PlayingHud.tsx` — Switch selectedHex to tileOverlayStore
+- `frontend/landgrab-ui/src/components/game/GuidanceBanner.tsx` — Switch selectedHexKey to tileOverlayStore
+- `frontend/landgrab-ui/src/components/map/GameMap.tsx` — Major refactor: React layers, onHexScreenPosition, tooltip
+- `frontend/landgrab-ui/src/components/game/map/HexTooltip.ts` — Convert to return ReactNode
+- `frontend/landgrab-ui/src/styles/index.css` — Zoom/layer CSS rules, fix night-mode selectors
 
 ### Frontend — Remove (Phase 7):
 - `frontend/landgrab-ui/src/components/game/map/HexGridLayer.ts`
