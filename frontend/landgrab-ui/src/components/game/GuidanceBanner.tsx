@@ -125,7 +125,7 @@ export function GuidanceBanner({
       if (!isCarryingTroops) {
         hideTimeout = window.setTimeout(() => {
           setIsVisible(false);
-        }, 5300);
+        }, 12300);
       }
     } else {
       showTimeout = window.setTimeout(() => {
@@ -135,7 +135,7 @@ export function GuidanceBanner({
       if (!isCarryingTroops) {
         hideTimeout = window.setTimeout(() => {
           setIsVisible(false);
-        }, 5000);
+        }, 12000);
       }
     }
 

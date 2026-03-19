@@ -7,7 +7,6 @@ import { GameIcon } from '../common/GameIcon';
 interface TileActionPanelProps {
   actions: TileAction[];
   targetCell: HexCell | undefined;
-  targetHex: [number, number];
   player: Player | null;
   onAction: (actionType: TileActionType) => void;
   onDismiss: () => void;
@@ -23,7 +22,6 @@ const toneColors: Record<TileAction['tone'], string> = {
 export function TileActionPanel({
   actions,
   targetCell,
-  targetHex,
   player,
   onAction,
   onDismiss,
@@ -37,24 +35,11 @@ export function TileActionPanel({
   const carriedTroops = player?.carriedTroops ?? 0;
 
   return (
-    <div
-      className="glass-panel"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.5rem',
-        width: '100%',
-        pointerEvents: 'auto',
-        padding: '0.75rem',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-          <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-            {t('game.tileAction.tileCoords', { q: targetHex[0], r: targetHex[1] })}
-          </span>
+    <div className="glass-panel tile-action-panel">
+      <div className="tile-action-panel__header">
+        <div className="tile-action-panel__info">
           {targetCell?.ownerName && (
-            <span style={{ fontSize: '0.8rem' }}>
+            <span className="tile-action-panel__meta">
               {t('game.tileAction.owner')}: {' '}
               <strong style={{ color: targetCell.ownerColor ?? 'inherit' }}>
                 {targetCell.ownerName}
@@ -62,37 +47,38 @@ export function TileActionPanel({
             </span>
           )}
           {targetCell && (
-            <span style={{ fontSize: '0.8rem' }}>
+            <span className="tile-action-panel__meta">
               {t('game.tileAction.tileTroops')}: <strong>{targetCell.troops}</strong>
             </span>
           )}
           {targetCell?.isFortified && (
-            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+            <span className="tile-action-panel__meta--muted">
               <GameIcon name="shield" size="sm" /> {t('phase3.fortified')}
             </span>
           )}
           {targetCell?.isFort && (
-            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+            <span className="tile-action-panel__meta--muted">
               <GameIcon name="fort" size="sm" /> {t('phase4.fort')}
             </span>
           )}
         </div>
 
-        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-          <span style={{ fontSize: '0.8rem' }}>
+        <div className="tile-action-panel__right">
+          <span className="tile-action-panel__meta">
             {t('game.tileAction.carrying')}: <strong>{carriedTroops}</strong>
           </span>
           <button
-            className="hud-btn-flat"
+            className="tile-action-panel__close"
             onClick={onDismiss}
-            style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', alignSelf: 'flex-end' }}
+            aria-label={t('common.close')}
+            type="button"
           >
             ×
           </button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+      <div className="tile-action-panel__actions">
         {actions.map((action) => (
           <button
             key={action.type}
@@ -100,16 +86,7 @@ export function TileActionPanel({
             disabled={!action.enabled}
             onClick={() => onAction(action.type)}
             style={{
-              minHeight: '48px',
-              fontSize: '1rem',
-              opacity: action.enabled ? 1 : 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              width: '100%',
               backgroundColor: action.enabled ? toneColors[action.tone] : undefined,
-              cursor: action.enabled ? 'pointer' : 'not-allowed',
             }}
           >
             <span><GameIcon name={action.icon} /></span>
@@ -119,7 +96,7 @@ export function TileActionPanel({
       </div>
 
       {disabledReasonText && (
-        <div style={{ fontSize: '0.75rem', opacity: 0.7, textAlign: 'center' }}>
+        <div className="tile-action-panel__reason">
           {disabledReasonText}
         </div>
       )}

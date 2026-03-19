@@ -756,7 +756,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  opacity: 0.65;
+  opacity: 0.85;
 }
 
 .action-dock__defend-bonus {
@@ -1538,4 +1538,51 @@
 
 .player-hud__empty-icon {
   font-size: 1.1rem;
+}
+
+/* ── Mobile breakpoints ─────────────────────────────────── */
+@media (max-width: 480px) {
+  .stat-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .action-dock__relation {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+  }
+
+  .action-dock__defend-bonus {
+    font-size: 0.65rem;
+    padding: 0.05rem 0.35rem;
+  }
+
+  .action-dock__context {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .action-dock__btn {
+    min-width: 56px;
+    min-height: 56px;
+    padding: 0.4rem;
+  }
+
+  .action-dock__btn-label {
+    font-size: 0.6rem;
+    max-width: 56px;
+  }
+
+  .action-dock__btn-icon {
+    font-size: 1.5rem;
+  }
+
+  .action-dock__actions {
+    gap: 0.35rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .action-dock__terrain {
+    opacity: 0.8;
+  }
 }
