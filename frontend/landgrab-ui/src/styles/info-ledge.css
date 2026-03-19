@@ -4,20 +4,21 @@
     width: 100%;
     max-height: 0;
     overflow: hidden;
-    background: rgba(15, 25, 45, 0.6);
-    color: #ecf0f1;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: linear-gradient(180deg, rgba(8, 14, 22, 0.94), rgba(5, 10, 18, 0.92));
+    color: rgba(232, 242, 255, 0.92);
+    font-family: 'Fredoka', system-ui, -apple-system, sans-serif;
     font-size: 0.9rem;
     padding: 0 0.75rem;
-    border-top: 1px solid transparent;
+    border-top: 1px solid rgba(120, 190, 255, 0.1);
     transition: max-height 0.25s ease-in-out, padding 0.25s ease-in-out, border-top-color 0.25s ease-in-out;
     box-sizing: border-box;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
 }
 
 .info-ledge--visible {
     max-height: 3rem;
     padding: 0.4rem 0.75rem;
-    border-top-color: rgba(255, 255, 255, 0.06);
+    border-top-color: rgba(120, 190, 255, 0.1);
 }
 
 .info-ledge--expanded {
@@ -30,6 +31,7 @@
     gap: 0.5rem;
     cursor: pointer;
     min-height: 36px;
+    font-size: 0.72rem;
     /* Touch-friendly */
     width: 100%;
 }
@@ -43,23 +45,23 @@
 
 /* Severity Colors */
 .info-ledge__dot--connection {
-    background-color: #f59e0b;
+    background-color: rgba(245, 158, 11, 0.7);
 }
 
 .info-ledge__dot--error {
-    background-color: #ef4444;
+    background-color: rgba(231, 76, 60, 0.7);
 }
 
 .info-ledge__dot--hostMessage {
-    background-color: #3b82f6;
+    background-color: rgba(120, 190, 255, 0.7);
 }
 
 .info-ledge__dot--interaction {
-    background-color: #14b8a6;
+    background-color: rgba(46, 204, 113, 0.7);
 }
 
 .info-ledge__dot--gameEvent {
-    background-color: #64748b;
+    background-color: rgba(177, 204, 220, 0.4);
 }
 
 .info-ledge__icon {
@@ -75,17 +77,20 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.78rem;
 }
 
 .info-ledge__message--muted {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(177, 204, 220, 0.72);
 }
 
 .info-ledge__badge {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(120, 190, 255, 0.1);
+    border: 1px solid rgba(120, 190, 255, 0.12);
+    color: rgba(177, 204, 220, 0.85);
     border-radius: 999px;
     padding: 0.1rem 0.5rem;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     flex-shrink: 0;
 }
@@ -97,7 +102,7 @@
 
     50% {
         transform: scale(1.15);
-        background: rgba(255, 255, 255, 0.25);
+        background: rgba(120, 190, 255, 0.16);
     }
 
     100% {
@@ -115,7 +120,7 @@
     align-items: center;
     justify-content: center;
     font-size: 0.88rem;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(177, 204, 220, 0.62);
     transition: transform 0.25s ease-in-out;
 }
 
@@ -131,8 +136,6 @@
     max-height: 100%;
     /* Bounded by parent transition */
     padding-bottom: 0.4rem;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .info-ledge__list::-webkit-scrollbar {
@@ -140,7 +143,7 @@
 }
 
 .info-ledge__list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(120, 190, 255, 0.22);
     border-radius: 4px;
 }
 
@@ -161,7 +164,7 @@
     align-items: flex-start;
     gap: 0.5rem;
     padding: 0.35rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(120, 190, 255, 0.08);
     animation: list-item-enter 0.2s ease-out forwards;
 }
 
@@ -179,24 +182,28 @@
 
 .info-ledge__item-message {
     flex: 1;
+    font-size: 0.78rem;
     line-height: 1.35;
     word-break: break-word;
 }
 
 .info-ledge__dismiss {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.4);
+    background: rgba(120, 190, 255, 0.04);
+    border: 1px solid rgba(120, 190, 255, 0.08);
+    color: rgba(177, 204, 220, 0.56);
+    border-radius: 999px;
     cursor: pointer;
-    padding: 0.2rem;
-    font-size: 0.9rem;
+    padding: 0.2rem 0.3rem;
+    font-size: 0.78rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: color 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
     line-height: 1;
 }
 
 .info-ledge__dismiss:hover {
-    color: rgba(255, 255, 255, 0.8);
+    background: rgba(120, 190, 255, 0.1);
+    border-color: rgba(120, 190, 255, 0.16);
+    color: rgba(232, 242, 255, 0.86);
 }

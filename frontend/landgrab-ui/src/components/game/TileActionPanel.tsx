@@ -70,7 +70,7 @@ export function TileActionPanel({
           <button
             className="tile-action-panel__close"
             onClick={onDismiss}
-            aria-label={t('common.close')}
+            aria-label={t('common.close' as never)}
             type="button"
           >
             ×

@@ -1,8 +1,8 @@
 ---
 name: Orchestrator
 description: Coordinates all Landgrab specialist agents — delegates planning, coding, design, debugging, database, testing and i18n work
-model: claude-sonnet-4.6
-tools: ['read/readFile', 'agent', 'vscode/memory', 'search/searchSubagent']
+model: Claude Sonnet 4.6 (copilot)
+tools: [vscode/memory, read/readFile, agent/runSubagent, landgrab/assert_hex_state, landgrab/assert_player_state, landgrab/assert_sessions_in_sync, landgrab/auth_login, landgrab/auth_register, landgrab/auth_register_ui, landgrab/evidence_aria_snapshot, landgrab/evidence_checkpoint, landgrab/evidence_compare_sessions, landgrab/evidence_console_all, landgrab/evidence_console_delta, landgrab/evidence_console_errors, landgrab/evidence_screenshot, landgrab/evidence_screenshot_base64, landgrab/evidence_summary, landgrab/map_center_on_player, landgrab/map_get_visible_hexes, landgrab/map_pan_to_hex, landgrab/map_select_hex_near_player, landgrab/network_requests, landgrab/player_attack_hex, landgrab/player_claim_hex, landgrab/player_enable_debug_gps, landgrab/player_move_steps, landgrab/player_navigate_to_hex, landgrab/player_pickup_troops, landgrab/player_reclaim_hex, landgrab/player_select_hex, landgrab/player_step_hex, landgrab/room_assign_players, landgrab/room_can_start, landgrab/room_configure_defaults, landgrab/room_create, landgrab/room_join, landgrab/room_set_dynamics, landgrab/room_set_rules, landgrab/room_start, landgrab/room_wait_until_joinable, landgrab/room_wizard_next, landgrab/scenario_create_2p_game, landgrab/scenario_create_n_player_game, landgrab/scenario_inject_state, landgrab/session_click, landgrab/session_click_testid, landgrab/session_create, landgrab/session_destroy, landgrab/session_destroy_all, landgrab/session_fill, landgrab/session_fill_testid, landgrab/session_get_html, landgrab/session_get_text, landgrab/session_list, landgrab/session_press_key, landgrab/session_wait_for, landgrab/session_wait_for_text, landgrab/signalr_status, landgrab/state_game_snapshot, landgrab/state_hex_snapshot, landgrab/state_last_combat_result, landgrab/state_last_events, landgrab/state_player_snapshot, landgrab/state_snapshot, landgrab/state_wait_for, landgrab/state_wait_for_event, landgrab/wait_for_connection_state, playwright/browser_click, playwright/browser_close, playwright/browser_console_messages, playwright/browser_drag, playwright/browser_evaluate, playwright/browser_file_upload, playwright/browser_fill_form, playwright/browser_handle_dialog, playwright/browser_hover, playwright/browser_install, playwright/browser_navigate, playwright/browser_navigate_back, playwright/browser_network_requests, playwright/browser_press_key, playwright/browser_resize, playwright/browser_run_code, playwright/browser_select_option, playwright/browser_snapshot, playwright/browser_tabs, playwright/browser_take_screenshot, playwright/browser_type, playwright/browser_wait_for, sequentialthinking/sequentialthinking]
 ---
 
 <!-- Note: Memory is experimental at the moment. You'll need to be in VS Code Insiders and toggle on memory in settings -->
@@ -23,7 +23,7 @@ Choose the agent that best matches the task you want to accomplish. Multiple age
 - **Expert .NET software engineer mode instructions** — Deep .NET architecture, SOLID principles, design patterns, TDD. Use for backend architecture decisions or complex C# review.
 - **Expert React Frontend Engineer** — Advanced React 19.2, hooks, TypeScript, performance optimization. Use for React-specific architecture decisions.
 - **MS-SQL Database Administrator** — Schema design, query tuning, migrations, DB security. Use for any database-focused task.
-- **Landgrab Playtester** — Multiplayer gameplay validation and UX evidence collection via browser automation. Use to verify features work end-to-end in the real UI.
+- **Landgrab Playtester** — Multiplayer gameplay validation and functional testing. Use only for functional gameplay correctness checks, not for gathering visual or UX evidence.
 - **Lingo.dev Localization (i18n) Agent** — Add/update locale strings, i18n setup and audits. Use for any translation or multi-language work.
 
 ### Routing quick-reference
@@ -37,7 +37,7 @@ Choose the agent that best matches the task you want to accomplish. Multiple age
 | React architecture | Planner → Expert React Frontend Engineer | Coder (for implementation) |
 | Database work | MS-SQL Database Administrator | Coder (for EF migrations) |
 | i18n / translations | Lingo.dev Localization (i18n) Agent | — |
-| Playtest / UX validation | Landgrab Playtester | — |
+| Playtest / UX validation | Playwright browser session (see below) | Landgrab Playtester (functional only) |
 
 ## Landgrab Skills
 
@@ -45,13 +45,30 @@ Skills in `.github/skills/` contain step-by-step procedures. Pass the skill name
 
 | Skill | Agent | When |
 |---|---|---|
-| `landgrab-host-and-start` | Landgrab Playtester | Starting a hosted game session for testing |
-| `landgrab-join-and-sync` | Landgrab Playtester | Joining a game as a guest player |
-| `landgrab-playturn` | Landgrab Playtester | Executing gameplay turns (move, claim, attack) |
-| `landgrab-ux-review` | Landgrab Playtester | Capturing screenshots and producing a UX report |
 | `aspnet-minimal-api-openapi` | Coder / Expert .NET | Adding OpenAPI docs to a new ASP.NET minimal API endpoint |
 | `csharp-xunit` | Coder / Expert .NET | Writing xUnit tests for backend services |
 | `appinsights-instrumentation` | Coder | Instrumenting the app with Azure App Insights telemetry |
+
+## Playwright Browser Session (Visual Evidence)
+
+When you need to observe the UI, gather visual evidence, or verify how a feature looks and behaves, you manage a Playwright browser session **directly** — do not delegate this to the Landgrab Playtester.
+
+### Setup Rules
+
+1. **Start the session once** — Launch a non-headless Playwright browser with a mobile viewport (e.g. 390×844, iPhone-class) at the beginning of any UX or visual verification task. Never launch a second browser.
+2. **Ask the user to set up the game** — After opening the browser, tell the user: "The browser is open. Please set up the game state you'd like me to observe (host a room, add players, start the game, etc.) and let me know when you're ready." Wait for the user to confirm before proceeding.
+3. **Reuse the session for all iterations** — Every screenshot, interaction, or check in the same conversation must reuse the same browser instance. Never navigate away from the app or open a new tab for unrelated content.
+4. **Never terminate the browser session** — Do not close the browser at any point during the conversation, even after completing a task. The user may want to inspect it or continue from the same state.
+
+### Workflow
+
+```
+1. playwright_browser_navigate → http://localhost:5173 (non-headless, mobile viewport)
+2. Ask user to set up game state
+3. Wait for user confirmation
+4. Use playwright_browser_snapshot / playwright_browser_take_screenshot to gather evidence
+5. Repeat steps 3–4 for each iteration — same browser, same session
+```
 
 ## Execution Model
 

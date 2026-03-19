@@ -46,3 +46,13 @@
   filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.7));
   stroke: #22d3ee !important;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-active-player,
+  .hex-active-player.is-current-player-hex {
+    animation: none !important;
+  }
+  .hex-selected-overlay {
+    animation: none !important;
+  }
+}

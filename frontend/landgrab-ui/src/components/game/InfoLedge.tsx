@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { SEVERITY_PRIORITY, useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import type { LedgeItem, LedgeSeverity } from '../../stores/infoLedgeStore';
 import { GameIcon } from '../common/GameIcon';
-import '../../styles/info-ledge.css';
 
 // Using a slightly extracted mapping function to isolate logic
 function getSeverityClass(severity: LedgeSeverity): string {

@@ -11,7 +11,7 @@ export interface MapInteractionFeedback {
   targetHex?: [number, number] | null;
 }
 
-/* ── Explicit tile-action types (used by TileActionPanel) ── */
+/* ── Explicit tile-action types for the in-game tile action UI ── */
 
 export type TileActionType = 'claim' | 'claimAlliance' | 'claimSelf' | 'attack' | 'reinforce' | 'pickup';
 

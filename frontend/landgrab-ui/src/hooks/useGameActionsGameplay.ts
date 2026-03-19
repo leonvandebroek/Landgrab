@@ -305,14 +305,17 @@ export function useGameActionsGameplay({
     }
 
     const targetHex: [number, number] = [q, r];
-    useGameplayStore.getState().setSelectedHexKey(`${q},${r}`);
-    setPickupPrompt(null);
-    setReinforcePrompt(null);
-    setAttackPrompt(null);
-    setCombatPreview(null);
     clearError();
 
-    if (!isHostBypass && (!currentHex || currentHex[0] !== q || currentHex[1] !== r)) {
+    const isCurrentTile = currentHex?.[0] === q && currentHex[1] === r;
+
+    if (!isCurrentTile) {
+      useGameplayStore.getState().setSelectedHexKey(null);
+      setPickupPrompt(null);
+      setReinforcePrompt(null);
+      setAttackPrompt(null);
+      setCombatPreview(null);
+
       const interactionStatus = getTileInteractionStatus({
         state: gameState,
         player: myPlayer,
@@ -330,6 +333,11 @@ export function useGameActionsGameplay({
       return;
     }
 
+    useGameplayStore.getState().setSelectedHexKey(null);
+    setPickupPrompt(null);
+    setReinforcePrompt(null);
+    setAttackPrompt(null);
+    setCombatPreview(null);
     setMapFeedback(null);
   }, [
     auth,
