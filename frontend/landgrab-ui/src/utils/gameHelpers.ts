@@ -2,16 +2,11 @@ import type { TFunction } from 'i18next';
 import type { GameDynamics, GameState } from '../types/game';
 
 const DEFAULT_GAME_DYNAMICS: GameDynamics = {
-  terrainEnabled: false,
   playerRolesEnabled: false,
-  fogOfWarEnabled: false,
   beaconEnabled: false,
-  supplyLinesEnabled: false,
   hqEnabled: false,
   hqAutoAssign: true,
   tileDecayEnabled: false,
-  timedEscalationEnabled: false,
-  underdogPactEnabled: false,
 };
 
 export function getErrorMessage(error: unknown): string {

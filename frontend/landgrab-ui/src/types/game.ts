@@ -6,22 +6,15 @@ export type WinConditionType = 'TerritoryPercent' | 'Elimination' | 'TimedGame';
 export type GameAreaMode = 'Centered' | 'Drawn' | 'Pattern';
 export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starburst';
 
-export type TerrainType = 'None' | 'Water' | 'Building' | 'Road' | 'Path' | 'Forest' | 'Park' | 'Hills' | 'Steep';
-
 export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Engineer';
 
 export interface GameDynamics {
-  terrainEnabled: boolean;
   playerRolesEnabled: boolean;
-  fogOfWarEnabled: boolean;
   beaconEnabled: boolean;
   combatMode?: CombatMode;
-  supplyLinesEnabled: boolean;
   hqEnabled: boolean;
   hqAutoAssign: boolean;
   tileDecayEnabled: boolean;
-  timedEscalationEnabled: boolean;
-  underdogPactEnabled: boolean;
 }
 
 export interface HexCoordinate {
@@ -89,7 +82,6 @@ export interface HexCell {
   ownerColor?: string;
   troops: number;
   isMasterTile: boolean;
-  terrainType?: TerrainType;
   // Phase 3: Rally
   isFortified?: boolean;
   // Phase 3: Shepherd
@@ -155,8 +147,6 @@ export interface AllianceDto {
   hqHexQ?: number;
   hqHexR?: number;
   claimFrozenUntil?: string;
-  // Phase 8: Underdog
-  underdogBoostUntil?: string;
 }
 
 export interface GameEventLogEntry {
@@ -211,8 +201,6 @@ export interface GameState {
   isPaused?: boolean;
   activeRaids?: ActiveCommandoRaid[];
   contestedEdges?: ContestedEdgeDto[] | null;
-  supplyEdges?: SupplyEdgeDto[] | null;
-  disconnectedHexKeys?: string[] | null;
 }
 
 export interface ActiveCommandoRaid {
@@ -247,7 +235,6 @@ export interface CombatResult {
   previousOwnerName: string | null;
   attackerBonus: number;
   defenderBonus: number;
-  defenderTerrainType: TerrainType | null;
   effectiveAttack: number;
   effectiveDefence: number;
   attackerTroopsLost: number;
@@ -339,12 +326,6 @@ export interface ContestedEdgeDto {
   teamAColor: string;
   teamBColor: string;
   intensity: number;
-}
-
-export interface SupplyEdgeDto {
-  fromKey: string;
-  toKey: string;
-  teamColor: string;
 }
 
 export interface HostMessage {

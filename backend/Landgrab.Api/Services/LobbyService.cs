@@ -274,7 +274,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
         if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
         {
             var centerCell = room.State.Grid.Values
-                .Where(cell => cell.OwnerId == null && cell.TerrainType != TerrainType.Water)
+                .Where(cell => cell.OwnerId == null)
                 .OrderBy(cell => HexService.HexDistance(cell.Q, cell.R))
                 .ThenBy(cell => cell.Q)
                 .ThenBy(cell => cell.R)
@@ -427,8 +427,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 var key = HexService.Key(pos.q, pos.r);
                 return state.Grid.TryGetValue(key, out var cell)
                        && cell.OwnerId == null
-                       && !cell.IsMasterTile
-                       && cell.TerrainType != TerrainType.Water;
+                       && !cell.IsMasterTile;
             })
             .ToList();
 
@@ -436,7 +435,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             return available;
 
         return state.Grid.Values
-            .Where(cell => cell.OwnerId == null && !cell.IsMasterTile && cell.TerrainType != TerrainType.Water)
+            .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
             .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
             .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
             .Select(cell => (cell.Q, cell.R))

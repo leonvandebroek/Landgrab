@@ -13,9 +13,8 @@ import { GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
 import { HexTooltipOverlay } from './HexTooltipOverlay';
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { getTimePeriod } from '../../utils/timeOfDay';
-import { injectTerrainPatternSVG } from './TerrainPatternDefs';
 import { TroopSplashLayer } from './TroopSplashLayer';
-import { MapLayerToggle, TimeOverlay } from '../game/map';
+import { MapLayerToggle, MapLegend, TimeOverlay } from '../game/map';
 
 interface LocationPoint {
   lat: number;
@@ -183,10 +182,8 @@ export const GameMap = memo(function GameMap({
     if (!gridOverride) return;
     useEffectsStore.getState().setEffects({
       contestedEdges: state.contestedEdges ?? [],
-      supplyEdges: state.supplyEdges ?? [],
-      disconnectedHexKeys: new Set(inactiveHexKeys),
     });
-  }, [gridOverride, inactiveHexKeys, state.contestedEdges, state.disconnectedHexKeys, state.supplyEdges]);
+  }, [gridOverride, inactiveHexKeys, state.contestedEdges]);
 
   useEffect(() => {
     const playerLayerStore = usePlayerLayerStore.getState();
@@ -285,12 +282,6 @@ export const GameMap = memo(function GameMap({
     if (navigateRef) {
       navigateRef.current = (lat: number, lng: number) => map.setView([lat, lng]);
     }
-
-    window.setTimeout(() => {
-      if (containerRef.current) {
-        injectTerrainPatternSVG(containerRef.current);
-      }
-    }, 100);
 
     return () => {
       if (basemapResetTimeoutId !== null) {
@@ -494,6 +485,7 @@ export const GameMap = memo(function GameMap({
             mapLat={state.mapLat ?? 0}
             mapLng={state.mapLng ?? 0}
             tileSizeMeters={state.tileSizeMeters ?? 50}
+            layerPreferences={layerPrefs}
           />
           <PlayerLayer map={mapInstance} />
           <HexTooltipOverlay map={mapInstance} />
@@ -580,6 +572,7 @@ export const GameMap = memo(function GameMap({
         </button>
       </div>
       <MapLayerToggle prefs={layerPrefs} onPrefsChange={setLayerPrefs} />
+      <MapLegend />
     </div>
   );
 });

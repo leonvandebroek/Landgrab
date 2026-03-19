@@ -7,7 +7,6 @@ import { useGameStore } from '../../stores/gameStore';
 import { useGameplayStore } from '../../stores/gameplayStore';
 import type { HexCell } from '../../types/game';
 import { iconHtml } from '../../utils/gameIcons';
-import { terrainIcons } from '../../utils/terrainIcons';
 
 interface HexTooltipOverlayProps {
   map: L.Map;
@@ -118,18 +117,12 @@ interface TooltipCardProps {
 
 function TooltipCard({ cell, currentHex, isContested, t }: TooltipCardProps) {
   const translate = t as unknown as (key: string, options?: { defaultValue?: string }) => string;
-  const terrainType = cell.terrainType ?? 'None';
-  const terrainIconName = terrainType !== 'None' ? terrainIcons[terrainType] : '';
   const distance = currentHex ? getHexDistance([cell.q, cell.r], currentHex) : null;
   const ownerColor = cell.ownerColor ?? 'transparent';
 
   return (
     <div className="tooltip-card">
       <div className="tooltip-header">
-        <span className="tooltip-terrain-icon">
-          {terrainIconName ? <IconMarkup markup={iconHtml(terrainIconName, 'sm')} /> : null}
-          {terrainType !== 'None' ? ` ${translate(`terrain.${terrainType}`)}` : ''}
-        </span>
       </div>
       <div className="tooltip-owner">
         <span className="tooltip-owner-swatch" style={{ background: ownerColor }} />

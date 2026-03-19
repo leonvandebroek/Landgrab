@@ -24,8 +24,6 @@ export function useMapOrchestrator() {
 
     useEffectsStore.getState().setEffects({
       contestedEdges: state.contestedEdges ?? [],
-      supplyEdges: state.supplyEdges ?? [],
-      disconnectedHexKeys: new Set(state.disconnectedHexKeys ?? []),
     });
 
     usePlayerLayerStore.getState().setPlayers(state.players ?? []);

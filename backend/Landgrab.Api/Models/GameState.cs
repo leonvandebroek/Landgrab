@@ -53,19 +53,6 @@ public enum CombatMode
     Siege
 }
 
-public enum TerrainType
-{
-    None,
-    Water,
-    Building,
-    Road,
-    Path,
-    Forest,
-    Park,
-    Hills,
-    Steep
-}
-
 public enum PlayerRole
 {
     None,
@@ -78,14 +65,10 @@ public class GameDynamics
 {
     public bool BeaconEnabled { get; set; }
     public bool TileDecayEnabled { get; set; }
-    public bool TerrainEnabled { get; set; }
     public CombatMode CombatMode { get; set; } = CombatMode.Balanced;
     public bool PlayerRolesEnabled { get; set; }
-    public bool FogOfWarEnabled { get; set; }
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
-    public bool TimedEscalationEnabled { get; set; }
-    public bool UnderdogPactEnabled { get; set; }
 }
 
 public class HexCoordinateDto
@@ -160,8 +143,6 @@ public class AllianceDto
     public int? HQHexR { get; set; }
     public DateTime? ClaimFrozenUntil { get; set; }
 
-    // Phase 8: Underdog Pact
-    public DateTime? UnderdogBoostUntil { get; set; }
 }
 
 public class GameEventLogEntry
@@ -225,8 +206,6 @@ public class GameState
     public bool IsAllianceVictory { get; set; }
     public List<Achievement> Achievements { get; set; } = [];
     public List<ContestedEdgeDto>? ContestedEdges { get; set; }
-    public List<SupplyEdgeDto>? SupplyEdges { get; set; }
-    public List<string>? DisconnectedHexKeys { get; set; }
 
     // Host settings
     public bool HostBypassGps { get; set; } = false;
@@ -292,7 +271,6 @@ public class CombatResult
     public string? PreviousOwnerName { get; set; }
     public int AttackerBonus { get; set; }
     public int DefenderBonus { get; set; }
-    public string? DefenderTerrainType { get; set; }
     public int EffectiveAttack { get; set; }
     public int EffectiveDefence { get; set; }
     public int AttackerTroopsLost { get; set; }

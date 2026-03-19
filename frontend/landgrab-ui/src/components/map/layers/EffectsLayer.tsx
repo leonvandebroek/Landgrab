@@ -6,13 +6,15 @@ import { ReactSvgOverlay } from '../ReactSvgOverlay';
 import { roomHexCornerLatLngs, roomHexToLatLng } from '../HexMath';
 import { useEffectsStore } from '../../../stores/effectsStore';
 import type { TroopMovement } from '../../../stores/effectsStore';
-import type { ContestedEdgeDto, SupplyEdgeDto } from '../../../types/game';
+import type { ContestedEdgeDto } from '../../../types/game';
+import type { MapLayerPreferences } from '../../../types/mapLayerPreferences';
 
 interface EffectsLayerProps {
   map: L.Map;
   mapLat: number;
   mapLng: number;
   tileSizeMeters: number;
+  layerPreferences: MapLayerPreferences;
 }
 
 interface ProjectedLine {
@@ -73,14 +75,14 @@ function EffectsLayerComponent({
   mapLat,
   mapLng,
   tileSizeMeters,
+  layerPreferences,
 }: EffectsLayerProps) {
   const [svgRoot, setSvgRoot] = useState<SVGGElement | null>(null);
   const [projectionTick, setProjectionTick] = useState(0);
 
-  const { contestedEdges, supplyEdges, troopMovements } = useEffectsStore(
+  const { contestedEdges, troopMovements } = useEffectsStore(
     useShallow((state) => ({
       contestedEdges: state.contestedEdges,
-      supplyEdges: state.supplyEdges,
       troopMovements: state.troopMovements,
     })),
   );
@@ -152,41 +154,6 @@ function EffectsLayerComponent({
     });
   }, [contestedEdges, map, mapLat, mapLng, projectionTick, tileSizeMeters]);
 
-  const supplyLines = useMemo<ProjectedLine[]>(() => {
-    void projectionTick;
-
-    return supplyEdges.flatMap((edge: SupplyEdgeDto) => {
-      const coords = projectCenterLine(map, edge.fromKey, edge.toKey, mapLat, mapLng, tileSizeMeters);
-      
-      // Premium effect: Base rail + flowing energy
-      // Pattern: 6 dash, 12 gap = 18 total length
-      // Dark Arcade: Shadow Casing + Neon Rail + White Energy
-      return [{
-        key: `${edge.fromKey}:${edge.toKey}:casing`,
-        className: 'supply-line-casing',
-        stroke: '#000000', // Deep shadow for lift
-        opacity: 0.6,
-        strokeWidth: 12,
-        ...coords,
-      }, {
-        key: `${edge.fromKey}:${edge.toKey}:rail`,
-        className: 'supply-line-rail',
-        stroke: edge.teamColor, // Solid team color core
-        opacity: 1.0,
-        strokeWidth: 6,
-        ...coords,
-      }, {
-        key: `${edge.fromKey}:${edge.toKey}:flow`,
-        className: 'supply-line-flow',
-        stroke: '#ffffff', // White electricity
-        opacity: 0.8,
-        strokeWidth: 2, 
-        strokeDasharray: '4 6', 
-        ...coords,
-      }];
-    });
-  }, [map, mapLat, mapLng, projectionTick, supplyEdges, tileSizeMeters]);
-
   const troopMovementLines = useMemo<ProjectedLine[]>(() => {
     void projectionTick;
 
@@ -207,35 +174,22 @@ function EffectsLayerComponent({
 
   return createPortal(
     <g className="effects-layer" pointerEvents="none">
-      {supplyLines.map((line) => (
-        <line
-          key={line.key}
-          className={line.className}
-          x1={line.x1}
-          y1={line.y1}
-          x2={line.x2}
-          y2={line.y2}
-          stroke={line.stroke}
-          strokeWidth={line.strokeWidth}
-          strokeOpacity={line.opacity}
-          strokeDasharray={line.strokeDasharray}
-          strokeLinecap="round"
-        />
-      ))}
-      {contestedLines.map((line) => (
-        <line
-          key={line.key}
-          className={line.className}
-          x1={line.x1}
-          y1={line.y1}
-          x2={line.x2}
-          y2={line.y2}
-          stroke={line.stroke}
-          strokeWidth={line.strokeWidth}
-          strokeOpacity={line.opacity}
-          strokeLinecap="round"
-        />
-      ))}
+      {layerPreferences.contestedEdges
+        ? contestedLines.map((line) => (
+            <line
+              key={line.key}
+              className={line.className}
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+              stroke={line.stroke}
+              strokeWidth={line.strokeWidth}
+              strokeOpacity={line.opacity}
+              strokeLinecap="round"
+            />
+          ))
+        : null}
       {troopMovementLines.map((line) => (
         <line
           key={line.key}

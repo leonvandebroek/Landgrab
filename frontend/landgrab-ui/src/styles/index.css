@@ -719,7 +719,6 @@ input:focus {
 .game-map-container {
   flex: 1;
   position: relative;
-  overflow: hidden;
 }
 
 .game-map-overlay-layer {
@@ -836,6 +835,7 @@ input:focus {
 .leaflet-map {
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 /* ── Map controls ───────────────────────────────────────────────────────── */
@@ -1653,30 +1653,6 @@ input:focus {
 .hex-label-wrapper .hex-label.master {
   border-color: #f1c40f;
   color: #f9e27d;
-}
-
-.hex-terrain-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  pointer-events: none;
-}
-
-.hex-terrain-icon,
-.hex-terrain-icon * {
-  pointer-events: none;
-}
-
-.hex-terrain-icon span {
-  display: block;
-  font-size: 0.95rem;
-  line-height: 1;
-  filter: drop-shadow(0 1px 3px rgba(5, 10, 18, 0.45));
-  opacity: 0.96;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .grid-dim-mask {
@@ -4832,22 +4808,6 @@ input:checked+.display-settings-slider:before {
   will-change: transform;
 }
 
-/* 2. Fog of War Reveal Animation */
-@keyframes hex-reveal {
-  0% {
-    fill-opacity: 0.05;
-  }
-
-  100% {
-    fill-opacity: 1;
-  }
-}
-
-/* Leaflet places the className on the <path> element itself — no descendant needed */
-.hex-polygon.is-revealing {
-  animation: hex-reveal 0.8s ease-out forwards;
-}
-
 /* 3. Hex Claim Pulse Animation */
 @keyframes hex-claim-pulse {
   0% {
@@ -4872,7 +4832,7 @@ input:checked+.display-settings-slider:before {
 
 /* 4. Territory Border Effects — Frontier Glow & Contested Pulse */
 .hex-polygon.is-frontier {
-  filter: drop-shadow(0 0 5px var(--hex-owner-color, rgba(255, 255, 255, 0.4)));
+  filter: drop-shadow(0 0 8px var(--hex-owner-color, rgba(255, 255, 255, 0.4)));
 }
 
 @keyframes border-pulse {
@@ -4880,12 +4840,12 @@ input:checked+.display-settings-slider:before {
   0%,
   100% {
     stroke-opacity: 1;
-    stroke-width: 4;
+    stroke-width: 5;
   }
 
   50% {
-    stroke-opacity: 0.55;
-    stroke-width: 2.5;
+    stroke-opacity: 0.7;
+    stroke-width: 3.5;
   }
 }
 
@@ -4940,27 +4900,9 @@ input:checked+.display-settings-slider:before {
   animation: master-shimmer 3s ease-in-out infinite;
 }
 
-@keyframes current-player-hex-pulse {
-
-  0%,
-  100% {
-    stroke-opacity: 0.92;
-    stroke-width: 4px;
-    fill-opacity: 0.1;
-  }
-
-  50% {
-    stroke-opacity: 1;
-    stroke-width: 6px;
-    fill-opacity: 0.24;
-  }
-}
-
 .hex-active-player {
-  stroke: var(--hex-player-highlight-color, #4f8cff);
-  fill: var(--hex-player-highlight-color, #4f8cff);
+  /* Removed: conflicting with critical overrides at bottom */
   pointer-events: none;
-  animation: current-player-hex-pulse 1.6s ease-in-out infinite;
 }
 
 /* 5. Troop Badge Styles */
@@ -5342,10 +5284,6 @@ input:checked+.display-settings-slider:before {
   border-bottom: 1px solid rgba(100, 160, 220, 0.12);
   padding-bottom: 0.25rem;
   margin-bottom: 0.1rem;
-}
-
-.tooltip-terrain-icon {
-  font-size: 0.85rem;
 }
 
 .tooltip-coords {
@@ -6300,29 +6238,6 @@ input:checked+.display-settings-slider:before {
   }
 }
 
-.supply-line {
-  animation: supply-flow 2s linear infinite;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-
-.supply-arrow {
-  pointer-events: none;
-  opacity: 0.7;
-}
-
-.hex-polygon.is-disconnected {
-  opacity: 0.5 !important;
-  filter: grayscale(60%) !important;
-}
-
-.hex-disconnected-overlay {
-  pointer-events: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 4px rgba(214, 225, 240, 0.22));
-}
-
 /* ═══════════════════════════════════════════════════════
    Feature: Troop Movement Animations
    ═══════════════════════════════════════════════════════ */
@@ -6427,6 +6342,7 @@ input:checked+.display-settings-slider:before {
    Feature: Map layer toggle
    ═══════════════════════════════════════════════════════ */
 .map-layer-toggle {
+  --map-layer-toggle-available-h: calc(100vh - 60px - var(--player-hud-h, 170px) - 202px);
   position: absolute;
   left: 10px;
   bottom: calc(var(--player-hud-h, 170px) + 136px);
@@ -6451,7 +6367,7 @@ input:checked+.display-settings-slider:before {
 }
 
 .map-layer-toggle-panel.is-expanded {
-  max-height: min(60vh, 420px);
+  max-height: max(200px, var(--map-layer-toggle-available-h));
   opacity: 1;
   transform: translateY(0) scale(1);
   pointer-events: auto;
@@ -6460,7 +6376,7 @@ input:checked+.display-settings-slider:before {
 .map-layer-toggle-surface {
   display: flex;
   flex-direction: column;
-  max-height: min(60vh, 420px);
+  max-height: 100%;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -6613,14 +6529,18 @@ input:checked+.display-settings-slider:before {
 
 @media (max-width: 768px) {
   .map-layer-toggle {
+    --map-layer-toggle-available-h: calc(100vh - 60px - var(--player-hud-h, 170px) - 190px);
     left: 8px;
     bottom: calc(var(--player-hud-h, 170px) + 124px);
     width: min(320px, calc(100vw - 16px));
   }
 
-  .map-layer-toggle-panel.is-expanded,
+  .map-layer-toggle-panel.is-expanded {
+    max-height: max(200px, var(--map-layer-toggle-available-h));
+  }
+
   .map-layer-toggle-surface {
-    max-height: min(56vh, 380px);
+    max-height: 100%;
   }
 
   .map-layer-toggle-scroll {
@@ -6656,7 +6576,6 @@ input:checked+.display-settings-slider:before {
   .hex-building-icon .building.hq,
   .hex-building-icon .building.hq::before,
   .contested-edge,
-  .supply-line,
   .troop-flow,
   .troop-dot,
   .btn-confirm {
@@ -6668,13 +6587,11 @@ input:checked+.display-settings-slider:before {
 
 /* Strategic zoom (< 14): only colored polygons, hide all overlays */
 [data-zoom-level="strategic"] .hex-fo-badge,
-[data-zoom-level="strategic"] .hex-fo-terrain,
 [data-zoom-level="strategic"] .hex-fo-building {
   display: none;
 }
 
-/* Tactical zoom (14-15): show badges, hide terrain/building icons */
-[data-zoom-level="tactical"] .hex-fo-terrain,
+/* Tactical zoom (14-15): show badges, hide building icons */
 [data-zoom-level="tactical"] .hex-fo-building {
   display: none;
 }
@@ -6683,10 +6600,6 @@ input:checked+.display-settings-slider:before {
 
 /* === Layer preference toggles (classes on .hex-overlay-svg) === */
 .hex-overlay-svg.hide-troop-badges .hex-fo-badge {
-  display: none;
-}
-
-.hex-overlay-svg.hide-terrain-icons .hex-fo-terrain {
   display: none;
 }
 
@@ -6700,7 +6613,6 @@ input:checked+.display-settings-slider:before {
 
 /* === SVG foreignObject elements === */
 .hex-fo-badge,
-.hex-fo-terrain,
 .hex-fo-building {
   overflow: visible;
   pointer-events: none;
@@ -6727,31 +6639,6 @@ input:checked+.display-settings-slider:before {
   stroke-width: 3;
   stroke-linecap: round;
   opacity: 0.7;
-}
-
-/* Supply lines */
-.supply-line {
-  stroke-width: 1.5;
-  stroke-dasharray: 6 3;
-  opacity: 0.5;
-}
-
-/* Selection/current overlays */
-.hex-selection-overlay,
-.hex-selected-overlay {
-  fill: rgba(255, 255, 255, 0.3);
-  stroke: #fff;
-  stroke-width: 2;
-  pointer-events: none;
-}
-
-.hex-current-overlay,
-.hex-active-player.is-current-player-hex {
-  fill: rgba(0, 150, 255, 0.2);
-  stroke: #0096ff;
-  stroke-width: 2;
-  stroke-dasharray: 4 2;
-  pointer-events: none;
 }
 
 /* Fort build progress ring — CSS animation over build duration */
@@ -6786,35 +6673,22 @@ input:checked+.display-settings-slider:before {
 
 /* Hex Selection Pulse */
 @keyframes hex-pulse-cyan {
-  0% { stroke-opacity: 0.8; stroke-width: 4px; }
-  50% { stroke-opacity: 1; stroke-width: 6px; filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.6)); }
-  100% { stroke-opacity: 0.8; stroke-width: 4px; }
+  0% { stroke-opacity: 0.9; stroke-width: 5px; filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.5)); }
+  50% { stroke-opacity: 1; stroke-width: 7px; filter: drop-shadow(0 0 12px rgba(34, 211, 238, 0.7)); }
+  100% { stroke-opacity: 0.9; stroke-width: 5px; filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.5)); }
 }
 
 .hex-selected-overlay {
   animation: hex-pulse-cyan 2s infinite ease-in-out;
 }
 
-/* Hex Active Player Pulse */
-@keyframes hex-pulse-green {
-  0% { stroke-opacity: 0.8; stroke-width: 5px; }
-  50% { stroke-opacity: 1; stroke-width: 7px; filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.6)); }
-  100% { stroke-opacity: 0.8; stroke-width: 5px; }
-}
-
-.hex-active-player {
-  animation: hex-pulse-green 2s infinite ease-in-out;
-}
-
 /* Icon Pop */
-.hex-terrain-icon svg,
 .hex-building-icon svg,
 .hex-fort-icon-wrapper svg {
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
   transition: transform 0.2s ease;
 }
 
-.hex-tile:hover .hex-terrain-icon svg,
 .hex-tile:hover .hex-building-icon svg {
   transform: scale(1.1);
 }
@@ -6840,39 +6714,7 @@ input:checked+.display-settings-slider:before {
   color: #ef4444; /* Red-500 */
 }
 
-/* Disconnected Overlay */
-.hex-disconnected-overlay {
-  stroke-dasharray: 4 4;
-  animation: dash-march 1s linear infinite;
-}
-
-@keyframes dash-march {
-  to { stroke-dashoffset: -8; }
-}
-
 /* --- PREMIUM GAME DYNAMICS EFFECTS --- */
-
-/* Supply Lines - Playful Update */
-@keyframes energy-flow-refined {
-  to { stroke-dashoffset: -16; }
-}
-
-.supply-line-casing {
-  stroke-linecap: round;
-  transition: opacity 0.3s ease;
-  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
-}
-
-.supply-line-rail {
-  stroke-linecap: round;
-  transition: opacity 0.3s ease;
-}
-
-.supply-line-flow {
-  animation: energy-flow-refined 1.5s linear infinite;
-  stroke-linecap: round;
-  transition: stroke-width 0.3s ease;
-}
 
 /* Contested Edges */
 @keyframes clash-jitter {
@@ -7053,4 +6895,285 @@ input:checked+.display-settings-slider:before {
 
 .beacon-pulse-icon {
   animation: beacon-pulse 1.5s infinite cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Map Legend
+   ═══════════════════════════════════════════════════════════════ */
+
+.map-legend {
+  --map-legend-available-h: calc(100vh - 60px - var(--player-hud-h, 170px) - 322px);
+  position: absolute;
+  bottom: calc(var(--player-hud-h, 170px) + 206px);
+  left: 10px;
+  z-index: 1060;
+  pointer-events: auto;
+}
+
+.map-legend-trigger {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: background 0.2s, transform 0.15s;
+}
+
+.map-legend-trigger:hover {
+  background: rgba(30, 41, 59, 0.95);
+  transform: scale(1.05);
+}
+
+.map-legend-trigger.active {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.map-legend-panel {
+  position: absolute;
+  bottom: 56px;
+  left: 0;
+  width: 260px;
+  max-height: max(200px, var(--map-legend-available-h));
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: legend-slide-in 0.2s ease-out;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+}
+
+@keyframes legend-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.map-legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.map-legend-header h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.map-legend-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.map-legend-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.map-legend-content {
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: max-content;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.2;
+}
+
+.legend-swatch {
+  width: 22px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.legend-swatch.your-territory {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: 2px solid #ffffff;
+}
+
+.legend-swatch.enemy-territory {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 2px solid #ffffff;
+}
+
+.legend-swatch.neutral-territory {
+  background: #1e293b;
+  border: 2px solid #64748b;
+}
+
+.legend-swatch.current-location {
+  background: rgba(46, 204, 113, 0.2);
+  border: 3px solid #2ecc71;
+  box-shadow: 0 0 6px rgba(46, 204, 113, 0.5);
+}
+
+.legend-swatch.contested-border {
+  background: transparent;
+  border: 2px dashed #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.legend-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
+}
+
+.legend-icon-wrapper {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+.legend-icon-wrapper.master {
+  color: #fcd34d;
+  background: rgba(252, 211, 77, 0.15);
+}
+
+.legend-icon-wrapper.hq {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.legend-icon-wrapper.fort {
+  color: #e879f9;
+  background: rgba(232, 121, 249, 0.15);
+}
+
+.legend-badge-example {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, hsl(217, 90%, 60%) 0%, hsl(217, 80%, 40%) 100%);
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  font-family: 'Fredoka', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+.legend-line {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .map-legend-panel {
+    width: 240px;
+  }
+
+  .legend-row {
+    font-size: 0.72rem;
+    gap: 8px;
+  }
+}
+
+/* --- CRITICAL VISIBILITY OVERRIDES --- */
+
+/* Current player: always glowing, pulsing brightness */
+@keyframes current-player-hex-pulse {
+  0%, 100% {
+    stroke-width: 7px;
+    stroke-opacity: 1;
+    fill-opacity: 0.35;
+    filter: drop-shadow(0 0 8px rgba(46, 204, 113, 0.6)) drop-shadow(0 0 16px rgba(46, 204, 113, 0.3));
+  }
+  50% {
+    stroke-width: 9px;
+    stroke-opacity: 1;
+    fill-opacity: 0.45;
+    filter: drop-shadow(0 0 14px rgba(46, 204, 113, 0.8)) drop-shadow(0 0 24px rgba(46, 204, 113, 0.4));
+  }
+}
+
+/* Selected hex: steady glow with subtle pulse */
+@keyframes hex-pulse-cyan {
+  0%, 100% {
+    stroke-width: 6px;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.6)) drop-shadow(0 0 12px rgba(34, 211, 238, 0.3));
+  }
+  50% {
+    stroke-width: 8px;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.8)) drop-shadow(0 0 18px rgba(34, 211, 238, 0.4));
+  }
+}
+
+.hex-active-player,
+.hex-selected-overlay,
+.hex-active-player.is-current-player-hex {
+  vector-effect: non-scaling-stroke !important;
+  paint-order: fill stroke !important;
+  stroke-dasharray: none !important;
+}
+
+.hex-active-player,
+.hex-active-player.is-current-player-hex {
+  animation: current-player-hex-pulse 2s infinite ease-in-out !important;
+  stroke: #2ecc71 !important;
+  stroke-width: 7px !important;
+  fill: rgba(46, 204, 113, 0.40) !important;
+}
+
+.hex-selected-overlay {
+  animation: hex-pulse-cyan 2s infinite ease-in-out !important;
+  stroke: #22d3ee !important;
+  stroke-width: 6px !important;
+  fill: rgba(34, 211, 238, 0.35) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-active-player,
+  .hex-active-player.is-current-player-hex,
+  .hex-selected-overlay {
+    animation: none !important;
+  }
 }

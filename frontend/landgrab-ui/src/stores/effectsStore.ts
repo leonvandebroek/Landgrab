@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ContestedEdgeDto, SupplyEdgeDto } from '../types/game';
+import type { ContestedEdgeDto } from '../types/game';
 
 export interface TroopMovement {
   fromHex: string;
@@ -12,14 +12,10 @@ export interface TroopMovement {
 interface EffectsStore {
   contestedEdges: ContestedEdgeDto[];
   contestedHexKeys: Set<string>;
-  supplyEdges: SupplyEdgeDto[];
-  disconnectedHexKeys: Set<string>;
   troopMovements: TroopMovement[];
 
   setEffects: (effects: {
     contestedEdges: ContestedEdgeDto[];
-    supplyEdges: SupplyEdgeDto[];
-    disconnectedHexKeys: Set<string>;
   }) => void;
   setTroopMovements: (movements: TroopMovement[]) => void;
 }
@@ -27,8 +23,6 @@ interface EffectsStore {
 export const useEffectsStore = create<EffectsStore>((set) => ({
   contestedEdges: [],
   contestedHexKeys: new Set<string>(),
-  supplyEdges: [],
-  disconnectedHexKeys: new Set<string>(),
   troopMovements: [],
 
   setEffects: (effects) => set({

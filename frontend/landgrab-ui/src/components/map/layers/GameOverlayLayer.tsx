@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import { useHexGeometries } from '../../../hooks/useHexGeometries';
 import { useGameStore } from '../../../stores/gameStore';
+import { useGameplayStore } from '../../../stores/gameplayStore';
 import { ReactSvgOverlay } from '../ReactSvgOverlay';
 import { HexTile } from '../HexTile';
 import { WorldDimMask } from '../WorldDimMask';
@@ -38,6 +39,8 @@ function GameOverlayLayerComponent({
   );
 
   const grid = useGameStore((state) => state.gridOverride ?? state.gameState?.grid);
+  const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
+  const currentHexKey = useGameplayStore((state) => state.currentHexKey);
   const tileKeys = useMemo(() => grid ? Object.keys(grid) : [], [grid]);
 
   const hexGeometries = useHexGeometries(
@@ -55,12 +58,6 @@ function GameOverlayLayerComponent({
     if (!layerPreferences.troopBadges) {
       hiddenClasses.push('hide-troop-badges');
     }
-    if (!layerPreferences.terrainIcons) {
-      hiddenClasses.push('hide-terrain-icons');
-    }
-    if (!layerPreferences.buildingIcons) {
-      hiddenClasses.push('hide-building-icons');
-    }
     if (!layerPreferences.borderEffects) {
       hiddenClasses.push('hide-border-effects');
     }
@@ -68,8 +65,6 @@ function GameOverlayLayerComponent({
     return hiddenClasses.join(' ');
   }, [
     layerPreferences.borderEffects,
-    layerPreferences.buildingIcons,
-    layerPreferences.terrainIcons,
     layerPreferences.troopBadges,
   ]);
   const initialOverlayClassNameRef = useRef(overlayClassName);
@@ -142,10 +137,38 @@ function GameOverlayLayerComponent({
             key={key}
             hexId={key}
             geometry={geometry}
+            isCurrent={currentHexKey === key}
+            isSelected={selectedHexKey === key}
             onHexClick={handleHexClick}
           />
         );
       })}
+      <g className="hex-highlights" style={{ pointerEvents: 'none' }}>
+        {selectedHexKey && hexGeometries[selectedHexKey] ? (
+          <polygon
+            className="hex-selected-overlay"
+            data-hex-id={selectedHexKey}
+            points={hexGeometries[selectedHexKey].points}
+            fill="rgba(34, 211, 238, 0.35)"
+            stroke="#22d3ee"
+            strokeWidth={6}
+            strokeOpacity={1}
+            pointerEvents="none"
+          />
+        ) : null}
+        {currentHexKey && hexGeometries[currentHexKey] ? (
+          <polygon
+            className="hex-active-player is-current-player-hex"
+            data-hex-id={currentHexKey}
+            points={hexGeometries[currentHexKey].points}
+            fill="rgba(46, 204, 113, 0.40)"
+            stroke="#2ecc71"
+            strokeWidth={7}
+            strokeOpacity={1}
+            pointerEvents="none"
+          />
+        ) : null}
+      </g>
     </g>,
     svgRoot,
   );

@@ -455,12 +455,67 @@ const bridgeApi: AgentBridgeApi = {
       throw new Error('SignalR invoke is not available.');
     }
 
-    const preview = await currentRuntime.invoke('GetCombatPreview', q, r).catch(() => null);
-    const snapshotBefore = getBridgeSnapshot() as ReturnType<typeof getBridgeSnapshot>;
-    const myPlayer = getMyPlayer(getGameState(), currentRuntime.auth);
-    const finalTroopCount = troopCount ?? myPlayer?.carriedTroops ?? undefined;
-    const snapshot = await placeTroops(q, r, finalTroopCount);
-    return cloneForAgent({ preview, snapshotBefore, snapshot });
+    // The game requires the player to be physically inside the target hex.
+    // Compute target-hex coords and teleport via UpdatePlayerLocation before preview + attack.
+    const state = getGameState();
+    let attackCoords = resolveActionCoordinates([q, r]);
+    if (!currentRuntime.isHostBypass && state?.mapLat != null && state?.mapLng != null) {
+      const [tLat, tLng] = roomHexToLatLng(q, r, state.mapLat, state.mapLng, state.tileSizeMeters);
+      attackCoords = { lat: tLat, lng: tLng };
+      await currentRuntime.invoke('UpdatePlayerLocation', tLat, tLng);
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    }
+
+    const preview = await currentRuntime.invoke<Record<string, unknown>>('GetCombatPreview', q, r).catch(() => null);
+    const cellBefore = getGameState()?.grid?.[`${q},${r}`] ?? null;
+    const myPlayerBefore = getMyPlayer(getGameState(), currentRuntime.auth);
+    const finalTroopCount = troopCount ?? myPlayerBefore?.carriedTroops ?? undefined;
+
+    // Clear any stale combat result before attacking so we can detect a fresh one.
+    useGameplayStore.getState().setCombatResult(null);
+
+    await currentRuntime.invoke('PlaceTroops', q, r, attackCoords.lat, attackCoords.lng, finalTroopCount ?? null);
+
+    // Poll for the combat result to arrive via SignalR (up to 5 s).
+    let combatResult: unknown = null;
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      combatResult = useGameplayStore.getState().combatResult;
+      if (combatResult) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, 200));
+    }
+
+    const stateAfter = getGameState();
+    const myPlayerAfter = getMyPlayer(stateAfter, currentRuntime.auth);
+    const cellAfter = stateAfter?.grid?.[`${q},${r}`] ?? null;
+
+    return cloneForAgent({
+      q,
+      r,
+      attackerTroopsSent: finalTroopCount ?? null,
+      attackerCarriedBefore: myPlayerBefore?.carriedTroops ?? null,
+      attackerCarriedAfter: myPlayerAfter?.carriedTroops ?? null,
+      attackerTerritoryAfter: myPlayerAfter?.territoryCount ?? null,
+      defenderTroopsBefore: cellBefore?.troops ?? null,
+      defenderOwnerBefore: cellBefore?.ownerName ?? null,
+      defenderTroopsAfter: cellAfter?.troops ?? null,
+      defenderOwnerAfter: cellAfter?.ownerName ?? null,
+      hexOwnerChanged: (cellBefore?.ownerId ?? null) !== (cellAfter?.ownerId ?? null),
+      // Strip newState — it embeds the full 65KB game state and is redundant here.
+      combatResult: combatResult && typeof combatResult === 'object'
+        ? Object.fromEntries(Object.entries(combatResult as Record<string, unknown>).filter(([k]) => k !== 'newState'))
+        : combatResult ?? null,
+      preview: preview
+        ? {
+          valid: preview['valid'],
+          canAttack: preview['canAttack'],
+          attackerTroops: preview['attackerTroops'],
+          defenderTroops: preview['defenderTroops'],
+          attackerBonus: preview['attackerBonus'],
+          defenderBonus: preview['defenderBonus'],
+        }
+        : null,
+    });
   },
   pickupTroops: async ({ q, r, count }) => {
     const currentRuntime = ensureRuntime();
@@ -469,9 +524,25 @@ const bridgeApi: AgentBridgeApi = {
       throw new Error('SignalR invoke is not available.');
     }
 
+    const carriedBefore = getMyPlayer(getGameState(), currentRuntime.auth)?.carriedTroops ?? 0;
     const coordinates = resolveActionCoordinates([q, r]);
     await currentRuntime.invoke('PickUpTroops', q, r, count, coordinates.lat, coordinates.lng);
-    return cloneForAgent(getBridgeSnapshot());
+
+    // Wait for SignalR state update to propagate to the store.
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+
+    const state = getGameState();
+    const myPlayer = getMyPlayer(state, currentRuntime.auth);
+    const hexCell = state?.grid?.[`${q},${r}`] ?? null;
+    return cloneForAgent({
+      success: true,
+      pickedUpCount: count,
+      carriedTroopsBefore: carriedBefore,
+      carriedTroopsAfter: myPlayer?.carriedTroops ?? null,
+      hexTroopsAfter: hexCell?.troops ?? null,
+      hexOwner: hexCell?.ownerName ?? null,
+      territoryCount: myPlayer?.territoryCount ?? null,
+    });
   },
   reclaimHex: async ({ q, r, troopCount }) => cloneForAgent(await placeTroops(q, r, troopCount ?? 1)),
   setRules: async (input) => {
@@ -565,13 +636,7 @@ const bridgeApi: AgentBridgeApi = {
     if (preset === 'combat-test') {
       currentRuntime.handleSetGameDynamics({
         ...state.dynamics,
-        fogOfWarEnabled: false,
         combatMode: 'Balanced',
-      });
-    } else if (preset === 'fog-test') {
-      currentRuntime.handleSetGameDynamics({
-        ...state.dynamics,
-        fogOfWarEnabled: true,
       });
     }
 

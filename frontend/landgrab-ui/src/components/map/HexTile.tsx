@@ -3,11 +3,9 @@ import type { CSSProperties } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffectsStore } from '../../stores/effectsStore';
 import { useGameStore } from '../../stores/gameStore';
-import { useGameplayStore } from '../../stores/gameplayStore';
 import { usePlayerLayerStore } from '../../stores/playerLayerStore';
 import type { HexCell, Player } from '../../types/game';
 import { gameIcons, iconHtml } from '../../utils/gameIcons';
-import { terrainIcons } from '../../utils/terrainIcons';
 import type { HexPixelGeometry } from '../../hooks/useHexGeometries';
 import { TroopBadge } from './TroopBadge';
 import {
@@ -16,14 +14,13 @@ import {
   getHexOwnerColor,
   getHexPolygonClassName,
   getHexTerritoryStatus,
-  isFogHiddenHex,
-  shouldHideTroopCountInForest,
-  shouldRenderTerrainIcon,
 } from '../game/map/hexRendering';
 
 interface HexTileProps {
   hexId: string;
   geometry: HexPixelGeometry;
+  isCurrent: boolean;
+  isSelected: boolean;
   onHexClick?: (q: number, r: number) => void;
 }
 
@@ -49,11 +46,8 @@ function getPlayersById(players: Player[]): ReadonlyMap<string, Player> {
   return cachedPlayersById;
 }
 
-export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: HexTileProps) {
+export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSelected, onHexClick }: HexTileProps) {
   const cell = useGameStore((state) => (state.gridOverride ?? state.gameState?.grid)?.[hexId] ?? null);
-  const isSelected = useGameplayStore((state) => state.selectedHexKey === hexId);
-  const isCurrent = useGameplayStore((state) => state.currentHexKey === hexId);
-  const dynamics = useGameStore(useShallow((state) => state.gameState?.dynamics));
   const isHQ = useGameStore(
     (state) => (state.gameState?.alliances ?? []).some(
       (alliance) => `${alliance.hqHexQ ?? ''},${alliance.hqHexR ?? ''}` === hexId,
@@ -67,10 +61,9 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     const [q, r] = parsed;
     return HEX_NEIGHBOR_OFFSETS.map(([dq, dr]) => grid[`${q + dq},${r + dr}`]) as Array<HexCell | undefined>;
   }));
-  const isSupplyDisconnected = useEffectsStore((state) => state.disconnectedHexKeys.has(hexId));
   const hasGridOverride = useGameStore((state) => state.gridOverride !== null);
-  // isInactive = full fading (ReviewStep preview only); supply disconnection uses subtle overlay
-  const isInactive = isSupplyDisconnected && hasGridOverride;
+  // isInactive = full fading (ReviewStep preview only)
+  const isInactive = hasGridOverride && !cell;
   const isContested = useEffectsStore((state) => state.contestedHexKeys.has(hexId));
   const hasActiveRaid = useGameStore(
     (state) => (state.gameState?.activeRaids ?? []).some(
@@ -96,7 +89,6 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
   const playersById = getPlayersById(players);
 
   const myPlayer = playersById.get(myUserId);
-  const myAllianceId = myPlayer?.allianceId;
 
   const isMine = Boolean(cell?.ownerId && cell.ownerId === myUserId);
   const isHostile = Boolean(cell?.ownerId && cell.ownerId !== myUserId && !isMine);
@@ -149,25 +141,17 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     return null;
   }
 
-  const terrainType = cell.terrainType ?? 'None';
-  const terrainIcon = terrainIcons[terrainType];
   const ownerColor = getHexOwnerColor(cell, playersById, cell.ownerColor ?? DEFAULT_OWNER_COLOR);
   const territoryStatus = getHexTerritoryStatus(cell, neighborhoodGrid, false);
-  const isFogHidden = isFogHiddenHex(cell, isInactive, dynamics?.fogOfWarEnabled);
-  const hasTerrain = Boolean(dynamics?.terrainEnabled && terrainType !== 'None');
   const fillStyle = getHexFillStyle({
     cell,
-    hasTerrain,
-    isFogHidden,
     isInactive,
     ownerColor,
     hostColor: DEFAULT_HOST_COLOR,
-    terrainType,
   });
   const borderStyle = getHexBorderStyle({
     cell,
     isCurrentHex: isCurrent,
-    isFogHidden,
     isHQ,
     isHostile,
     isInactive,
@@ -182,39 +166,18 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
     isInactive,
     isMine,
     isSelected,
-    isSupplyDisconnected,
     isContested: territoryStatus.isContested || isContested,
     newlyClaimedKeys: EMPTY_KEYS,
     newlyRevealedKeys: EMPTY_KEYS,
     shouldShowBorderEffects: true,
-    shouldShowSupplyLines: true,
-    supplyLinesEnabled: dynamics?.supplyLinesEnabled,
-    hqEnabled: dynamics?.hqEnabled,
   });
-  const shouldShowTerrainMarker = shouldRenderTerrainIcon({
-    cell,
-    isFogHidden,
-    isInactive,
-    shouldShowBuildingIcons: true,
-    shouldShowTerrainIcons: true,
-    terrainIcon,
-    terrainType,
-    terrainEnabled: dynamics?.terrainEnabled,
-  });
-  const isForestBlind = shouldHideTroopCountInForest({
-    cell,
-    myAllianceId,
-    myUserId,
-    terrainEnabled: dynamics?.terrainEnabled,
-  });
-  const showTroopBadge = !isInactive && !isFogHidden && (Boolean(cell.ownerId) || cell.isMasterTile);
-  const engineerBuildProgress = !cell.isFort && !isInactive && !isFogHidden
+  const showTroopBadge = !isInactive && (Boolean(cell.ownerId) || cell.isMasterTile);
+  const engineerBuildProgress = !cell.isFort && !isInactive
     ? getEngineerBuildProgress(cell.engineerBuiltAt)
     : null;
-  const terrainMarkerHtml = shouldShowTerrainMarker && terrainIcon ? iconHtml(terrainIcon, 'sm') : null;
   const polygonStyle: HexPolygonStyle = {
     '--hex-owner-color': ownerColor,
-    '--hex-player-highlight-color': myPlayer?.allianceColor ?? myPlayer?.color ?? '#22d3ee', // Default to Cyan if unknown
+    '--hex-player-highlight-color': myPlayer?.allianceColor ?? myPlayer?.color ?? '#22d3ee',
   } as HexPolygonStyle;
 
   return (
@@ -223,7 +186,6 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
       data-hex-id={hexId}
       data-troops={cell.troops}
       data-inactive={isInactive ? '1' : undefined}
-      data-fog={isFogHidden ? '1' : undefined}
       data-center-x={geometry.center[0]}
       data-center-y={geometry.center[1]}
       onClick={handleClick}
@@ -243,48 +205,6 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
         strokeDasharray={borderStyle.dashArray}
         style={polygonStyle}
       />
-
-      {isSelected ? (
-        <polygon
-          className="hex-selected-overlay"
-          data-hex-id={hexId}
-          points={geometry.points}
-          fill="rgba(34, 211, 238, 0.12)"
-          stroke="#22d3ee"
-          strokeWidth={4}
-          strokeOpacity={0.95}
-          pointerEvents="none"
-        />
-      ) : null}
-
-      {isCurrent ? (
-        <polygon
-          className="hex-active-player is-current-player-hex"
-          data-hex-id={hexId}
-          points={geometry.points}
-          fill="rgba(46, 204, 113, 0.16)"
-          stroke="#2ecc71"
-          strokeWidth={5}
-          strokeOpacity={0.95}
-          strokeDasharray="10 6"
-          pointerEvents="none"
-        />
-      ) : null}
-
-      {isSupplyDisconnected && !isInactive && !isFogHidden ? (
-        <polygon
-          className="hex-disconnected-overlay"
-          data-hex-id={hexId}
-          points={geometry.points}
-          fill="transparent"
-          fillOpacity={0}
-          stroke="rgba(214, 225, 240, 0.72)"
-          strokeWidth={2}
-          strokeOpacity={0.9}
-          strokeDasharray="6 5"
-          pointerEvents="none"
-        />
-      ) : null}
 
       {/* Raid Marker: Top Left */}
       {hasActiveRaid && !isInactive ? (
@@ -311,16 +231,6 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
         </>
       ) : null}
 
-      {/* Terrain Icon: Top Right */}
-      {terrainMarkerHtml ? renderForeignObject({
-        className: 'hex-fo-terrain hex-terrain-icon',
-        x: slots.topRight.x - (11 * scale),
-        y: slots.topRight.y - (11 * scale),
-        width: 22 * scale,
-        height: 22 * scale,
-        html: terrainMarkerHtml,
-      }) : null}
-
       {/* Fort Progress: Center (under badge) */}
       {engineerBuildProgress != null ? renderForeignObject({
         className: 'hex-fo-progress hex-fort-progress',
@@ -332,7 +242,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
       }) : null}
 
       {/* Buildings (Fort/HQ/Master): Bottom Left */}
-      {cell.isFort && !isInactive && !isFogHidden ? renderForeignObject({
+      {cell.isFort && !isInactive ? renderForeignObject({
         className: 'hex-fo-fort hex-fort-icon-wrapper',
         x: slots.bottomLeft.x - (9 * scale),
         y: slots.bottomLeft.y - (9 * scale),
@@ -341,7 +251,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
         html: iconHtml('fort', 'sm'),
       }) : null}
 
-      {cell.isMasterTile && !isInactive && !isFogHidden ? renderForeignObject({
+      {cell.isMasterTile && !isInactive ? renderForeignObject({
         className: 'hex-fo-building hex-building-icon',
         x: slots.bottomLeft.x - (14 * scale),
         y: slots.bottomLeft.y - (14 * scale),
@@ -350,7 +260,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
         html: `<div class="building master" aria-hidden="true">${gameIcons.master}</div>`,
       }) : null}
 
-      {isHQ && !cell.isMasterTile && !isInactive && !isFogHidden ? renderForeignObject({
+      {isHQ && !cell.isMasterTile && !isInactive ? renderForeignObject({
         className: 'hex-fo-building hex-building-icon',
         x: slots.bottomLeft.x - (14 * scale),
         y: slots.bottomLeft.y - (14 * scale),
@@ -386,7 +296,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, onHexClick }: He
               isFort={cell.isFort}
               isHQ={isHQ}
               isMasterTile={cell.isMasterTile}
-              isForestBlind={isForestBlind}
+              isForestBlind={false}
             />
           </div>
         </foreignObject>

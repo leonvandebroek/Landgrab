@@ -19,7 +19,6 @@ public partial class GameHub : Hub
 {
     private readonly GameService gameService;
     private readonly GlobalMapService globalMap;
-    private readonly TerrainFetchService terrainFetchService;
     private readonly DerivedMapStateService derivedMapStateService;
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
@@ -46,14 +45,12 @@ public partial class GameHub : Hub
     public GameHub(
         GameService gameService,
         GlobalMapService globalMap,
-        TerrainFetchService terrainFetchService,
         DerivedMapStateService derivedMapStateService,
         IServiceScopeFactory scopeFactory,
         ILogger<GameHub> logger)
     {
         this.gameService = gameService;
         this.globalMap = globalMap;
-        this.terrainFetchService = terrainFetchService;
         this.derivedMapStateService = derivedMapStateService;
         this.scopeFactory = scopeFactory;
         this.logger = logger;
@@ -94,28 +91,6 @@ public partial class GameHub : Hub
         if (state.Phase == GamePhase.Playing)
         {
             derivedMapStateService.ComputeAndAttach(state);
-        }
-
-        if (state.Dynamics.FogOfWarEnabled && state.Phase == GamePhase.Playing)
-        {
-            var room = gameService.GetRoom(roomCode);
-            if (room != null)
-            {
-                var hostObserverUserId = state.HostObserverMode
-                    ? room.HostUserId.ToString()
-                    : null;
-                var hiddenFogCells = gameService.CreateHiddenFogCellsForBroadcast(state);
-
-                foreach (var (connectionId, userId) in room.ConnectionMap)
-                {
-                    var playerSnapshot = hostObserverUserId == userId
-                        ? state
-                        : gameService.GetPlayerSnapshot(state, userId, hiddenFogCells);
-                    await Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot);
-                }
-
-                return;
-            }
         }
 
         await Clients.Group(roomCode).SendAsync("StateUpdated", state);
@@ -178,14 +153,10 @@ public partial class GameHub : Hub
         {
             BeaconEnabled = dynamics.BeaconEnabled,
             TileDecayEnabled = dynamics.TileDecayEnabled,
-            TerrainEnabled = dynamics.TerrainEnabled,
             CombatMode = Enum.IsDefined(dynamics.CombatMode) ? dynamics.CombatMode : CombatMode.Balanced,
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
-            FogOfWarEnabled = dynamics.FogOfWarEnabled,
             HQEnabled = dynamics.HQEnabled,
             HQAutoAssign = dynamics.HQAutoAssign,
-            TimedEscalationEnabled = dynamics.TimedEscalationEnabled,
-            UnderdogPactEnabled = dynamics.UnderdogPactEnabled,
         };
     }
 

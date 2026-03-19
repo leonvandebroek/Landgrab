@@ -43,7 +43,6 @@ builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
-builder.Services.AddHttpClient<TerrainFetchService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 
@@ -176,6 +175,11 @@ app.MapAuthEndpoints();
 app.MapGlobalMapEndpoints();
 app.MapAllianceEndpoints();
 app.MapMapTemplateEndpoints();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapPlaytestEndpoints();
+}
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));

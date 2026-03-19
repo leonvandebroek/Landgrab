@@ -89,7 +89,6 @@ internal static class GameStateCommon
                 HQHexQ = alliance.HQHexQ,
                 HQHexR = alliance.HQHexR,
                 ClaimFrozenUntil = alliance.ClaimFrozenUntil,
-                UnderdogBoostUntil = alliance.UnderdogBoostUntil
             }).ToList(),
             EventLog = state.EventLog.Select(entry => new GameEventLogEntry
             {
@@ -120,7 +119,6 @@ internal static class GameStateCommon
                     OwnerColor = entry.Value.OwnerColor,
                     Troops = entry.Value.Troops,
                     IsMasterTile = entry.Value.IsMasterTile,
-                    TerrainType = entry.Value.TerrainType,
                     IsFortified = entry.Value.IsFortified,
                     LastVisitedAt = entry.Value.LastVisitedAt,
                     EngineerBuiltAt = entry.Value.EngineerBuiltAt,
@@ -140,14 +138,10 @@ internal static class GameStateCommon
             {
                 BeaconEnabled = state.Dynamics.BeaconEnabled,
                 TileDecayEnabled = state.Dynamics.TileDecayEnabled,
-                TerrainEnabled = state.Dynamics.TerrainEnabled,
                 CombatMode = state.Dynamics.CombatMode,
                 PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
-                FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
                 HQEnabled = state.Dynamics.HQEnabled,
                 HQAutoAssign = state.Dynamics.HQAutoAssign,
-                TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
-                UnderdogPactEnabled = state.Dynamics.UnderdogPactEnabled,
             },
             GameDurationMinutes = state.GameDurationMinutes,
             MasterTileQ = state.MasterTileQ,
@@ -188,13 +182,6 @@ internal static class GameStateCommon
                 TeamBColor = edge.TeamBColor,
                 Intensity = edge.Intensity
             }).ToList(),
-            SupplyEdges = state.SupplyEdges?.Select(edge => new SupplyEdgeDto
-            {
-                FromKey = edge.FromKey,
-                ToKey = edge.ToKey,
-                TeamColor = edge.TeamColor
-            }).ToList(),
-            DisconnectedHexKeys = state.DisconnectedHexKeys?.ToList()
         };
     }
 

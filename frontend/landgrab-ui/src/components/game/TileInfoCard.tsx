@@ -1,7 +1,5 @@
 import { useTranslation } from 'react-i18next';
 import type { HexCell } from '../../types/game';
-import { terrainDefendBonus } from '../../utils/terrainColors';
-import { terrainIcons } from '../../utils/terrainIcons';
 import { GameIcon } from '../common/GameIcon';
 
 interface TileInfoCardProps {
@@ -16,10 +14,6 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
 
   if (!targetCell) return null;
 
-  const terrainType = targetCell.terrainType;
-  const terrainLabel = terrainType && terrainType !== 'None' ? t(`terrain.${terrainType}` as never) : null;
-  const terrainIconName = terrainType && terrainType !== 'None' ? terrainIcons[terrainType] : '';
-  const defendBonus = terrainDefendBonus(terrainType, true);
   const hasOwner = !!targetCell.ownerId;
 
   return (
@@ -56,16 +50,6 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
           <div className="tile-info-card__row">
             <span className="tile-info-card__label">{t('game.tileInfo.troops')}</span>
             <span className="tile-info-card__value"><GameIcon name="contested" size="sm" /> {targetCell.troops}</span>
-          </div>
-        )}
-
-        {terrainLabel && (
-          <div className="tile-info-card__row">
-            <span className="tile-info-card__label">{t('game.tileInfo.terrain')}</span>
-            <span className="tile-info-card__value">
-              {terrainIconName && <GameIcon name={terrainIconName} size="sm" />} {terrainLabel}
-              {defendBonus > 0 && <span className="tile-info-card__bonus"> +{defendBonus}<GameIcon name="shield" size="sm" /></span>}
-            </span>
           </div>
         )}
 

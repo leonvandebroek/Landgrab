@@ -1,5 +1,6 @@
 export { buildHexTooltipHtml, escapeHtml } from './HexTooltip';
 export { MapLayerToggle } from './MapLayerToggle';
+export { MapLegend } from './MapLegend';
 export { TimeOverlay } from './TimeOverlay';
 export {
   getHexBorderStyle,
@@ -9,7 +10,4 @@ export {
   getHexPolygonClassName,
   getHexTerritoryStatus,
   getTroopBadgeDescriptor,
-  isFogHiddenHex,
-  shouldHideTroopCountInForest,
-  shouldRenderTerrainIcon,
 } from './hexRendering';

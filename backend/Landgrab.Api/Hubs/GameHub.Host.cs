@@ -18,15 +18,6 @@ public partial class GameHub
             return;
         }
 
-        if (room.State.Dynamics.TerrainEnabled && room.State.HasMapLocation)
-        {
-            await terrainFetchService.AssignTerrainToGrid(
-                room.State.Grid,
-                room.State.MapLat!.Value,
-                room.State.MapLng!.Value,
-                room.State.TileSizeMeters);
-        }
-
         var (state, error) = gameService.StartGame(room.Code, UserId);
         if (error != null)
         {

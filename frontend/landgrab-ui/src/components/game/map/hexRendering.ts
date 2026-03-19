@@ -1,6 +1,5 @@
 import { roomHexCornerLatLngs, roomHexToLatLng } from '../../map/HexMath';
-import type { GameState, HexCell, TerrainType } from '../../../types/game';
-import { terrainFillColors } from '../../../utils/terrainColors';
+import type { GameState, HexCell } from '../../../types/game';
 import { scaleTroopColor, hexToHSL } from '../../../utils/hexColorUtils';
 import { gameIcons } from '../../../utils/gameIcons';
 import { escapeHtml } from './HexTooltip';
@@ -31,45 +30,22 @@ export interface HexBorderStyle {
 
 interface HexFillStyleOptions {
   cell: HexCell;
-  hasTerrain: boolean;
-  isFogHidden: boolean;
   isInactive: boolean;
   ownerColor: string;
   hostColor: string;
-  terrainType: TerrainType;
 }
 
 interface HexBorderStyleOptions {
   cell: HexCell;
   isCurrentHex: boolean;
-  isFogHidden: boolean;
   isHQ: boolean;
   isHostile: boolean;
   isInactive: boolean;
   isSelected: boolean;
 }
 
-interface TerrainIconVisibilityOptions {
-  cell: HexCell;
-  isFogHidden: boolean;
-  isInactive: boolean;
-  shouldShowBuildingIcons: boolean;
-  shouldShowTerrainIcons: boolean;
-  terrainIcon: string;
-  terrainType: TerrainType;
-  terrainEnabled: boolean | undefined;
-}
-
-interface ForestBlindOptions {
-  cell: HexCell;
-  myAllianceId: string | undefined;
-  myUserId: string;
-  terrainEnabled: boolean | undefined;
-}
-
 interface TroopBadgeDescriptorOptions {
   isFort: boolean;
-  isForestBlind: boolean;
   isHQ: boolean;
   isMasterTile: boolean;
   ownerColor: string;
@@ -86,14 +62,10 @@ interface PolygonClassNameOptions {
   isInactive: boolean;
   isMine: boolean;
   isSelected: boolean;
-  isSupplyDisconnected: boolean;
   isContested: boolean;
   newlyClaimedKeys: ReadonlySet<string>;
   newlyRevealedKeys: ReadonlySet<string>;
   shouldShowBorderEffects: boolean;
-  shouldShowSupplyLines: boolean;
-  supplyLinesEnabled: boolean | undefined;
-  hqEnabled: boolean | undefined;
 }
 
 export function getHexGeometry(
@@ -161,42 +133,21 @@ export function getHexTerritoryStatus(
   return { isFrontier, isContested };
 }
 
-export function isFogHiddenHex(cell: HexCell, isInactive: boolean, fogOfWarEnabled: boolean | undefined): boolean {
-  return Boolean(
-    fogOfWarEnabled
-    && !cell.ownerId
-    && !cell.isMasterTile
-    && cell.troops === 0
-    && !isInactive
-  );
-}
-
 export function getHexFillStyle({
   cell,
-  hasTerrain,
-  isFogHidden,
   isInactive,
   ownerColor,
   hostColor,
-  terrainType,
 }: HexFillStyleOptions): HexFillStyle {
-  // Playful Dark Arcade: Deep backgrounds with neon pops
-  // Neutral hexes: Dark Slate for clean canvas
-  const neutralFill = hasTerrain && !isInactive
-    ? terrainFillColors[terrainType]
-    : (isInactive ? '#1e293b' : '#0f172a'); // Slate-800 / Slate-900
+  const neutralFill = isInactive ? '#1e293b' : '#0f172a'; // Slate-800 / Slate-900
 
   return {
-    fillColor: isFogHidden
-      ? 'url(#pattern-fog)' // Patterned fog
-      : cell.isMasterTile
+    fillColor: cell.isMasterTile
         ? hostColor
         : cell.ownerId
           ? scaleTroopColor(ownerColor, cell.troops)
           : neutralFill,
-    fillOpacity: isFogHidden
-      ? 1.0 // Full opacity for pattern base
-      : isInactive
+    fillOpacity: isInactive
         ? 0.1 // Faint inactive
         : cell.isMasterTile
           ? 0.8 // More solid
@@ -209,7 +160,6 @@ export function getHexFillStyle({
 export function getHexBorderStyle({
   cell,
   isCurrentHex,
-  isFogHidden,
   isHQ,
   isHostile,
   isInactive,
@@ -220,10 +170,10 @@ export function getHexBorderStyle({
     ? '#ffffff' // White borders between owned hexes for "sticker" look
     : (isInactive
       ? '#334155' // Slate-700
-      : (isFogHidden ? '#1e293b' : '#475569')); // Slate-800 / Slate-600
+      : '#64748b'); // Slate-500
   
-  let borderWeight = cell.ownerId ? 4 : (isInactive ? 2 : 3); // Thicker base for mobile visibility
-  const borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : ((isInactive || isFogHidden) ? 0.3 : 0.6);
+  let borderWeight = cell.ownerId ? 4 : (isInactive ? 2 : 4); // Thicker base for mobile visibility
+  const borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : (isInactive ? 0.4 : 0.75);
   let dashArray: string | undefined;
 
   if (cell.isMasterTile) {
@@ -268,14 +218,10 @@ export function getHexPolygonClassName({
   isInactive,
   isMine,
   isSelected,
-  isSupplyDisconnected,
   isContested,
   newlyClaimedKeys,
   newlyRevealedKeys,
   shouldShowBorderEffects,
-  shouldShowSupplyLines,
-  supplyLinesEnabled,
-  hqEnabled,
 }: PolygonClassNameOptions): string {
   return [
     'hex-polygon',
@@ -294,63 +240,11 @@ export function getHexPolygonClassName({
     newlyClaimedKeys.has(cellKey) ? 'is-just-claimed' : '',
     shouldShowBorderEffects && isFrontier ? 'is-frontier' : '',
     shouldShowBorderEffects && isContested ? 'is-contested' : '',
-    shouldShowSupplyLines && supplyLinesEnabled && hqEnabled && isSupplyDisconnected ? 'is-disconnected' : '',
   ].filter(Boolean).join(' ');
-}
-
-export function shouldRenderTerrainIcon({
-  cell,
-  isFogHidden,
-  isInactive,
-  shouldShowBuildingIcons,
-  shouldShowTerrainIcons,
-  terrainIcon,
-  terrainType,
-  terrainEnabled,
-}: TerrainIconVisibilityOptions): boolean {
-  const hasTerrain = terrainEnabled && terrainType !== 'None';
-  if (!hasTerrain || isInactive || !terrainIcon || isFogHidden) {
-    return false;
-  }
-
-  // Premium cleanup: Don't show terrain icons on neutral/unowned hexes to reduce clutter
-  // Exception: Buildings might still be relevant
-  if (!cell.ownerId && terrainType !== 'Building') {
-    return false;
-  }
-  // Even for Buildings, if it's unowned, we probably want to reduce clutter unless it's a special POI
-  // Assuming standard urban terrain is just 'Building', we hide it on unowned too.
-  if (!cell.ownerId && terrainType === 'Building' && !cell.isMasterTile && !cell.isFort) {
-      return false;
-  }
-
-  const isCommonTerrain = terrainType === 'Building' || terrainType === 'Road' || terrainType === 'Path';
-  const showThisTerrainIcon = isCommonTerrain ? shouldShowBuildingIcons : shouldShowTerrainIcons;
-  if (!showThisTerrainIcon) {
-    return false;
-  }
-
-  return true;
-}
-
-export function shouldHideTroopCountInForest({
-  cell,
-  myAllianceId,
-  myUserId,
-  terrainEnabled,
-}: ForestBlindOptions): boolean {
-  return Boolean(
-    terrainEnabled
-    && cell.terrainType === 'Forest'
-    && cell.ownerId
-    && cell.ownerId !== myUserId
-    && !(myAllianceId && cell.ownerAllianceId === myAllianceId)
-  );
 }
 
 export function getTroopBadgeDescriptor({
   isFort,
-  isForestBlind,
   isHQ,
   isMasterTile,
   ownerColor,
@@ -382,6 +276,10 @@ export function getTroopBadgeDescriptor({
   // Playful Candy Button Look (Dark Arcade Mode) - MATCHING TroopBadge.tsx
   // Gradient: Vibrant top-down light-to-dark for volume
   const badgeBg = `linear-gradient(180deg, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,65%) 0%, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,45%) 100%)`;
+  const avgLightness = 50;
+  const isLightBadge = (badgeHue >= 40 && badgeHue <= 90 && badgeSaturation > 50)
+    || (badgeHue >= 150 && badgeHue <= 195 && badgeSaturation > 50 && avgLightness > 45);
+  const textColor = isLightBadge ? '#1a1a2e' : 'white';
   const badgeBorderColor = '#ffffff';
   
   // Pop shadow: Outer white glow for separation from dark map + Hard shadow for 3D + Inset highlight
@@ -389,7 +287,6 @@ export function getTroopBadgeDescriptor({
     
   const badgeClass = [
     'hex-troop-badge',
-    isForestBlind ? 'forest-blind' : '',
     isMasterTile ? 'master-badge' : '',
     isHQ ? 'hq-badge' : '',
     isFort ? 'fort-badge' : '',
@@ -399,13 +296,13 @@ export function getTroopBadgeDescriptor({
   // Use Fredoka font
   return {
     badgeSize,
-    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border: 3px solid ${badgeBorderColor};box-shadow:${badgeGlow};border-radius:50%;--troop-count-size:${countFontSize}px;font-family:'Fredoka',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;color:white;">
+    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border: 3px solid ${badgeBorderColor};box-shadow:${badgeGlow};border-radius:50%;--troop-count-size:${countFontSize}px;font-family:'Fredoka',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;color:${textColor};">
   <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true" style="position:absolute;top:-3px;left:-3px;width:calc(100% + 6px);height:calc(100% + 6px);pointer-events:none;">
     <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="4"
             stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="1" stroke-linecap="round" />
   </svg>
   ${prefix ? `<span class="troop-badge-prefix" style="margin-right:2px;display:flex;align-items:center;">${prefix}</span>` : ''}
-  <span class="troop-count" style="${troops === 0 ? 'color:rgba(255,255,255,0.8)' : ''};line-height:1;">${escapeHtml(troopLabel)}</span>
+  <span class="troop-count" style="${troops === 0 ? `color:${textColor === 'white' ? 'rgba(255,255,255,0.8)' : 'rgba(26,26,46,0.6)'}` : ''};line-height:1;">${escapeHtml(troopLabel)}</span>
 </div>`,
   };
 }

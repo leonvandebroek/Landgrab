@@ -5,17 +5,19 @@ import { callAgentBridge, getAgentSnapshot, pollAgentBridge, waitForAgentBridge 
 import { injectAuthIntoPage, loginUserApi, registerUserApi, registerViaUI } from '../lib/auth-helpers.js';
 import { startConsoleCapture } from '../lib/evidence.js';
 
+const API_BASE = process.env.LANDGRAB_API_URL ?? 'http://localhost:5001';
+
 function jsonResult(payload: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
 }
 
 const playerSpecSchema = z.object({
   sessionId: z.string(),
-  authMode: z.enum(['register', 'login', 'register-ui']).optional().default('register'),
+  authMode: z.enum(['register', 'login', 'register-ui', 'skip']).optional().default('register'),
   username: z.string().optional(),
   email: z.string().email().optional(),
   usernameOrEmail: z.string().optional(),
-  password: z.string().min(8),
+  password: z.string().min(8).optional(),
 });
 
 type PlayerSpec = z.infer<typeof playerSpecSchema>;
@@ -41,6 +43,15 @@ function getLoginIdentifier(spec: PlayerSpec): string {
 
 async function authenticatePlayer(spec: PlayerSpec) {
   const session = await ensureSessionReady(spec.sessionId);
+
+  // Skip re-auth when the session is already authenticated and no explicit credential is supplied.
+  if (spec.authMode === 'skip' || (!spec.password && session.token && session.userId)) {
+    return session;
+  }
+
+  if (!spec.password) {
+    throw new Error(`Session "${spec.sessionId}": password is required when not already authenticated.`);
+  }
 
   if (spec.authMode === 'register-ui') {
     if (!spec.username || !spec.email) {
@@ -106,9 +117,20 @@ async function configureAlliancesAndAssignments(
   autoDistribute: boolean,
   assignments: Array<{ sessionId: string; allianceName: string }> = [],
 ) {
-  const derivedAllianceNames = allianceNames && allianceNames.length > 0
-    ? allianceNames
-    : [...new Set(assignments.map((assignment) => assignment.allianceName))];
+  // Derive the full set of alliance names, merging: explicit arg > inferred from assignments > existing alliances in game state.
+  let derivedAllianceNames: string[];
+  if (allianceNames && allianceNames.length > 0) {
+    derivedAllianceNames = allianceNames;
+  } else if (assignments.length > 0) {
+    // Preserve any alliances that already exist so we don't wipe ones with members.
+    const existingSnapshot = await getAgentSnapshot<any>(getSession(hostSessionId).page);
+    const existingNames: string[] = existingSnapshot?.gameState?.alliances?.map((a: any) => a.name as string) ?? [];
+    const assignmentNames = [...new Set(assignments.map((a) => a.allianceName))];
+    // Union: keep existing names plus any new ones introduced by assignments.
+    derivedAllianceNames = [...new Set([...existingNames, ...assignmentNames])];
+  } else {
+    derivedAllianceNames = [];
+  }
 
   if (derivedAllianceNames.length > 0 || autoDistribute) {
     await callAgentBridge(getSession(hostSessionId).page, 'assignPlayers', {
@@ -235,14 +257,10 @@ export function registerRoomAutomationTools(server: McpServer): void {
       live: z.boolean().optional().default(false),
       beaconEnabled: z.boolean().optional(),
       tileDecayEnabled: z.boolean().optional(),
-      terrainEnabled: z.boolean().optional(),
       combatMode: z.enum(['Classic', 'Balanced', 'Siege']).optional(),
       playerRolesEnabled: z.boolean().optional(),
-      fogOfWarEnabled: z.boolean().optional(),
       hqEnabled: z.boolean().optional(),
       hqAutoAssign: z.boolean().optional(),
-      timedEscalationEnabled: z.boolean().optional(),
-      underdogPactEnabled: z.boolean().optional(),
     },
     async ({ sessionId, ...dynamics }) => {
       const { page } = getSession(sessionId);
@@ -253,7 +271,7 @@ export function registerRoomAutomationTools(server: McpServer): void {
 
   server.tool(
     'room_assign_players',
-    'Configure alliances and optionally assign specific player sessions to alliances.',
+    'Configure alliances and assign specific player sessions to alliances. When assignments are provided without explicit allianceNames, existing alliances are preserved and new names from assignments are merged in — so you can safely call this for partial updates. Pass all players in one call when possible to avoid intermediate unassigned states.',
     {
       hostSessionId: z.string(),
       allianceNames: z.array(z.string()).min(1).optional(),
@@ -272,18 +290,196 @@ export function registerRoomAutomationTools(server: McpServer): void {
 
   server.tool(
     'room_configure_defaults',
-    'Apply a fast default host configuration for common playtest presets.',
+    'Apply a fast default host configuration for common playtest presets. If guestSessionIds is provided, waits for all guests to appear in the room before applying the configuration so that auto-distribute includes all players.',
     {
       sessionId: z.string(),
       preset: z.enum(['default', 'quick-2p', 'combat-test', 'fog-test']).optional().default('default'),
       allianceNames: z.array(z.string()).min(1).optional(),
       teamCount: z.number().int().min(2).max(4).optional(),
       wizardStep: z.number().int().min(0).max(10).optional(),
+      guestSessionIds: z.array(z.string()).optional().describe(
+        'Session IDs of expected guests. The tool waits until all guests have joined before configuring, ensuring auto-distribute covers all players.',
+      ),
+      guestWaitTimeoutMs: z.number().int().min(1_000).max(60_000).optional().default(20_000),
     },
-    async ({ sessionId, ...options }) => {
+    async ({ sessionId, guestSessionIds, guestWaitTimeoutMs, ...options }) => {
       const { page } = getSession(sessionId);
+
+      if (guestSessionIds && guestSessionIds.length > 0) {
+        const expectedPlayerCount = guestSessionIds.length + 1; // guests + host
+        await pollAgentBridge(
+          page,
+          () => getAgentSnapshot<any>(page),
+          (snapshot) => (snapshot?.gameState?.players?.length ?? 0) >= expectedPlayerCount,
+          { timeoutMs: guestWaitTimeoutMs, intervalMs: 300 },
+        );
+      }
+
       const snapshot = await callAgentBridge(page, 'configureDefaults', options);
       return jsonResult({ sessionId, options, snapshot });
+    },
+  );
+
+  server.tool(
+    'room_can_start',
+    'Check whether the host can start the game and explain exactly which prerequisites are not yet satisfied. Use this before clicking Start Game to diagnose a disabled button.',
+    { sessionId: z.string() },
+    async ({ sessionId }) => {
+      const snapshot = await getAgentSnapshot<any>(getSession(sessionId).page);
+      const state = snapshot?.gameState;
+      if (!state) {
+        return jsonResult({ canStart: false, missing: ['game state not available — session may not be in a room'] });
+      }
+
+      const missing: string[] = [];
+
+      if (!state.hasMapLocation) {
+        missing.push('map location not set — call room_configure_defaults or room_set_rules');
+      }
+
+      if ((state.players?.length ?? 0) < 2) {
+        missing.push(`only ${state.players?.length ?? 0} player(s) — need at least 2`);
+      }
+
+      const unassigned: string[] = (state.players ?? []).filter((p: any) => !p.allianceId).map((p: any) => p.name as string);
+      if (unassigned.length > 0) {
+        missing.push(`players without an alliance: ${unassigned.join(', ')} — call room_assign_players`);
+      }
+
+      return jsonResult({
+        canStart: missing.length === 0,
+        missing,
+        playerCount: state.players?.length ?? 0,
+        allianceCount: state.alliances?.length ?? 0,
+        hasMapLocation: state.hasMapLocation ?? false,
+      });
+    },
+  );
+
+  server.tool(
+    'scenario_inject_state',
+    `Directly inject a pre-configured Playing game into the backend, bypassing the lobby wizard entirely.
+All player sessions must already be authenticated (via auth_register or auth_login) before calling this tool.
+After injection, all sessions are navigated to the frontend and polled until they reach the Playing phase via useAutoResume.
+
+Use this instead of scenario_create_*_game when you want to evaluate a specific mid-game state (pre-captured hexes, exact troop counts, custom dynamics) without having to play through the setup wizard to reach it.`,
+    {
+      hostSessionId: z.string().describe(
+        'Session ID of the authenticated host. This player MUST be included in the players list.',
+      ),
+      mapLat: z.number().default(52.0).describe('Map center latitude for the hex grid.'),
+      mapLng: z.number().default(4.9).describe('Map center longitude for the hex grid.'),
+      tileSizeMeters: z.number().int().min(25).max(5000).default(50),
+      gridRadius: z.number().int().min(3).max(12).default(6),
+      hostBypassGps: z.boolean().default(true),
+      dynamics: z.object({
+        beaconEnabled: z.boolean().optional(),
+        tileDecayEnabled: z.boolean().optional(),
+        combatMode: z.enum(['Classic', 'Balanced', 'Siege']).optional(),
+        playerRolesEnabled: z.boolean().optional(),
+        hqEnabled: z.boolean().optional(),
+        hqAutoAssign: z.boolean().optional(),
+      }).optional(),
+      players: z.array(z.object({
+        sessionId: z.string().describe('Authenticated MCP session ID for this player.'),
+        allianceName: z.string().describe('Alliance/team name — players sharing a name are on the same team.'),
+        carriedTroops: z.number().int().min(0).default(3),
+        lat: z.number().optional().describe('Starting latitude; defaults to mapLat.'),
+        lng: z.number().optional().describe('Starting longitude; defaults to mapLng.'),
+        role: z.enum(['None', 'Commander', 'Scout', 'Engineer']).default('None'),
+      })).min(2).describe('All player sessions to include. hostSessionId must appear here.'),
+      hexOverrides: z.array(z.object({
+        q: z.number().int(),
+        r: z.number().int(),
+        ownerSessionId: z.string().optional().describe('Session ID of the owning player, or omit for neutral.'),
+        troops: z.number().int().min(0).default(0),
+        isFort: z.boolean().default(false),
+        isMasterTile: z.boolean().default(false),
+      })).optional().describe(
+        'Pre-captured hexes and troop placements. Omit to start with an empty board.',
+      ),
+    },
+    async ({ hostSessionId, mapLat, mapLng, tileSizeMeters, gridRadius, hostBypassGps, dynamics, players, hexOverrides }) => {
+      const hostSession = getSession(hostSessionId);
+      if (!hostSession.token || !hostSession.userId) {
+        throw new Error(`Host session "${hostSessionId}" is not authenticated. Call auth_register or auth_login first.`);
+      }
+
+      // Resolve session IDs to real user IDs and usernames
+      const playerSpecs = players.map((p) => {
+        const session = getSession(p.sessionId);
+        if (!session.userId || !session.username) {
+          throw new Error(`Session "${p.sessionId}" is not authenticated.`);
+        }
+        return {
+          userId: session.userId,
+          username: session.username,
+          allianceName: p.allianceName,
+          carriedTroops: p.carriedTroops,
+          lat: p.lat ?? mapLat,
+          lng: p.lng ?? mapLng,
+          role: p.role,
+        };
+      });
+
+      const hexOverrideSpecs = hexOverrides?.map((h) => ({
+        q: h.q,
+        r: h.r,
+        ownerPlayerId: h.ownerSessionId ? getSession(h.ownerSessionId).userId : undefined,
+        troops: h.troops,
+        isFort: h.isFort,
+        isMasterTile: h.isMasterTile,
+      }));
+
+      // Call the dev-only backend endpoint to build the room in memory
+      const res = await fetch(`${API_BASE}/api/playtest/inject-scenario`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${hostSession.token}`,
+        },
+        body: JSON.stringify({
+          mapLat,
+          mapLng,
+          tileSizeMeters,
+          gridRadius,
+          hostBypassGps,
+          dynamics: dynamics ?? {},
+          players: playerSpecs,
+          hexOverrides: hexOverrideSpecs,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`inject-scenario failed (${res.status}): ${err}`);
+      }
+
+      const { roomCode } = await res.json() as { roomCode: string };
+
+      // Navigate all sessions to the frontend — useAutoResume finds the injected room
+      const allSessionIds = [...new Set([hostSessionId, ...players.map((p) => p.sessionId)])];
+      for (const sessionId of allSessionIds) {
+        const { page } = getSession(sessionId);
+        await page.goto(getFrontendUrl());
+        await waitForAgentBridge(page);
+      }
+
+      // Wait for every session to reach the Playing phase in this specific room
+      await Promise.all(
+        allSessionIds.map((sessionId) =>
+          pollAgentBridge(
+            getSession(sessionId).page,
+            () => getAgentSnapshot<any>(getSession(sessionId).page),
+            (snapshot) =>
+              snapshot?.gameState?.phase === 'Playing' &&
+              snapshot?.gameState?.roomCode === roomCode,
+            { timeoutMs: 20_000, intervalMs: 300 },
+          ),
+        ),
+      );
+
+      return jsonResult({ status: 'ready', roomCode, sessionIds: allSessionIds });
     },
   );
 

@@ -28,7 +28,6 @@ export function hasHexChanged(previousCell: HexCell, nextCell: HexCell): boolean
     || previousCell.isFortified !== nextCell.isFortified
     || previousCell.engineerBuiltAt !== nextCell.engineerBuiltAt
     || previousCell.isMasterTile !== nextCell.isMasterTile
-    || previousCell.terrainType !== nextCell.terrainType
     || previousCell.lastVisitedAt !== nextCell.lastVisitedAt;
 }
 

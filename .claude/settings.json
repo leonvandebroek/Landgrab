@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "landgrab": {
+      "type": "stdio",
+      "command": "npm",
+      "args": ["--prefix", "tools/landgrab-agent-mcp", "run", "dev"]
+    }
+  }
+}

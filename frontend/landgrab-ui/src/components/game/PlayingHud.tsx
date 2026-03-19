@@ -112,11 +112,7 @@ export function PlayingHud({
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
   const needsClock = Boolean(
     state
-    && (
-      isTimedGame
-      || state.dynamics?.timedEscalationEnabled
-      || (state.dynamics?.underdogPactEnabled && myAlliance?.underdogBoostUntil)
-    )
+    && isTimedGame
   );
 
   useEffect(() => {
@@ -270,19 +266,6 @@ export function PlayingHud({
   }, [state]);
 
   const totalHexes = useMemo(() => Object.keys(state?.grid ?? {}).length, [state]);
-  const escalationLevel = useMemo(() => {
-    if (!state?.dynamics?.timedEscalationEnabled || !state.gameStartedAt) {
-      return 0;
-    }
-
-    return Math.floor((currentTime - new Date(state.gameStartedAt).getTime()) / (30 * 60000));
-  }, [currentTime, state]);
-  const underdogBoostActive = Boolean(
-    state?.dynamics?.underdogPactEnabled
-    && myAlliance?.underdogBoostUntil
-    && new Date(myAlliance.underdogBoostUntil).getTime() > currentTime,
-  );
-
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
 
@@ -368,20 +351,6 @@ export function PlayingHud({
                   {formatTimeRemaining(displayTimeRemaining)}
                 </span>
                 <span className="stat-label">{t('game.hudTimer')}</span>
-              </div>
-            )}
-            {state.dynamics?.timedEscalationEnabled && state.gameStartedAt && (
-              <div className="stat-item">
-                <span className="stat-value warning">
-                  <GameIcon name="lightning" size="sm" /> {escalationLevel}
-                </span>
-                <span className="stat-label">{t('game.escalationLevel' as never)}</span>
-              </div>
-            )}
-            {underdogBoostActive && (
-              <div className="stat-item">
-                <span className="stat-value" style={{ color: '#2ecc71' }}><GameIcon name="biceps" size="sm" /></span>
-                <span className="stat-label">{t('game.underdogActive' as never)}</span>
               </div>
             )}
           </div>

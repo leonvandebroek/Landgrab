@@ -19,6 +19,7 @@ public class GameService(
     internal WinConditionService WinConditionService => _winConditionService;
 
     public GameRoom CreateRoom(string hostUserId, string hostUsername, string connectionId) => roomService.CreateRoom(hostUserId, hostUsername, connectionId);
+    public GameRoom CreateScenarioRoom(string hostUserId, InjectScenarioRequest req) => roomService.CreateScenarioRoom(hostUserId, req);
     public (GameRoom? room, string? error) JoinRoom(string roomCode, string userId, string username, string connectionId) => roomService.JoinRoom(roomCode, userId, username, connectionId);
     public GameRoom? GetRoom(string code) => roomService.GetRoom(code);
     public GameState? GetStateSnapshot(string roomCode) => gameStateService.GetStateSnapshot(roomCode);
@@ -98,9 +99,6 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
 
     public void AppendEventLogPublic(GameState state, GameEventLogEntry entry) => gameStateService.AppendEventLog(state, entry);
     public GameState SnapshotStatePublic(GameState state) => gameStateService.SnapshotState(state);
-    public GameState GetPlayerSnapshot(GameState fullSnapshot, string userId) => gameStateService.GetPlayerSnapshot(fullSnapshot, userId);
-    public GameState GetPlayerSnapshot(GameState fullSnapshot, string userId, IReadOnlyDictionary<string, HexCell> hiddenFogCells) => gameStateService.GetPlayerSnapshot(fullSnapshot, userId, hiddenFogCells);
-    public IReadOnlyDictionary<string, HexCell> CreateHiddenFogCellsForBroadcast(GameState fullSnapshot) => gameStateService.CreateHiddenFogCellsForBroadcast(fullSnapshot);
 
     public (GameState? state, string? error) SetHostObserverMode(string roomCode, string userId, bool enabled) => hostControlService.SetHostObserverMode(roomCode, userId, enabled);
     public (GameState? state, string? error) UpdateGameDynamicsLive(string roomCode, string userId, GameDynamics dynamics) => hostControlService.UpdateGameDynamicsLive(roomCode, userId, dynamics);

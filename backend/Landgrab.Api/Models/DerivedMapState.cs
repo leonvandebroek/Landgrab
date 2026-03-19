@@ -9,10 +9,3 @@ public class ContestedEdgeDto
     public string TeamBColor { get; set; } = "";
     public double Intensity { get; set; }
 }
-
-public class SupplyEdgeDto
-{
-    public string FromKey { get; set; } = "";
-    public string ToKey { get; set; } = "";
-    public string TeamColor { get; set; } = "";
-}

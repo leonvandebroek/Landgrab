@@ -702,6 +702,8 @@ token provided
   use: {
     baseURL: 'http://localhost:5173',         // Vite dev server
     trace: 'on-first-retry',                  // Record trace on retry
+            headless: false,
+            ...devices['iPhone 15 Pro']
   },
   webServer: {
     command: 'npm run dev',                   // Auto-start server
@@ -710,7 +712,9 @@ token provided
     timeout: 30000,
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } }
+    { name: 'chromium', use: { browserName: 'chromium',
+            headless: false,
+            ...devices['iPhone 15 Pro'] } }
   ],
 }
 ```

@@ -64,6 +64,8 @@ Fast path: after room creation, prefer `room_wait_until_joinable` to confirm the
 
 Fast path: `room_configure_defaults` will set a map location, centered area, master tile, and push the wizard forward for deterministic local playtests.
 
+> ⚠️ **Timing:** `room_configure_defaults` auto-distributes players based on who is in the room *at call time*. Always call it after all guests have joined, or pass `guestSessionIds` so it waits automatically.
+
 ### Step 4 — Setup Wizard: Teams (Step 1)
 
 1. Configure alliances and assign players to them.
@@ -72,6 +74,8 @@ Fast path: `room_configure_defaults` will set a map location, centered area, mas
 4. Click the next button (`data-testid="wizard-next-btn"`) when all players are assigned.
 5. **Verify**: At least 2 players are assigned to alliances and the wizard advances.
 6. **Evidence**: Screenshot the teams configuration.
+
+> ⚠️ **`room_assign_players` is a full replace.** Every call rebuilds the entire alliance config from scratch. Always include **all** players in a single call — calling it twice for different players will un-assign whoever was assigned in the first call.
 
 ### Step 5 — Setup Wizard: Rules (Step 2)
 
@@ -100,10 +104,11 @@ Fast path: use `room_set_dynamics` for preset toggles and live-compatible dynami
 1. Review the game configuration summary shown on the review step.
 2. Configure the game area (centered, pattern, or custom) if needed.
 3. Assign starting tiles if required by the test scenario.
-4. Click the start game button (`data-testid="wizard-start-game-btn"`).
-5. Wait for the `GameStarted` SignalR event or the game phase to transition to `Playing`.
-6. **Verify**: The game view is visible and the phase is `Playing`.
-7. **Evidence**: Screenshot the game-started state.
+4. **Before clicking Start Game**, call `room_can_start` to confirm all prerequisites are satisfied. If `canStart` is false, address each item in `missing` before proceeding.
+5. Click the start game button (`data-testid="wizard-start-game-btn"`).
+6. Wait for the `GameStarted` SignalR event or the game phase to transition to `Playing`.
+7. **Verify**: The game view is visible and the phase is `Playing`.
+8. **Evidence**: Screenshot the game-started state.
 
 Recommended verification after each host-side action:
 

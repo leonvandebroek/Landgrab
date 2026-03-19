@@ -494,6 +494,32 @@ export function registerStateTools(server: McpServer): void {
   );
 
   server.tool(
+    'state_last_combat_result',
+    [
+      'Return the most recent combat result stored in the frontend gameplay store for a session.',
+      'Contains attacker/defender troop counts, outcome, bonus breakdowns, and whether the hex changed ownership.',
+      'Returns null if no combat has happened yet or the result has been cleared.',
+    ].join(' '),
+    { sessionId: z.string() },
+    async ({ sessionId }) => {
+      const { page } = getSession(sessionId);
+      // Read directly from the gameplay store to avoid returning the full snapshot.
+      const result = await page.evaluate(() => {
+        const bridge = (window as any).__LANDGRAB_AGENT_BRIDGE__;
+        const gameplay = bridge?.getSnapshot?.()?.gameplay ?? {};
+        const cr = gameplay.combatResult ?? null;
+        return {
+          combatResult: cr && typeof cr === 'object'
+            ? Object.fromEntries(Object.entries(cr as Record<string, unknown>).filter(([k]) => k !== 'newState'))
+            : cr,
+          neutralClaimResult: gameplay.neutralClaimResult ?? null,
+        };
+      });
+      return jsonResult({ sessionId, ...result });
+    },
+  );
+
+  server.tool(
     'signalr_status',
     'Return the current SignalR connection state exposed by the frontend bridge.',
     { sessionId: z.string() },

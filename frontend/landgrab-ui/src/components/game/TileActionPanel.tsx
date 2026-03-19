@@ -1,9 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { HexCell, Player } from '../../types/game';
-import { terrainIcons } from '../../utils/terrainIcons';
 import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
-import { terrainDefendBonus } from '../../utils/terrainColors';
 import { GameIcon } from '../common/GameIcon';
 
 interface TileActionPanelProps {
@@ -37,9 +35,6 @@ export function TileActionPanel({
   if (actions.length === 0) return null;
 
   const carriedTroops = player?.carriedTroops ?? 0;
-  const terrainIconName = targetCell?.terrainType && targetCell.terrainType !== 'None'
-    ? terrainIcons[targetCell.terrainType]
-    : '';
 
   return (
     <div
@@ -69,14 +64,6 @@ export function TileActionPanel({
           {targetCell && (
             <span style={{ fontSize: '0.8rem' }}>
               {t('game.tileAction.tileTroops')}: <strong>{targetCell.troops}</strong>
-            </span>
-          )}
-          {targetCell?.terrainType && targetCell.terrainType !== 'None' && (
-            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-              {terrainIconName && <GameIcon name={terrainIconName} size="sm" />} {t(`terrain.${targetCell.terrainType}` as never)}
-              {terrainDefendBonus(targetCell.terrainType, true) > 0 && (
-                <> ({t('terrain.defendBonus', { bonus: terrainDefendBonus(targetCell.terrainType, true) })})</>
-              )}
             </span>
           )}
           {targetCell?.isFortified && (

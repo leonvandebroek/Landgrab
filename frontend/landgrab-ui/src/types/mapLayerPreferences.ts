@@ -2,13 +2,9 @@ import type { GameIconName } from '../utils/gameIcons';
 
 export interface MapLayerPreferences {
   borderEffects: boolean;
-  buildingIcons: boolean;
   contestedEdges: boolean;
-  fogOfWar: boolean;
   playerMarkers: boolean;
   playerRadius: boolean;
-  supplyLines: boolean;
-  terrainIcons: boolean;
   timeOverlay: boolean;
   troopAnimations: boolean;
   troopBadges: boolean;
@@ -17,13 +13,9 @@ export interface MapLayerPreferences {
 
 export const DEFAULT_MAP_LAYER_PREFS: MapLayerPreferences = {
   borderEffects: true,
-  buildingIcons: true,
   contestedEdges: true,
-  fogOfWar: true,
   playerMarkers: true,
   playerRadius: true,
-  supplyLines: true,
-  terrainIcons: true,
   timeOverlay: true,
   troopAnimations: true,
   troopBadges: true,
@@ -40,12 +32,7 @@ export const LAYER_GROUPS: LayerGroup[] = [
   {
     key: 'territory',
     icon: '⬢',
-    layers: ['borderEffects', 'contestedEdges', 'supplyLines'],
-  },
-  {
-    key: 'terrain',
-    icon: 'forest',
-    layers: ['terrainIcons', 'buildingIcons'],
+    layers: ['borderEffects', 'contestedEdges'],
   },
   {
     key: 'units',
@@ -60,6 +47,6 @@ export const LAYER_GROUPS: LayerGroup[] = [
   {
     key: 'overlays',
     icon: 'fog',
-    layers: ['fogOfWar', 'worldDimMask', 'timeOverlay'],
+    layers: ['worldDimMask', 'timeOverlay'],
   },
 ];
