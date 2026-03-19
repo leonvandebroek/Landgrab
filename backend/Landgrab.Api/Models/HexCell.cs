@@ -10,7 +10,6 @@ public class HexCell
     public string? OwnerColor { get; set; }
     public int Troops { get; set; }
     public bool IsMasterTile { get; set; }
-    public TerrainType TerrainType { get; set; }
 
     // Phase 3: Rally — fortified when ≥2 allied players present
     public bool IsFortified { get; set; }

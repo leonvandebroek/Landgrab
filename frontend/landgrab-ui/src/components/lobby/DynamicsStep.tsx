@@ -36,24 +36,14 @@ export function DynamicsStep({
 
     const isFeatureEnabled = (key: FeatureKey) => {
         switch (key) {
-            case 'terrain':
-                return dynamics.terrainEnabled;
             case 'playerRoles':
                 return dynamics.playerRolesEnabled;
-            case 'fogOfWar':
-                return dynamics.fogOfWarEnabled;
             case 'beaconEnabled':
                 return dynamics.beaconEnabled;
-            case 'supplyLines':
-                return dynamics.supplyLinesEnabled;
             case 'hq':
                 return dynamics.hqEnabled;
             case 'tileDecayEnabled':
                 return dynamics.tileDecayEnabled;
-            case 'timedEscalation':
-                return dynamics.timedEscalationEnabled;
-            case 'underdogPact':
-                return dynamics.underdogPactEnabled;
         }
     };
 
@@ -73,29 +63,11 @@ export function DynamicsStep({
         }
 
         switch (key) {
-            case 'terrain':
-                updateDynamics({ terrainEnabled: checked });
-                return;
             case 'playerRoles':
                 updateDynamics({ playerRolesEnabled: checked });
                 return;
-            case 'fogOfWar':
-                updateDynamics({ fogOfWarEnabled: checked });
-                return;
-            case 'supplyLines':
-                updateDynamics({
-                    supplyLinesEnabled: checked,
-                    ...(checked ? { hqEnabled: true } : {}),
-                });
-                return;
             case 'hq':
                 updateDynamics({ hqEnabled: checked, ...(checked ? { hqAutoAssign: true } : {}) });
-                return;
-            case 'timedEscalation':
-                updateDynamics({ timedEscalationEnabled: checked });
-                return;
-            case 'underdogPact':
-                updateDynamics({ underdogPactEnabled: checked });
                 return;
         }
     };

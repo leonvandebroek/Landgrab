@@ -6,19 +6,19 @@
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
-  background-color: var(--bg-primary);
+  /* background-color: var(--bg);  Removed to let dark --bg shine through */
 }
 
 .top-status-bar {
-  background: rgba(10, 18, 32, 0.95);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.85); /* Dark Slate Glass */
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  color: white;
+  color: #f8fafc; /* Slate-50 */
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   padding-top: env(safe-area-inset-top, 0px);
 }
 
@@ -38,6 +38,14 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  font-weight: 600;
+  color: #cbd5e1; /* Slate-300 */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.hud-stats-flat .stat-item svg {
+  color: #60a5fa; /* Bright Blue icons */
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6)); /* Neon Glow */
 }
 
 .hud-stats-flat .stat-value {
@@ -280,9 +288,14 @@
   transform: scale(0.97);
 }
 
+/* Disabled Tile Action */
 .tile-action-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.75;
   cursor: not-allowed;
+  filter: grayscale(100%) brightness(0.7);
+  background: #334155;
+  color: rgba(255,255,255,0.6);
+  pointer-events: none;
 }
 
 .tile-action-btn:disabled:active {
@@ -851,10 +864,15 @@
 }
 
 /* ── Disabled ── */
-.action-dock__btn:disabled {
-  opacity: 0.4;
+.action-dock__btn:disabled,
+.hud-btn:disabled {
+  opacity: 0.75; /* Boosted from 0.6 */
   cursor: not-allowed;
-  filter: saturate(0.3);
+  filter: grayscale(100%) brightness(0.7); /* Fully desaturate */
+  pointer-events: none;
+  background: #334155 !important;
+  color: rgba(255,255,255,0.6) !important;
+  box-shadow: none !important;
 }
 
 /* ── Icon and label ── */
@@ -1113,19 +1131,20 @@
   right: 0;
   z-index: 800;
   padding: 0.5rem 0.5rem calc(env(safe-area-inset-bottom, 0px) + 1rem);
-  background: linear-gradient(to top, rgba(10, 10, 16, 0.97), rgba(15, 18, 28, 0.93));
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.95)); /* Dark Slate Glass */
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-top: 2px solid var(--dock-accent, rgba(255, 255, 255, 0.06));
+  border-top: 2px solid rgba(59, 130, 246, 0.3); /* Subtle blue glow edge */
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   pointer-events: auto;
   transition: border-color 0.3s ease, background 0.3s ease;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
 }
 
 .player-hud--active {
-  border-top-color: var(--dock-accent, rgba(255, 255, 255, 0.15));
+  border-top-color: var(--dock-accent, #3b82f6); /* Blue-500 */
 }
 
 .player-hud--idle {
@@ -1274,21 +1293,28 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   padding: 0.5rem 0.4rem;
   min-height: 64px;
-  border-radius: 0.7rem;
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  /* Dark Arcade Glass */
+  background: rgba(30, 41, 59, 0.6); /* Slate-800 translucent */
+  color: #cbd5e1; /* Slate-300 */
+  border: 2px solid rgba(255, 255, 255, 0.05);
   font-size: 0.8rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   flex: 1 0 0;
   min-width: 72px;
   position: relative;
   -webkit-tap-highlight-color: transparent;
-  animation: hud-btn-enter 0.2s ease both;
+  animation: hud-btn-enter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  box-shadow: 0 4px 0 #cbd5e1; /* 3D effect base */
+}
+
+.player-hud__btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 #cbd5e1;
 }
 
 @keyframes hud-btn-enter {
@@ -1338,21 +1364,28 @@
 }
 
 .player-hud__btn--primary {
-  border-color: rgba(46, 204, 113, 0.8);
-  background: rgba(46, 204, 113, 0.25);
+  background: linear-gradient(145deg, #15803d, #166534); /* Dark Green base */
+  color: #ffffff !important;
+  border: 2px solid #4ade80; /* Green-400 Neon Border */
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 
 .player-hud__btn--primary:not(:disabled) {
-  box-shadow: 0 0 14px rgba(46, 204, 113, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  /* Remove old shadow */
+  box-shadow: 0 4px 0 #15803d, 0 8px 16px rgba(34, 197, 94, 0.3);
 }
 
 .player-hud__btn--primary:active:not(:disabled) {
-  background: rgba(46, 204, 113, 0.4);
+  background: #16a34a;
+  transform: translateY(4px);
+  box-shadow: 0 0 0 #15803d;
 }
 
 .player-hud__btn--danger {
-  border-color: rgba(231, 76, 60, 0.8);
-  background: rgba(231, 76, 60, 0.25);
+  background: linear-gradient(145deg, #b91c1c, #991b1b); /* Dark Red base */
+  color: #ffffff !important;
+  border: 2px solid #f87171; /* Red-400 Neon Border */
+  box-shadow: 0 0 10px rgba(248, 113, 113, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 
 .player-hud__btn--danger:not(:disabled) {
@@ -1364,8 +1397,10 @@
 }
 
 .player-hud__btn--info {
-  border-color: rgba(52, 152, 219, 0.8);
-  background: rgba(52, 152, 219, 0.25);
+  background: linear-gradient(145deg, #1e40af, #1e3a8a); /* Dark Blue base */
+  color: #ffffff !important;
+  border: 2px solid #60a5fa; /* Blue-400 Neon Border */
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.2);
 }
 
 .player-hud__btn--info:not(:disabled) {
@@ -1377,8 +1412,9 @@
 }
 
 .player-hud__btn--neutral {
-  border-color: rgba(149, 165, 166, 0.3);
-  background: rgba(149, 165, 166, 0.1);
+  background: rgba(51, 65, 85, 0.5); /* Slate-700 translucent */
+  border: 2px solid rgba(148, 163, 184, 0.3); /* Slate-400 */
+  color: #cbd5e1;
 }
 
 .player-hud__btn-locked {
@@ -1464,8 +1500,10 @@
 }
 
 .player-hud__ability--cooldown {
-  opacity: 0.4;
+  opacity: 0.75; /* Much more visible than 0.4 */
   cursor: not-allowed;
+  filter: grayscale(80%) brightness(80%);
+  background: #334155; /* Slate-700 background */
 }
 
 .player-hud__countdown {

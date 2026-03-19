@@ -2,16 +2,11 @@ import type { TFunction } from 'i18next';
 import type { GameDynamics, GameState } from '../types/game';
 
 const DEFAULT_GAME_DYNAMICS: GameDynamics = {
-  terrainEnabled: false,
   playerRolesEnabled: false,
-  fogOfWarEnabled: false,
   beaconEnabled: false,
-  supplyLinesEnabled: false,
   hqEnabled: false,
   hqAutoAssign: true,
   tileDecayEnabled: false,
-  timedEscalationEnabled: false,
-  underdogPactEnabled: false,
 };
 
 export function getErrorMessage(error: unknown): string {
@@ -86,7 +81,7 @@ export function isMissingHubMethodFailure(message: string): boolean {
 }
 
 export function localizeLobbyError(message: unknown, t: TFunction): string {
-  const text = typeof message === 'string' ? message : JSON.stringify(message);
+  const text = typeof message === 'string' ? message : getErrorMessage(message);
   const normalized = text.toLowerCase();
 
   if (normalized.includes('room not found')) {

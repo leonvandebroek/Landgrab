@@ -21,7 +21,7 @@ import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import type { GameState, RoomSummary } from './types/game';
 import { useGameStore } from './stores/gameStore';
 import type { SavedSession } from './stores/gameStore';
-import { useGameplayStore } from './stores/gameplayStore';
+import { useGameplayStore } from './stores';
 import { useInfoLedgeStore } from './stores/infoLedgeStore';
 import { useUiStore } from './stores/uiStore';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
@@ -30,9 +30,10 @@ import {
   persistDebugLocation,
   readPersistedDebugLocation,
 } from './utils/debugLocationSession';
+import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
 
-const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
+const DEBUG_GPS_AVAILABLE = import.meta.env.DEV;
 
 type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
@@ -405,6 +406,7 @@ export default function App() {
     setGameState(null);
     setPickupPrompt(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
   }, [
     clearGameplayUi,
@@ -512,6 +514,63 @@ export default function App() {
     handleSetMasterTile, handleSetMasterTileByHex, handleAssignStartingTile,
     handleConfigureAlliances, handleDistributePlayers, handleAssignAllianceStartingTile,
     handleStartGame, handleReturnToLobby, handleSetObserverMode,
+  ]);
+
+  useEffect(() => {
+    installAgentBridge({
+      auth,
+      connected,
+      reconnecting,
+      currentLocation,
+      currentHex,
+      currentPlayerName,
+      isHostBypass,
+      invoke,
+      mapNavigate: (lat, lng) => {
+        mapNavigateRef.current?.(lat, lng);
+      },
+      applyDebugLocation,
+      disableDebugLocation,
+      stepDebugLocationByHex,
+      handleHexClick,
+      handleSetAlliance,
+      handleSetMapLocation,
+      handleSetTileSize,
+      handleUseCenteredGameArea,
+      handleSetClaimMode,
+      handleSetWinCondition,
+      handleSetGameDynamics,
+      handleConfigureAlliances,
+      handleDistributePlayers,
+      handleUpdateDynamicsLive,
+    });
+
+    return () => {
+      uninstallAgentBridge();
+    };
+  }, [
+    auth,
+    connected,
+    reconnecting,
+    currentLocation,
+    currentHex,
+    currentPlayerName,
+    isHostBypass,
+    invoke,
+    applyDebugLocation,
+    disableDebugLocation,
+    stepDebugLocationByHex,
+    handleHexClick,
+    handleSetAlliance,
+    handleSetMapLocation,
+    handleSetTileSize,
+    handleUseCenteredGameArea,
+    handleSetClaimMode,
+    handleSetWinCondition,
+    handleSetGameDynamics,
+    handleConfigureAlliances,
+    handleDistributePlayers,
+    handleUpdateDynamicsLive,
   ]);
 
   // ── Render ───────────────────────────────────────────────────────────────

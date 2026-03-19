@@ -66,22 +66,6 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
     { key: 'win-condition', label: t('rules.winCondition.title'), body: winConditionText },
   ];
 
-  if (dynamics.terrainEnabled) {
-    matchSpecificItems.push({
-      key: 'terrain',
-      label: t('rules.terrain.title'),
-      body: t('rules.terrain.body'),
-    });
-  }
-
-  if (dynamics.fogOfWarEnabled) {
-    matchSpecificItems.push({
-      key: 'fog-of-war',
-      label: t('rules.fogOfWar.title'),
-      body: t('rules.fogOfWar.body'),
-    });
-  }
-
   if (dynamics.beaconEnabled) {
     matchSpecificItems.push({
       key: 'beacon',
@@ -99,35 +83,11 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
     });
   }
 
-  if (dynamics.supplyLinesEnabled) {
-    matchSpecificItems.push({
-      key: 'supply-lines',
-      label: t('rules.supplyLines.title'),
-      body: t('rules.supplyLines.body'),
-    });
-  }
-
   if (dynamics.hqEnabled) {
     matchSpecificItems.push({
       key: 'hq',
       label: t('rules.hq.title'),
       body: t('rules.hq.body'),
-    });
-  }
-
-  if (dynamics.timedEscalationEnabled) {
-    matchSpecificItems.push({
-      key: 'timed-escalation',
-      label: t('rules.timedEscalation.title'),
-      body: t('rules.timedEscalation.body'),
-    });
-  }
-
-  if (dynamics.underdogPactEnabled) {
-    matchSpecificItems.push({
-      key: 'underdog-pact',
-      label: t('rules.underdogPact.title'),
-      body: t('rules.underdogPact.body'),
     });
   }
 

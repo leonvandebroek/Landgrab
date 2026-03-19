@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { TFunction } from 'i18next';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import type { SavedSession } from '../stores/gameStore';
 import { useGameStore } from '../stores/gameStore';
 import { useInfoLedgeStore } from '../stores/infoLedgeStore';
@@ -11,8 +11,10 @@ import type { SoundName } from './useSound';
 import type { GameEvents } from './useSignalR';
 import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
-import { localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
+import { getErrorMessage, localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
+import { useMapOrchestrator } from './useMapOrchestrator';
+import { recordAgentEvent } from '../testing/agentBridge';
 
 type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 
@@ -151,32 +153,47 @@ export function useSignalRHandlers({
   playSound,
 }: UseSignalRHandlersOptions): GameEvents {
   const gameState = useGameStore(state => state.gameState);
+  const { dispatchStateToLayers, dispatchPlayersOnly } = useMapOrchestrator();
 
   return useMemo<GameEvents>(() => ({
     onRoomCreated: (code, state) => {
       const roomCode = code || state.roomCode;
       const normalizedState = normalizeGameState(state, gameState);
+      recordAgentEvent('RoomCreated', {
+        roomCode,
+        phase: normalizedState.phase,
+        playerCount: normalizedState.players.length,
+      });
       saveSession(roomCode);
       resolveResumeFromState(normalizedState);
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       useUiStore.getState().setView('lobby');
       useGameplayStore.getState().clearGameplayUi();
+      useGameplayStore.getState().setSelectedHexKey(null);
       useUiStore.getState().clearError();
     },
     onPlayerJoined: (state) => {
       const normalizedState = normalizeGameState(state, gameState);
+      recordAgentEvent('PlayerJoined', {
+        roomCode: normalizedState.roomCode,
+        phase: normalizedState.phase,
+        playerCount: normalizedState.players.length,
+      });
       resolveResumeFromState(normalizedState);
       if (normalizedState.roomCode) {
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       if (state.phase === 'Lobby') {
         useUiStore.getState().setView('lobby');
         useGameplayStore.getState().clearGameplayUi();
+        useGameplayStore.getState().setSelectedHexKey(null);
       } else if (normalizedState.phase === 'Playing') {
         restorePersistedDebugLocation(normalizedState.roomCode);
         useUiStore.getState().setView('game');
@@ -187,11 +204,16 @@ export function useSignalRHandlers({
     },
     onGameStarted: (state) => {
       const normalizedState = normalizeGameState(state, gameState);
+      recordAgentEvent('GameStarted', {
+        roomCode: normalizedState.roomCode,
+        playerCount: normalizedState.players.length,
+      });
       resolveResumeFromState(normalizedState);
       if (normalizedState.roomCode) {
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       restorePersistedDebugLocation(normalizedState.roomCode);
@@ -200,6 +222,13 @@ export function useSignalRHandlers({
     },
     onStateUpdated: (state) => {
       const normalizedState = normalizeGameState(state, gameState);
+      recordAgentEvent('StateUpdated', {
+        roomCode: normalizedState.roomCode,
+        phase: normalizedState.phase,
+        playerCount: normalizedState.players.length,
+        gridCount: Object.keys(normalizedState.grid).length,
+        eventLogCount: normalizedState.eventLog?.length ?? 0,
+      });
       const gameplayState = useGameplayStore.getState();
       const shouldClearPickup = shouldClearPickupPrompt(
         gameplayState.pickupPrompt,
@@ -227,6 +256,7 @@ export function useSignalRHandlers({
         saveSession(normalizedState.roomCode);
       }
       useGameStore.getState().setGameState(normalizedState);
+      dispatchStateToLayers(normalizedState);
       if (shouldClearPickup) {
         gameplayState.setPickupPrompt(null);
       }
@@ -247,6 +277,7 @@ export function useSignalRHandlers({
       } else if (normalizedState.phase === 'GameOver') {
         useUiStore.getState().setView('gameover');
         useGameplayStore.getState().clearGameplayUi();
+        useGameplayStore.getState().setSelectedHexKey(null);
       }
       useUiStore.getState().clearError();
 
@@ -269,6 +300,14 @@ export function useSignalRHandlers({
       }
     },
     onPlayersMoved: (players) => {
+      recordAgentEvent('PlayersMoved', {
+        players: players.map((player) => ({
+          id: player.id,
+          name: player.name,
+          currentHexQ: player.currentHexQ,
+          currentHexR: player.currentHexR,
+        })),
+      });
       useGameStore.getState().updateGameState((currentState) => {
         if (!currentState) {
           return currentState;
@@ -279,14 +318,23 @@ export function useSignalRHandlers({
           players,
         };
       });
+      dispatchPlayersOnly(players);
     },
     onGameOver: () => {
+      recordAgentEvent('GameOver');
       playSound('victory');
       vibrate(HAPTIC.victory);
       useGameplayStore.getState().clearGameplayUi();
+      useGameplayStore.getState().setSelectedHexKey(null);
       useUiStore.getState().setView('gameover');
     },
     onCombatResult: (result) => {
+      recordAgentEvent('CombatResult', {
+        q: result.q,
+        r: result.r,
+        attackerWon: result.attackerWon,
+        hexCaptured: result.hexCaptured,
+      });
       vibrate(HAPTIC.attack);
       useGameplayStore.getState().setCombatPreview(null);
       useGameplayStore.getState().setAttackPrompt(null);
@@ -302,9 +350,19 @@ export function useSignalRHandlers({
       });
     },
     onNeutralClaimResult: (result) => {
+      recordAgentEvent('NeutralClaimResult', {
+        q: result.q,
+        r: result.r,
+        success: true,
+      });
       useGameplayStore.getState().setNeutralClaimResult(result);
     },
     onTileLost: (data) => {
+      recordAgentEvent('TileLost', {
+        q: data.Q,
+        r: data.R,
+        attackerName: data.AttackerName,
+      });
       playSound('notification');
       vibrate(HAPTIC.loss);
       useGameplayStore.getState().setMapFeedback({
@@ -321,13 +379,16 @@ export function useSignalRHandlers({
       });
     },
     onError: (message) => {
-      if (resolveResumeFromError(message)) {
+      recordAgentEvent('Error', { message });
+      const errorText = getErrorMessage(message);
+      if (resolveResumeFromError(errorText)) {
         return;
       }
 
-      useUiStore.getState().setError(localizeLobbyError(message, t));
+      useUiStore.getState().setError(localizeLobbyError(errorText, t));
     },
     onHostMessage: (data) => {
+      recordAgentEvent('HostMessage', data);
       useNotificationStore.getState().setHostMessage(data);
       useInfoLedgeStore.getState().push({
         severity: 'hostMessage',
@@ -339,6 +400,7 @@ export function useSignalRHandlers({
       });
     },
     onDrainTick: (data) => {
+      recordAgentEvent('DrainTick', data);
       const { gameState: currentState, savedSession } = useGameStore.getState();
       if (!currentState || !savedSession?.userId || !data.allianceId) {
         return;
@@ -358,6 +420,7 @@ export function useSignalRHandlers({
       });
     },
     onDynamicsChanged: (dynamics) => {
+      recordAgentEvent('DynamicsChanged', dynamics);
       useGameStore.getState().updateGameState((currentState) => {
         if (!currentState) {
           return currentState;
@@ -380,6 +443,7 @@ export function useSignalRHandlers({
     onTemplateSaved: () => {
     },
     onReconnected: () => {
+      recordAgentEvent('Reconnected');
       useUiStore.getState().clearError();
       const session = savedSessionRef.current;
       const invoke = getInvoke();
@@ -391,5 +455,5 @@ export function useSignalRHandlers({
         // Silently ignore — the justConnected auto-resume flow also attempts rejoin.
       });
     },
-  }), [gameState, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
+  }), [dispatchPlayersOnly, dispatchStateToLayers, gameState, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
 }

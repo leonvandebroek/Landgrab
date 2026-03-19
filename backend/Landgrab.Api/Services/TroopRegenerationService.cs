@@ -45,25 +45,7 @@ public sealed class TroopRegenerationService(
                         }, stoppingToken);
                     }
 
-                    if (state.Dynamics.FogOfWarEnabled)
-                    {
-                        var hostObserverUserId = state.HostObserverMode
-                            ? room.HostUserId.ToString()
-                            : null;
-                        var hiddenFogCells = gameService.CreateHiddenFogCellsForBroadcast(state);
-
-                        foreach (var (connectionId, userId) in room.ConnectionMap)
-                        {
-                            var playerSnapshot = hostObserverUserId == userId
-                                ? state
-                                : gameService.GetPlayerSnapshot(state, userId, hiddenFogCells);
-                            await hubContext.Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot, stoppingToken);
-                        }
-                    }
-                    else
-                    {
-                        await hubContext.Clients.Group(roomCode).SendAsync("StateUpdated", state, stoppingToken);
-                    }
+                    await hubContext.Clients.Group(roomCode).SendAsync("StateUpdated", state, stoppingToken);
 
                     if (state.Phase == GamePhase.GameOver)
                     {

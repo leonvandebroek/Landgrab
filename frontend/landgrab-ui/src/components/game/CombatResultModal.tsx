@@ -60,8 +60,10 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                         </h2>
                         <p className={styles.subtitle}>
                             {won
-                                ? t('combat.victorySubtitle', { q: result.q, r: result.r })
-                                : t('combat.defeatSubtitle', { q: result.q, r: result.r })}
+                                ? t('combat.victorySubtitle')
+                                : result.attackerTroopsRemaining > 0
+                                    ? t('combat.defeatSubtitleWithSurvivors', { count: result.attackerTroopsRemaining })
+                                    : t('combat.defeatSubtitle')}
                         </p>
                     </div>
 

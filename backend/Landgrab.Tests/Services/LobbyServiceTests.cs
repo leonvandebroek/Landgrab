@@ -856,38 +856,6 @@ public sealed class LobbyServiceTests
     }
 
     [Fact]
-    public void StartGame_AllNonMasterHexesAreWater_ReturnsBlockedPlayersError()
-    {
-        // Master tile is pre-set so AutoAssign won't fail on that check.
-        // All remaining hexes are water so no alliance or player can gain territory access.
-        var hostGuid = Guid.NewGuid();
-        var hostId = hostGuid.ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithPhase(GamePhase.Lobby)
-            .WithGrid(2)
-            .WithMasterTile(0, 0)
-            .AddPlayer(hostId, "Alice")
-            .AddPlayer("p2", "Bob")
-            .AddAlliance("a1", "Alpha", hostId)
-            .AddAlliance("a2", "Beta", "p2")
-            .Build();
-
-        foreach (var cell in state.Grid.Values)
-        {
-            if (!cell.IsMasterTile)
-                cell.TerrainType = TerrainType.Water;
-        }
-
-        var context = new ServiceTestContext(state, hostGuid);
-        var sut = CreateLobbyService(context);
-
-        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
-
-        result.Should().BeNull();
-        error.Should().Be("Cannot start the game because these players would begin with 0 troops and no territory access: Alice, Bob.");
-    }
-
-    [Fact]
     public void StartGame_RoomNotFound_ReturnsError()
     {
         var state = ServiceTestContext.CreateBuilder()

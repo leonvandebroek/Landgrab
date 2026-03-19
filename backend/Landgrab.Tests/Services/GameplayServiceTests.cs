@@ -426,36 +426,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PlaceTroops_CombatAccountsForTerrainDefenseBonus()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithTerrainEnabled()
-            .AddPlayer("p1", "Alice")
-            .AddPlayer("p2", "Bob")
-            .OwnHex(0, 0, "p1")
-            .OwnHex(1, 0, "p2")
-            .WithTerrain(1, 0, TerrainType.Steep)
-            .WithTroops(1, 0, 3)
-            .WithCarriedTroops("p1", 4, 0, 0)
-            .Build();
-        state.Dynamics.CombatMode = CombatMode.Classic;
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
-
-        result.state.Should().NotBeNull();
-        result.error.Should().BeNull();
-        result.combatResult.Should().NotBeNull();
-        result.combatResult!.AttackerWon.Should().BeFalse();
-        result.combatResult.DefenderBonus.Should().Be(2);
-        context.Cell(1, 0).OwnerId.Should().Be("p2");
-        context.Cell(1, 0).Troops.Should().Be(3);
-        context.Player("p1").CarriedTroops.Should().Be(2);
-    }
-
-    [Fact]
     public void PlaceTroops_CombatAccountsForFortDefenseBonus()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -548,44 +518,6 @@ public sealed class GameplayServiceTests
             .WithTroops(0, 0, 5)
             .WithPlayerPosition("p2", 0, 0)
             .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(5);
-    }
-
-    [Fact]
-    public void AddReinforcementsToAllHexes_OnBuildingTerrain_AddsExtraTroop()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithTerrainEnabled()
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 2)
-            .WithTerrain(0, 0, TerrainType.Building)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(4);
-    }
-
-    [Fact]
-    public void AddReinforcementsToAllHexes_WithTimedEscalation_AddsEscalationBonus()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 2)
-            .Build();
-        state.Dynamics.TimedEscalationEnabled = true;
-        state.GameStartedAt = DateTime.UtcNow.AddMinutes(-61);
         var context = new ServiceTestContext(state);
 
         var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);

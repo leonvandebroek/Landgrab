@@ -74,6 +74,118 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
         return room;
     }
 
+    public GameRoom CreateScenarioRoom(string hostUserId, InjectScenarioRequest req)
+    {
+        var code = GenerateCode();
+        var room = new GameRoom
+        {
+            Code = code,
+            HostUserId = Guid.TryParse(hostUserId, out var hostGuid) ? hostGuid : Guid.NewGuid()
+        };
+
+        room.State.RoomCode = code;
+        room.State.MapLat = req.MapLat;
+        room.State.MapLng = req.MapLng;
+        room.State.GridRadius = req.GridRadius;
+        room.State.HostBypassGps = req.HostBypassGps;
+        room.State.Dynamics = req.Dynamics ?? new GameDynamics();
+        room.State.Grid = BuildGridForState(room.State);
+        room.State.TileSizeMeters = GetAllowedTileSizeMeters(
+            room.State.Grid.Values.Select(c => (c.Q, c.R)),
+            req.TileSizeMeters,
+            room.State.MaxFootprintMetersOverride ?? MaxFootprintMeters);
+
+        // Build alliances from the distinct names in the player list
+        var allianceNames = req.Players.Select(p => p.AllianceName).Distinct().ToList();
+        for (var i = 0; i < allianceNames.Count; i++)
+        {
+            room.State.Alliances.Add(new AllianceDto
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = allianceNames[i],
+                Color = GameStateCommon.AllianceColors[i % GameStateCommon.AllianceColors.Length]
+            });
+        }
+
+        // Add players
+        for (var i = 0; i < req.Players.Count; i++)
+        {
+            var spec = req.Players[i];
+            var alliance = room.State.Alliances.FirstOrDefault(a => a.Name == spec.AllianceName);
+            if (alliance != null && !alliance.MemberIds.Contains(spec.UserId))
+                alliance.MemberIds.Add(spec.UserId);
+
+            Enum.TryParse<PlayerRole>(spec.Role, out var role);
+
+            room.State.Players.Add(new PlayerDto
+            {
+                Id = spec.UserId,
+                Name = spec.Username,
+                Color = Colors[i % Colors.Length],
+                Emoji = GetPlayerEmoji(i),
+                IsHost = spec.UserId == hostUserId,
+                AllianceId = alliance?.Id,
+                AllianceName = alliance?.Name,
+                AllianceColor = alliance?.Color,
+                CarriedTroops = spec.CarriedTroops,
+                CurrentLat = spec.Lat,
+                CurrentLng = spec.Lng,
+                IsConnected = false,
+                Role = role
+            });
+        }
+
+        // Apply hex overrides (ownership, troop counts, forts, master tile)
+        if (req.HexOverrides != null)
+        {
+            foreach (var ovr in req.HexOverrides)
+            {
+                var key = HexService.Key(ovr.Q, ovr.R);
+                if (!room.State.Grid.TryGetValue(key, out var cell))
+                    continue;
+
+                if (ovr.IsMasterTile)
+                {
+                    cell.IsMasterTile = true;
+                    room.State.MasterTileQ = ovr.Q;
+                    room.State.MasterTileR = ovr.R;
+                }
+
+                if (ovr.OwnerPlayerId != null)
+                {
+                    var owner = room.State.Players.FirstOrDefault(p => p.Id == ovr.OwnerPlayerId);
+                    if (owner != null)
+                    {
+                        var ownerAlliance = room.State.Alliances.FirstOrDefault(a => a.Id == owner.AllianceId);
+                        cell.OwnerId = owner.Id;
+                        cell.OwnerAllianceId = owner.AllianceId;
+                        cell.OwnerName = owner.Name;
+                        cell.OwnerColor = ownerAlliance?.Color ?? owner.Color;
+                    }
+                }
+
+                cell.Troops = ovr.Troops;
+                cell.IsFort = ovr.IsFort;
+            }
+        }
+
+        GameplayService.RefreshTerritoryCount(room.State);
+
+        room.State.Phase = GamePhase.Playing;
+        room.State.GameStartedAt = DateTime.UtcNow;
+
+        AppendEventLog(room.State, new GameEventLogEntry
+        {
+            Type = "GameStarted",
+            Message = "Playtest scenario injected.",
+            PlayerId = hostUserId
+        });
+
+        _rooms[code] = room;
+        QueuePersistence(room, SnapshotState(room.State));
+        return room;
+    }
+
     public (GameRoom? room, string? error) JoinRoom(string roomCode, string userId,
         string username, string connectionId)
     {

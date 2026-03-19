@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { getTileActions, getTileInteractionStatus } from '../components/game/tileInteraction';
 import type { TileAction, TileActionType } from '../components/game/tileInteraction';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type { CombatPreviewDto, HexCell } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
@@ -66,11 +66,10 @@ export function useGameActionsGameplay({
   playSound,
   handleActivateCommandoRaid,
 }: UseGameActionsGameplayOptions): UseGameActionsGameplayResult {
-  const selectedHex = useGameplayStore(state => state.selectedHex);
+  const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
   const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
   const combatResult = useGameplayStore(state => state.combatResult);
   const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
-  const setSelectedHex = useGameplayStore(state => state.setSelectedHex);
   const setMapFeedback = useGameplayStore(state => state.setMapFeedback);
   const setPickupPrompt = useGameplayStore(state => state.setPickupPrompt);
   const setPickupCount = useGameplayStore(state => state.setPickupCount);
@@ -88,6 +87,13 @@ export function useGameActionsGameplay({
   const pendingLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastSendTimeRef = useRef<number>(0);
   const previousCurrentHexRef = useRef<string | null>(null);
+  const selectedHex = useMemo<[number, number] | null>(() => {
+    if (!selectedHexKey) {
+      return null;
+    }
+
+    return selectedHexKey.split(',').map(Number) as [number, number];
+  }, [selectedHexKey]);
 
   const clearLocationThrottle = useCallback((): void => {
     if (locationThrottleRef.current !== null) {
@@ -185,13 +191,13 @@ export function useGameActionsGameplay({
       return;
     }
 
-    setSelectedHex(currentHex);
+    useGameplayStore.getState().setSelectedHexKey(`${currentHex[0]},${currentHex[1]}`);
     setMapFeedback(null);
     setPickupPrompt(null);
     setReinforcePrompt(null);
     setAttackPrompt(null);
     setCombatPreview(null);
-  }, [currentHex, gameState?.phase, setAttackPrompt, setCombatPreview, setMapFeedback, setPickupPrompt, setReinforcePrompt, setSelectedHex]);
+  }, [currentHex, gameState?.phase, setAttackPrompt, setCombatPreview, setMapFeedback, setPickupPrompt, setReinforcePrompt]);
 
   const getCombatPreview = useCallback(async (q: number, r: number): Promise<CombatPreviewDto> => {
     if (!invoke) {
@@ -248,11 +254,11 @@ export function useGameActionsGameplay({
   ]);
 
   const tileActions = useMemo<TileAction[]>(() => {
-    if (!gameState || gameState.phase !== 'Playing' || !selectedHex) {
+    if (!gameState || gameState.phase !== 'Playing' || !selectedHexKey || !selectedHex) {
       return [];
     }
 
-    const targetCell = gameState.grid[`${selectedHex[0]},${selectedHex[1]}`];
+    const targetCell = gameState.grid[selectedHexKey];
     return getTileActions({
       state: gameState,
       player: myPlayer,
@@ -261,7 +267,7 @@ export function useGameActionsGameplay({
       currentHex,
       isHostBypass,
     });
-  }, [currentHex, gameState, isHostBypass, myPlayer, selectedHex]);
+  }, [currentHex, gameState, isHostBypass, myPlayer, selectedHex, selectedHexKey]);
 
   const currentHexActions = useMemo<TileAction[]>(() => {
     if (!gameState || gameState.phase !== 'Playing' || !currentHex) {
@@ -299,7 +305,7 @@ export function useGameActionsGameplay({
     }
 
     const targetHex: [number, number] = [q, r];
-    setSelectedHex(targetHex);
+    useGameplayStore.getState().setSelectedHexKey(`${q},${r}`);
     setPickupPrompt(null);
     setReinforcePrompt(null);
     setAttackPrompt(null);
@@ -338,7 +344,6 @@ export function useGameActionsGameplay({
     setMapFeedback,
     setPickupPrompt,
     setReinforcePrompt,
-    setSelectedHex,
     setAttackPrompt,
     setCombatPreview,
     t,
@@ -423,7 +428,7 @@ export function useGameActionsGameplay({
         break;
       }
       case 'reinforce': {
-        setSelectedHex(currentHex);
+        useGameplayStore.getState().setSelectedHexKey(`${currentHex[0]},${currentHex[1]}`);
         setPickupPrompt(null);
         setAttackPrompt(null);
         const maxTroops = myPlayer?.carriedTroops ?? 1;
@@ -432,7 +437,7 @@ export function useGameActionsGameplay({
         break;
       }
       case 'attack': {
-        setSelectedHex(currentHex);
+        useGameplayStore.getState().setSelectedHexKey(`${currentHex[0]},${currentHex[1]}`);
         setPickupPrompt(null);
         setReinforcePrompt(null);
         setAttackPrompt(null);
@@ -448,7 +453,7 @@ export function useGameActionsGameplay({
         break;
       }
       case 'pickup': {
-        setSelectedHex(currentHex);
+        useGameplayStore.getState().setSelectedHexKey(`${currentHex[0]},${currentHex[1]}`);
         setReinforcePrompt(null);
         setAttackPrompt(null);
         const cell = gameState.grid[`${q},${r}`];
@@ -470,17 +475,16 @@ export function useGameActionsGameplay({
     setPickupPrompt,
     setReinforceCount,
     setReinforcePrompt,
-    setSelectedHex,
     getCombatPreview,
     playSound,
     setMapFeedback,
   ]);
 
   const handleDismissTileActions = useCallback((): void => {
-    setSelectedHex(null);
+    useGameplayStore.getState().setSelectedHexKey(null);
     setMapFeedback(null);
     setCombatPreview(null);
-  }, [setCombatPreview, setMapFeedback, setSelectedHex]);
+  }, [setCombatPreview, setMapFeedback]);
 
   const handleConfirmPickup = useCallback((): void => {
     const currentPickupPrompt = useGameplayStore.getState().pickupPrompt;
@@ -497,7 +501,7 @@ export function useGameActionsGameplay({
     }
 
     clearError();
-    setSelectedHex(targetHex);
+    useGameplayStore.getState().setSelectedHexKey(`${targetHex[0]},${targetHex[1]}`);
     invoke('PickUpTroops', currentPickupPrompt.q, currentPickupPrompt.r, currentPickupCount, coordinates.lat, coordinates.lng)
       .then(() => {
         setPickupPrompt(null);
@@ -528,7 +532,6 @@ export function useGameActionsGameplay({
     playSound,
     setMapFeedback,
     setPickupPrompt,
-    setSelectedHex,
     t,
   ]);
 
@@ -547,7 +550,7 @@ export function useGameActionsGameplay({
     }
 
     clearError();
-    setSelectedHex(targetHex);
+    useGameplayStore.getState().setSelectedHexKey(`${targetHex[0]},${targetHex[1]}`);
 
     try {
       await invoke(
@@ -583,7 +586,6 @@ export function useGameActionsGameplay({
     playSound,
     setMapFeedback,
     setReinforcePrompt,
-    setSelectedHex,
     t,
   ]);
 

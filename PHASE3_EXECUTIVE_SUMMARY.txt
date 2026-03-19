@@ -1,0 +1,344 @@
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3 MAPorchestrator + GRIDDIFF + SIGNALR INTEGRATION
+Executive Summary for Frontend Implementation
+═══════════════════════════════════════════════════════════════════════════════
+
+PROJECT LOCATION:
+  /Users/leonvandebroek/Projects/Github/Landgrab/frontend/landgrab-ui/src
+
+ANALYSIS DOCUMENTS CREATED:
+  1. PHASE3_INTEGRATION_GUIDE.md (36 KB) — Complete technical reference
+  2. PHASE3_QUICK_REFERENCE.md (14 KB) — Copy-paste code patterns
+  3. PHASE3_IMPLEMENTATION_ROADMAP.md (27 KB) — Step-by-step checklist
+  4. PHASE3_EXECUTIVE_SUMMARY.txt (this file)
+
+═══════════════════════════════════════════════════════════════════════════════
+1. KEY FINDINGS
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ GRID DIFF ALREADY EXISTS
+  File: src/hooks/useGridDiff.ts (179 lines)
+  Status: PRODUCTION-READY, NO CHANGES NEEDED
+  Function: Detects troop movements (attack vs transfer) between grid states
+  Input: Record<string, HexCell> keyed by "${q},${r}"
+  Output: TroopMovement[] (max 10, auto-clears after 1500ms)
+  Gotchas: Only first matching neighbor credited, first render skipped
+
+✗ NO MAPOCHESTRATOR HOOK EXISTS
+  Status: MUST CREATE
+  Location: src/hooks/useMapOrchestrator.ts (NEW FILE)
+  Purpose: Orchestrate grid diff + SignalR + store updates for Phase 3
+  Complexity: Medium (wrapper around existing hooks + store sync)
+
+✓ SIGNALR HANDLERS READY
+  File: src/hooks/useSignalRHandlers.ts (401 lines)
+  Status: EXISTS, NEEDS PHASE 3 EVENT HANDLING
+  Key Handler: onStateUpdated (line 204-274) — where grid updates flow in
+  Integration: Add Phase 3 event detection in normalizedState.eventLog loop
+
+✓ TYPE SYSTEM PREPARED
+  File: src/types/game.ts (355 lines)
+  Status: Phase 3 fields ALREADY PRESENT:
+    - HexCell.isFortified (line 94)
+    - HexCell.lastVisitedAt (line 96)
+    - Player.rallyPoint* fields (lines 131-135)
+    - Player.isBeacon, beaconLat/Lng (lines 123-125)
+  Action: Verify types, extend GameEventLogEntry for Phase 3 events
+
+✓ STORES PREPARED
+  Status: Foundation exists, needs Phase 3 fields
+  Files:
+    - tileOverlayStore.ts (65 lines) — Tile display state
+    - effectsStore.ts (35 lines) — Visual effects (troopMovements, edges)
+    - playerLayerStore.ts (23 lines) — Player positions/beacons
+    - gameStore.ts (105 lines) — Canonical game state
+  Action: Extend tileOverlayStore for rallyPoint/fortified tracking
+
+═══════════════════════════════════════════════════════════════════════════════
+2. CORE ARCHITECTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+DATA FLOW:
+  1. SignalR receives grid update → onStateUpdated handler
+  2. normalizeGameState() called → useGameStore.setGameState()
+  3. useMapOrchestrator detects changes (via useGridDiff)
+  4. Movements/events synced to effectsStore (visual effects)
+  5. Tile state synced to tileOverlayStore (display state)
+  6. GameMap renders tileOverlayStore + effectsStore visuals
+
+KEY HOOKS (in order of execution):
+  1. useSignalR — WebSocket connection (maintains hub connection)
+  2. useSignalRHandlers — Event handlers (routes server messages)
+  3. useMapOrchestrator [NEW] — Phase 3 coordination (orchestrates sub-hooks)
+     ├─ useGridDiff — Movement detection (returns TroopMovement[])
+     └─ useEffect chains — Store syncing + event tracking
+  4. GameView — Presenter (reads stores, renders components)
+
+HEX COORDINATE KEY FORMAT:
+  ✓ Correct: "${q},${r}" (e.g., "5,-3")
+  ✗ Wrong: "q:r", "q_r", "q.r", etc.
+  Functions: parseKey(key) and toKey(q, r) exist in useGridDiff.ts
+
+═══════════════════════════════════════════════════════════════════════════════
+3. MUST-PORT-EXACTLY CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+useGridDiff Algorithm (src/hooks/useGridDiff.ts:84-147)
+  ✓ NEVER MODIFY — logic is proven and tested
+  ✓ COPY VERBATIM if porting to new system
+  ✓ Patterns used:
+    - hasGridChanged() — sampled check (first, middle, last keys)
+    - NEIGHBOR_OFFSETS — 6-direction hex grid offsets
+    - Attack detection — ownerId change + adjacent friendly loses troops
+    - Transfer detection — same owner, gained troops from adjacent friendly
+    - Critical: Only first matching neighbor is credited (break statement)
+    - Critical: Movements merge into state via setTimeout(..., 0)
+    - Critical: Auto-clear after CLEAR_DELAY_MS (1500ms)
+
+useSignalRHandlers Pattern (src/hooks/useSignalRHandlers.ts:156-399)
+  ✓ INTEGRATION POINT: onStateUpdated handler
+  ✓ Must call normalizeGameState() before storing
+  ✓ Must check event log for new entries (slice from previous count)
+  ✓ Must push new events to infoLedgeStore for toast display
+  ✓ Must clear prompts when hex states change (shouldClear* helpers)
+
+Store Update Ordering
+  ✓ gameStore.setGameState() first (source of truth)
+  ✓ useGridDiff auto-triggers via dependency
+  ✓ effectsStore.setTroopMovements() next (visual effects)
+  ✓ tileOverlayStore.updateTiles() next (display state)
+  ✓ infoLedgeStore.push() last (toast messages)
+
+═══════════════════════════════════════════════════════════════════════════════
+4. CRITICAL GOTCHAS & WARNINGS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. HEX KEY FORMAT IS "${q},${r}"
+   ✗ Wrong: "5:3", "5_3", "5|3"
+   ✓ Right: "5,-3"
+   Impact: All lookups fail if format wrong
+
+2. useGridDiff TIMING
+   ✗ First render has NO previous grid — returns empty movements
+   ✓ Only second+ update triggers detection
+   Impact: Don't expect movements on initial load
+
+3. useGridDiff AUTO-CLEAR
+   ✗ Movements persist indefinitely if auto-clear fails
+   ✓ 1500ms timeout always fires (unless timer not cleared on unmount)
+   Impact: Memory leak possible if cleanup skipped
+
+4. normalizeGameState() IS REQUIRED
+   ✗ Storing raw state from SignalR causes inconsistencies
+   ✓ Always call normalizeGameState(incomingState, previousState)
+   Impact: UI sync issues, stale prompts, ghost entities
+
+5. EVENT LOG PARSING MUST BE CAREFUL
+   ✗ Assuming all entries are Phase 3 types crashes handler
+   ✓ Check entry.type before dispatching Phase 3 logic
+   Impact: Phase 3 events disappear or cause exceptions
+
+6. STORE COUPLING IS INTENTIONAL
+   ✗ Trying to use tileOverlayStore as source of truth
+   ✓ gameStore is source of truth, others are derived
+   Impact: Stale state, race conditions, desyncs
+
+7. MOVEMENT DETECTION ONLY CHECKS FIRST NEIGHBOR
+   ✗ Trying to detect all attacking neighbors
+   ✓ Break on first match (this is intentional)
+   Impact: Multiple simultaneous attacks only show first
+
+8. ZUSTAND STATE IMMUTABILITY
+   ✗ Modifying state object directly: state.tiles[key] = newTile
+   ✓ Spreading: { ...state.tiles, [key]: newTile }
+   Impact: React won't detect changes, UI won't update
+
+═══════════════════════════════════════════════════════════════════════════════
+5. IMPLEMENTATION PHASES
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 3A: RALLY POINTS (1-2 days)
+  ✓ Create useMapOrchestrator.ts
+  ✓ Add rallyPointHexKey to tileOverlayStore
+  ✓ Track myPlayer.rallyPointActive in orchestrator
+  ✓ Render rally point hex visual in GameMap
+  ✓ Add rally point event log handling in SignalRHandlers
+  ✓ Add "RallyPointActivated", "RallyPointResolved" event types
+
+PHASE 3B: FORTIFICATIONS (1 day)
+  ✓ Add fortifiedHexKeys to tileOverlayStore
+  ✓ Track isFortified flags in orchestrator
+  ✓ Render fortified hex overlay in GameMap
+  ✓ Add event log handling for fortification events
+  ✓ Add "TileFortified", "TileDeFortified" event types
+
+PHASE 3C: SHEPHERD BEACONS (1 day)
+  ✓ Add beaconLocations to playerLayerStore
+  ✓ Track isBeacon + beaconLat/Lng in orchestrator
+  ✓ Render beacon positions on PlayerLayer
+  ✓ Add event log handling for beacon sightings
+  ✓ Add "ShepherdBeaconSighted" event type
+
+TESTING & POLISH (1-2 days)
+  ✓ Unit test useGridDiff with Phase 3 scenarios
+  ✓ Integration test SignalR → orchestrator → stores
+  ✓ Visual test all Phase 3 visuals
+  ✓ Memory leak test (unmount during effects)
+  ✓ Performance test (no jank from diff)
+
+═══════════════════════════════════════════════════════════════════════════════
+6. FILE MANIFEST
+═══════════════════════════════════════════════════════════════════════════════
+
+MUST READ (in order):
+  1. src/types/game.ts (355 lines)
+     → GameState, HexCell, Player types (verify Phase 3 fields exist)
+  2. src/stores/effectsStore.ts (35 lines)
+     → TroopMovement type, simple store pattern
+  3. src/stores/tileOverlayStore.ts (65 lines)
+     → TileState type, main tile display state
+  4. src/hooks/useGridDiff.ts (179 lines)
+     → Movement detection algorithm (COPY EXACTLY, NO CHANGES)
+  5. src/hooks/useSignalRHandlers.ts (401 lines)
+     → Event handler pattern (where Phase 3 events integrate)
+  6. src/components/GameView.tsx (150+ lines)
+     → How to wire useMapOrchestrator into GameView
+
+MUST CREATE (new files):
+  1. src/hooks/useMapOrchestrator.ts
+     → Orchestrate grid diff + store syncing + event tracking
+     → 150-200 lines expected
+
+MUST MODIFY (existing files):
+  1. src/types/game.ts
+     → Extend GameEventLogEntry with Phase 3 event types
+  2. src/stores/tileOverlayStore.ts
+     → Add rallyPointHexKey, fortifiedHexKeys fields + setters
+  3. src/stores/playerLayerStore.ts
+     → Add beaconLocations field + setter
+  4. src/hooks/useSignalRHandlers.ts
+     → Enhance onStateUpdated to detect Phase 3 events
+  5. src/components/GameView.tsx
+     → Call useMapOrchestrator hook
+
+SHOULD NOT MODIFY (working as-is):
+  ✓ src/hooks/useGridDiff.ts (production-ready, no changes)
+  ✓ src/hooks/useSignalR.ts (connection management, stable)
+  ✓ src/stores/gameStore.ts (canonical state, stable)
+  ✓ src/stores/effectsStore.ts (simple effects, ready to use)
+
+═══════════════════════════════════════════════════════════════════════════════
+7. QUICK START CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+Day 1: Planning & Review
+  [ ] Read all 4 analysis documents (order: quick ref → guide → roadmap)
+  [ ] Review existing useGridDiff.ts (understand movement detection)
+  [ ] Review useSignalRHandlers.ts (understand integration point)
+  [ ] Review GameView.tsx (understand component structure)
+  [ ] Review types/game.ts (verify Phase 3 fields present)
+
+Day 2-3: Create useMapOrchestrator
+  [ ] Create src/hooks/useMapOrchestrator.ts
+  [ ] Implement grid diff syncing (troopMovements → effectsStore)
+  [ ] Implement rally point tracking (myPlayer.rallyPoint* → tileOverlayStore)
+  [ ] Implement fortification tracking (isFortified → tileOverlayStore)
+  [ ] Implement beacon tracking (isBeacon → playerLayerStore)
+  [ ] Test all useEffect dependencies
+
+Day 4: Store Extensions
+  [ ] Extend tileOverlayStore: add rallyPointHexKey, fortifiedHexKeys
+  [ ] Extend playerLayerStore: add beaconLocations
+  [ ] Verify no TypeScript errors
+
+Day 5: SignalR Integration
+  [ ] Extend useSignalRHandlers.ts to detect Phase 3 events
+  [ ] Add helper functions (shouldClearRallyPrompt, etc.)
+  [ ] Add event log entry parsing for Phase 3 types
+  [ ] Test with mock SignalR messages
+
+Day 6: Type System
+  [ ] Extend GameEventLogEntry with Phase 3 event types
+  [ ] Verify all event types are in union
+  [ ] Check for TypeScript errors
+
+Day 7: Component Wiring
+  [ ] Wire useMapOrchestrator into GameView
+  [ ] Verify no circular dependencies
+  [ ] Check component render logic
+
+Day 8-9: Testing
+  [ ] Unit test useGridDiff with Phase 3 scenarios
+  [ ] Integration test SignalR → orchestrator → stores
+  [ ] Visual test in browser (rally points, fortifications, beacons)
+  [ ] Memory leak test (unmount, check cleanup)
+
+Day 10: Polish & Docs
+  [ ] Update component comments
+  [ ] Update README for Phase 3 architecture
+  [ ] Performance test (profile diff execution)
+  [ ] Finalize and commit
+
+═══════════════════════════════════════════════════════════════════════════════
+8. SUCCESS METRICS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Functional Requirements
+  [ ] Rally points appear and disappear correctly
+  [ ] Fortified hexes show visual indicator
+  [ ] Beacon positions track on map
+  [ ] Troop movements animate (arrows, colors)
+  [ ] Event log shows all Phase 3 events as toasts
+
+✅ Code Quality
+  [ ] No console errors or warnings
+  [ ] No TypeScript errors
+  [ ] No memory leaks (unmount test passes)
+  [ ] Code matches style of existing hooks
+
+✅ Performance
+  [ ] Grid diff completes < 50ms
+  [ ] No jank when detecting movements
+  [ ] Store updates batched efficiently
+
+✅ Stability
+  [ ] Existing Phase 2 features still work
+  [ ] No regression in existing movement detection
+  [ ] Proper cleanup on component unmount
+
+═══════════════════════════════════════════════════════════════════════════════
+9. REFERENCE LINKS (within codebase)
+═══════════════════════════════════════════════════════════════════════════════
+
+Type Definitions:
+  - GameState: src/types/game.ts:179
+  - HexCell: src/types/game.ts:83
+  - Player: src/types/game.ts:102
+  - TileState: src/stores/tileOverlayStore.ts:4
+  - TroopMovement: src/stores/effectsStore.ts:4 (and useGridDiff.ts:4)
+
+Store Implementations:
+  - gameStore: src/stores/gameStore.ts:72
+  - tileOverlayStore: src/stores/tileOverlayStore.ts:37
+  - effectsStore: src/stores/effectsStore.ts:26
+  - playerLayerStore: src/stores/playerLayerStore.ts:14
+
+Hook Implementations:
+  - useGridDiff: src/hooks/useGridDiff.ts:63
+  - useSignalRHandlers: src/hooks/useSignalRHandlers.ts:145
+  - useSignalR: src/hooks/useSignalR.ts:31
+
+Components:
+  - GameView: src/components/GameView.tsx:82
+  - App: src/App.tsx:47
+
+═══════════════════════════════════════════════════════════════════════════════
+
+FINAL NOTES:
+  - No code changes made to existing files during this analysis
+  - All existing code is production-ready, no regressions expected
+  - useGridDiff.ts is the most critical dependency — understand it fully
+  - useSignalRHandlers.ts is the integration point — extend carefully
+  - useMapOrchestrator is the new glue layer — design for clarity
+  - Start small (Phase 3A: rally points), then expand to B and C
+

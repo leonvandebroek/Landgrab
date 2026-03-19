@@ -1,7 +1,6 @@
 import i18n from '../../../i18n';
 import type { HexCell } from '../../../types/game';
 import { iconHtml } from '../../../utils/gameIcons';
-import { terrainIcons } from '../../../utils/terrainIcons';
 
 export function buildHexTooltipHtml(
   cell: HexCell,
@@ -9,10 +8,6 @@ export function buildHexTooltipHtml(
   isContested = false,
 ): string {
   const owner = escapeHtml(cell.ownerName ?? i18n.t('map.unclaimed'));
-  const terrainType = cell.terrainType ?? 'None';
-  const terrainIconName = terrainType !== 'None' ? terrainIcons[terrainType] : '';
-  const terrainIcon = terrainIconName ? iconHtml(terrainIconName, 'sm') : '';
-  const terrainName = terrainType !== 'None' ? escapeHtml(i18n.t(`terrain.${terrainType}` as never)) : '';
   const ownerColor = escapeHtml(cell.ownerColor ?? 'transparent');
   const fortInfo = cell.isFort ? `<div class="tooltip-stat"><span class="tooltip-stat-icon">${iconHtml('fort', 'sm')}</span>${escapeHtml(i18n.t('map.fort'))}</div>` : '';
   const contestedInfo = isContested
@@ -26,7 +21,6 @@ export function buildHexTooltipHtml(
 
   return `<div class="tooltip-card">
     <div class="tooltip-header">
-      <span class="tooltip-terrain-icon">${terrainIcon}${terrainName ? ` ${terrainName}` : ''}</span>
     </div>
     <div class="tooltip-owner">
       <span class="tooltip-owner-swatch" style="background:${ownerColor}"></span>

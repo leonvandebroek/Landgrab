@@ -34,8 +34,7 @@ public class GameplayService(
         List<CombatBonusDetail> AttackerBonuses,
         List<CombatBonusDetail> DefenderBonuses,
         string DefenderName,
-        string? DefenderAllianceName,
-        string DefenderTerrainType);
+        string? DefenderAllianceName);
 
     private sealed record CombatResolution(
         bool AttackerWon,
@@ -284,14 +283,6 @@ public class GameplayService(
 
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
 
-            // ── Dynamics: Water blocking (non-own/non-allied hexes only) ──
-            if (cell.OwnerId != userId && !sameAllianceHex)
-            {
-                // Water terrain is impassable
-                if (room.State.Dynamics.TerrainEnabled && cell.TerrainType == TerrainType.Water)
-                    return (null, "Water terrain is impassable.", null, null);
-            }
-
             if (cell.OwnerId == userId || sameAllianceHex)
             {
                 if (player.CarriedTroops <= 0)
@@ -445,7 +436,6 @@ public class GameplayService(
                 NewState = attackSnapshot,
                 AttackerBonus = combatStats.AttackerBonuses.Sum(bonus => bonus.Value),
                 DefenderBonus = combatStats.DefenderBonuses.Sum(bonus => bonus.Value),
-                DefenderTerrainType = combatStats.DefenderTerrainType,
                 EffectiveAttack = combatStats.EffectiveAttack,
                 EffectiveDefence = combatStats.EffectiveDefence,
                 AttackerTroopsLost = combatResolution.AttackerTroopsLost,
@@ -504,17 +494,6 @@ public class GameplayService(
         var defenderBonuses = new List<CombatBonusDetail>();
         var tacticalStrikeUsed = state.Dynamics.PlayerRolesEnabled && player.TacticalStrikeActive;
 
-        if (state.Dynamics.TerrainEnabled)
-        {
-            var terrainBonus = cell.TerrainType switch
-            {
-                TerrainType.Building or TerrainType.Hills => 1,
-                TerrainType.Steep => 2,
-                _ => 0
-            };
-            AddBonus(defenderBonuses, "Terrain", terrainBonus);
-        }
-
         if (cell.IsFortified && !tacticalStrikeUsed)
             AddBonus(defenderBonuses, "Rally", 1);
 
@@ -529,17 +508,6 @@ public class GameplayService(
             if (commanderPresent)
                 AddBonus(attackerBonuses, "Commander", 1);
 
-        }
-
-        if (state.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
-        {
-            var totalOwnedHexes = state.Grid.Values.Count(candidate => candidate.OwnerId != null);
-            if (totalOwnedHexes > 0)
-            {
-                var targetAllianceHexes = state.Grid.Values.Count(candidate => candidate.OwnerAllianceId == cell.OwnerAllianceId);
-                if ((double)targetAllianceHexes / totalOwnedHexes > 0.6)
-                    AddBonus(attackerBonuses, "Underdog Pact", 2);
-            }
         }
 
         var effectiveAttack = deployedTroops + attackerBonuses.Sum(bonus => bonus.Value);
@@ -566,8 +534,7 @@ public class GameplayService(
             attackerBonuses,
             defenderBonuses,
             cell.OwnerName ?? "Unknown defender",
-            defenderAllianceName,
-            cell.TerrainType.ToString());
+            defenderAllianceName);
     }
 
     private static CombatResolution ResolveCombat(CombatStats combatStats)
@@ -875,16 +842,6 @@ public class GameplayService(
 
             ExpireTimedAbilities(room.State, DateTime.UtcNow);
 
-            var terrainEnabled = room.State.Dynamics.TerrainEnabled;
-
-            // Phase 8: Timed Escalation — increase regen after time thresholds
-            var escalationBonus = 0;
-            if (room.State.Dynamics.TimedEscalationEnabled && room.State.GameStartedAt.HasValue)
-            {
-                var elapsed = DateTime.UtcNow - room.State.GameStartedAt.Value;
-                escalationBonus = (int)(elapsed.TotalMinutes / 30); // +1 per 30 min
-            }
-
             var drainTicks = new List<DrainTickNotification>();
 
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
@@ -941,13 +898,6 @@ public class GameplayService(
                 var friendlyPresent = playersInHex.Any(p => IsFriendlyCell(p, cell));
                 var presenceMultiplier = friendlyPresent ? 3 : 1;
                 cell.Troops += presenceMultiplier;
-
-                // Phase 8: Timed Escalation bonus
-                cell.Troops += escalationBonus;
-
-                // Building terrain bonus: +1 extra regen
-                if (terrainEnabled && cell.TerrainType == TerrainType.Building)
-                    cell.Troops++;
 
             }
 

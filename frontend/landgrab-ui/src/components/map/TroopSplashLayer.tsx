@@ -117,6 +117,10 @@ function mapEventToSplash(event: GameEventLogEntry, id: string): TroopSplash | n
         case 'EmergencyRepair':
         case 'EmergencyRepairActivated':
             return { id, createdAtMs, q: event.q, r: event.r, text: '+3', colorClassName: 'troop-splash--repair' };
+        case 'TileCaptured':
+            return { id, createdAtMs, q: event.q, r: event.r, text: '⚔️', colorClassName: 'troop-splash--capture' };
+        case 'TileClaimed':
+            return { id, createdAtMs, q: event.q, r: event.r, text: '🚩', colorClassName: 'troop-splash--capture' };
         default:
             return null;
     }

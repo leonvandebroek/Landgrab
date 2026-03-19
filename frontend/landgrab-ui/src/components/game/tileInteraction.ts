@@ -1,7 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { GameState, Player } from '../../types/game';
 import { hexKey, hexNeighbors } from '../map/HexMath';
-import { terrainDefendBonus } from '../../utils/terrainColors';
 import type { GameIconName } from '../../utils/gameIcons';
 
 export type MapInteractionTone = 'info' | 'success' | 'error';
@@ -121,7 +120,7 @@ export function getTileActions({
 
   /* ── Enemy tile ── */
   if (isEnemy) {
-    const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
+    const defenderBonusVal = 0;
     const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
     const effectiveAttack = carriedTroops;
     const effectiveDefence = targetCell.troops + defenderBonusVal + fortBonus;
@@ -334,7 +333,7 @@ export function getTileInteractionStatus({
     };
   }
 
-  const defenderBonusVal = terrainDefendBonus(targetCell.terrainType, state.dynamics?.terrainEnabled);
+  const defenderBonusVal = 0;
   const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
   const effectiveAttack = carriedTroops;
   const effectiveDefence = targetCell.troops + defenderBonusVal + fortBonus;

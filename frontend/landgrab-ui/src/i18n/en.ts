@@ -206,8 +206,6 @@ const en = {
     hudDisplayDesc: 'Customize your map markers',
     hudYourRole: 'Your Role',
     hudTimer: 'Time',
-    escalationLevel: 'Escalation',
-    underdogActive: 'Underdog Pact active!',
     pickupPrompt: 'Pick up troops',
     reinforcePrompt: 'Reinforce tile',
     roomLabel: 'Room',
@@ -256,7 +254,7 @@ const en = {
     yourHexDesc_other: 'Your hex \u2022 {{count}} troops',
     enemyHexDesc_one: '{{name}} \u2022 {{count}} troop',
     enemyHexDesc_other: '{{name}} \u2022 {{count}} troops',
-    tileLost: '{{attacker}} captured your tile at ({{q}}, {{r}})!',
+    tileLost: '{{attacker}} captured one of your tiles!',
     soundOn: 'Sound on',
     soundOff: 'Sound off',
     soundToggle: 'Sound',
@@ -310,8 +308,6 @@ const en = {
       carrying: 'Carrying',
       standoffBlocked: 'Standoff! An enemy player is on this tile — attacks are blocked',
       presenceBonusAttacker: 'Presence bonus: +1 attack',
-      waterImpassable: 'This tile is impassable water terrain.',
-      terrainDefenceBonus: 'Terrain defence bonus: +{{count}}',
       forestBlind: 'Enemy troop count hidden (forest)',
       troopsUnknown: 'Troop count unknown',
     },
@@ -328,13 +324,6 @@ const en = {
       pickedUp_other: 'Picked up {{count}} troops from {{q}}, {{r}}.',
     },
 
-    // Supply lines (F3)
-    supplyLine: {
-      connected: 'Connected to HQ',
-      disconnected: 'Disconnected from supply network',
-      supplyLines: 'Supply lines',
-    },
-
     // Mini-map (F4)
     miniMap: {
       title: 'Strategic overview',
@@ -344,7 +333,7 @@ const en = {
     // Radial menu (F6)
     radial: {
       dismiss: 'Dismiss',
-      tileInfo: '({{q}}, {{r}})',
+      tileInfo: 'Tile details',
     },
 
     dock: {
@@ -354,9 +343,6 @@ const en = {
       carrying: 'Carrying',
       troops: 'troops',
       owner: 'Owner',
-      terrain: 'Terrain',
-      defendBonus: '+{{bonus}} defence',
-      terrainDefenceBonus: '+{{bonus}} defence bonus from {{terrain}} terrain',
       fortified: 'Fortified',
       fort: 'Fort',
       relation: {
@@ -370,7 +356,6 @@ const en = {
     tileInfo: {
       owner: 'Owner',
       troops: 'Troops',
-      terrain: 'Terrain',
       status: 'Status',
       unclaimed: 'Unclaimed territory',
       presenceBoost: 'Boosted regen (3×) — you are here',
@@ -378,9 +363,9 @@ const en = {
 
     // Toast notifications (F8)
     toast: {
-      tileLost: '{{attacker}} captured your tile at ({{q}}, {{r}})!',
-      combatWon: 'You won the battle at ({{q}}, {{r}})!',
-      combatLost: 'You lost the battle at ({{q}}, {{r}})',
+      tileLost: '{{attacker}} captured one of your tiles!',
+      combatWon: 'You won the battle!',
+      combatLost: 'You lost the battle.',
       drainTick: 'Enemy drain: -{{troops}} troops from a tile',
       achievementUnlocked: 'Achievement: {{name}}',
       territoryMilestone_one: '{{count}} territory held!',
@@ -399,7 +384,7 @@ const en = {
       PlayerReturnedToLobby: '{{playerName}} returned to the lobby.',
       HostSwitchedToObserver: 'Host switched to Observer mode.',
       HostReturnedToPlay: 'Host returned to active play.',
-      AllianceChanged: '{{playerName}} joined alliance {{allianceName}}.',
+      AllianceChanged: '{{playerName}} joined {{allianceName}}.',
       MasterTileAssigned: 'Home base assigned.',
       StartingTileAssigned: '{{targetPlayerName}} received a starting position.',
       TileCaptured: '{{playerName}} claimed a tile.',
@@ -480,9 +465,10 @@ const en = {
     winProbability: 'Win probability',
     noBonuses: 'No active bonuses',
     victoryTitle: 'Victory!',
-    victorySubtitle: 'Hex {{q}}, {{r}} is yours. Decide how many troops to station there.',
+    victorySubtitle: 'Territory captured! Decide how many troops to station here.',
     defeatTitle: 'Defeat',
-    defeatSubtitle: 'The assault on hex {{q}}, {{r}} failed. Your surviving troops stay with you.',
+    defeatSubtitle: 'Your assault was repelled.',
+    defeatSubtitleWithSurvivors: 'Your assault was repelled. {{count}} surviving troops stay with you.',
     defenderSide: 'Defender',
     defenderLosses: 'Defender losses',
     defenderRemaining: 'Defender survivors',
@@ -498,12 +484,10 @@ const en = {
       Siege: 'Siege',
     },
     bonusSources: {
-      Terrain: 'Terrain',
       Rally: 'Rally',
       Fort: 'Fort',
       Commander: 'Commander',
       'Shield Wall': 'Shield Wall',
-      'Underdog Pact': 'Underdog Pact',
     },
   },
   neutralClaim: {
@@ -552,23 +536,18 @@ const en = {
     expandPanel: 'Open map layers',
     collapsePanel: 'Close map layers',
     territory: 'Territory',
-    terrain: 'Terrain',
     units: 'Units',
     players: 'Players',
     overlays: 'Overlays',
     borderEffects: 'Border Effects',
     buildingIcons: 'Building Icons',
     contestedEdges: 'Contested Edges',
-    supplyLines: 'Supply Lines',
-    terrainIcons: 'Terrain Icons',
     troopBadges: 'Troop Badges',
     troopAnimations: 'Troop Animations',
     playerMarkers: 'Player Markers',
     playerRadius: 'Claim Radius',
-    fogOfWar: 'Fog of War',
     worldDimMask: 'World Dim Mask',
     timeOverlay: 'Time Overlay',
-    supplyLinesMissingHq: 'Supply lines require an HQ to be assigned',
   },
   guidance: {
     enableLocation: 'Enable location to play',
@@ -586,7 +565,6 @@ const en = {
     waitingForTurn: 'Waiting for your turn...',
     yourTurn: 'It\'s your turn! Make a move',
     gameOver: 'Game over!',
-    supplyWarning: 'This hex is disconnected from your supply line!',
     nearestFrontier: 'Your nearest frontier is to the {{direction}}.',
     noFrontierYet: 'Your team has lost all territory. Walk onto a neutral tile to start reclaiming.',
     helpTitle: 'How to Play',
@@ -595,17 +573,13 @@ const en = {
     combatTitle: 'Combat',
     contestedZonesTitle: 'Contested Zones',
     contestedZonesText: 'Red circles mark hexes that border enemy territory. These are frontline zones where combat can break out.',
-    terrainTitle: 'Terrain',
     troopsTitle: 'Troops',
     helpTroops: 'Pick up troops from your team\'s tiles and carry them with you. Reinforce friendly tiles or spend carried troops to attack enemies. You need more troops than the defender to capture a tile.',
     beaconTitle: 'Beacon',
     helpBeaconLegend: 'Beacons extend your team\'s claiming range. In Adjacency Required mode, a teammate\'s beacon lets allies claim hexes within 2 hexes of the beacon, even without bordering territory. The beacon holder must stay within 1 hex of the beacon location.',
-    fogOfWarTitle: 'Fog of War',
-    fogOfWarText: 'Enemy troop counts stay hidden until you get close enough, and forests can keep them concealed for longer.',
     helpMovement: 'Walk around in the real world. Your position is shown on the map.',
     helpClaim: 'Step on a neutral hex to claim it for your team.',
     helpAttack: 'Step on an enemy hex to attack. Combat is automatic based on troop counts.',
-    helpTerrain: 'Different terrain types give combat bonuses or penalties.',
     helpBeaconIntro: 'Beacons act like a forward outpost, but only in the right claim mode:',
     helpBeaconBullet1: 'Beacons only matter in Adjacency Required claim mode. In Presence Only and Presence With Troop modes, they do nothing.',
     helpBeaconBullet2: 'Normally your team can claim only hexes that directly border your existing territory.',
@@ -613,8 +587,6 @@ const en = {
     helpBeaconBullet4: 'The beacon turns off automatically if that teammate moves more than 1 hex away, so they need to hold position.',
     hqLegendTitle: 'HQ',
     hqLegendText: 'Your alliance\'s headquarters. When enabled, HQ must be assigned in the lobby. Supply lines connect back to HQ, and disconnected territory may stop regenerating troops. If your HQ is captured, claiming is temporarily frozen.',
-    supplyLinesLegendTitle: 'Supply Lines',
-    supplyLinesLegendText: 'Dashed lines show the connection from your HQ to your territory. Hexes that cannot reach HQ through owned territory are cut off from the supply network and will not regenerate troops.',
   },
   settings: {
     display: {
@@ -666,21 +638,13 @@ const en = {
     },
     combat: {
       title: 'Combat',
-      body: 'When you step on an enemy hex, combat happens automatically. The outcome depends on troop counts and terrain bonuses. Attackers need more troops than defenders to win.',
+      body: 'When you step on an enemy hex, combat happens automatically. The outcome depends on troop counts. Attackers need more troops than defenders to win.',
     },
     winCondition: {
       title: 'Win Condition',
       territoryPercent: 'The first team to control {{value}}% of the map wins!',
       elimination: 'Eliminate all other players by taking all their hexes!',
       timedGame: 'The game lasts {{value}} minutes. The player with the most territory at the end wins!',
-    },
-    terrain: {
-      title: 'Terrain',
-      body: 'Different terrain types affect gameplay. Some give defensive bonuses, others slow movement or are impassable.',
-    },
-    fogOfWar: {
-      title: 'Fog of War',
-      body: 'You can only see hexes near your territory. The rest of the map is hidden in fog.',
     },
     beacon: {
       title: 'Beacons',
@@ -690,24 +654,12 @@ const en = {
       bullet3: 'If a teammate activates a beacon, allies can also claim any hex within 2 hexes of that beacon, even when it does not border your territory.',
       bullet4: 'The beacon turns off automatically if that teammate moves more than 1 hex away, so they need to hold position like a forward outpost.',
     },
-    supplyLines: {
-      title: 'Supply Lines',
-      body: 'Your team\'s hexes must be connected to your team\'s HQ. Disconnected hexes won\'t regenerate troops.',
-    },
     hq: {
       title: 'Headquarters',
       body: 'Your team\'s first claimed hex becomes your team\'s HQ. Protect it — losing your team\'s HQ weakens your entire territory!',
     },
     roles: {
       title: 'Player Roles',
-    },
-    timedEscalation: {
-      title: 'Timed Escalation',
-      body: 'As the game progresses, troop regeneration and combat intensity increase, making the late game more decisive.',
-    },
-    underdogPact: {
-      title: 'Underdog Pact',
-      body: 'Players who fall behind receive small bonuses to help them catch up and stay competitive.',
     },
   },
   wizard: {
@@ -866,7 +818,6 @@ const en = {
     featuresLabel: 'Additional Features',
     featuresDesc: 'Toggle optional gameplay layers.',
     warning: {
-      supplyLinesNeedsHq: 'Supply lines will not work unless HQ is enabled.',
       missingSingleHq: 'HQ is enabled, but 1 alliance still needs an HQ assigned in Review.',
       missingMultipleHq: 'HQ is enabled, but {{count}} alliances still need an HQ assigned in Review.',
     },
@@ -888,45 +839,17 @@ const en = {
       },
     },
     feature: {
-      terrain: 'Terrain Effects',
-      terrainDesc: 'Real-world terrain affects combat and movement.',
       playerRoles: 'Player Roles',
       playerRolesDesc: 'Assign special roles with unique abilities.',
-      fogOfWar: 'Fog of War',
-      fogOfWarDesc: 'Only see hexes near your territory.',
       beaconEnabled: 'Beacon',
       beaconEnabledDesc: 'A teammate can hold position to extend your alliance border by up to 2 hexes in Adjacency Required mode.',
-      supplyLines: 'Supply Lines',
-      supplyLinesDesc: 'Disconnected territory stops regenerating.',
       hq: 'HQ Mechanic',
       hqDesc: 'Each team has a capturable headquarters.',
       hqAutoAssign: 'Auto-assign HQ',
       hqAutoAssignDesc: "Automatically place each alliance's headquarters on their starting tile when the game begins.",
       tileDecayEnabled: 'Tile decay',
       tileDecayEnabledDesc: 'Unoccupied tiles gradually lose troops over time.',
-      timedEscalation: 'Timed Escalation',
-      timedEscalationDesc: 'Game intensity increases over time.',
-      underdogPact: 'Underdog Pact',
-      underdogPactDesc: 'Trailing teams get temporary attack bonuses.',
     },
-  },
-  terrain: {
-    None: 'Open',
-    Water: 'Water',
-    Building: 'Building',
-    Road: 'Road',
-    Path: 'Path',
-    Forest: 'Forest',
-    Park: 'Park',
-    Hills: 'Hills',
-    Steep: 'Steep',
-    legend: 'Terrain',
-    defendBonus: '+{{bonus}} defence',
-    regenBonus: '+1 regen',
-    impassable: 'Impassable',
-    forestBlind: 'Hidden (forest)',
-    drainActive: 'Drain: regen blocked',
-    presenceBonus: '+1 attack (presence)',
   },
   phase3: {
     fortified: 'Fortified',
@@ -1058,15 +981,6 @@ const en = {
     commandoCooldown: 'Commando raid on cooldown',
     commandoSelectTarget: 'Select a target hex within 3 hexes.',
   },
-  phase7: {
-    fogOfWar: 'Fog of War',
-    fogOfWarDesc: 'Hidden areas are shrouded in darkness.',
-    hiddenHex: 'Unknown territory',
-    supplyLines: 'Supply Lines',
-    supplyLinesDesc: 'Disconnected territory stops regenerating.',
-    disconnected: 'Disconnected — no regen',
-    connected: 'Connected to supply line',
-  },
   mapEditor: {
     title: 'Map Editor',
     backToLobby: 'Back to Lobby',
@@ -1165,6 +1079,20 @@ const en = {
   },
   infoLedge: {
     moreCount: '+{{count}}',
+  },
+  mapLegend: {
+    title: 'Map Legend',
+    yourTerritory: 'Your territory',
+    enemyTerritory: 'Enemy territory',
+    neutral: 'Unclaimed',
+    youAreHere: 'You are here',
+    masterTile: 'Master tile',
+    hqHex: 'Headquarters',
+    fort: 'Fort',
+    contested: 'Contested border',
+    troops: 'Troop count',
+    expandLegend: 'Show legend',
+    collapseLegend: 'Hide legend',
   },
 } as const;
 

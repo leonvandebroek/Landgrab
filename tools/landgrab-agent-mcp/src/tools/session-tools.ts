@@ -2,16 +2,23 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createSession, destroySession, listSessions, destroyAllSessions, getFrontendUrl, getSession } from '../lib/browser-registry.js';
 import { startConsoleCapture } from '../lib/evidence.js';
+import { waitForAgentBridge } from '../lib/agent-bridge.js';
 
 export function registerSessionTools(server: McpServer): void {
   server.tool(
     'session_create',
     'Create a new browser session for a player. Returns the session ID.',
-    { sessionId: z.string().describe('Unique identifier for this player session') },
-    async ({ sessionId }) => {
-      const session = await createSession(sessionId);
+    {
+      sessionId: z.string().describe('Unique identifier for this player session'),
+      viewportWidth: z.number().optional().describe('Viewport width in pixels'),
+      viewportHeight: z.number().optional().describe('Viewport height in pixels'),
+    },
+    async ({ sessionId, viewportWidth, viewportHeight }) => {
+      const viewport = viewportWidth && viewportHeight ? { width: viewportWidth, height: viewportHeight } : undefined;
+      const session = await createSession(sessionId, viewport);
       startConsoleCapture(sessionId, session.page);
       await session.page.goto(getFrontendUrl());
+      await waitForAgentBridge(session.page);
       return {
         content: [{ type: 'text', text: JSON.stringify({ sessionId, url: getFrontendUrl(), status: 'created' }) }],
       };
@@ -75,6 +82,28 @@ export function registerSessionTools(server: McpServer): void {
   );
 
   server.tool(
+    'session_click_testid',
+    'Click an element in a named session by data-testid.',
+    {
+      sessionId: z.string(),
+      testId: z.string(),
+      force: z.boolean().optional(),
+    },
+    async ({ sessionId, testId, force }) => {
+      const { page } = getSession(sessionId);
+      const locator = page.getByTestId(testId).first();
+      await locator.waitFor({ state: 'visible', timeout: 10_000 });
+      if (force) {
+        await locator.dispatchEvent('click');
+      } else {
+        await locator.click();
+      }
+
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'clicked', testId }) }] };
+    },
+  );
+
+  server.tool(
     'session_fill',
     'Fill a text or number input in a named session by CSS selector.',
     {
@@ -92,6 +121,23 @@ export function registerSessionTools(server: McpServer): void {
   );
 
   server.tool(
+    'session_fill_testid',
+    'Fill a text or number input in a named session by data-testid.',
+    {
+      sessionId: z.string(),
+      testId: z.string(),
+      value: z.string(),
+    },
+    async ({ sessionId, testId, value }) => {
+      const { page } = getSession(sessionId);
+      const locator = page.getByTestId(testId).first();
+      await locator.waitFor({ state: 'visible', timeout: 10_000 });
+      await locator.fill(value);
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'filled', testId, value }) }] };
+    },
+  );
+
+  server.tool(
     'session_wait_for',
     'Wait for a CSS selector to reach a given visibility state in a named session.',
     {
@@ -104,6 +150,35 @@ export function registerSessionTools(server: McpServer): void {
       const { page } = getSession(sessionId);
       await page.locator(selector).first().waitFor({ state, timeout });
       return { content: [{ type: 'text', text: JSON.stringify({ status: 'found', selector, state }) }] };
+    },
+  );
+
+  server.tool(
+    'session_wait_for_text',
+    'Wait for specific text to appear anywhere on the page in a named session.',
+    {
+      sessionId: z.string(),
+      text: z.string(),
+      timeout: z.number().int().min(500).max(30_000).optional().default(10_000),
+    },
+    async ({ sessionId, text, timeout }) => {
+      const { page } = getSession(sessionId);
+      await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible', timeout });
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'found', text }) }] };
+    },
+  );
+
+  server.tool(
+    'session_press_key',
+    'Press a keyboard key in a named session.',
+    {
+      sessionId: z.string(),
+      key: z.string(),
+    },
+    async ({ sessionId, key }) => {
+      const { page } = getSession(sessionId);
+      await page.keyboard.press(key);
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'pressed', key }) }] };
     },
   );
 

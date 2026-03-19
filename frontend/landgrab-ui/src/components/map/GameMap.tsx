@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
 import { DEFAULT_MAP_LAYER_PREFS, type MapLayerPreferences } from '../../types/mapLayerPreferences';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
+import { useEffectsStore } from '../../stores/effectsStore';
+import { usePlayerLayerStore } from '../../stores/playerLayerStore';
+import { useGameStore, useGameplayStore } from '../../stores';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
+import { GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
+import { HexTooltipOverlay } from './HexTooltipOverlay';
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { getTimePeriod } from '../../utils/timeOfDay';
-import { showTroopAnimations } from '../../utils/zoomThresholds';
-import { injectTerrainPatternSVG } from './TerrainPatternDefs';
-import { useGridDiff } from '../../hooks/useGridDiff';
-import { renderTroopAnimations } from './TroopAnimationLayer';
 import { TroopSplashLayer } from './TroopSplashLayer';
-import { MapLayerToggle, renderHexGridLayers, renderPlayerMarkers, TimeOverlay } from '../game/map';
+import { MapLayerToggle, MapLegend, TimeOverlay } from '../game/map';
 
 interface LocationPoint {
   lat: number;
@@ -51,25 +52,32 @@ function formatDebugHex(hex: [number, number] | null): string {
   return hex ? `(${hex[0]}, ${hex[1]})` : '—';
 }
 
-function applyLayerPane(layerGroup: L.LayerGroup, paneName: string) {
-  const layers = [...layerGroup.getLayers()];
-
-  for (const layer of layers) {
-    if (!(layer instanceof L.Marker || layer instanceof L.Path)) {
-      continue;
-    }
-
-    if (layer.options.pane === paneName) {
-      continue;
-    }
-
-    layerGroup.removeLayer(layer);
-    layer.options.pane = paneName;
-    layerGroup.addLayer(layer);
+function toHexKey(hex: [number, number] | null | undefined): string | null {
+  if (!hex) {
+    return null;
   }
+
+  return `${hex[0]},${hex[1]}`;
 }
 
-export function GameMap({
+function parseHexKey(hexKey: string | null): [number, number] | null {
+  if (!hexKey) {
+    return null;
+  }
+
+  const delimiter = hexKey.includes(',') ? ',' : ':';
+  const [qText, rText] = hexKey.split(delimiter);
+  const q = Number(qText);
+  const r = Number(rText);
+
+  if (!Number.isFinite(q) || !Number.isFinite(r)) {
+    return null;
+  }
+
+  return [q, r];
+}
+
+export const GameMap = memo(function GameMap({
   state,
   myUserId,
   currentLocation,
@@ -78,43 +86,31 @@ export function GameMap({
   constrainViewportToGrid = false,
   gridOverride,
   inactiveHexKeys = [],
-  playerDisplayPrefs,
+  playerDisplayPrefs: _playerDisplayPrefs,
   onBoundsChange,
   onHexScreenPosition,
   navigateRef,
 }: Props) {
   const { t } = useTranslation();
+  const selectedHexKey = useGameplayStore((overlayState) => overlayState.selectedHexKey);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
-  const [mapOverlayTick, setMapOverlayTick] = useState(0);
   const [layerPrefs, setLayerPrefs] = useState<MapLayerPreferences>(() => ({ ...DEFAULT_MAP_LAYER_PREFS }));
   const [basemapError, setBasemapError] = useState(false);
   const [basemapDismissed, setBasemapDismissed] = useState(false);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const basemapErrorRef = useRef(false);
   const basemapDismissedRef = useRef(false);
   const followedLocationKeyRef = useRef('');
-  const layerGroupRef = useRef<L.LayerGroup | null>(null);
-  const playerLayerGroupRef = useRef<L.LayerGroup | null>(null);
-  const animLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const activeBaseLayerRef = useRef<BasemapLayer | null>(null);
   const basemapLayersRef = useRef<BasemapLayer[]>([]);
   const geometryKeyRef = useRef('');
-  const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
-  const prevGridRef = useRef<Record<string, HexCell>>({});
-  const onHexClickRef = useRef(onHexClick);
-  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
-
-  useEffect(() => {
-    onHexClickRef.current = onHexClick;
-  });
-
-  const troopMovements = useGridDiff(state.grid);
   const initialCenterRef = useRef<[number, number]>(
-    state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER
+    state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER,
   );
 
   const currentHex = useMemo(() => {
@@ -130,18 +126,14 @@ export function GameMap({
       state.tileSizeMeters,
     );
   }, [currentLocation, state.mapLat, state.mapLng, state.tileSizeMeters]);
+
   const myPlayer = useMemo(
-    () => state.players.find(player => player.id === myUserId) ?? null,
+    () => state.players.find((player) => player.id === myUserId) ?? null,
     [myUserId, state.players],
   );
-
   const renderedGrid = gridOverride ?? state.grid;
-  const hasPendingMapOverlays = useMemo(
-    () => Object.values(renderedGrid).some(cell => Boolean(cell.engineerBuiltAt) && !cell.isFort)
-      || state.players.some(player => Boolean(player.demolishActive && player.demolishStartedAt)),
-    [renderedGrid, state.players],
-  );
-  const inactiveHexKeySet = useMemo(() => new Set(inactiveHexKeys), [inactiveHexKeys]);
+  const selectedHexFromStore = useMemo(() => parseHexKey(selectedHexKey), [selectedHexKey]);
+
   const applyBasemapError = useCallback((nextValue: boolean) => {
     if (basemapErrorRef.current === nextValue) {
       return;
@@ -160,12 +152,45 @@ export function GameMap({
     setBasemapDismissed(nextValue);
   }, []);
 
+  const handleHexClick = useCallback((q: number, r: number) => {
+    onHexClick?.(q, r, renderedGrid[`${q},${r}`]);
+  }, [onHexClick, renderedGrid]);
+
   function handleZoomToLocation() {
     const map = mapRef.current;
     if (map && currentLocation) {
       map.setView([currentLocation.lat, currentLocation.lng], Math.max(map.getZoom(), 17));
     }
   }
+
+  useEffect(() => {
+    useGameplayStore.getState().setSelectedHexKey(toHexKey(selectedHex));
+  }, [selectedHex]);
+
+  useEffect(() => {
+    useGameplayStore.getState().setCurrentHexKey(toHexKey(currentHex));
+  }, [currentHex]);
+
+  useEffect(() => {
+    useGameStore.getState().setGridOverride(gridOverride ?? null);
+    return () => {
+      useGameStore.getState().setGridOverride(null);
+    };
+  }, [gridOverride]);
+
+  useEffect(() => {
+    if (!gridOverride) return;
+    useEffectsStore.getState().setEffects({
+      contestedEdges: state.contestedEdges ?? [],
+    });
+  }, [gridOverride, inactiveHexKeys, state.contestedEdges]);
+
+  useEffect(() => {
+    const playerLayerStore = usePlayerLayerStore.getState();
+    playerLayerStore.setPlayers(state.players ?? []);
+    playerLayerStore.setMyUserId(myUserId);
+    playerLayerStore.setCurrentLocation(currentLocation);
+  }, [currentLocation, myUserId, state.players]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -251,25 +276,12 @@ export function GameMap({
       [t('map.layerGray')]: brtGray,
     }).addTo(map);
 
-    layerGroupRef.current = L.layerGroup().addTo(map);
-    playerLayerGroupRef.current = L.layerGroup().addTo(map);
-    animLayerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     setMapInstance(map);
 
     if (navigateRef) {
       navigateRef.current = (lat: number, lng: number) => map.setView([lat, lng]);
     }
-
-    setTimeout(() => {
-      if (containerRef.current) {
-        injectTerrainPatternSVG(containerRef.current);
-      }
-    }, 100);
-
-    map.getContainer().addEventListener('pointerdown', (event: PointerEvent) => {
-      pointerDownRef.current = { x: event.clientX, y: event.clientY };
-    }, { passive: true });
 
     return () => {
       if (basemapResetTimeoutId !== null) {
@@ -291,9 +303,6 @@ export function GameMap({
       map.remove();
       mapRef.current = null;
       setMapInstance(null);
-      layerGroupRef.current = null;
-      playerLayerGroupRef.current = null;
-      animLayerGroupRef.current = null;
       geometryKeyRef.current = '';
       if (navigateRef) {
         navigateRef.current = null;
@@ -346,14 +355,14 @@ export function GameMap({
     if (!onHexScreenPosition || !map) {
       return;
     }
-    if (!selectedHex || state.mapLat == null || state.mapLng == null) {
+    if (!selectedHexFromStore || state.mapLat == null || state.mapLng == null) {
       onHexScreenPosition(null);
       return;
     }
 
     const [lat, lng] = roomHexToLatLng(
-      selectedHex[0],
-      selectedHex[1],
+      selectedHexFromStore[0],
+      selectedHexFromStore[1],
       state.mapLat,
       state.mapLng,
       state.tileSizeMeters,
@@ -361,24 +370,12 @@ export function GameMap({
     const point = map.latLngToContainerPoint([lat, lng]);
     const rect = map.getContainer().getBoundingClientRect();
     onHexScreenPosition({ x: rect.left + point.x, y: rect.top + point.y });
-  }, [selectedHex, state.mapLat, state.mapLng, state.tileSizeMeters, onHexScreenPosition]);
+  }, [onHexScreenPosition, selectedHexFromStore, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setTimePeriod(getTimePeriod()), 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
-
-  useEffect(() => {
-    if (!hasPendingMapOverlays) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setMapOverlayTick(tick => tick + 1);
-    }, 1_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [hasPendingMapOverlays]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -431,7 +428,7 @@ export function GameMap({
     geometryKeyRef.current = geometryKey;
 
     const points = Object.values(renderedGrid)
-      .flatMap(cell => roomHexCornerLatLngs(cell.q, cell.r, state.mapLat!, state.mapLng!, state.tileSizeMeters))
+      .flatMap((cell) => roomHexCornerLatLngs(cell.q, cell.r, state.mapLat!, state.mapLng!, state.tileSizeMeters))
       .map(([lat, lng]) => L.latLng(lat, lng));
 
     if (points.length === 0) {
@@ -450,101 +447,6 @@ export function GameMap({
     map.setMaxBounds(bounds.pad(0.05));
   }, [constrainViewportToGrid, renderedGrid, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
-  useEffect(() => {
-    const layerGroup = layerGroupRef.current;
-    if (!layerGroup || state.mapLat == null || state.mapLng == null) {
-      return;
-    }
-
-    renderHexGridLayers({
-      currentHex,
-      currentZoom,
-      inactiveHexKeySet,
-      layerGroup,
-      layerPrefs,
-      myUserId,
-      onHexClickRef,
-      pointerDownRef,
-      prevGridRef,
-      renderedGrid,
-      selectedHex,
-      state: {
-        alliances: state.alliances,
-        dynamics: state.dynamics,
-        mapLat: state.mapLat,
-        mapLng: state.mapLng,
-        players: state.players,
-        tileSizeMeters: state.tileSizeMeters,
-      } as GameState,
-    });
-
-    applyLayerPane(layerGroup, HEX_LAYER_PANE);
-  }, [
-    currentHex,
-    currentZoom,
-    inactiveHexKeySet,
-    layerPrefs,
-    mapOverlayTick,
-    myUserId,
-    renderedGrid,
-    selectedHex,
-    state.alliances,
-    state.dynamics,
-    state.mapLat,
-    state.mapLng,
-    state.players,
-    state.tileSizeMeters,
-  ]);
-
-  useEffect(() => {
-    const playerLayerGroup = playerLayerGroupRef.current;
-    if (!playerLayerGroup) {
-      return;
-    }
-
-    playerLayerGroup.clearLayers();
-
-    if (state.mapLat == null || state.mapLng == null) {
-      return;
-    }
-
-    renderPlayerMarkers({
-      currentLocation,
-      currentZoom,
-      layerGroup: playerLayerGroup,
-      layerPrefs,
-      myUserId,
-      playerDisplayPrefs,
-      state,
-    });
-
-    applyLayerPane(playerLayerGroup, PLAYER_LAYER_PANE);
-  }, [
-    currentLocation,
-    currentZoom,
-    layerPrefs,
-    myUserId,
-    playerDisplayPrefs,
-    state,
-    state.mapLat,
-    state.mapLng,
-    state.players,
-    state.tileSizeMeters,
-  ]);
-
-  useEffect(() => {
-    const layerGroup = animLayerGroupRef.current;
-    if (!layerGroup || state.mapLat == null || state.mapLng == null) {
-      return;
-    }
-    if (troopMovements.length === 0 || !showTroopAnimations(currentZoom)) {
-      layerGroup.clearLayers();
-      return;
-    }
-
-    renderTroopAnimations(troopMovements, layerGroup, state.mapLat, state.mapLng, state.tileSizeMeters, layerPrefs);
-  }, [troopMovements, state.mapLat, state.mapLng, state.tileSizeMeters, currentZoom, layerPrefs]);
-
   function handleBasemapRetry() {
     const layer = activeBaseLayerRef.current;
     console.info('[GameMap] retrying basemap tiles', {
@@ -557,7 +459,7 @@ export function GameMap({
 
     applyBasemapDismissed(false);
     applyBasemapError(false);
-    basemapLayersRef.current.forEach(baseLayer => {
+    basemapLayersRef.current.forEach((baseLayer) => {
       if (baseLayer === layer) {
         baseLayer.redraw();
       }
@@ -567,6 +469,28 @@ export function GameMap({
   return (
     <div className={`game-map-container time-${timePeriod}`}>
       <div ref={containerRef} className="leaflet-map" />
+      {mapInstance ? (
+        <>
+          <GameOverlayLayer
+            map={mapInstance}
+            mapLat={state.mapLat ?? 0}
+            mapLng={state.mapLng ?? 0}
+            tileSizeMeters={state.tileSizeMeters ?? 50}
+            onHexClick={handleHexClick}
+            layerPreferences={layerPrefs}
+            showWorldDimMask={layerPrefs.worldDimMask}
+          />
+          <EffectsLayer
+            map={mapInstance}
+            mapLat={state.mapLat ?? 0}
+            mapLng={state.mapLng ?? 0}
+            tileSizeMeters={state.tileSizeMeters ?? 50}
+            layerPreferences={layerPrefs}
+          />
+          <PlayerLayer map={mapInstance} />
+          <HexTooltipOverlay map={mapInstance} />
+        </>
+      ) : null}
       <TroopSplashLayer
         key={state.roomCode}
         events={state.eventLog}
@@ -607,6 +531,7 @@ export function GameMap({
               : '—'}
           </span>
           <span>Detected (Q, R): {formatDebugHex(currentHex)}</span>
+          <span>Zoom: {currentZoom}</span>
           <span>
             Game state lat/lng: {formatDebugCoordinate(myPlayer?.currentLat)}, {formatDebugCoordinate(myPlayer?.currentLng)}
           </span>
@@ -616,12 +541,19 @@ export function GameMap({
         <button
           type="button"
           className={`map-control-fab${isFollowingMe ? ' is-active' : ''}`}
-          onClick={() => setIsFollowingMe(enabled => !enabled)}
+          onClick={() => setIsFollowingMe((enabled) => !enabled)}
           title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
           aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
           disabled={!currentLocation}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+          {/* Navigation/Compass Icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {isFollowingMe ? (
+              <path d="M12 2L2 22l10-3 10 3L12 2z" fill="currentColor" fillOpacity="0.2" />
+            ) : (
+              <polygon points="3 11 22 2 13 21 11 13 3 11" />
+            )}
+          </svg>
         </button>
         <button
           type="button"
@@ -631,10 +563,16 @@ export function GameMap({
           aria-label={t('game.zoomToLocation')}
           disabled={!currentLocation}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="3"></circle><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 6.9 8 11.7z"></path></svg>
+          {/* Crosshair/Focus Icon */}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
         </button>
       </div>
       <MapLayerToggle prefs={layerPrefs} onPrefsChange={setLayerPrefs} />
+      <MapLegend />
     </div>
   );
-}
+});

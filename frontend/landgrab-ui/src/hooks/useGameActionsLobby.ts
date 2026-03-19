@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { roomHexToLatLng } from '../components/map/HexMath';
 import { useGameStore } from '../stores/gameStore';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type {
   ClaimMode,
@@ -84,6 +84,7 @@ export function useGameActionsLobby({
     setGameState(null);
     setPickupPrompt(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
   }, [clearGameplayUi, clearSession, setGameState, setPickupPrompt, setView]);
 
@@ -356,6 +357,7 @@ export function useGameActionsLobby({
     setMyRooms([]);
     setGameState(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
     setError('');
     setPickupPrompt(null);

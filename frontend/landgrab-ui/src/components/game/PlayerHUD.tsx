@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
-import { terrainIcons } from '../../utils/terrainIcons';
 import { getTileActionDisabledReasonText } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
 import { useSecondTick } from '../../hooks/useSecondTick';
-import { terrainDefendBonus } from '../../utils/terrainColors';
 import { AbilityInfoSheet } from './AbilityInfoSheet';
 import { GameIcon } from '../common/GameIcon';
 
@@ -370,14 +368,6 @@ export function PlayerHUD({
 
   const hasAbilities = abilityButtons.length > 0;
 
-  const terrainType = targetCell?.terrainType;
-  const terrainLabel =
-    terrainType && terrainType !== 'None'
-      ? t(`terrain.${terrainType}` as never)
-      : null;
-  const terrainIconName = terrainType && terrainType !== 'None' ? terrainIcons[terrainType] : '';
-  const defendBonus = terrainDefendBonus(terrainType, true);
-
   return (
     <div
       className={`player-hud ${hasActions ? 'player-hud--active' : 'player-hud--idle'} player-hud--${relation}`}
@@ -423,24 +413,6 @@ export function PlayerHUD({
 
           {targetCell && targetCell.troops > 0 && (
             <span className="player-hud__troops"><GameIcon name="contested" size="sm" /> {targetCell.troops}</span>
-          )}
-
-          {terrainLabel && (
-            <span
-              className="player-hud__terrain"
-              title={defendBonus > 0
-                ? t('game.dock.terrainDefenceBonus' as never, {
-                  bonus: defendBonus,
-                  terrain: terrainLabel,
-                })
-                : undefined}
-            >
-              {terrainIconName && <GameIcon name={terrainIconName} size="sm" />}
-              {terrainLabel}
-              {defendBonus > 0 && (
-                <span className="player-hud__defend-bonus">+{defendBonus}<GameIcon name="shield" size="sm" /></span>
-              )}
-            </span>
           )}
 
           {targetCell?.isFortified && (

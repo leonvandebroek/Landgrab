@@ -12,7 +12,8 @@ import type {
 const MAP_FEEDBACK_TIMEOUT_MS = 3500;
 
 interface GameplayStore {
-  selectedHex: [number, number] | null;
+  selectedHexKey: string | null;
+  currentHexKey: string | null;
   mapFeedback: MapInteractionFeedback | null;
   pickupPrompt: PickupPrompt | null;
   pickupCount: number;
@@ -24,7 +25,8 @@ interface GameplayStore {
   combatResult: CombatResult | null;
   neutralClaimResult: NeutralClaimResult | null;
   commandoTargetingMode: boolean;
-  setSelectedHex: (hex: [number, number] | null) => void;
+  setSelectedHexKey: (key: string | null) => void;
+  setCurrentHexKey: (key: string | null) => void;
   setMapFeedback: (feedback: MapInteractionFeedback | null) => void;
   setPickupPrompt: (prompt: PickupPrompt | null) => void;
   setPickupCount: (count: number) => void;
@@ -37,7 +39,6 @@ interface GameplayStore {
   setNeutralClaimResult: (result: NeutralClaimResult | null) => void;
   setCommandoTargetingMode: (mode: boolean) => void;
   clearGameplayUi: () => void;
-  selectedHexKey: string | null;
 }
 
 let mapFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,8 +52,9 @@ function clearMapFeedbackTimer(): void {
   mapFeedbackTimer = null;
 }
 
-export const useGameplayStore = create<GameplayStore>()((set, get) => ({
-  selectedHex: null,
+export const useGameplayStore = create<GameplayStore>()((set) => ({
+  selectedHexKey: null,
+  currentHexKey: null,
   mapFeedback: null,
   pickupPrompt: null,
   pickupCount: 1,
@@ -64,7 +66,8 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
   combatResult: null,
   neutralClaimResult: null,
   commandoTargetingMode: false,
-  setSelectedHex: (selectedHex) => set({ selectedHex }),
+  setSelectedHexKey: (selectedHexKey) => set({ selectedHexKey }),
+  setCurrentHexKey: (currentHexKey) => set({ currentHexKey }),
   setMapFeedback: (mapFeedback) => {
     clearMapFeedbackTimer();
     set({ mapFeedback });
@@ -91,7 +94,8 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
   clearGameplayUi: () => {
     clearMapFeedbackTimer();
     set({
-      selectedHex: null,
+      selectedHexKey: null,
+      currentHexKey: null,
       mapFeedback: null,
       pickupPrompt: null,
       pickupCount: 1,
@@ -104,9 +108,5 @@ export const useGameplayStore = create<GameplayStore>()((set, get) => ({
       neutralClaimResult: null,
       commandoTargetingMode: false,
     });
-  },
-  get selectedHexKey() {
-    const selectedHex = get().selectedHex;
-    return selectedHex ? `${selectedHex[0]},${selectedHex[1]}` : null;
   },
 }));

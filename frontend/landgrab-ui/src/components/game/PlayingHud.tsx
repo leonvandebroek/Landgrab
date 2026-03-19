@@ -5,7 +5,7 @@ import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
 import { hexKey } from '../map/HexMath';
 import { useSound } from '../../hooks/useSound';
 import { useGameStore } from '../../stores/gameStore';
-import { useGameplayStore } from '../../stores/gameplayStore';
+import { useGameplayStore } from '../../stores';
 import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import { useUiStore } from '../../stores/uiStore';
 import { GameEventLog } from './GameEventLog';
@@ -81,7 +81,7 @@ export function PlayingHud({
   const { t } = useTranslation();
   const { toggleSound } = useSound();
   const state = useGameStore((store) => store.gameState);
-  const selectedHex = useGameplayStore((store) => store.selectedHex);
+  const selectedHexKey = useGameplayStore((store) => store.selectedHexKey);
   const interactionFeedback = useGameplayStore((store) => store.mapFeedback);
   const pickupPrompt = useGameplayStore((store) => store.pickupPrompt);
   const pickupCount = useGameplayStore((store) => store.pickupCount);
@@ -102,14 +102,17 @@ export function PlayingHud({
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
   const effectiveShowReturnConfirm = activeModal === 'menu' && showReturnConfirm;
   const me = state?.players.find((player) => player.id === myUserId);
+  const selectedHex = useMemo<[number, number] | null>(() => {
+    if (!selectedHexKey) {
+      return null;
+    }
+
+    return selectedHexKey.split(',').map(Number) as [number, number];
+  }, [selectedHexKey]);
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
   const needsClock = Boolean(
     state
-    && (
-      isTimedGame
-      || state.dynamics?.timedEscalationEnabled
-      || (state.dynamics?.underdogPactEnabled && myAlliance?.underdogBoostUntil)
-    )
+    && isTimedGame
   );
 
   useEffect(() => {
@@ -263,24 +266,11 @@ export function PlayingHud({
   }, [state]);
 
   const totalHexes = useMemo(() => Object.keys(state?.grid ?? {}).length, [state]);
-  const escalationLevel = useMemo(() => {
-    if (!state?.dynamics?.timedEscalationEnabled || !state.gameStartedAt) {
-      return 0;
-    }
-
-    return Math.floor((currentTime - new Date(state.gameStartedAt).getTime()) / (30 * 60000));
-  }, [currentTime, state]);
-  const underdogBoostActive = Boolean(
-    state?.dynamics?.underdogPactEnabled
-    && myAlliance?.underdogBoostUntil
-    && new Date(myAlliance.underdogBoostUntil).getTime() > currentTime,
-  );
-
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
 
-    const targetCell = selectedHex
-      ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
+    const targetCell = selectedHexKey
+      ? state.grid[selectedHexKey] ?? undefined
       : undefined;
 
     return getTileInteractionStatus({
@@ -291,10 +281,10 @@ export function PlayingHud({
       currentHex,
       t,
     });
-  }, [currentHex, me, pickupPrompt, reinforcePrompt, selectedHex, state, t]);
+  }, [currentHex, me, pickupPrompt, reinforcePrompt, selectedHex, selectedHexKey, state, t]);
 
-  const selectedCell: HexCell | undefined = state && selectedHex
-    ? state.grid[hexKey(selectedHex[0], selectedHex[1])] ?? undefined
+  const selectedCell: HexCell | undefined = state && selectedHexKey
+    ? state.grid[selectedHexKey] ?? undefined
     : undefined;
 
   const showRemoteTileInfoCard = Boolean(
@@ -361,20 +351,6 @@ export function PlayingHud({
                   {formatTimeRemaining(displayTimeRemaining)}
                 </span>
                 <span className="stat-label">{t('game.hudTimer')}</span>
-              </div>
-            )}
-            {state.dynamics?.timedEscalationEnabled && state.gameStartedAt && (
-              <div className="stat-item">
-                <span className="stat-value warning">
-                  <GameIcon name="lightning" size="sm" /> {escalationLevel}
-                </span>
-                <span className="stat-label">{t('game.escalationLevel' as never)}</span>
-              </div>
-            )}
-            {underdogBoostActive && (
-              <div className="stat-item">
-                <span className="stat-value" style={{ color: '#2ecc71' }}><GameIcon name="biceps" size="sm" /></span>
-                <span className="stat-label">{t('game.underdogActive' as never)}</span>
               </div>
             )}
           </div>
@@ -647,7 +623,7 @@ export function PlayingHud({
         </div>
       )}
 
-      {debugPanel}
+      {!activeModal && debugPanel}
 
       <PlayerHUD
         actions={currentHexActions ?? []}

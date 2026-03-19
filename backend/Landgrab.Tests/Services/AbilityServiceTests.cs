@@ -418,31 +418,4 @@ public sealed class AbilityServiceTests
         context.Player("p1").DemolishCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(30), TimeSpan.FromSeconds(10));
     }
 
-    [Fact]
-    public void GetVisibleHexKeys_WithActiveBeacon_RevealsSurroundingHexesForAllianceMembers()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(10)
-            .WithPlayerRolesEnabled()
-            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
-            .AddPlayer("p2", "Bob", allianceId: "a1")
-            .AddPlayer("p3", "Enemy", allianceId: "a2")
-            .OwnHex(5, 0, "p2", allianceId: "a1") // p2 owns hex far from beacon area
-            .OwnHex(0, 0, "p3", allianceId: "a2") // enemy hex at beacon location
-            .WithTroops(0, 0, 7) // enemy troops visible only if beacon reveals it
-            .Build();
-        state.Dynamics.FogOfWarEnabled = true;
-        state.Dynamics.BeaconEnabled = true;
-        var (beaconLat, beaconLng) = ServiceTestContext.HexCenter(0, 0);
-        state.Players.First(p => p.Id == "p1").IsBeacon = true;
-        state.Players.First(p => p.Id == "p1").BeaconLat = beaconLat;
-        state.Players.First(p => p.Id == "p1").BeaconLng = beaconLng;
-        var context = new ServiceTestContext(state);
-
-        var snapshot = context.GameStateService.GetPlayerSnapshot(state, "p2");
-
-        // (0,0) should be visible because scout p1 has beacon there — enemy troops exposed
-        snapshot.Grid[HexService.Key(0, 0)].Troops.Should().Be(7);
-    }
-
 }
