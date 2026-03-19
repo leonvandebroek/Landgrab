@@ -90,13 +90,16 @@
     filter: drop-shadow(0 0 5px rgba(248, 113, 113, 0.6));
 }
 
-@media (max-width: 428px) {
+@media (max-width: 500px) {
     .context-item {
-        padding: 6px 14px;
+        max-width: 260px;
+        padding: 6px 12px;
+        gap: 6px;
+        font-size: 0.7rem;
     }
 
     .guidance-tip {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
     }
 
     .action-prompt {

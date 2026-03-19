@@ -254,7 +254,7 @@ const en = {
     yourHexDesc_other: 'Your hex \u2022 {{count}} troops',
     enemyHexDesc_one: '{{name}} \u2022 {{count}} troop',
     enemyHexDesc_other: '{{name}} \u2022 {{count}} troops',
-    tileLost: '{{attacker}} captured your tile at ({{q}}, {{r}})!',
+    tileLost: '{{attacker}} captured one of your tiles!',
     soundOn: 'Sound on',
     soundOff: 'Sound off',
     soundToggle: 'Sound',
@@ -333,7 +333,7 @@ const en = {
     // Radial menu (F6)
     radial: {
       dismiss: 'Dismiss',
-      tileInfo: '({{q}}, {{r}})',
+      tileInfo: 'Tile details',
     },
 
     dock: {
@@ -363,9 +363,9 @@ const en = {
 
     // Toast notifications (F8)
     toast: {
-      tileLost: '{{attacker}} captured your tile at ({{q}}, {{r}})!',
-      combatWon: 'You won the battle at ({{q}}, {{r}})!',
-      combatLost: 'You lost the battle at ({{q}}, {{r}})',
+      tileLost: '{{attacker}} captured one of your tiles!',
+      combatWon: 'You won the battle!',
+      combatLost: 'You lost the battle.',
       drainTick: 'Enemy drain: -{{troops}} troops from a tile',
       achievementUnlocked: 'Achievement: {{name}}',
       territoryMilestone_one: '{{count}} territory held!',
@@ -384,7 +384,7 @@ const en = {
       PlayerReturnedToLobby: '{{playerName}} returned to the lobby.',
       HostSwitchedToObserver: 'Host switched to Observer mode.',
       HostReturnedToPlay: 'Host returned to active play.',
-      AllianceChanged: '{{playerName}} joined alliance {{allianceName}}.',
+      AllianceChanged: '{{playerName}} joined {{allianceName}}.',
       MasterTileAssigned: 'Home base assigned.',
       StartingTileAssigned: '{{targetPlayerName}} received a starting position.',
       TileCaptured: '{{playerName}} claimed a tile.',
@@ -465,9 +465,10 @@ const en = {
     winProbability: 'Win probability',
     noBonuses: 'No active bonuses',
     victoryTitle: 'Victory!',
-    victorySubtitle: 'Hex {{q}}, {{r}} is yours. Decide how many troops to station there.',
+    victorySubtitle: 'Territory captured! Decide how many troops to station here.',
     defeatTitle: 'Defeat',
-    defeatSubtitle: 'The assault on hex {{q}}, {{r}} failed. Your surviving troops stay with you.',
+    defeatSubtitle: 'Your assault was repelled.',
+    defeatSubtitleWithSurvivors: 'Your assault was repelled. {{count}} surviving troops stay with you.',
     defenderSide: 'Defender',
     defenderLosses: 'Defender losses',
     defenderRemaining: 'Defender survivors',

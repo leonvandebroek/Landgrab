@@ -4,6 +4,7 @@ import { GameIcon } from '../common/GameIcon';
 import { hexAreAdjacent } from '../map/HexMath';
 import { useGameStore } from '../../stores/gameStore';
 import { useGameplayStore } from '../../stores';
+import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 
 interface GuidanceBannerProps {
   carriedTroops: number;
@@ -20,6 +21,7 @@ export function GuidanceBanner({
   const gameState = useGameStore((state) => state.gameState);
   const currentUserId = useGameStore((state) => state.savedSession?.userId);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
+  const hasLedgeLocationError = useInfoLedgeStore((state) => state.items.some((item) => item.source === 'locationError'));
   const isCarryingTroops = carriedTroops > 0;
   const selectedHexCell = useMemo(
     () => (gameState && selectedHexKey ? gameState.grid[selectedHexKey] : undefined),
@@ -78,7 +80,7 @@ export function GuidanceBanner({
     });
   }, [currentHexCell, currentPlayer, gameState, selectedHexCell, t]);
   const computedHint = useMemo(() => {
-    if (!hasLocation) {
+    if (!hasLocation && !hasLedgeLocationError) {
       return t('guidance.enableLocation');
     }
 
@@ -101,7 +103,7 @@ export function GuidanceBanner({
     }
 
     return t('guidance.walkToClaim');
-  }, [carriedTroops, claimModeHint, hasLocation, isCarryingTroops, isInOwnHex, selectedHexExists, t]);
+  }, [carriedTroops, claimModeHint, hasLedgeLocationError, hasLocation, isCarryingTroops, isInOwnHex, selectedHexExists, t]);
   const [hint, setHint] = useState<string>(computedHint);
   const [isVisible, setIsVisible] = useState<boolean>(true);
 

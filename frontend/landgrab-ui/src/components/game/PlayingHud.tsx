@@ -623,7 +623,7 @@ export function PlayingHud({
         </div>
       )}
 
-      {debugPanel}
+      {!activeModal && debugPanel}
 
       <PlayerHUD
         actions={currentHexActions ?? []}

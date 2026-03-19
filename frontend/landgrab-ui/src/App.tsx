@@ -33,7 +33,7 @@ import {
 import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
 
-const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
+const DEBUG_GPS_AVAILABLE = import.meta.env.DEV;
 
 type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
 

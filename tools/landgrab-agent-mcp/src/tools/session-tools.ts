@@ -8,9 +8,14 @@ export function registerSessionTools(server: McpServer): void {
   server.tool(
     'session_create',
     'Create a new browser session for a player. Returns the session ID.',
-    { sessionId: z.string().describe('Unique identifier for this player session') },
-    async ({ sessionId }) => {
-      const session = await createSession(sessionId);
+    {
+      sessionId: z.string().describe('Unique identifier for this player session'),
+      viewportWidth: z.number().optional().describe('Viewport width in pixels'),
+      viewportHeight: z.number().optional().describe('Viewport height in pixels'),
+    },
+    async ({ sessionId, viewportWidth, viewportHeight }) => {
+      const viewport = viewportWidth && viewportHeight ? { width: viewportWidth, height: viewportHeight } : undefined;
+      const session = await createSession(sessionId, viewport);
       startConsoleCapture(sessionId, session.page);
       await session.page.goto(getFrontendUrl());
       await waitForAgentBridge(session.page);

@@ -254,7 +254,7 @@ const nl = {
     yourHexDesc_other: 'Jouw gebied \u2022 {{count}} troepen',
     enemyHexDesc_one: '{{name}} \u2022 {{count}} troep',
     enemyHexDesc_other: '{{name}} \u2022 {{count}} troepen',
-    tileLost: '{{attacker}} heeft jouw gebied bij ({{q}}, {{r}}) veroverd!',
+    tileLost: '{{attacker}} heeft een van je tegels veroverd!',
     soundOn: 'Geluid aan',
     soundOff: 'Geluid uit',
     soundToggle: 'Geluid',
@@ -333,7 +333,7 @@ const nl = {
     // Radiaal menu (F6)
     radial: {
       dismiss: 'Sluiten',
-      tileInfo: '({{q}}, {{r}})',
+      tileInfo: 'Tegeldetails',
     },
 
     dock: {
@@ -363,9 +363,9 @@ const nl = {
 
     // Meldingen (F8)
     toast: {
-      tileLost: '{{attacker}} heeft je tegel op ({{q}}, {{r}}) veroverd!',
-      combatWon: 'Je hebt het gevecht op ({{q}}, {{r}}) gewonnen!',
-      combatLost: 'Je hebt het gevecht op ({{q}}, {{r}}) verloren',
+      tileLost: '{{attacker}} heeft een van je tegels veroverd!',
+      combatWon: 'Je hebt het gevecht gewonnen!',
+      combatLost: 'Je hebt het gevecht verloren.',
       drainTick: 'Vijandelijke drain: -{{troops}} troepen van een tegel',
       achievementUnlocked: 'Prestatie: {{name}}',
       territoryMilestone_one: '{{count}} territorium bezet!',
@@ -384,7 +384,7 @@ const nl = {
       PlayerReturnedToLobby: '{{playerName}} is terug naar de lobby gegaan.',
       HostSwitchedToObserver: 'Host schakelde over naar Observatormodus.',
       HostReturnedToPlay: 'Host keerde terug naar actief spel.',
-      AllianceChanged: '{{playerName}} zit nu in alliantie {{allianceName}}.',
+      AllianceChanged: '{{playerName}} zit nu in {{allianceName}}.',
       MasterTileAssigned: 'Thuisbasis toegewezen.',
       StartingTileAssigned: '{{targetPlayerName}} kreeg een startpositie.',
       TileCaptured: '{{playerName}} eiste een tegel op.',
@@ -465,9 +465,10 @@ const nl = {
     winProbability: 'Winkans',
     noBonuses: 'Geen actieve bonussen',
     victoryTitle: 'Overwinning!',
-    victorySubtitle: 'Gebied {{q}}, {{r}} is van jou. Kies hoeveel troepen je daar stationeert.',
+    victorySubtitle: 'Gebied veroverd! Kies hoeveel troepen je hier stationeert.',
     defeatTitle: 'Nederlaag',
-    defeatSubtitle: 'De aanval op gebied {{q}}, {{r}} is mislukt. Je overlevende troepen blijven bij je.',
+    defeatSubtitle: 'Je aanval is afgeslagen.',
+    defeatSubtitleWithSurvivors: 'Je aanval is afgeslagen. {{count}} overlevende troepen blijven bij je.',
     defenderSide: 'Verdediger',
     defenderLosses: 'Verdedigersverliezen',
     defenderRemaining: 'Verdedigers overleven',

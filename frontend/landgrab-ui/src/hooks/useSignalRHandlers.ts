@@ -11,7 +11,7 @@ import type { SoundName } from './useSound';
 import type { GameEvents } from './useSignalR';
 import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
-import { localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
+import { getErrorMessage, localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
 import { useMapOrchestrator } from './useMapOrchestrator';
 import { recordAgentEvent } from '../testing/agentBridge';
@@ -380,11 +380,12 @@ export function useSignalRHandlers({
     },
     onError: (message) => {
       recordAgentEvent('Error', { message });
-      if (resolveResumeFromError(message)) {
+      const errorText = getErrorMessage(message);
+      if (resolveResumeFromError(errorText)) {
         return;
       }
 
-      useUiStore.getState().setError(localizeLobbyError(message, t));
+      useUiStore.getState().setError(localizeLobbyError(errorText, t));
     },
     onHostMessage: (data) => {
       recordAgentEvent('HostMessage', data);

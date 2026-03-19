@@ -11,7 +11,7 @@ interface TroopDeployModalProps {
 
 export function TroopDeployModal({ claimResult, onDeploy, onClose }: TroopDeployModalProps) {
     const { t } = useTranslation();
-    const [deployCount, setDeployCount] = useState(0);
+    const [deployCount, setDeployCount] = useState(Math.min(1, claimResult.carriedTroops));
 
     return (
         <div className={styles.overlay} onClick={onClose} role="presentation">
@@ -25,7 +25,6 @@ export function TroopDeployModal({ claimResult, onDeploy, onClose }: TroopDeploy
                 <div className={styles.content}>
                     <div className={styles.badgeRow}>
                         <span className={styles.modeBadge}>{t('neutralClaim.title')}</span>
-                        <span className={styles.subtleText}>{claimResult.q}, {claimResult.r}</span>
                     </div>
 
                     <div className={styles.header}>

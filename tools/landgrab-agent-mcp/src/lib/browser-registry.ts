@@ -21,12 +21,12 @@ export async function ensureBrowser(): Promise<Browser> {
   return browser;
 }
 
-export async function createSession(id: string): Promise<PlayerSession> {
+export async function createSession(id: string, viewport?: { width: number; height: number }): Promise<PlayerSession> {
   if (sessions.has(id)) {
     throw new Error(`Session "${id}" already exists`);
   }
   const b = await ensureBrowser();
-  const context = await b.newContext();
+  const context = await b.newContext(viewport ? { viewport } : undefined);
   const page = await context.newPage();
   const session: PlayerSession = { id, context, page, username: '' };
   sessions.set(id, session);

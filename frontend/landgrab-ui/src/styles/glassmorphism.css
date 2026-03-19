@@ -186,7 +186,7 @@
   border-top-right-radius: 24px;
   padding: 1.5rem;
   padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
-  pointer-events: auto;
+  pointer-events: none;
   transform: translateY(100%);
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
@@ -198,6 +198,7 @@
 
 .hud-modal-sheet.open {
   transform: translateY(0);
+  pointer-events: auto;
 }
 
 .hud-modal-header {

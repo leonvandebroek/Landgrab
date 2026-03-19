@@ -1057,6 +1057,25 @@ input:focus {
   border-radius: 12px;
 }
 
+.debug-gps-panel.compact.collapsed {
+  padding: 6px 10px;
+}
+
+.debug-gps-collapse-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.debug-gps-collapse-toggle {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
 .debug-gps-panel * {
   pointer-events: auto;
 }
@@ -2633,6 +2652,16 @@ input:focus {
   .game-map-controls {
     right: 12px;
     left: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .host-step-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-metric-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4786,7 +4815,7 @@ input:checked+.display-settings-slider:before {
 }
 
 .rules-spacer {
-  height: 2rem;
+  height: 5rem;
 }
 
 .rules-sheet .rules-content {
