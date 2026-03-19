@@ -3,14 +3,14 @@ const nl = {
     tagline: 'Verover je omgeving! (letterlijk)',
     leadBadge: 'Accounttoegang',
     leadTitle: 'Stap de spelflow binnen met hetzelfde kwaliteitsniveau als de game zelf.',
-    leadBody: 'Log snel in, of registreer en ga direct door naar Game setup.',
+    leadBody: 'Log in binnen enkele seconden en spring direct het spel in met je vrienden.',
     trustTitle: 'Privé als standaard',
     trustBody: 'Alleen je gebruikersnaam is zichtbaar voor andere spelers. Je e-mail blijft achter de schermen.',
     playTitle: 'Gebouwd voor live play',
     playBody: 'Van account naar spelcode naar kaartsetup: de hele flow is afgestemd op snelle start in de echte wereld.',
     signIn: 'Inloggen',
     signInTitle: 'Welkom terug',
-    signInBody: 'Pak de draad weer op en ga direct terug naar je spelflow.',
+    signInBody: 'Spring terug in je spel — je voortgang is opgeslagen.',
     signUp: 'Registreren',
     signUpTitle: 'Maak je speleraccount aan',
     signUpBody: 'Registreer eenmalig, en host of join games zonder frictie.',
@@ -183,8 +183,8 @@ const nl = {
       detail: 'Neutrale claims verbruiken 1 meebewegende troep.',
     },
     AdjacencyRequired: {
-      title: 'Aangrenzendheid vereist',
-      detail: 'Neutrale claims moeten grenzen aan je alliantiegebied.',
+      title: 'Grenzen aan je gebied',
+      detail: 'Je kunt alleen velden claimen die grenzen aan het gebied van jouw team.',
     },
   },
   winCondition: {
@@ -260,12 +260,12 @@ const nl = {
     soundToggle: 'Geluid',
     allianceButtonCapturedBase: 'De basis van je team is veroverd! Ga naar geallieerd gebied om een nieuw veld te claimen.',
     allianceButtonOnTeamTile: 'Stap op een aangrenzend neutraal veld om het voor je team te claimen.',
-    drainActive: 'Drain: je verliest troepen aan nabije vijanden',
+    drainActive: '⚠️ Vijandige drain — nabije vijanden stelen je soldaten!',
     drainingEnemy: 'Vijandelijk veld wordt gedraineerd',
     dynamicsChanged: 'De game host heeft de spelregels gewijzigd!',
     guidance: {
       noGps: 'Geef eerst GPS-toegang. Zodra de kaart je kan zien, kan hij ook je volgende beste zet aanwijzen.',
-      notOnGrid: 'Je bent dichtbij, maar nog niet vastgeklikt op een gamegebied. Gebruik de locatieknoppen en beweeg tot er een gebied verschijnt.',
+      notOnGrid: 'Bijna! Blijf lopen om het speelveld te betreden.',
       pickupHere: 'Goede plek: tik op deze eigen gebied om troepen op te halen en duw daarna verder naar buiten.',
       findTroops: 'Deze gebied is van jou maar leeg. Ga naar een andere eigen gebied met troepen voordat je uitbreidt.',
       moveToOwnedTile: 'Je staat niet op een van je eigen gebieden. Ga eerst naar vriendelijk gebied zodat je troepen kunt ophalen.',
@@ -338,7 +338,7 @@ const nl = {
 
     dock: {
       noLocation: 'Wachten op GPS-signaal…',
-      outsideGrid: 'Ga naar het spelgebied',
+      outsideGrid: 'Loop terug naar het speelveld! 🗺️',
       noActions: 'Alles veilig — blijf bewegen!',
       carrying: 'Draagt',
       troops: 'troepen',
@@ -358,16 +358,16 @@ const nl = {
       troops: 'Troepen',
       status: 'Status',
       unclaimed: 'Onbezet gebied',
-      presenceBoost: 'Verhoogde regeneratie (3×) — jij bent hier',
+      presenceBoost: 'Je bent hier — soldaten herstellen 3× sneller!',
     },
 
     // Meldingen (F8)
     toast: {
-      tileLost: '{{attacker}} heeft een van je tegels veroverd!',
+      tileLost: '😤 {{attacker}} heeft zojuist een van jouw velden ingenomen! Sla terug!',
       combatWon: 'Je hebt het gevecht gewonnen!',
       combatLost: 'Je hebt het gevecht verloren.',
       drainTick: 'Vijandelijke drain: -{{troops}} troepen van een tegel',
-      achievementUnlocked: 'Prestatie: {{name}}',
+      achievementUnlocked: '🏹 Prestatie behaald: {{name}}',
       territoryMilestone_one: '{{count}} territorium bezet!',
       territoryMilestone_other: '{{count}} territoria bezet!',
     },
@@ -456,11 +456,11 @@ const nl = {
     abandon: 'Gebied opgeven',
     previewBadge: 'Gevechtsplan',
     resultBadge: 'Gevechtsverslag',
-    previewTitle: 'Gevechtsvoorvertoning',
-    previewSubtitle: 'Bekijk de krachtsverhouding voordat je je troepen inzet.',
-    effectiveAttack: 'Effectieve aanval',
-    effectiveDefence: 'Effectieve verdediging',
-    troopsCommitted: 'Ingezette troepen',
+    previewTitle: 'Gevechtsblik',
+    previewSubtitle: 'Bekijk je kansen voordat je aanvalt!',
+    effectiveAttack: 'Aanvalskracht',
+    effectiveDefence: 'Verdedigingskracht',
+    troopsCommitted: 'Soldaten gestuurd',
     troopsDefending: 'Verdedigende troepen',
     winProbability: 'Winkans',
     noBonuses: 'Geen actieve bonussen',
@@ -492,8 +492,8 @@ const nl = {
   },
   neutralClaim: {
     title: 'Gebied Veroverd!',
-    subtitle: 'Kies hoeveel troepen je wilt plaatsen.',
-    carriedSummary: 'Je draagt {{carriedTroops}} troepen. {{troopsOnHex}} staan al op het gebied.',
+    subtitle: 'Hoeveel soldaten wil je hier achterlaten?',
+    carriedSummary: 'Je draagt {{carriedTroops}} soldaten. Er staan al {{troopsOnHex}} op dit veld.',
     deploy: 'Plaatsen',
     keepCarrying: 'Blijven dragen',
     deployAndContinue: 'Plaatsen & Doorgaan',
@@ -896,7 +896,7 @@ const nl = {
         },
         tacticalStrike: {
           title: 'Tactische Aanval',
-          description: 'Je volgende aanval negeert alle verdedigingsbonussen (forten, versterking)',
+          description: 'Jouw volgende aanval negeert alle fort- en verdedigingsbonussen — volle kracht vooruit!',
           shortDesc: 'Negeert forten bij volgende aanval',
           cooldown: '20 min afkoeltijd',
         },
@@ -920,7 +920,7 @@ const nl = {
       abilities: {
         extendedVision: {
           title: 'Uitgebreid Zicht',
-          description: '+3 mist-van-oorlog radius',
+          description: 'Onthult meer van de kaart rondom jou — zie verder dan andere spelers.',
           shortDesc: 'Verder zien',
         },
         firstStrike: {
@@ -941,12 +941,12 @@ const nl = {
       abilities: {
         fortConstruction: {
           title: 'Fortbouw',
-          description: 'Blijf 10 min op eigen hex om een permanent fort te bouwen (+1 verdediging)',
+          description: 'Blijf 10 minuten op jouw eigen veld staan om een fort te bouwen — geeft +1 verdediging voor altijd.',
           shortDesc: 'Bouw permanente forten',
         },
         emergencyRepair: {
           title: 'Sabotage',
-          description: 'Sta 1 minuut op een vijandelijke hex om de troepen regeneratie uit te schakelen',
+          description: 'Sta 1 minuut op een vijandelijk veld om te voorkomen dat er nieuwe soldaten bijkomen.',
           shortDesc: 'Schakel vijandelijke regen uit',
           cooldown: '20 min afkoeltijd',
         },

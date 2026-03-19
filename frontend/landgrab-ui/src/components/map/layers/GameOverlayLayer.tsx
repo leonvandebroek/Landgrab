@@ -144,15 +144,16 @@ function GameOverlayLayerComponent({
         );
       })}
       <g className="hex-highlights" style={{ pointerEvents: 'none' }}>
-        {selectedHexKey && hexGeometries[selectedHexKey] ? (
+        {selectedHexKey && hexGeometries[selectedHexKey] && selectedHexKey !== currentHexKey ? (
           <polygon
             className="hex-selected-overlay"
             data-hex-id={selectedHexKey}
             points={hexGeometries[selectedHexKey].points}
-            fill="rgba(34, 211, 238, 0.35)"
+            fill="rgba(34, 211, 238, 0.06)"
             stroke="#22d3ee"
-            strokeWidth={6}
-            strokeOpacity={1}
+            strokeWidth={2}
+            strokeDasharray="6 8"
+            strokeLinecap="round"
             pointerEvents="none"
           />
         ) : null}
@@ -161,10 +162,11 @@ function GameOverlayLayerComponent({
             className="hex-active-player is-current-player-hex"
             data-hex-id={currentHexKey}
             points={hexGeometries[currentHexKey].points}
-            fill="rgba(46, 204, 113, 0.40)"
+            fill="rgba(46, 204, 113, 0.08)"
             stroke="#2ecc71"
-            strokeWidth={7}
-            strokeOpacity={1}
+            strokeWidth={2.5}
+            strokeDasharray="10 6"
+            strokeLinecap="round"
             pointerEvents="none"
           />
         ) : null}

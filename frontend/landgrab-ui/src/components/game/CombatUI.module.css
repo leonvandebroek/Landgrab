@@ -46,7 +46,7 @@
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
     color: #c9d5e7;
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -106,7 +106,7 @@
 
 .combatantLabel {
     color: rgba(223, 232, 244, 0.64);
-    font-size: 0.72rem;
+    font-size: 0.82rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -120,7 +120,7 @@
 
 .combatantMeta {
     color: rgba(223, 232, 244, 0.7);
-    font-size: 0.83rem;
+    font-size: 0.9rem;
 }
 
 .troopCount {
@@ -132,7 +132,7 @@
 
 .metricLabel {
     color: rgba(223, 232, 244, 0.62);
-    font-size: 0.78rem;
+    font-size: 0.88rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }

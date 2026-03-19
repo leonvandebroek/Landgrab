@@ -269,14 +269,17 @@ export function PlayingHud({
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
 
-    const targetCell = selectedHexKey
-      ? state.grid[selectedHexKey] ?? undefined
+    // Use selectedHex if explicitly tapped, otherwise fall back to current position
+    const effectiveHex = selectedHex ?? currentHex;
+    const effectiveKey = effectiveHex ? `${effectiveHex[0]},${effectiveHex[1]}` : null;
+    const targetCell = effectiveKey
+      ? state.grid[effectiveKey] ?? undefined
       : undefined;
 
     return getTileInteractionStatus({
       state,
       player: me ?? null,
-      targetHex: selectedHex,
+      targetHex: effectiveHex,
       targetCell,
       currentHex,
       t,

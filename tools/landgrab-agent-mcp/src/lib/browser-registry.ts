@@ -16,7 +16,7 @@ const sessions = new Map<string, PlayerSession>();
 
 export async function ensureBrowser(): Promise<Browser> {
   if (!browser || !browser.isConnected()) {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: process.env.LANDGRAB_HEADLESS !== 'false' });
   }
   return browser;
 }

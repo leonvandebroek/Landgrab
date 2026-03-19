@@ -153,7 +153,7 @@ export function getHexFillStyle({
           ? 0.8 // More solid
           : cell.ownerId
             ? 0.9 // Solid, vibrant ownership
-            : 0.6, // Semi-transparent neutral
+            : 0.25, // See-through neutral — map visible below
   };
 }
 
@@ -172,7 +172,7 @@ export function getHexBorderStyle({
       ? '#334155' // Slate-700
       : '#64748b'); // Slate-500
   
-  let borderWeight = cell.ownerId ? 4 : (isInactive ? 2 : 4); // Thicker base for mobile visibility
+  let borderWeight = cell.ownerId ? 4 : (isInactive ? 2 : 2); // Owned=4, neutral=2, inactive=2
   const borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : (isInactive ? 0.4 : 0.75);
   let dashArray: string | undefined;
 
@@ -252,12 +252,12 @@ export function getTroopBadgeDescriptor({
   troops,
 }: TroopBadgeDescriptorOptions): { badgeSize: number; html: string } {
   // Playful sizing: Chunky and readable
-  const badgeSize = Math.round(Math.min(48, Math.max(28, 30 + Math.log2(Math.max(1, troops)) * 4)));
+  const badgeSize = Math.round(Math.min(48, Math.max(36, 30 + Math.log2(Math.max(1, troops)) * 4)));
   const troopCountLength = troopLabel.length;
   // Fredoka is rounded, needs good size
   const countFontSize = troopCountLength >= 3
-    ? Math.max(12, Math.round(badgeSize * 0.4))
-    : Math.max(14, Math.round(badgeSize * 0.5));
+    ? Math.max(14, Math.round(badgeSize * 0.4))
+    : Math.max(16, Math.round(badgeSize * 0.5));
     
   const ringPct = Math.min(100, troops * 2);
   const prefix = isMasterTile

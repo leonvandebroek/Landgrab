@@ -3,14 +3,14 @@ const en = {
     tagline: 'Conquer your neighborhood!',
     leadBadge: 'Account access',
     leadTitle: 'Enter the room flow with the same level of polish as the game itself.',
-    leadBody: 'Sign in fast, register cleanly, and move straight into room setup without the usual throwaway auth screen feeling.',
+    leadBody: 'Sign in in seconds and jump straight into the game with your friends.',
     trustTitle: 'Private by default',
     trustBody: 'Only your username is shown to other players. Your email stays behind the scenes.',
     playTitle: 'Built for live play',
     playBody: 'From account to room code to map setup, the whole experience is tuned for quick real-world coordination.',
     signIn: 'Sign In',
     signInTitle: 'Welcome back',
-    signInBody: 'Pick up where you left off and head straight back into your room flow.',
+    signInBody: 'Jump back into your game — your progress is saved.',
     signUp: 'Sign Up',
     signUpTitle: 'Create your player account',
     signUpBody: 'Register once, keep your identity consistent, and host or join rooms without friction.',
@@ -183,8 +183,8 @@ const en = {
       detail: 'Neutral claims spend 1 carried troop.',
     },
     AdjacencyRequired: {
-      title: 'Adjacency required',
-      detail: 'Neutral claims must border your alliance territory.',
+      title: 'Border your territory',
+      detail: 'You can only claim hexes that are touching your team\'s territory.',
     },
   },
   winCondition: {
@@ -260,12 +260,12 @@ const en = {
     soundToggle: 'Sound',
     allianceButtonCapturedBase: "Your team's base has been captured! Move to allied territory to claim a new tile.",
     allianceButtonOnTeamTile: 'Step onto an adjacent neutral tile to claim it for your team.',
-    drainActive: 'Drain: losing troops to nearby enemies',
+    drainActive: '⚠️ Enemy drain — nearby enemies are taking your troops!',
     drainingEnemy: 'Draining enemy tile',
     dynamicsChanged: 'The game host has changed the game rules!',
     guidance: {
       noGps: 'Allow GPS access first. Once the map can see you, it can suggest the next tile to hit.',
-      notOnGrid: 'You are close, but not snapped to a room tile yet. Use the location controls and move until a tile appears.',
+      notOnGrid: 'Almost there! Keep walking to step onto the game grid.',
       pickupHere: 'Great spot: tap this owned tile to pick up troops, then push outward.',
       findTroops: 'This tile is yours but empty. Move to another owned tile with troops before expanding.',
       moveToOwnedTile: 'You are not standing on one of your own tiles. Move to friendly territory first so you can pick up troops.',
@@ -338,7 +338,7 @@ const en = {
 
     dock: {
       noLocation: 'Waiting for GPS signal…',
-      outsideGrid: 'Move to the game area',
+      outsideGrid: 'Walk back into the battlefield! 🗺️',
       noActions: 'All clear — keep moving!',
       carrying: 'Carrying',
       troops: 'troops',
@@ -358,16 +358,16 @@ const en = {
       troops: 'Troops',
       status: 'Status',
       unclaimed: 'Unclaimed territory',
-      presenceBoost: 'Boosted regen (3×) — you are here',
+      presenceBoost: 'You\'re here — troops recover 3× faster!',
     },
 
     // Toast notifications (F8)
     toast: {
-      tileLost: '{{attacker}} captured one of your tiles!',
+      tileLost: '😤 {{attacker}} just took one of your tiles! Strike back!',
       combatWon: 'You won the battle!',
       combatLost: 'You lost the battle.',
       drainTick: 'Enemy drain: -{{troops}} troops from a tile',
-      achievementUnlocked: 'Achievement: {{name}}',
+      achievementUnlocked: '🏹 Achievement unlocked: {{name}}',
       territoryMilestone_one: '{{count}} territory held!',
       territoryMilestone_other: '{{count}} territories held!',
     },
@@ -456,11 +456,11 @@ const en = {
     abandon: 'Abandon Territory',
     previewBadge: 'Battle plan',
     resultBadge: 'Battle recap',
-    previewTitle: 'Engagement Preview',
-    previewSubtitle: 'Review the matchup before committing your troops.',
-    effectiveAttack: 'Effective attack',
-    effectiveDefence: 'Effective defence',
-    troopsCommitted: 'Troops committed',
+    previewTitle: 'Battle Preview',
+    previewSubtitle: 'Check the odds before you charge in!',
+    effectiveAttack: 'Attack power',
+    effectiveDefence: 'Defence power',
+    troopsCommitted: 'Troops sent',
     troopsDefending: 'Troops defending',
     winProbability: 'Win probability',
     noBonuses: 'No active bonuses',
@@ -492,8 +492,8 @@ const en = {
   },
   neutralClaim: {
     title: 'Territory Claimed!',
-    subtitle: 'Choose how many troops to deploy on this hex.',
-    carriedSummary: 'You carry {{carriedTroops}} troops. {{troopsOnHex}} already on hex.',
+    subtitle: 'How many troops do you want to leave here?',
+    carriedSummary: 'You\'re carrying {{carriedTroops}} troops. {{troopsOnHex}} are already on this tile.',
     deploy: 'Deploy',
     keepCarrying: 'Keep carrying',
     deployAndContinue: 'Deploy & Continue',
@@ -896,7 +896,7 @@ const en = {
         },
         tacticalStrike: {
           title: 'Tactical Strike',
-          description: 'Your next attack ignores all defense bonuses (forts, fortification)',
+          description: 'Your next attack ignores all fort and defense bonuses — hit them full strength!',
           shortDesc: 'Ignores forts on next attack',
           cooldown: '20 min cooldown',
         },
@@ -920,7 +920,7 @@ const en = {
       abilities: {
         extendedVision: {
           title: 'Extended Vision',
-          description: '+3 fog-of-war radius',
+          description: 'Reveals more of the map around you — see further than other players.',
           shortDesc: 'See further',
         },
         firstStrike: {
@@ -941,12 +941,12 @@ const en = {
       abilities: {
         fortConstruction: {
           title: 'Fort Construction',
-          description: 'Stay 10 min on own hex to build a permanent fort (+1 defense)',
+          description: 'Stay on your own hex for 10 min to build a fort — gives +1 defence to that hex forever.',
           shortDesc: 'Build permanent forts',
         },
         emergencyRepair: {
           title: 'Sabotage',
-          description: 'Stand on an enemy hex for 1 minute to disable its troop regeneration',
+          description: 'Stand on an enemy hex for 1 minute to stop it from getting new troops.',
           shortDesc: 'Disable enemy regen',
           cooldown: '20 min cooldown',
         },

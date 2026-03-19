@@ -129,29 +129,29 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
           <circle
             cx={beacon.point.x}
             cy={beacon.point.y}
-            r={18}
+            r={22}
             fill={beacon.color}
-            fillOpacity={0.08}
+            fillOpacity={0.18}
             stroke={beacon.color}
             strokeOpacity={0.72}
             strokeDasharray="8 4"
-            strokeWidth={2}
+            strokeWidth={3}
           />
           <circle
             cx={beacon.point.x}
             cy={beacon.point.y}
-            r={10}
+            r={12}
             fill={beacon.color}
-            fillOpacity={0.18}
+            fillOpacity={0.45}
             stroke="#ffffff"
             strokeOpacity={0.95}
-            strokeWidth={2}
+            strokeWidth={3}
           />
           <foreignObject
-            x={beacon.point.x - 12}
-            y={beacon.point.y - 12}
-            width={24}
-            height={24}
+            x={beacon.point.x - 14}
+            y={beacon.point.y - 14}
+            width={28}
+            height={28}
             pointerEvents="none"
           >
             <div
@@ -160,7 +160,7 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
                 alignItems: 'center',
                 color: '#ffffff',
                 display: 'flex',
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: 700,
                 height: '100%',
                 justifyContent: 'center',

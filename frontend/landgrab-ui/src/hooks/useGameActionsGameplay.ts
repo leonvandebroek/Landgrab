@@ -191,7 +191,7 @@ export function useGameActionsGameplay({
       return;
     }
 
-    useGameplayStore.getState().setSelectedHexKey(`${currentHex[0]},${currentHex[1]}`);
+    useGameplayStore.getState().setSelectedHexKey(null);
     setMapFeedback(null);
     setPickupPrompt(null);
     setReinforcePrompt(null);
