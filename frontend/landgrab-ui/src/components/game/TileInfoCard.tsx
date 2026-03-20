@@ -12,8 +12,6 @@ import { deriveTileState } from '../map/tricorderTileState';
 const TILE_OWNER_FALLBACK_COLOR = 'rgba(177, 204, 220, 0.5)';
 const TILE_VALUE_POSITIVE_COLOR = 'rgba(46, 204, 113, 0.85)';
 const TILE_VALUE_WARNING_COLOR = 'rgba(251, 146, 60, 0.96)';
-const SABOTAGE_DURATION_MS = 60 * 1000;
-const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
 const EMPTY_GRID: Record<string, HexCell> = {};
 const EMPTY_PLAYERS: Player[] = [];
 const EMPTY_PLAYERS_RECORD: Record<string, Player> = {};
@@ -150,11 +148,11 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     playerPositions,
     players: playersRecord,
   }), [currentPlayer?.allianceId, hexKey, myUserId, playerPositions, playersRecord]);
-  const sabotageCountdown = tileState.progressState.type === 'sabotage'
-    ? formatDurationRemaining(tileState.progressState.startedAt, SABOTAGE_DURATION_MS)
+  const sabotageStepsText = tileState.progressState.type === 'sabotage'
+    ? `${tileState.progressState.stepsCompleted ?? 0}/${tileState.progressState.stepsRequired ?? 3}`
     : null;
-  const demolishCountdown = tileState.progressState.type === 'demolish'
-    ? formatDurationRemaining(tileState.progressState.startedAt, DEMOLISH_DURATION_MS)
+  const demolishStepsText = tileState.progressState.type === 'demolish'
+    ? `${tileState.progressState.stepsCompleted ?? 0}/${tileState.progressState.stepsRequired ?? 3}`
     : null;
   const regenBlockedCountdown = formatTimeRemaining(tileState.regenBlockedUntil);
   const rallyCountdown = formatTimeRemaining(tileState.urgencyState.rallyDeadline);
@@ -240,7 +238,7 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
                 <span className="tile-info-card__label">{t('game.tileInfo.sabotageActive' as never)}</span>
                 <span className="tile-info-card__value tile-info-card__value--warning">
                   <GameIcon name="lightning" size="sm" />
-                  {formatProgressDescriptor(tileState.progressState.progress, sabotageCountdown)}
+                  {sabotageStepsText}
                 </span>
               </div>
               <progress
@@ -301,7 +299,7 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
                 <span className="tile-info-card__label">{t('game.tileInfo.demolishActive' as never)}</span>
                 <span className="tile-info-card__value tile-info-card__value--warning">
                   <GameIcon name="hammerDrop" size="sm" />
-                  {formatProgressDescriptor(tileState.progressState.progress, demolishCountdown)}
+                  {demolishStepsText}
                 </span>
               </div>
               <progress
@@ -391,11 +389,6 @@ function countFriendlyPlayersOnHex({
   }, 0);
 }
 
-function formatProgressDescriptor(progress: number, countdown: string | null): string {
-  const percentage = `${Math.round(progress * 100)}%`;
-  return countdown ? `${percentage} • ${countdown}` : percentage;
-}
-
 function formatTimeRemaining(until: string | undefined): string | null {
   if (!until) {
     return null;
@@ -409,19 +402,6 @@ function formatTimeRemaining(until: string | undefined): string | null {
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function formatDurationRemaining(startedAt: string | undefined, durationMs: number): string | null {
-  if (!startedAt) {
-    return null;
-  }
-
-  const startTime = new Date(startedAt).getTime();
-  if (Number.isNaN(startTime)) {
-    return null;
-  }
-
-  return formatTimeRemaining(new Date(startTime + durationMs).toISOString());
 }
 
 function sanitizeCssColor(value: string | undefined): string | undefined {

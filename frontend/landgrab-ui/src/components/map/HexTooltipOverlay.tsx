@@ -5,8 +5,10 @@ import L from 'leaflet';
 import { useEffectsStore } from '../../stores/effectsStore';
 import { useGameStore } from '../../stores/gameStore';
 import { useGameplayStore } from '../../stores/gameplayStore';
+import { usePlayerLayerStore } from '../../stores/playerLayerStore';
 import type { HexCell } from '../../types/game';
 import { iconHtml } from '../../utils/gameIcons';
+import { getProgressState } from './tricorderTileState';
 
 interface HexTooltipOverlayProps {
   map: L.Map;
@@ -193,6 +195,17 @@ interface TooltipCardProps {
 function TooltipCard({ cell, clearHoveredHex, currentHex, isContested, isTouchDevice, t }: TooltipCardProps) {
   const translate = t as unknown as (key: string, options?: Record<string, unknown>) => string;
   const distance = currentHex ? getHexDistance([cell.q, cell.r], currentHex) : null;
+  const myUserId = usePlayerLayerStore((state) => state.myUserId);
+  const players = usePlayerLayerStore((state) => state.players);
+  const currentPlayer = useMemo(
+    () => players.find((p) => p.id === myUserId),
+    [players, myUserId],
+  );
+  const hexKey = `${cell.q},${cell.r}`;
+  const progressState = useMemo(
+    () => getProgressState(cell, hexKey, currentPlayer),
+    [cell, hexKey, currentPlayer],
+  );
 
   const isHidden = cell.visibilityTier === 'Hidden';
   const isRemembered = cell.visibilityTier === 'Remembered';
@@ -270,6 +283,24 @@ function TooltipCard({ cell, clearHoveredHex, currentHex, isContested, isTouchDe
           {translate('map.contestedLabel', { defaultValue: 'Contested' })} - {translate('map.contestedDescription', { defaultValue: 'borders enemy territory' })}
         </div>
       ) : null}
+      {progressState.type !== 'none' && (
+        <div className="tooltip-stat tooltip-stat--progress">
+          <span className="tooltip-stat-icon">
+            <IconMarkup markup={iconHtml(
+              progressState.type === 'sabotage' ? 'lightning' : progressState.type === 'demolish' ? 'contested' : 'fort',
+              'sm',
+            )} />
+          </span>
+          <span>
+            {progressState.type === 'sabotage'
+              ? translate('map.tooltipSabotage', { defaultValue: 'Sabotage' })
+              : progressState.type === 'demolish'
+                ? translate('map.tooltipDemolish', { defaultValue: 'Demolish' })
+                : translate('map.tooltipFortBuild', { defaultValue: 'Fort construction' })}
+            {' '}{progressState.stepsCompleted ?? 0}/{progressState.stepsRequired ?? 3}
+          </span>
+        </div>
+      )}
       {distance != null ? (
         <div className="tooltip-stat tooltip-distance">
           {translate('map.zones', {

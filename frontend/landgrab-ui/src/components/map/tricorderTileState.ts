@@ -23,8 +23,8 @@ export interface TricorderTileState {
   progressState: {
     type: 'none' | 'build' | 'demolish' | 'sabotage';
     progress: number;
-    startedAt?: string;
-    duration?: number;
+    stepsCompleted?: number;
+    stepsRequired?: number;
   };
   structureState: {
     type: 'none' | 'hq' | 'fort' | 'master';
@@ -166,7 +166,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     rallyDeadline,
   };
 
-  const progressState: TricorderTileState['progressState'] = { type: 'none', progress: 0 };
+  const progressState = getProgressState(cell, hexKey, currentPlayer);
 
   const isHQ = Boolean(cell) && alliances.some(
     (alliance) => alliance.hqHexQ === cell.q && alliance.hqHexR === cell.r,
@@ -285,6 +285,43 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     isMine,
     isAlly,
   };
+}
+
+export function getProgressState(
+  cell: HexCell | undefined,
+  hexKey: string,
+  currentPlayer: Player | undefined,
+): TricorderTileState['progressState'] {
+  if (!currentPlayer || !cell) {
+    return { type: 'none', progress: 0 };
+  }
+
+  if (
+    currentPlayer.fortTargetQ != null
+    && currentPlayer.fortTargetR != null
+    && cell.q === currentPlayer.fortTargetQ
+    && cell.r === currentPlayer.fortTargetR
+  ) {
+    const visited = currentPlayer.fortPerimeterVisited?.length ?? 0;
+    return { type: 'build', progress: visited / 6, stepsCompleted: visited, stepsRequired: 6 };
+  }
+
+  if (
+    currentPlayer.sabotageTargetQ != null
+    && currentPlayer.sabotageTargetR != null
+    && cell.q === currentPlayer.sabotageTargetQ
+    && cell.r === currentPlayer.sabotageTargetR
+  ) {
+    const visited = currentPlayer.sabotagePerimeterVisited?.length ?? 0;
+    return { type: 'sabotage', progress: visited / 3, stepsCompleted: visited, stepsRequired: 3 };
+  }
+
+  if (currentPlayer.demolishTargetKey && currentPlayer.demolishTargetKey === hexKey) {
+    const approaches = currentPlayer.demolishApproachDirectionsMade?.length ?? 0;
+    return { type: 'demolish', progress: approaches / 3, stepsCompleted: approaches, stepsRequired: 3 };
+  }
+
+  return { type: 'none', progress: 0 };
 }
 
 function getStrengthUnknownState({
