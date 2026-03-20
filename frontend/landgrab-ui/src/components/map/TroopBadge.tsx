@@ -37,7 +37,6 @@ export const TroopBadge = memo(function TroopBadge({
 
   const masterPrefixText = isMasterTile ? '★ ' : '';
   const hqPrefixMarkup = !isMasterTile ? getHqPrefixMarkup(isHQ) : '';
-  const fortPrefixText = isFort ? '[F] ' : '';
 
   const badgeClassName = [
     'hex-troop-badge',
@@ -90,9 +89,6 @@ export const TroopBadge = memo(function TroopBadge({
             justifyContent: 'center',
           }}
         >
-          {fortPrefixText ? (
-            <span aria-hidden="true">{fortPrefixText}</span>
-          ) : null}
           {troopLabel}
         </span>
         {coordinateLabel ? (

@@ -674,6 +674,7 @@ export const GameMap = memo(function GameMap({
             <path d="M10 15v6" />
           </svg>
         </button>
+        <MapLegend />
       </div>
       <MapLayerToggle
         prefs={layerPrefs}
@@ -681,7 +682,6 @@ export const GameMap = memo(function GameMap({
         isOpen={isLayerPanelOpen}
         onClose={() => setIsLayerPanelOpen(false)}
       />
-      <MapLegend />
     </div>
   );
 });

@@ -50,6 +50,7 @@ interface HexBorderStyleOptions {
   isHQ?: boolean;
   isInactive: boolean;
   isSelected: boolean;
+  selectionType?: 'none' | 'selectedFriendly' | 'selectedHostile';
   ownerColor?: string;
 }
 
@@ -75,6 +76,7 @@ interface PolygonClassNameOptions {
   isInactive: boolean;
   isMine: boolean;
   isSelected: boolean;
+  selectionType?: 'none' | 'selectedFriendly' | 'selectedHostile';
   isContested: boolean;
   newlyClaimedKeys: ReadonlySet<string>;
   newlyRevealedKeys: ReadonlySet<string>;
@@ -180,6 +182,7 @@ export function getHexBorderStyle({
   isHQ,
   isInactive,
   isSelected,
+  selectionType = 'none',
   ownerColor,
 }: HexBorderStyleOptions): HexBorderStyle {
   if (isInactive) {
@@ -208,6 +211,32 @@ export function getHexBorderStyle({
     };
   }
 
+  if (isCurrentHex) {
+    return {
+      borderColor: '#00ffaa',
+      borderWeight: 2,
+      borderOpacity: 1,
+    };
+  }
+
+  if (selectionType === 'selectedFriendly') {
+    return {
+      borderColor: 'var(--hex-sel-friendly, #00f3ff)',
+      borderWeight: 4,
+      borderOpacity: 1,
+      dashArray: '8 8',
+    };
+  }
+
+  if (selectionType === 'selectedHostile') {
+    return {
+      borderColor: 'var(--hex-sel-hostile, #ff3333)',
+      borderWeight: 4,
+      borderOpacity: 1,
+      dashArray: '12 6',
+    };
+  }
+
   if (isSelected) {
     return {
       borderColor: '#ffffff',
@@ -215,14 +244,6 @@ export function getHexBorderStyle({
       borderOpacity: 1,
       dashArray: '6 8',
       animationClass: 'is-pulse',
-    };
-  }
-
-  if (isCurrentHex) {
-    return {
-      borderColor: '#00ffaa',
-      borderWeight: 2,
-      borderOpacity: 1,
     };
   }
 
@@ -274,6 +295,7 @@ export function getHexPolygonClassName({
   isInactive,
   isMine,
   isSelected,
+  selectionType = 'none',
   isContested,
   newlyClaimedKeys,
   newlyRevealedKeys,
@@ -288,6 +310,8 @@ export function getHexPolygonClassName({
     // This class triggers the intense neon pulse animation in index.css
     isCurrentHex ? 'is-current-player-hex' : '',
     isSelected ? 'is-selected' : '',
+    !isCurrentHex && selectionType === 'selectedFriendly' ? 'hex-selection-friendly' : '',
+    !isCurrentHex && selectionType === 'selectedHostile' ? 'hex-selection-hostile' : '',
     isInactive ? 'is-inactive' : '',
     cell.isFortified ? 'is-fortified' : '',
     cell.isFort ? 'is-fort' : '',

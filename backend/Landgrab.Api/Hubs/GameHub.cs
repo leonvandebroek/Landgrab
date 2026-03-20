@@ -83,14 +83,11 @@ public partial class GameHub : Hub
 
     private async Task BroadcastState(string roomCode, GameState state, string? aliasEvent = null)
     {
+        derivedMapStateService.ComputeAndAttach(state);
+
         if (!string.IsNullOrWhiteSpace(aliasEvent))
         {
             await Clients.Group(roomCode).SendAsync(aliasEvent, state);
-        }
-
-        if (state.Phase == GamePhase.Playing)
-        {
-            derivedMapStateService.ComputeAndAttach(state);
         }
 
         await Clients.Group(roomCode).SendAsync("StateUpdated", state);
@@ -107,6 +104,8 @@ public partial class GameHub : Hub
 
     private async Task SendStateToCaller(GameState state)
     {
+        derivedMapStateService.ComputeAndAttach(state);
+
         await Clients.Caller.SendAsync("StateUpdated", state);
         if (state.Phase == GamePhase.GameOver)
         {

@@ -119,14 +119,16 @@ public class PlayerDto
     public int? RallyPointR { get; set; }
 
     // Engineer abilities
-    public bool SabotageActive { get; set; }
-    public DateTime? SabotageStartedAt { get; set; }
+    public int? FortTargetQ { get; set; }
+    public int? FortTargetR { get; set; }
+    public List<string> FortPerimeterVisited { get; set; } = new();
     public int? SabotageTargetQ { get; set; }
     public int? SabotageTargetR { get; set; }
+    public List<string> SabotagePerimeterVisited { get; set; } = new();
     public DateTime? SabotageCooldownUntil { get; set; }
-    public bool DemolishActive { get; set; }
     public string? DemolishTargetKey { get; set; }
-    public DateTime? DemolishStartedAt { get; set; }
+    public List<string> DemolishApproachDirectionsMade { get; set; } = new();
+    public string? PreviousHexKey { get; set; }
     public DateTime? DemolishCooldownUntil { get; set; }
 }
 

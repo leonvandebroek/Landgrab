@@ -142,23 +142,32 @@ export function PlayingHud({
     const hud = layout.querySelector('.player-hud') as HTMLElement | null;
     if (!hud) {
       layout.style.removeProperty('--player-hud-h');
+      layout.style.removeProperty('--player-hud-safe-inset');
       return;
     }
 
-    const syncHudHeight = (height: number) => {
-      layout.style.setProperty('--player-hud-h', `${Math.ceil(height)}px`);
+    const syncHudMetrics = () => {
+      const layoutRect = layout.getBoundingClientRect();
+      const hudRect = hud.getBoundingClientRect();
+      layout.style.setProperty('--player-hud-h', `${Math.ceil(hudRect.height)}px`);
+      layout.style.setProperty('--player-hud-safe-inset', `${Math.max(0, Math.ceil(layoutRect.bottom - hudRect.top))}px`);
     };
 
-    syncHudHeight(hud.getBoundingClientRect().height);
+    syncHudMetrics();
 
-    const observer = new ResizeObserver(([entry]) => {
-      syncHudHeight(entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height);
+    const observer = new ResizeObserver(() => {
+      syncHudMetrics();
     });
 
     observer.observe(hud);
+    observer.observe(layout);
+    window.addEventListener('resize', syncHudMetrics);
+
     return () => {
       observer.disconnect();
+      window.removeEventListener('resize', syncHudMetrics);
       layout.style.removeProperty('--player-hud-h');
+      layout.style.removeProperty('--player-hud-safe-inset');
     };
   }, []);
 
