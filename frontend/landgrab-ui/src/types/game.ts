@@ -89,6 +89,7 @@ export interface HexCell {
   // Phase 4: Engineer
   engineerBuiltAt?: string;
   isFort?: boolean;
+  sabotagedUntil?: string;
 }
 
 export interface Player {

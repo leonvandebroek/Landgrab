@@ -35,15 +35,31 @@ interface RenderedPlayerMarker {
 }
 
 interface ProjectedBeacon {
-  key: string;
+  beacon: ActiveBeacon;
   point: L.Point;
+}
+
+interface ActiveBeacon {
+  key: string;
+  location: [number, number];
   color: string;
   label: string;
+  revealRadiusMeters: number;
 }
 
 const DEFAULT_PLAYER_COLOR = '#4f8cff';
 const OVERLAY_PANE = 'overlayPane';
 const PLAYER_PANE = 'game-map-player-pane';
+const BEACON_RADIUS_PANE = 'game-map-beacon-radius-pane';
+const DEFAULT_BEACON_REVEAL_RADIUS_METERS = 200;
+const BEACON_RADIUS_STYLE: Omit<L.CircleOptions, 'radius'> = {
+  color: 'rgba(0, 243, 255, 0.4)',
+  fillColor: 'rgba(0, 243, 255, 0.08)',
+  fillOpacity: 1,
+  weight: 1,
+  dashArray: '8 4',
+  interactive: false,
+};
 
 function getOrbitalOffset(
   index: number,
@@ -84,6 +100,12 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   const gameState = useGameStore((state) => state.gameState);
 
   useEffect(() => {
+    if (!map.getPane(BEACON_RADIUS_PANE)) {
+      const beaconRadiusPane = map.createPane(BEACON_RADIUS_PANE);
+      beaconRadiusPane.style.zIndex = '625';
+      beaconRadiusPane.style.pointerEvents = 'none';
+    }
+
     const pane = map.getPane(PLAYER_PANE) ? PLAYER_PANE : OVERLAY_PANE;
     const overlay = new ReactSvgOverlay({ pane });
     overlay.addTo(map);
@@ -106,6 +128,13 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       map.off('zoomend moveend viewreset', handleProjectionChange);
     };
   }, [map]);
+
+  const defaultBeaconRevealRadiusMeters = useMemo(() => {
+    return Math.max(
+      DEFAULT_BEACON_REVEAL_RADIUS_METERS,
+      (gameState?.tileSizeMeters ?? 0) * 3,
+    );
+  }, [gameState?.tileSizeMeters]);
 
   const projectedPlayers = useMemo<ProjectedPlayer[]>(() => {
     void projectionTick;
@@ -166,9 +195,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
     return groups;
   }, [projectedPlayers, gameState]);
 
-  const projectedBeacons = useMemo<ProjectedBeacon[]>(() => {
-    void projectionTick;
-
+  const activeBeacons = useMemo<ActiveBeacon[]>(() => {
     return players.flatMap((player) => {
       if (!player.isBeacon) {
         return [];
@@ -179,14 +206,44 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         return [];
       }
 
+      const revealRadiusMeters = getBeaconRevealRadiusMeters(player, defaultBeaconRevealRadiusMeters);
+
       return [{
         key: `${player.id}-beacon`,
-        point: map.latLngToLayerPoint(L.latLng(location[0], location[1])),
+        location,
         color: player.allianceColor ?? player.color ?? DEFAULT_PLAYER_COLOR,
         label: `${player.name} beacon`,
+        revealRadiusMeters,
       }];
     });
-  }, [map, players, projectionTick]);
+  }, [defaultBeaconRevealRadiusMeters, players]);
+
+  const projectedBeacons = useMemo<ProjectedBeacon[]>(() => {
+    void projectionTick;
+
+    return activeBeacons.map((beacon) => ({
+      beacon,
+      point: map.latLngToLayerPoint(L.latLng(beacon.location[0], beacon.location[1])),
+    }));
+  }, [activeBeacons, map, projectionTick]);
+
+  useEffect(() => {
+    if (layerPreferences?.playerMarkers === false) {
+      return;
+    }
+
+    const beaconRadiusLayers = activeBeacons.map((beacon) => {
+      return L.circle(beacon.location, {
+        ...BEACON_RADIUS_STYLE,
+        pane: BEACON_RADIUS_PANE,
+        radius: beacon.revealRadiusMeters,
+      }).addTo(map);
+    });
+
+    return () => {
+      beaconRadiusLayers.forEach((layer) => layer.remove());
+    };
+  }, [activeBeacons, layerPreferences?.playerMarkers, map]);
 
   const renderedPlayerMarkers = useMemo<RenderedPlayerMarker[]>(() => {
     return projectedPlayers.flatMap((projectedPlayer, playerIndex) => {
@@ -265,11 +322,11 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         ))}
       </defs>
 
-      {projectedBeacons.map((beacon) => (
+      {projectedBeacons.map(({ beacon, point }) => (
         <g key={beacon.key} className="player-layer__beacon" pointerEvents="none">
           <circle
-            cx={beacon.point.x}
-            cy={beacon.point.y}
+            cx={point.x}
+            cy={point.y}
             r={22}
             fill={beacon.color}
             fillOpacity={0.18}
@@ -279,8 +336,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
             strokeWidth={3}
           />
           <circle
-            cx={beacon.point.x}
-            cy={beacon.point.y}
+            cx={point.x}
+            cy={point.y}
             r={12}
             fill={beacon.color}
             fillOpacity={0.45}
@@ -289,8 +346,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
             strokeWidth={3}
           />
           <text
-            x={beacon.point.x}
-            y={beacon.point.y + 6}
+            x={point.x}
+            y={point.y + 6}
             fontSize="16"
             fontWeight="bold"
             fill="#ffffff"
@@ -387,3 +444,13 @@ function computeHexPoints(cx: number, cy: number, r: number): string {
 }
 
 export const PlayerLayer = memo(PlayerLayerComponent);
+
+function getBeaconRevealRadiusMeters(player: Player, fallbackRadiusMeters: number): number {
+  const candidateRadius = (player as Player & { beaconRadius?: number | null }).beaconRadius;
+
+  if (typeof candidateRadius === 'number' && Number.isFinite(candidateRadius) && candidateRadius > 0) {
+    return candidateRadius;
+  }
+
+  return fallbackRadiusMeters;
+}

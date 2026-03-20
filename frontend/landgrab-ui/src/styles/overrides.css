@@ -60,7 +60,8 @@
 }
 
 .contested-edge-heat {
-  animation: heat-pulse 1.5s ease-in-out infinite;
+  animation: heat-pulse 2s ease-in-out infinite;
+  will-change: opacity, filter;
 }
 
 .contested-edge-march {

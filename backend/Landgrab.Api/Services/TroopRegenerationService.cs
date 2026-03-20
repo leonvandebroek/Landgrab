@@ -19,6 +19,7 @@ public sealed class TroopRegenerationService(
             {
                 using var scope = scopeFactory.CreateScope();
                 var gameService = scope.ServiceProvider.GetRequiredService<GameService>();
+                var derivedMapStateService = scope.ServiceProvider.GetRequiredService<DerivedMapStateService>();
 
                 foreach (var roomCode in gameService.GetPlayingRoomCodes())
                 {
@@ -33,6 +34,8 @@ public sealed class TroopRegenerationService(
                     var state = result.state;
                     if (result.error != null || state == null)
                         continue;
+
+                    derivedMapStateService.ComputeAndAttach(state);
 
                     foreach (var drainTick in result.drainTicks)
                     {
