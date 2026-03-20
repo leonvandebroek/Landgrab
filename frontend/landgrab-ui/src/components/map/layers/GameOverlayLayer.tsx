@@ -120,9 +120,21 @@ function GameOverlayLayerComponent({
   }
 
   return createPortal(
-    <g data-zoom-level={zoomCategory}>
-      {showWorldDimMask ? (
-        <WorldDimMask
+    <>
+      <defs>
+        <pattern
+          id="fort-hatch-pattern"
+          patternUnits="userSpaceOnUse"
+          width="8"
+          height="8"
+          patternTransform="rotate(45)"
+        >
+          <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+        </pattern>
+      </defs>
+      <g data-zoom-level={zoomCategory}>
+        {showWorldDimMask ? (
+          <WorldDimMask
           tileKeys={tileKeys}
           hexGeometries={hexGeometries}
           mapBounds={mapBounds}
@@ -171,7 +183,8 @@ function GameOverlayLayerComponent({
           />
         ) : null}
       </g>
-    </g>,
+    </g>
+    </>,
     svgRoot,
   );
 }

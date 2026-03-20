@@ -7,7 +7,7 @@ import { DEFAULT_MAP_LAYER_PREFS, type MapLayerPreferences } from '../../types/m
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
 import { useEffectsStore } from '../../stores/effectsStore';
 import { usePlayerLayerStore } from '../../stores/playerLayerStore';
-import { useGameStore, useGameplayStore } from '../../stores';
+import { useGameStore, useGameplayStore, useUiStore } from '../../stores';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
 import { GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
 import { HexTooltipOverlay } from './HexTooltipOverlay';
@@ -39,7 +39,7 @@ interface Props {
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const GRID_FIT_PADDING = L.point(24, 24);
 const DEFAULT_MAP_ZOOM = 16;
-const SHOW_HEX_DEBUG_OVERLAY = import.meta.env.DEV;
+const ZOOM_LEVEL_SYNC_DEBOUNCE_MS = 140;
 const HEX_LAYER_PANE = 'game-map-hex-pane';
 const PLAYER_LAYER_PANE = 'game-map-player-pane';
 type BasemapLayer = L.TileLayer | L.TileLayer.WMS;
@@ -93,12 +93,15 @@ export const GameMap = memo(function GameMap({
 }: Props) {
   const { t } = useTranslation();
   const selectedHexKey = useGameplayStore((overlayState) => overlayState.selectedHexKey);
+  const setZoomLevel = useUiStore((uiState) => uiState.setZoomLevel);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const zoomSyncTimeoutRef = useRef<number | null>(null);
   const [isFollowingMe, setIsFollowingMe] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
   const [timePeriod, setTimePeriod] = useState(getTimePeriod);
   const [layerPrefs, setLayerPrefs] = useState<MapLayerPreferences>(() => ({ ...DEFAULT_MAP_LAYER_PREFS }));
+  const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
   const [basemapError, setBasemapError] = useState(false);
   const [basemapDismissed, setBasemapDismissed] = useState(false);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
@@ -131,6 +134,9 @@ export const GameMap = memo(function GameMap({
     () => state.players.find((player) => player.id === myUserId) ?? null,
     [myUserId, state.players],
   );
+  const layerPanelDisclosureProps = isLayerPanelOpen
+    ? { 'aria-expanded': 'true' as const }
+    : { 'aria-expanded': 'false' as const };
   const renderedGrid = gridOverride ?? state.grid;
   const selectedHexFromStore = useMemo(() => parseHexKey(selectedHexKey), [selectedHexKey]);
 
@@ -156,12 +162,48 @@ export const GameMap = memo(function GameMap({
     onHexClick?.(q, r, renderedGrid[`${q},${r}`]);
   }, [onHexClick, renderedGrid]);
 
-  function handleZoomToLocation() {
+  const handleZoomToLocation = useCallback(() => {
     const map = mapRef.current;
     if (map && currentLocation) {
       map.setView([currentLocation.lat, currentLocation.lng], Math.max(map.getZoom(), 17));
     }
-  }
+  }, [currentLocation]);
+
+  const queueZoomLevelSync = useCallback((nextZoomLevel: number) => {
+    if (zoomSyncTimeoutRef.current !== null) {
+      window.clearTimeout(zoomSyncTimeoutRef.current);
+    }
+
+    zoomSyncTimeoutRef.current = window.setTimeout(() => {
+      setZoomLevel(nextZoomLevel);
+      zoomSyncTimeoutRef.current = null;
+    }, ZOOM_LEVEL_SYNC_DEBOUNCE_MS);
+  }, [setZoomLevel]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const map = mapRef.current;
+      if (!map) return;
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault();
+        map.zoomIn();
+      } else if (e.key === '-') {
+        e.preventDefault();
+        map.zoomOut();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        handleZoomToLocation();
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (currentLocation) {
+          e.preventDefault();
+          setIsFollowingMe(prev => !prev);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentLocation, handleZoomToLocation, setIsFollowingMe]);
 
   useEffect(() => {
     useGameplayStore.getState().setSelectedHexKey(toHexKey(selectedHex));
@@ -311,19 +353,47 @@ export const GameMap = memo(function GameMap({
   }, [applyBasemapDismissed, applyBasemapError, constrainViewportToGrid, navigateRef, t]);
 
   useEffect(() => {
+    const map = mapInstance;
+    const container = containerRef.current;
+    if (!map || !container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize({ animate: false });
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [mapInstance]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) {
       return;
     }
 
     const handleZoomEnd = () => {
-      setCurrentZoom(map.getZoom());
+      const nextZoomLevel = map.getZoom();
+      setCurrentZoom(nextZoomLevel);
+      queueZoomLevelSync(nextZoomLevel);
     };
 
     handleZoomEnd();
     map.on('zoomend', handleZoomEnd);
     return () => {
       map.off('zoomend', handleZoomEnd);
+    };
+  }, [queueZoomLevelSync]);
+
+  useEffect(() => {
+    return () => {
+      if (zoomSyncTimeoutRef.current !== null) {
+        window.clearTimeout(zoomSyncTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -407,7 +477,13 @@ export const GameMap = memo(function GameMap({
     }
 
     followedLocationKeyRef.current = locationKey;
-    map.panTo([currentLocation.lat, currentLocation.lng], {
+    const containerHeight = map.getSize().y;
+    const offsetY = containerHeight * 0.08;
+    const targetPoint = map.project([currentLocation.lat, currentLocation.lng], map.getZoom());
+    const offsetPoint = targetPoint.subtract([0, offsetY]);
+    const offsetLatLng = map.unproject(offsetPoint, map.getZoom());
+
+    map.panTo(offsetLatLng, {
       animate: true,
       duration: 0.8,
       easeLinearity: 0.25,
@@ -487,7 +563,7 @@ export const GameMap = memo(function GameMap({
             tileSizeMeters={state.tileSizeMeters ?? 50}
             layerPreferences={layerPrefs}
           />
-          <PlayerLayer map={mapInstance} />
+          <PlayerLayer map={mapInstance} layerPreferences={layerPrefs} />
           <HexTooltipOverlay map={mapInstance} />
         </>
       ) : null}
@@ -522,7 +598,7 @@ export const GameMap = memo(function GameMap({
           </div>
         </div>
       )}
-      {SHOW_HEX_DEBUG_OVERLAY && (
+      {import.meta.env.DEV && (
         <aside className="game-map-dev-overlay" aria-live="polite">
           <strong>Hex debug</strong>
           <span>
@@ -557,7 +633,8 @@ export const GameMap = memo(function GameMap({
         </button>
         <button
           type="button"
-          className="map-control-fab"
+          className="map-control-fab locate-fab"
+          data-action="locate"
           onClick={handleZoomToLocation}
           title={t('game.zoomToLocation')}
           aria-label={t('game.zoomToLocation')}
@@ -570,8 +647,40 @@ export const GameMap = memo(function GameMap({
             <line x1="8" y1="12" x2="16" y2="12" />
           </svg>
         </button>
+        <button
+          type="button"
+          className={`map-control-fab${isLayerPanelOpen ? ' is-active' : ''}`}
+          onClick={() => setIsLayerPanelOpen((open) => !open)}
+          title={t('mapLayers.expandPanel')}
+          aria-label={t('mapLayers.expandPanel')}
+          {...layerPanelDisclosureProps}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M3 12h18" />
+            <path d="M3 18h18" />
+            <path d="M8 3v6" />
+            <path d="M16 9v6" />
+            <path d="M10 15v6" />
+          </svg>
+        </button>
       </div>
-      <MapLayerToggle prefs={layerPrefs} onPrefsChange={setLayerPrefs} />
+      <MapLayerToggle
+        prefs={layerPrefs}
+        onPrefsChange={setLayerPrefs}
+        isOpen={isLayerPanelOpen}
+        onClose={() => setIsLayerPanelOpen(false)}
+      />
       <MapLegend />
     </div>
   );

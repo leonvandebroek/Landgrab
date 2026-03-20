@@ -59,7 +59,7 @@ export function CombatPreviewModal({ preview, onAttack, onRetreat }: CombatPrevi
                     </div>
 
                     <div className={styles.versus}>
-                        <section className={styles.combatant}>
+                        <section className={`${styles.combatant} ${styles.attacker}`}>
                             <div className={styles.combatantHeader}>
                                 <span className={styles.combatantLabel}>{t('combat.attackerSide')}</span>
                                 <p className={styles.combatantName}>{t('combat.you')}</p>
@@ -75,9 +75,11 @@ export function CombatPreviewModal({ preview, onAttack, onRetreat }: CombatPrevi
                             <BonusList bonuses={preview.attackerBonuses} />
                         </section>
 
-                        <div aria-hidden="true" className={styles.vsDivider}>VS</div>
+                        <div className={styles.versusContainer}>
+                            <div aria-hidden="true" className={styles.vsDivider}>VS</div>
+                        </div>
 
-                        <section className={styles.combatant}>
+                        <section className={`${styles.combatant} ${styles.defender}`}>
                             <div className={styles.combatantHeader}>
                                 <span className={styles.combatantLabel}>{t('combat.defenderSide')}</span>
                                 <p className={styles.combatantName}>{preview.defenderName}</p>
@@ -104,9 +106,14 @@ export function CombatPreviewModal({ preview, onAttack, onRetreat }: CombatPrevi
                         </div>
                         <div className={styles.barTrack}>
                             <div className={styles.barFill} style={{ width: getProbabilityWidth(preview.attackerWinProbability) }} />
+                            <div className={styles.barThreshold} />
                         </div>
                     </section>
 
+
+                </div>
+
+                <div className={styles.footer}>
                     <div className={styles.actions}>
                         <button className={`${styles.button} ${styles.primaryButton}`} onClick={onAttack} type="button">
                             {t('combat.attackNow')}

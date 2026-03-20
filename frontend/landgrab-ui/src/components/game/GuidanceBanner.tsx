@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameIcon } from '../common/GameIcon';
 import { useGameStore } from '../../stores/gameStore';
 import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 
-interface GuidanceBannerProps {
+interface GuidanceBannerStateProps {
   carriedTroops: number;
   isInOwnHex: boolean;
   hasLocation: boolean;
+  currentHex: [number, number] | null;
 }
 
-export function GuidanceBanner({
+export function useGuidanceBannerState({
   carriedTroops,
   isInOwnHex,
-  hasLocation
-}: GuidanceBannerProps) {
+  hasLocation,
+  currentHex,
+}: GuidanceBannerStateProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((state) => state.gameState);
   const currentUserId = useGameStore((state) => state.savedSession?.userId);
@@ -63,6 +64,10 @@ export function GuidanceBanner({
       return t('guidance.enableLocation');
     }
 
+    if (!currentHex) {
+      return t('game.dock.outsideGrid');
+    }
+
     if (claimModeHint) {
       return claimModeHint;
     }
@@ -78,7 +83,7 @@ export function GuidanceBanner({
     }
 
     return t('guidance.walkToClaim');
-  }, [carriedTroops, claimModeHint, hasLedgeLocationError, hasLocation, isCarryingTroops, isInOwnHex, t]);
+  }, [carriedTroops, claimModeHint, currentHex, hasLedgeLocationError, hasLocation, isCarryingTroops, isInOwnHex, t]);
   const [hint, setHint] = useState<string>(computedHint);
   const [isVisible, setIsVisible] = useState<boolean>(true);
 
@@ -129,10 +134,5 @@ export function GuidanceBanner({
     };
   }, [computedHint, hint, isCarryingTroops]);
 
-  return (
-    <div className={`context-item guidance-tip ${isVisible ? 'enter-active' : ''}`}>
-      <span className="context-icon" aria-hidden="true"><GameIcon name="lightning" size="sm" /></span>
-      <span>{hint}</span>
-    </div>
-  );
+  return { hint, isVisible };
 }

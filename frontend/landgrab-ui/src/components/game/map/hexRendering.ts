@@ -1,6 +1,6 @@
 import { roomHexCornerLatLngs, roomHexToLatLng } from '../../map/HexMath';
 import type { GameState, HexCell } from '../../../types/game';
-import { scaleTroopColor, hexToHSL } from '../../../utils/hexColorUtils';
+import { scaleTroopColor } from '../../../utils/hexColorUtils';
 import { gameIcons } from '../../../utils/gameIcons';
 import { escapeHtml } from './HexTooltip';
 
@@ -28,8 +28,15 @@ export interface HexBorderStyle {
   dashArray?: string;
 }
 
+function formatTroopCount(n: number): string {
+  if (n >= 10000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
 interface HexFillStyleOptions {
   cell: HexCell;
+  isContested: boolean;
   isInactive: boolean;
   ownerColor: string;
   hostColor: string;
@@ -37,7 +44,9 @@ interface HexFillStyleOptions {
 
 interface HexBorderStyleOptions {
   cell: HexCell;
+  isContested?: boolean;
   isCurrentHex: boolean;
+  isFrontier: boolean;
   isHQ: boolean;
   isHostile: boolean;
   isInactive: boolean;
@@ -48,8 +57,12 @@ interface TroopBadgeDescriptorOptions {
   isFort: boolean;
   isHQ: boolean;
   isMasterTile: boolean;
+  isEnemy?: boolean;
   ownerColor: string;
-  troopLabel: string;
+  q?: number;
+  r?: number;
+  showCoords?: boolean;
+  troopLabel?: string;
   troops: number;
 }
 
@@ -135,6 +148,7 @@ export function getHexTerritoryStatus(
 
 export function getHexFillStyle({
   cell,
+  isContested,
   isInactive,
   ownerColor,
   hostColor,
@@ -150,16 +164,20 @@ export function getHexFillStyle({
     fillOpacity: isInactive
         ? 0.1 // Faint inactive
         : cell.isMasterTile
-          ? 0.8 // More solid
+          ? 0.50 // More solid
+          : isContested
+            ? 0.52 // Higher contested emphasis for fast tactical scanning
           : cell.ownerId
-            ? 0.9 // Solid, vibrant ownership
-            : 0.25, // See-through neutral — map visible below
+            ? 0.42 // Stronger owned fill while keeping streets readable
+            : 0.30, // Slightly clearer neutral read without overwhelming the basemap
   };
 }
 
 export function getHexBorderStyle({
   cell,
+  isContested,
   isCurrentHex,
+  isFrontier,
   isHQ,
   isHostile,
   isInactive,
@@ -173,37 +191,51 @@ export function getHexBorderStyle({
       : '#64748b'); // Slate-500
   
   let borderWeight = cell.ownerId ? 4 : (isInactive ? 2 : 2); // Owned=4, neutral=2, inactive=2
-  const borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : (isInactive ? 0.4 : 0.75);
+  let borderOpacity = cell.ownerId || cell.isMasterTile ? 1.0 : (isInactive ? 0.4 : 0.75);
   let dashArray: string | undefined;
+
+  if (cell.ownerId && !isFrontier) {
+    borderWeight = 0.4;
+    borderOpacity = 0.2;
+  }
 
   if (cell.isMasterTile) {
     borderColor = '#fbbf24'; // Amber-400
     borderWeight = 6;
+    borderOpacity = 1.0;
   }
   if (isCurrentHex) {
     // Current location is handled heavily by CSS .is-current-player-hex
     // But we set base SVG props here too as a fallback/reinforcement
     borderColor = '#22d3ee'; // Cyan-400 (Bright Neon)
     borderWeight = 8; // Ultra Thick for visibility
+    borderOpacity = 1.0;
   }
   if (isSelected) {
     borderColor = isHostile ? '#ef4444' : '#38bdf8'; // Red-500 : Sky-400
     borderWeight = Math.max(borderWeight, 6);
+    borderOpacity = Math.max(borderOpacity, 0.95);
   }
   if (cell.isFortified && !isInactive) {
     borderColor = '#f59e0b'; // Amber-500
     borderWeight = Math.max(borderWeight, 5);
+    borderOpacity = Math.max(borderOpacity, 0.9);
   }
   if (cell.isFort && !isInactive) {
     borderColor = '#e879f9'; // Fuchsia-400
     borderWeight = Math.max(borderWeight, 6);
+    borderOpacity = Math.max(borderOpacity, 0.95);
   }
   if (isHQ && !isInactive) {
     borderColor = '#fbbf24'; // Amber-400
     borderWeight = Math.max(borderWeight, 7);
+    borderOpacity = Math.max(borderOpacity, 0.95);
   }
   if (isInactive) {
     dashArray = '4 6'; // Chunky dash
+  }
+  if (isContested && !isInactive) {
+    dashArray = '12, 8';
   }
 
   return { borderColor, borderWeight, borderOpacity, dashArray };
@@ -247,62 +279,46 @@ export function getTroopBadgeDescriptor({
   isFort,
   isHQ,
   isMasterTile,
-  ownerColor,
+  isEnemy,
+  q,
+  r,
+  showCoords = false,
   troopLabel,
   troops,
 }: TroopBadgeDescriptorOptions): { badgeSize: number; html: string } {
-  // Playful sizing: Chunky and readable
-  const badgeSize = Math.round(Math.min(48, Math.max(36, 30 + Math.log2(Math.max(1, troops)) * 4)));
-  const troopCountLength = troopLabel.length;
-  // Fredoka is rounded, needs good size
+  const resolvedTroopLabel = troopLabel?.trim() ? troopLabel : formatTroopCount(troops);
+  const badgeSize = 18;
+  const troopCountLength = resolvedTroopLabel.length;
   const countFontSize = troopCountLength >= 3
     ? Math.max(14, Math.round(badgeSize * 0.4))
     : Math.max(16, Math.round(badgeSize * 0.5));
     
-  const ringPct = Math.min(100, troops * 2);
-  const prefix = isMasterTile
-    ? gameIcons.master.replace(
-      /<svg\b([^>]*)>/i,
-      '<svg$1 width="0.9em" height="0.9em" style="color:#fcd34d">', // Amber-300
-    )
-    : (isHQ
-      ? gameIcons.hq.replace(
-        /<svg\b([^>]*)>/i,
-        '<svg$1 width="0.9em" height="0.9em" style="color:#fcd34d">',
-      )
-      : '');
-  const { h: badgeHue, s: badgeSaturation } = hexToHSL(ownerColor);
-  
-  // Playful Candy Button Look (Dark Arcade Mode) - MATCHING TroopBadge.tsx
-  // Gradient: Vibrant top-down light-to-dark for volume
-  const badgeBg = `linear-gradient(180deg, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,65%) 0%, hsl(${Math.round(badgeHue)},${Math.round(badgeSaturation)}%,45%) 100%)`;
-  const avgLightness = 50;
-  const isLightBadge = (badgeHue >= 40 && badgeHue <= 90 && badgeSaturation > 50)
-    || (badgeHue >= 150 && badgeHue <= 195 && badgeSaturation > 50 && avgLightness > 45);
-  const textColor = isLightBadge ? '#1a1a2e' : 'white';
-  const badgeBorderColor = '#ffffff';
-  
-  // Pop shadow: Outer white glow for separation from dark map + Hard shadow for 3D + Inset highlight
-  const badgeGlow = '0 0 15px rgba(255, 255, 255, 0.25), 0 4px 0 rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.2)';
+  const fortPrefixIcon = isFort
+    ? gameIcons.fort.replace('<svg', '<svg width="10" height="10" style="vertical-align:middle;opacity:0.8;margin-right:2px"')
+    : '';
     
   const badgeClass = [
     'hex-troop-badge',
+    isEnemy === true ? 'enemy-badge' : '',
+    isEnemy === false ? 'friendly-badge' : '',
     isMasterTile ? 'master-badge' : '',
     isHQ ? 'hq-badge' : '',
     isFort ? 'fort-badge' : '',
     troops === 0 ? 'zero-troops' : '',
   ].filter(Boolean).join(' ');
 
-  // Use Fredoka font
+  const coordinateLabel = showCoords && q != null && r != null
+    ? `<div class="hex-coord-label">${q},${r}</div>`
+    : '';
+
+  // Callers may pass a preformatted compact label via troopLabel; otherwise we fall back to formatTroopCount(troops).
   return {
     badgeSize,
-    html: `<div class="${badgeClass}" style="width:${badgeSize}px;height:${badgeSize}px;background:${badgeBg};border: 3px solid ${badgeBorderColor};box-shadow:${badgeGlow};border-radius:50%;--troop-count-size:${countFontSize}px;font-family:'Fredoka',sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;color:${textColor};">
-  <svg class="troop-ring" viewBox="0 0 36 36" aria-hidden="true" style="position:absolute;top:-3px;left:-3px;width:calc(100% + 6px);height:calc(100% + 6px);pointer-events:none;">
-    <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="4"
-            stroke-dasharray="${ringPct} ${100 - ringPct}" stroke-dashoffset="25" opacity="1" stroke-linecap="round" />
-  </svg>
-  ${prefix ? `<span class="troop-badge-prefix" style="margin-right:2px;display:flex;align-items:center;">${prefix}</span>` : ''}
-  <span class="troop-count" style="${troops === 0 ? `color:${textColor === 'white' ? 'rgba(255,255,255,0.8)' : 'rgba(26,26,46,0.6)'}` : ''};line-height:1;">${escapeHtml(troopLabel)}</span>
+    html: `<div class="${badgeClass}" style="width:${badgeSize}px;background:var(--color-void);height:18px;border-radius:var(--radius-tech-pill);--troop-count-size:${countFontSize}px;font-family:var(--font-scifi-mono);font-weight:700;display:flex;align-items:center;justify-content:center;color:white;position:relative;">
+  <div class="troop-badge-text" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;">
+    <span class="troop-count" style="${troops === 0 ? 'color:rgba(255,255,255,0.8)' : ''};line-height:1;display:flex;align-items:center;justify-content:center;">${fortPrefixIcon}${escapeHtml(resolvedTroopLabel)}</span>
+    ${coordinateLabel}
+  </div>
 </div>`,
   };
 }

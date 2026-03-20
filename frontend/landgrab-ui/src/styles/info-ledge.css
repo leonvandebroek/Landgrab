@@ -4,12 +4,14 @@
     width: 100%;
     max-height: 0;
     overflow: hidden;
-    background: linear-gradient(180deg, rgba(8, 14, 22, 0.94), rgba(5, 10, 18, 0.92));
+    background: var(--surface-glass, rgba(10, 14, 20, 0.78));
+    -webkit-backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
     color: rgba(232, 242, 255, 0.92);
     font-family: 'Fredoka', system-ui, -apple-system, sans-serif;
     font-size: 0.9rem;
     padding: 0 0.75rem;
-    border-top: 1px solid rgba(120, 190, 255, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     transition: max-height 0.25s ease-in-out, padding 0.25s ease-in-out, border-top-color 0.25s ease-in-out;
     box-sizing: border-box;
     box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
@@ -18,7 +20,7 @@
 .info-ledge--visible {
     max-height: 3rem;
     padding: 0.4rem 0.75rem;
-    border-top-color: rgba(120, 190, 255, 0.1);
+    border-top-color: rgba(255, 255, 255, 0.08);
 }
 
 .info-ledge--expanded {
@@ -74,6 +76,7 @@
 
 .info-ledge__message {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -19,10 +19,10 @@
     gap: 10px;
     padding: 0.72rem 0.95rem;
     border-radius: 1.1rem;
-    background: linear-gradient(180deg, rgba(9, 16, 27, 0.94), rgba(5, 10, 18, 0.92));
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(132, 183, 221, 0.14);
+    background: var(--surface-glass, rgba(10, 14, 20, 0.78));
+    -webkit-backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow:
         0 14px 28px rgba(0, 0, 0, 0.34),
         inset 0 1px 0 rgba(222, 243, 255, 0.05);
@@ -128,5 +128,107 @@
     .action-prompt {
         font-size: 0.8rem;
         line-height: 1.38;
+    }
+}
+
+/* ── Integrated idle guidance inside PlayerHUD ─────────────────────── */
+
+.player-hud__idle-context {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    min-width: 0;
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+    border-radius: 0.9rem;
+    border: 1px solid transparent;
+    transition:
+        max-height 0.24s ease,
+        margin 0.24s ease,
+        padding 0.24s ease,
+        opacity 0.22s ease,
+        transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.1),
+        border-color 0.24s ease,
+        background 0.24s ease;
+}
+
+.player-hud__idle-context.enter-active,
+.player-hud__idle-context--prompt {
+    max-height: 3rem;
+    margin: 0.02rem 0 0.08rem;
+    padding: 0.4rem 0.55rem;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.player-hud__idle-context--guidance {
+    background: var(--surface-glass, rgba(10, 14, 20, 0.78));
+    -webkit-backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    border-color: rgba(255, 255, 255, 0.08);
+    color: rgba(233, 244, 252, 0.78);
+}
+
+.player-hud__idle-context--prompt {
+    background: var(--surface-glass, rgba(10, 14, 20, 0.78));
+    -webkit-backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    backdrop-filter: var(--blur-standard, blur(16px) saturate(180%));
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.player-hud__idle-context--danger {
+    background: linear-gradient(180deg, rgba(30, 15, 18, 0.72), rgba(18, 9, 11, 0.62));
+    border-color: rgba(248, 139, 122, 0.24);
+}
+
+.player-hud__idle-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: rgba(156, 210, 255, 0.88);
+}
+
+.player-hud__idle-context--danger .player-hud__idle-icon {
+    color: #ffb29f;
+}
+
+.player-hud__idle-text {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+@media (max-width: 500px) {
+    .player-hud__idle-context.enter-active,
+    .player-hud__idle-context--prompt {
+        padding: 0.34rem 0.48rem;
+    }
+
+    .player-hud__idle-text {
+        font-size: 0.74rem;
+    }
+}
+
+@media (max-width: 390px) {
+    .player-hud__idle-context.enter-active,
+    .player-hud__idle-context--prompt {
+        max-height: 2.75rem;
+        padding: 0.32rem 0.44rem;
+    }
+
+    .player-hud__idle-text {
+        font-size: 0.72rem;
     }
 }

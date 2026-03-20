@@ -74,38 +74,39 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                         </div>
                         <div className={styles.barTrack}>
                             <div className={styles.barFill} style={{ width: getProbabilityWidth(result.attackerWinProbability) }} />
+                            <div className={styles.barThreshold} />
                         </div>
 
                         <div className={styles.recapGrid}>
-                            <div className={styles.recapRow}>
+                            <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.effectiveAttack')}</span>
-                                <span className={styles.recapValueStrong}>{result.effectiveAttack}</span>
+                                <span className={styles.statValuePrimary}>{result.effectiveAttack}</span>
                             </div>
-                            <div className={styles.recapRow}>
+                            <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.effectiveDefence')}</span>
-                                <span className={styles.recapValueStrong}>{result.effectiveDefence}</span>
+                                <span className={styles.statValuePrimary}>{result.effectiveDefence}</span>
                             </div>
-                            <div className={styles.recapRow}>
+                            <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.attackerLosses')}</span>
-                                <span>{result.attackerTroopsLost}</span>
+                                <span className={styles.statValueCasualty}>{result.attackerTroopsLost}</span>
                             </div>
-                            <div className={styles.recapRow}>
+                            <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.defenderLosses')}</span>
-                                <span>{result.defenderTroopsLost}</span>
+                                <span className={styles.statValueCasualty}>{result.defenderTroopsLost}</span>
                             </div>
-                            <div className={styles.recapRow}>
+                            <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.attackerRemaining')}</span>
-                                <span>{result.attackerTroopsRemaining}</span>
+                                <span className={styles.statValueCasualty}>{result.attackerTroopsRemaining}</span>
                             </div>
                             <div className={styles.recapRow}>
                                 <span>{t('combat.defenderRemaining')}</span>
-                                <span>{result.defenderTroopsRemaining}</span>
+                                <span className={`${styles.statValueCasualty} ${result.defenderTroopsRemaining === 0 ? styles.statValueDanger : ''}`}>{result.defenderTroopsRemaining}</span>
                             </div>
                         </div>
                     </section>
 
                     <div className={styles.versus}>
-                        <section className={styles.combatant}>
+                        <section className={`${styles.combatant} ${styles.attacker}`}>
                             <div className={styles.combatantHeader}>
                                 <span className={styles.combatantLabel}>{t('combat.attackerSide')}</span>
                                 <p className={styles.combatantName}>{t('combat.you')}</p>
@@ -113,9 +114,11 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                             <BonusList bonuses={result.attackerBonuses} />
                         </section>
 
-                        <div aria-hidden="true" className={styles.vsDivider}>VS</div>
+                        <div className={styles.versusContainer}>
+                            <div aria-hidden="true" className={styles.vsDivider}>VS</div>
+                        </div>
 
-                        <section className={styles.combatant}>
+                        <section className={`${styles.combatant} ${styles.defender}`}>
                             <div className={styles.combatantHeader}>
                                 <span className={styles.combatantLabel}>{t('combat.defenderSide')}</span>
                                 <p className={styles.combatantName}>{result.previousOwnerName ?? t('combat.enemy')}</p>
@@ -125,37 +128,39 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                     </div>
 
                     {won ? (
-                        <>
-                            <section className={styles.sliderCard}>
-                                <div className={styles.sliderHeader}>
-                                    <span>{t('combat.deployPrompt')}</span>
-                                    <span className={styles.deploymentValue}>{deployCount}</span>
-                                </div>
-                                <input
-                                    aria-label={t('combat.deployPrompt')}
-                                    className={styles.slider}
-                                    max={result.attackerTroopsRemaining}
-                                    min={0}
-                                    onChange={(event) => setDeployCount(Number(event.target.value))}
-                                    type="range"
-                                    value={deployCount}
-                                />
-                                <div className={styles.summaryRow}>
-                                    <span className={styles.subtleText}>{t('combat.leaveCarried')}</span>
-                                    <span className={styles.subtleText}>{result.attackerTroopsRemaining - deployCount} {t('combat.stillCarried')}</span>
-                                </div>
-                            </section>
-
-                            <div className={styles.actions}>
-                                <button
-                                    className={`${styles.button} ${styles.primarySuccessButton}`}
-                                    onClick={() => onDeployTroops(deployCount)}
-                                    type="button"
-                                >
-                                    {t('combat.deployAndContinue')}
-                                </button>
+                        <section className={styles.sliderCard}>
+                            <div className={styles.sliderHeader}>
+                                <span>{t('combat.deployPrompt')}</span>
+                                <span className={styles.deploymentValue}>{deployCount}</span>
                             </div>
-                        </>
+                            <input
+                                aria-label={t('combat.deployPrompt')}
+                                className={styles.deploySlider}
+                                max={result.attackerTroopsRemaining}
+                                min={0}
+                                onChange={(event) => setDeployCount(Number(event.target.value))}
+                                type="range"
+                                value={deployCount}
+                            />
+                            <div className={styles.summaryRow}>
+                                <span className={styles.sliderHint}>0 {t('combat.leaveCarried')}</span>
+                                <span className={styles.sliderHint}>{result.attackerTroopsRemaining - deployCount} {t('combat.stillCarried')}</span>
+                            </div>
+                        </section>
+                    ) : null}
+                </div>
+
+                <div className={styles.footer}>
+                    {won ? (
+                        <div className={styles.actions}>
+                            <button
+                                className={`${styles.button} ${styles.primarySuccessButton}`}
+                                onClick={() => onDeployTroops(deployCount)}
+                                type="button"
+                            >
+                                {t('combat.deployAndContinue')}
+                            </button>
+                        </div>
                     ) : (
                         <div className={styles.actions}>
                             <button className={`${styles.button} ${styles.secondaryButton}`} onClick={onClose} type="button">

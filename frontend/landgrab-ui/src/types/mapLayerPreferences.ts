@@ -4,7 +4,6 @@ export interface MapLayerPreferences {
   borderEffects: boolean;
   contestedEdges: boolean;
   playerMarkers: boolean;
-  playerRadius: boolean;
   timeOverlay: boolean;
   troopAnimations: boolean;
   troopBadges: boolean;
@@ -15,7 +14,6 @@ export const DEFAULT_MAP_LAYER_PREFS: MapLayerPreferences = {
   borderEffects: true,
   contestedEdges: true,
   playerMarkers: true,
-  playerRadius: true,
   timeOverlay: true,
   troopAnimations: true,
   troopBadges: true,
@@ -42,7 +40,7 @@ export const LAYER_GROUPS: LayerGroup[] = [
   {
     key: 'players',
     icon: 'rallyTroops',
-    layers: ['playerMarkers', 'playerRadius'],
+    layers: ['playerMarkers'],
   },
   {
     key: 'overlays',

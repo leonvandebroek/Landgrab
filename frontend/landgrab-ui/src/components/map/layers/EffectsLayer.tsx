@@ -190,21 +190,23 @@ function EffectsLayerComponent({
             />
           ))
         : null}
-      {troopMovementLines.map((line) => (
-        <line
-          key={line.key}
-          className={line.className}
-          x1={line.x1}
-          y1={line.y1}
-          x2={line.x2}
-          y2={line.y2}
-          stroke={line.stroke}
-          strokeWidth={line.strokeWidth}
-          strokeOpacity={line.opacity}
-          strokeDasharray={line.strokeDasharray}
-          strokeLinecap="round"
-        />
-      ))}
+      {layerPreferences.troopAnimations
+        ? troopMovementLines.map((line) => (
+            <line
+              key={line.key}
+              className={line.className}
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+              stroke={line.stroke}
+              strokeWidth={line.strokeWidth}
+              strokeOpacity={line.opacity}
+              strokeDasharray={line.strokeDasharray}
+              strokeLinecap="round"
+            />
+          ))
+        : null}
     </g>,
     svgRoot,
   );
