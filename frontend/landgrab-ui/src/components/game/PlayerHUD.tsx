@@ -142,7 +142,6 @@ function getHexRelation(
   return 'enemy';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const STRATEGIC_ZOOM_THRESHOLD = 14;
 const STRATEGIC_ZOOM_DEBOUNCE_MS = 160;
 
@@ -156,8 +155,6 @@ function formatTimeRemaining(until: string | undefined): string | null {
   const seconds = Math.floor((remaining % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 
 export function PlayerHUD({
   actions,
