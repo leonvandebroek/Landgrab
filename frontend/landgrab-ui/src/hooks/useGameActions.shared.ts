@@ -54,6 +54,7 @@ export interface UseGameActionsResult {
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
   handleSetBeaconEnabled: (enabled: boolean) => void;
   handleSetTileDecayEnabled: (enabled: boolean) => void;
+  handleSetEnemySightingMemory: (seconds: number) => void;
   handleSetGameDynamics: (dynamics: GameDynamics) => void;
   handleSetPlayerRole: (role: string) => Promise<void>;
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
@@ -64,6 +65,7 @@ export interface UseGameActionsResult {
   handleActivateReinforce: () => Promise<void>;
   handleActivateEmergencyRepair: () => Promise<void>;
   handleStartDemolish: () => Promise<void>;
+  handleStartFortConstruction: () => Promise<void>;
   handleSetMasterTile: (lat: number, lng: number) => void;
   handleSetMasterTileByHex: (q: number, r: number) => void;
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;

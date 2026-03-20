@@ -10,6 +10,7 @@ interface TroopBadgeProps {
   isMasterTile?: boolean;
   isForestBlind?: boolean;
   isEnemy?: boolean;
+  isStale?: boolean;
   q?: number;
   r?: number;
   showCoords?: boolean;
@@ -29,11 +30,12 @@ export const TroopBadge = memo(function TroopBadge({
   isMasterTile = false,
   isForestBlind = false,
   isEnemy,
+  isStale = false,
   q,
   r,
   showCoords = false,
 }: TroopBadgeProps) {
-  const troopLabel = isForestBlind ? '?' : formatTroopCount(troops);
+  const troopLabel = isForestBlind ? '?' : (isStale ? `~${formatTroopCount(troops)}` : formatTroopCount(troops));
 
   const masterPrefixText = isMasterTile ? '★ ' : '';
   const hqPrefixMarkup = !isMasterTile ? getHqPrefixMarkup(isHQ) : '';
@@ -46,7 +48,8 @@ export const TroopBadge = memo(function TroopBadge({
     isMasterTile ? 'master-badge' : '',
     isHQ ? 'hq-badge' : '',
     isFort ? 'fort-badge' : '',
-    troops === 0 ? 'zero-troops' : '',
+    troops === 0 && !isStale ? 'zero-troops' : '',
+    isStale ? 'stale-badge' : '',
   ].filter(Boolean).join(' ');
 
   const badgeStyle: CSSProperties & { '--badge-border-color'?: string } = {

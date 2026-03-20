@@ -7,6 +7,8 @@ namespace Landgrab.Api.Services;
 public sealed class TroopRegenerationService(
     IServiceScopeFactory scopeFactory,
     IHubContext<GameHub> hubContext,
+    VisibilityService visibilityService,
+    VisibilityBroadcastHelper visibilityBroadcastHelper,
     ILogger<TroopRegenerationService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -35,30 +37,49 @@ public sealed class TroopRegenerationService(
                     if (result.error != null || state == null)
                         continue;
 
-                    derivedMapStateService.ComputeAndAttach(state);
-
                     foreach (var drainTick in result.drainTicks)
                     {
-                        await hubContext.Clients.Group(roomCode).SendAsync("DrainTick", new
+                        if (state.GameMode != GameMode.Alliances || state.Phase != GamePhase.Playing)
                         {
-                            q = drainTick.q,
-                            r = drainTick.r,
-                            troopsLost = drainTick.troopsLost,
-                            allianceId = drainTick.allianceId
-                        }, stoppingToken);
+                            await hubContext.Clients.Group(roomCode).SendAsync("DrainTick", new
+                            {
+                                q = drainTick.q,
+                                r = drainTick.r,
+                                troopsLost = drainTick.troopsLost,
+                                allianceId = drainTick.allianceId
+                            }, stoppingToken);
+
+                            continue;
+                        }
+
+                        foreach (var (connectionId, viewerUserId) in room.ConnectionMap)
+                        {
+                            var isHostObserver = room.State.HostObserverMode && GameStateCommon.IsHost(room, viewerUserId);
+                            if (!isHostObserver)
+                            {
+                                var visibleHexKeys = visibilityService.ComputeVisibleHexKeys(state, viewerUserId);
+                                if (!visibleHexKeys.Contains(HexService.Key(drainTick.q, drainTick.r)))
+                                {
+                                    continue;
+                                }
+                            }
+
+                            await hubContext.Clients.Client(connectionId).SendAsync("DrainTick", new
+                            {
+                                q = drainTick.q,
+                                r = drainTick.r,
+                                troopsLost = drainTick.troopsLost,
+                                allianceId = drainTick.allianceId
+                            }, stoppingToken);
+                        }
                     }
 
-                    await hubContext.Clients.Group(roomCode).SendAsync("StateUpdated", state, stoppingToken);
-
-                    if (state.Phase == GamePhase.GameOver)
-                    {
-                        await hubContext.Clients.Group(roomCode).SendAsync("GameOver", new
-                        {
-                            state.WinnerId,
-                            state.WinnerName,
-                            state.IsAllianceVictory
-                        }, stoppingToken);
-                    }
+                    await visibilityBroadcastHelper.BroadcastPerViewer(
+                        room,
+                        state,
+                        hubContext.Clients.Group(roomCode),
+                        connectionId => hubContext.Clients.Client(connectionId),
+                        derivedMapStateService);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

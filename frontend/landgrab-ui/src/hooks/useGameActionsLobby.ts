@@ -34,6 +34,7 @@ interface UseGameActionsLobbyResult {
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
   handleSetBeaconEnabled: (enabled: boolean) => void;
   handleSetTileDecayEnabled: (enabled: boolean) => void;
+  handleSetEnemySightingMemory: (seconds: number) => void;
   handleSetGameDynamics: (dynamics: GameDynamics) => void;
   handleSetPlayerRole: (role: string) => Promise<void>;
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
@@ -232,6 +233,14 @@ export function useGameActionsLobby({
     invoke('SetTileDecayEnabled', enabled).catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
+  const handleSetEnemySightingMemory = useCallback((seconds: number): void => {
+    if (!invoke) {
+      return;
+    }
+
+    invoke('SetEnemySightingMemory', seconds).catch(cause => setError(String(cause)));
+  }, [invoke, setError]);
+
   const handleSetGameDynamics = useCallback((dynamics: GameDynamics): void => {
     if (!invoke) {
       return;
@@ -380,6 +389,7 @@ export function useGameActionsLobby({
     handleSetWinCondition,
     handleSetBeaconEnabled,
     handleSetTileDecayEnabled,
+    handleSetEnemySightingMemory,
     handleSetGameDynamics,
     handleSetPlayerRole,
     handleSetAllianceHQ,

@@ -115,6 +115,29 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         }
     }
 
+    public (GameState? state, string? error) SetEnemySightingMemory(string roomCode, string userId, int seconds)
+    {
+        if (seconds < 0 || seconds > 300)
+            return (null, "Enemy sighting memory must be between 0 and 300 seconds.");
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, userId))
+                return (null, "Only the host can change enemy sighting memory.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Enemy sighting memory can only be changed in the lobby.");
+
+            room.State.Dynamics.EnemySightingMemorySeconds = seconds;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics)
     {
         var room = GetRoom(roomCode);

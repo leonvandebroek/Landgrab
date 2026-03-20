@@ -20,6 +20,8 @@ public partial class GameHub : Hub
     private readonly GameService gameService;
     private readonly GlobalMapService globalMap;
     private readonly DerivedMapStateService derivedMapStateService;
+    private readonly VisibilityService visibilityService;
+    private readonly VisibilityBroadcastHelper visibilityBroadcastHelper;
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
 
@@ -46,12 +48,16 @@ public partial class GameHub : Hub
         GameService gameService,
         GlobalMapService globalMap,
         DerivedMapStateService derivedMapStateService,
+        VisibilityService visibilityService,
+        VisibilityBroadcastHelper visibilityBroadcastHelper,
         IServiceScopeFactory scopeFactory,
         ILogger<GameHub> logger)
     {
         this.gameService = gameService;
         this.globalMap = globalMap;
         this.derivedMapStateService = derivedMapStateService;
+        this.visibilityService = visibilityService;
+        this.visibilityBroadcastHelper = visibilityBroadcastHelper;
         this.scopeFactory = scopeFactory;
         this.logger = logger;
     }
@@ -83,37 +89,66 @@ public partial class GameHub : Hub
 
     private async Task BroadcastState(string roomCode, GameState state, string? aliasEvent = null)
     {
-        derivedMapStateService.ComputeAndAttach(state);
-
-        if (!string.IsNullOrWhiteSpace(aliasEvent))
+        var room = gameService.GetRoom(roomCode);
+        if (room is null)
         {
-            await Clients.Group(roomCode).SendAsync(aliasEvent, state);
-        }
-
-        await Clients.Group(roomCode).SendAsync("StateUpdated", state);
-        if (state.Phase == GamePhase.GameOver)
-        {
-            await Clients.Group(roomCode).SendAsync("GameOver", new
+            var sharedState = GameStateCommon.SnapshotState(state);
+            derivedMapStateService.ComputeAndAttach(sharedState);
+            if (!string.IsNullOrWhiteSpace(aliasEvent))
             {
-                state.WinnerId,
-                state.WinnerName,
-                state.IsAllianceVictory
-            });
+                await Clients.Group(roomCode).SendAsync(aliasEvent, sharedState);
+            }
+
+            await Clients.Group(roomCode).SendAsync("StateUpdated", sharedState);
+            if (sharedState.Phase == GamePhase.GameOver)
+            {
+                await Clients.Group(roomCode).SendAsync("GameOver", new
+                {
+                    sharedState.WinnerId,
+                    sharedState.WinnerName,
+                    sharedState.IsAllianceVictory
+                });
+            }
+
+            return;
         }
+
+        await visibilityBroadcastHelper.BroadcastPerViewer(
+            room,
+            state,
+            Clients.Group(roomCode),
+            connectionId => Clients.Client(connectionId),
+            derivedMapStateService,
+            aliasEvent);
     }
 
     private async Task SendStateToCaller(GameState state)
     {
-        derivedMapStateService.ComputeAndAttach(state);
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        GameState callerState;
 
-        await Clients.Caller.SendAsync("StateUpdated", state);
-        if (state.Phase == GamePhase.GameOver)
+        if (room is not null)
+        {
+            callerState = visibilityBroadcastHelper.CreateStateForViewer(
+                room,
+                state,
+                UserId,
+                derivedMapStateService);
+        }
+        else
+        {
+            callerState = GameStateCommon.SnapshotState(state);
+            derivedMapStateService.ComputeAndAttach(callerState);
+        }
+
+        await Clients.Caller.SendAsync("StateUpdated", callerState);
+        if (callerState.Phase == GamePhase.GameOver)
         {
             await Clients.Caller.SendAsync("GameOver", new
             {
-                state.WinnerId,
-                state.WinnerName,
-                state.IsAllianceVictory
+                callerState.WinnerId,
+                callerState.WinnerName,
+                callerState.IsAllianceVictory
             });
         }
     }
@@ -156,6 +191,7 @@ public partial class GameHub : Hub
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
             HQEnabled = dynamics.HQEnabled,
             HQAutoAssign = dynamics.HQAutoAssign,
+            EnemySightingMemorySeconds = Math.Max(0, dynamics.EnemySightingMemorySeconds),
         };
     }
 

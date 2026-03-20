@@ -57,6 +57,7 @@ public class GameService(
 public (GameState? state, string? error) SetWinCondition(string roomCode, string userId, string winConditionType, int value) => gameConfigService.SetWinCondition(roomCode, userId, winConditionType, value);
     public (GameState? state, string? error) SetBeaconEnabled(string roomCode, string userId, bool enabled) => gameConfigService.SetBeaconEnabled(roomCode, userId, enabled);
     public (GameState? state, string? error) SetTileDecayEnabled(string roomCode, string userId, bool enabled) => gameConfigService.SetTileDecayEnabled(roomCode, userId, enabled);
+    public (GameState? state, string? error) SetEnemySightingMemory(string roomCode, string userId, int seconds) => gameConfigService.SetEnemySightingMemory(roomCode, userId, seconds);
     public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics) => gameConfigService.SetGameDynamics(roomCode, userId, dynamics);
     public (GameState? state, string? error) SetPlayerRole(string roomCode, string userId, string role) => lobbyService.SetPlayerRole(roomCode, userId, role);
     public (GameState? state, string? error) AssignPlayerRole(string roomCode, string userId, string targetPlayerId, string role) => lobbyService.AssignPlayerRole(roomCode, userId, targetPlayerId, role);
@@ -74,6 +75,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error) ActivateTacticalStrike(string roomCode, string userId) => abilityService.ActivateTacticalStrike(roomCode, userId);
     public (GameState? state, string? error) ActivateReinforce(string roomCode, string userId) => abilityService.ActivateReinforce(roomCode, userId);
     public (GameState? state, string? error) ActivateShieldWall(string roomCode, string userId) => abilityService.ActivateShieldWall(roomCode, userId);
+    public (GameState? state, string? error) StartFortConstruction(string roomCode, string userId) => abilityService.StartFortConstruction(roomCode, userId);
     public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId) => abilityService.ActivateEmergencyRepair(roomCode, userId);
     public (GameState? state, string? error) StartDemolish(string roomCode, string userId) => abilityService.StartDemolish(roomCode, userId);
     public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)

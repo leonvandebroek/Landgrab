@@ -7,6 +7,7 @@ const DEFAULT_GAME_DYNAMICS: GameDynamics = {
   hqEnabled: false,
   hqAutoAssign: true,
   tileDecayEnabled: false,
+  enemySightingMemorySeconds: 0,
 };
 
 export function getErrorMessage(error: unknown): string {
@@ -49,8 +50,19 @@ export function normalizeGameState(state: GameState, previousState?: GameState |
     ? previousState.eventLog
     : undefined;
 
+  let normalizedGrid = state.grid;
+  if (normalizedGrid) {
+    normalizedGrid = Object.fromEntries(
+      Object.entries(normalizedGrid).map(([key, cell]) => [
+        key,
+        { ...cell, visibilityTier: cell.visibilityTier ?? 'Visible' }
+      ])
+    );
+  }
+
   return {
     ...state,
+    grid: normalizedGrid,
     eventLog: Array.isArray(state.eventLog) ? state.eventLog : previousEventLog,
     dynamics: state.dynamics ?? DEFAULT_GAME_DYNAMICS,
   };

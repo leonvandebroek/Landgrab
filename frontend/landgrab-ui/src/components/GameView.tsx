@@ -42,6 +42,7 @@ export interface GameViewActions {
   onActivateReinforce: () => Promise<void>;
   onActivateEmergencyRepair: () => Promise<void>;
   onStartDemolish: () => Promise<void>;
+  onStartFortConstruction: () => Promise<void>;
   onSetObserverMode: (enabled: boolean) => void;
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
@@ -208,6 +209,7 @@ export function GameView({
           onActivateReinforce={actions.onActivateReinforce}
           onActivateEmergencyRepair={actions.onActivateEmergencyRepair}
           onStartDemolish={actions.onStartDemolish}
+          onStartFortConstruction={actions.onStartFortConstruction}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}

@@ -193,11 +193,28 @@ interface TooltipCardProps {
 function TooltipCard({ cell, clearHoveredHex, currentHex, isContested, isTouchDevice, t }: TooltipCardProps) {
   const translate = t as unknown as (key: string, options?: Record<string, unknown>) => string;
   const distance = currentHex ? getHexDistance([cell.q, cell.r], currentHex) : null;
-  const ownerColor = cell.ownerColor ?? '#888';
-  const ownerName = cell.ownerName ?? translate('map.unclaimed');
-  const threatLevel = cell.troops > 500
+
+  const isHidden = cell.visibilityTier === 'Hidden';
+  const isRemembered = cell.visibilityTier === 'Remembered';
+
+  const rawOwnerColor = isRemembered ? cell.lastKnownOwnerColor : cell.ownerColor;
+  const ownerColor = rawOwnerColor ?? '#888';
+
+  const rawOwnerName = isRemembered ? cell.lastKnownOwnerName : cell.ownerName;
+  const ownerName = isRemembered
+    ? (rawOwnerName ? `${rawOwnerName} ${translate('game.tileInfo.lastKnown', { defaultValue: '(last known)' })}` : translate('map.unclaimed'))
+    : (rawOwnerName ?? translate('map.unclaimed'));
+
+  const rawTroops = isRemembered ? (cell.lastKnownTroops ?? 0) : cell.troops;
+  const troopsDisplay = isRemembered
+    ? translate('game.tileInfo.staleTroops', { count: rawTroops, defaultValue: '~{{count}}' })
+    : rawTroops;
+  const isFort = isRemembered ? cell.lastKnownIsFort : cell.isFort;
+  const isMasterTile = isRemembered ? cell.lastKnownIsMasterTile : cell.isMasterTile;
+
+  const threatLevel = rawTroops > 500
     ? translate('map.threatHigh', { defaultValue: 'THREAT: HIGH' })
-    : cell.troops > 100
+    : rawTroops > 100
       ? translate('map.threatMed', { defaultValue: 'THREAT: MED' })
       : translate('map.threatLow', { defaultValue: 'THREAT: LOW' });
 
@@ -205,14 +222,14 @@ function TooltipCard({ cell, clearHoveredHex, currentHex, isContested, isTouchDe
     <div className="tooltip-card">
       <div className="tooltip-header">
         <div className="tooltip-owner">
-          <TooltipOwnerChevron ownerColor={ownerColor} />
+          <TooltipOwnerChevron ownerColor={isHidden ? '#888' : ownerColor} />
           <span className="tooltip-callsign-prefix">
             {translate('map.tooltipCallsign', { defaultValue: 'ZONE: ' })}
           </span>
-          <span className="tooltip-player-name">
-            {ownerName}
+          <span className={`tooltip-player-name ${isRemembered ? 'tooltip-player-name--remembered' : ''}`}>
+            {isHidden ? translate('game.tileInfo.unknownTerritory', { defaultValue: 'Unknown territory' }) : ownerName}
           </span>
-          {cell.isMasterTile ? <IconMarkup markup={iconHtml('crown', 'sm')} /> : null}
+          {!isHidden && isMasterTile ? <IconMarkup markup={iconHtml('crown', 'sm')} /> : null}
         </div>
         {isTouchDevice ? (
           <button
@@ -225,27 +242,29 @@ function TooltipCard({ cell, clearHoveredHex, currentHex, isContested, isTouchDe
           </button>
         ) : null}
       </div>
-      <div className="tooltip-stat tooltip-stat--troops">
-        <span className="tooltip-stat-icon"><IconMarkup markup={iconHtml('helmet', 'sm')} /></span>
-        <span>{cell.troops}</span>
-      </div>
+      {!isHidden && (
+        <div className="tooltip-stat tooltip-stat--troops">
+          <span className="tooltip-stat-icon"><IconMarkup markup={iconHtml('helmet', 'sm')} /></span>
+          <span>{troopsDisplay}</span>
+        </div>
+      )}
       <div className="tooltip-stat tooltip-coords">Q{cell.q} R{cell.r}</div>
-      {cell.troops > 0 ? (
+      {!isHidden && !isRemembered && rawTroops > 0 ? (
         <div className="tooltip-stat">
           <span className={`threat-level threat-level--${
-            cell.troops > 500 ? 'high' : cell.troops > 100 ? 'med' : 'low'
+            rawTroops > 500 ? 'high' : rawTroops > 100 ? 'med' : 'low'
           }`}>
             {threatLevel}
           </span>
         </div>
       ) : null}
-      {cell.isFort ? (
+      {!isHidden && isFort ? (
         <div className="tooltip-stat">
           <span className="tooltip-stat-icon"><IconMarkup markup={iconHtml('fort', 'sm')} /></span>
           <span>{translate('map.fortStatus', { defaultValue: 'FORTIFIED' })}</span>
         </div>
       ) : null}
-      {isContested ? (
+      {!isHidden && !isRemembered && isContested ? (
         <div className="tooltip-stat">
           <span className="tooltip-stat-icon"><IconMarkup markup={iconHtml('contested', 'sm')} /></span>
           {translate('map.contestedLabel', { defaultValue: 'Contested' })} - {translate('map.contestedDescription', { defaultValue: 'borders enemy territory' })}
