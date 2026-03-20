@@ -1,7 +1,7 @@
 ---
 name: Coder
 description: Writes code following mandatory coding principles.
-model: gpt-5.4
+model: GPT-5.4 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'io.github.upstash/context7/*', 'github/*', 'edit', 'search', 'web', 'vscode/memory', 'todo']
 ---
 

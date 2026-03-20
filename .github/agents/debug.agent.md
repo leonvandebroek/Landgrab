@@ -1,7 +1,7 @@
 ---
 description: 'Debug your application to find and fix a bug'
 name: 'Debug Mode Instructions'
-model: gpt-5.4
+model: claude-sonnet-4.6
 tools: ['edit/editFiles', 'search', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'search/usages', 'read/problems', 'execute/testFailure', 'web/fetch', 'web/githubRepo', 'execute/runTests']
 ---
 

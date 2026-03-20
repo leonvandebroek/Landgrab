@@ -1,10 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
-import { getTileActionDisabledReasonText } from './tileInteraction';
+import {
+  getTileActionAttackRequirement,
+  getTileActionDisabledReasonDetailText,
+  getTileActionDisabledReasonText,
+} from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
+import { useUiStore } from '../../stores/uiStore';
 import { useSecondTick } from '../../hooks/useSecondTick';
 import { AbilityInfoSheet } from './AbilityInfoSheet';
 import { GameIcon } from '../common/GameIcon';
@@ -36,6 +42,12 @@ interface PlayerHUDProps {
   onActivateReinforce: () => void;
   onActivateEmergencyRepair: () => void;
   onStartDemolish: () => void;
+  guidanceHint?: string | null;
+  guidanceVisible?: boolean;
+  interactionPrompt?: {
+    tone: 'info' | 'error';
+    message: string;
+  } | null;
 }
 
 interface AbilityButtonConfig {
@@ -43,25 +55,80 @@ interface AbilityButtonConfig {
   icon: GameIconName;
   title: string;
   description: string;
-  shortDescription?: string;
   status: string;
+  badgeText?: string | null;
   className: string;
-  accentColor?: string;
+  stateTone?: 'standby' | 'active' | 'cooldown' | 'targeting' | 'inProgress';
+  accentClassName?: string;
   disabled?: boolean;
   onClick?: () => void;
   role?: AbilityRole;
   abilityKey?: string;
+  isPressed?: boolean;
 }
 
 type AbilityRole = 'Commander' | 'Scout' | 'Engineer';
 
-const ROLE_ACCENT_COLORS: Record<AbilityRole, string> = {
-  Commander: '#f6c453',
-  Scout: '#6bc5ff',
-  Engineer: '#ffb366',
+const ROLE_ACCENT_CLASSES: Record<AbilityRole, string> = {
+  Commander: 'player-hud__ability--commander',
+  Scout: 'player-hud__ability--scout',
+  Engineer: 'player-hud__ability--engineer',
 };
 
-type HexRelation = 'own' | 'team' | 'allied' | 'enemy' | 'neutral';
+const PLAYER_HUD_TOKEN_STYLES = `
+  .player-hud {
+    --relation-own: rgba(46, 204, 113, 0.25);
+    --relation-team: rgba(52, 152, 219, 0.25);
+    --relation-enemy: rgba(231, 76, 60, 0.25);
+    --relation-neutral: rgba(177, 204, 220, 0.12);
+    --role-commander-accent: rgba(246, 196, 83, 0.82);
+    --role-scout-accent: rgba(107, 197, 255, 0.78);
+    --role-engineer-accent: rgba(255, 179, 102, 0.8);
+    --owner-color-fallback: rgba(177, 204, 220, 0.5);
+  }
+
+  .player-hud--own {
+    --dock-accent: var(--relation-own);
+  }
+
+  .player-hud--team {
+    --dock-accent: var(--relation-team);
+  }
+
+  .player-hud--enemy {
+    --dock-accent: var(--relation-enemy);
+  }
+
+  .player-hud--neutral {
+    --dock-accent: var(--relation-neutral);
+  }
+
+  .player-hud__ability--commander {
+    --ability-accent: var(--role-commander-accent);
+  }
+
+  .player-hud__ability--scout {
+    --ability-accent: var(--role-scout-accent);
+  }
+
+  .player-hud__ability--engineer {
+    --ability-accent: var(--role-engineer-accent);
+  }
+
+  .player-hud__ability--beacon {
+    --ability-accent: rgba(120, 190, 255, 0.82);
+  }
+
+  .player-hud__ability--beacon-active {
+    --ability-accent: rgba(46, 204, 113, 0.92);
+  }
+
+  .player-hud__owner-dot--fallback {
+    background: var(--owner-color-fallback);
+  }
+`;
+
+type HexRelation = 'own' | 'team' | 'enemy' | 'neutral';
 
 function getHexRelation(
   cell: HexCell | undefined,
@@ -74,15 +141,9 @@ function getHexRelation(
   return 'enemy';
 }
 
-const RELATION_ACCENT: Record<HexRelation, string> = {
-  own: 'rgba(46, 204, 113, 0.6)',
-  team: 'rgba(46, 204, 113, 0.55)',
-  allied: 'rgba(52, 152, 219, 0.5)',
-  enemy: 'rgba(231, 76, 60, 0.6)',
-  neutral: 'rgba(149, 165, 166, 0.3)',
-};
-
 const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
+const STRATEGIC_ZOOM_THRESHOLD = 14;
+const STRATEGIC_ZOOM_DEBOUNCE_MS = 160;
 
 function formatTimeRemaining(until: string | undefined): string | null {
   if (!until) return null;
@@ -119,7 +180,6 @@ export function PlayerHUD({
   hasLocation,
   myUserId,
   myAllianceId,
-  myAllianceName,
   player,
   dynamics,
   onActivateBeacon,
@@ -128,17 +188,25 @@ export function PlayerHUD({
   onActivateReinforce,
   onActivateEmergencyRepair,
   onStartDemolish,
+  guidanceHint,
+  guidanceVisible = false,
+  interactionPrompt,
 }: PlayerHUDProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const commandoTargetingMode = useGameplayStore((state) => state.commandoTargetingMode);
   const setCommandoTargetingMode = useGameplayStore((state) => state.setCommandoTargetingMode);
+  const zoomLevel = useUiStore((state) => state.zoomLevel);
   const [, setTick] = useState(0);
   const [infoSheet, setInfoSheet] = useState<{ role: AbilityRole; abilityKey: string } | null>(null);
+  const [isStrategicZoom, setIsStrategicZoom] = useState(() => zoomLevel < STRATEGIC_ZOOM_THRESHOLD);
+  const [isStrategicExpanded, setIsStrategicExpanded] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
 
   const showBeacon = Boolean(dynamics?.beaconEnabled);
   const rolesEnabled = Boolean(dynamics?.playerRolesEnabled);
+  const currentPlayer = player ?? null;
+  const selectedCell = targetCell;
   const tacticalStrikeTime = formatTimeRemaining(player?.tacticalStrikeExpiry);
   const tacticalStrikeCooldownTime = formatTimeRemaining(player?.tacticalStrikeCooldownUntil);
   const rallyPointCooldownTime = formatTimeRemaining(player?.rallyPointCooldownUntil);
@@ -164,6 +232,21 @@ export function PlayerHUD({
     setTick((tick) => tick + 1);
   });
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const nextIsStrategicZoom = zoomLevel < STRATEGIC_ZOOM_THRESHOLD;
+      setIsStrategicZoom(nextIsStrategicZoom);
+
+      if (!nextIsStrategicZoom) {
+        setIsStrategicExpanded(false);
+      }
+    }, STRATEGIC_ZOOM_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [zoomLevel]);
+
   const hasActions = actions.length > 0;
   const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);
   const disabledReasonText = getTileActionDisabledReasonText(
@@ -171,14 +254,36 @@ export function PlayerHUD({
     firstDisabledAction?.disabledReason,
     firstDisabledAction?.disabledReasonParams,
   );
+  const disabledReasonTitle = getTileActionDisabledReasonDetailText(
+    t,
+    firstDisabledAction?.disabledReason,
+    firstDisabledAction?.disabledReasonParams,
+  ) ?? disabledReasonText;
+  const attackRequirement = getTileActionAttackRequirement(firstDisabledAction);
   const emptyReason: 'noLocation' | 'outsideGrid' | 'noActions' = !hasLocation
     ? 'noLocation'
     : !currentHex
       ? 'outsideGrid'
       : 'noActions';
+  const selectedIsAllied = Boolean(
+    selectedCell
+    && currentPlayer
+    && (
+      selectedCell.ownerId === currentPlayer.id
+      || (
+        selectedCell.ownerAllianceId != null
+        && selectedCell.ownerAllianceId === currentPlayer.allianceId
+      )
+    )
+  );
+  const selectedIsEnemy = Boolean(
+    selectedCell?.ownerId != null
+    && currentPlayer
+    && selectedCell.ownerId !== currentPlayer.id
+    && (!currentPlayer.allianceId || selectedCell.ownerAllianceId !== currentPlayer.allianceId)
+  );
 
   const relation = getHexRelation(targetCell, myUserId, myAllianceId);
-  const accentColor = RELATION_ACCENT[relation];
 
   const formatStatus = (statusKey: 'activate' | 'active' | 'cooldown' | 'inProgress', time?: string | null): string => {
     const label = t(`roles.status.${statusKey}` as never);
@@ -237,14 +342,15 @@ export function PlayerHUD({
       icon: 'lightning',
       title: t('roles.Commander.abilities.tacticalStrike.title' as never),
       description: t('roles.Commander.abilities.tacticalStrike.description' as never),
-      shortDescription: t('roles.Commander.abilities.tacticalStrike.shortDesc' as never),
       status: tacticalStrikeActive
         ? formatStatus('active', tacticalStrikeTime)
         : tacticalStrikeOnCooldown
           ? formatStatus('cooldown', tacticalStrikeCooldownTime)
           : formatStatus('activate'),
-      className: `player-hud__ability ${tacticalStrikeActive ? 'player-hud__ability--active ability-btn-active' : ''} ${tacticalStrikeOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      accentColor: ROLE_ACCENT_COLORS.Commander,
+      badgeText: tacticalStrikeActive ? tacticalStrikeTime : tacticalStrikeCooldownTime,
+      className: `player-hud__ability ${tacticalStrikeActive ? 'player-hud__ability--active' : ''} ${tacticalStrikeOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      stateTone: tacticalStrikeActive ? 'active' : tacticalStrikeOnCooldown ? 'cooldown' : 'standby',
+      accentClassName: ROLE_ACCENT_CLASSES.Commander,
       disabled: tacticalStrikeActive || tacticalStrikeOnCooldown,
       onClick: tacticalStrikeActive || tacticalStrikeOnCooldown ? undefined : onActivateTacticalStrike,
       role: 'Commander',
@@ -259,14 +365,15 @@ export function PlayerHUD({
       icon: 'rallyTroops',
       title: t('roles.Commander.abilities.reinforce.title' as never),
       description: t('roles.Commander.abilities.reinforce.description' as never),
-      shortDescription: t('roles.Commander.abilities.reinforce.shortDesc' as never),
       status: rallyActive
         ? formatStatus('active', formatTimeRemaining(player.rallyPointDeadline))
         : rallyOnCooldown
           ? formatStatus('cooldown', rallyPointCooldownTime)
           : formatStatus('activate'),
-      className: `player-hud__ability ${rallyActive ? 'player-hud__ability--active ability-btn-active' : ''} ${rallyOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      accentColor: ROLE_ACCENT_COLORS.Commander,
+      badgeText: rallyActive ? formatTimeRemaining(player.rallyPointDeadline) : rallyPointCooldownTime,
+      className: `player-hud__ability ${rallyActive ? 'player-hud__ability--active' : ''} ${rallyOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      stateTone: rallyActive ? 'active' : rallyOnCooldown ? 'cooldown' : 'standby',
+      accentClassName: ROLE_ACCENT_CLASSES.Commander,
       disabled: rallyActive || rallyOnCooldown,
       onClick: rallyActive || rallyOnCooldown ? undefined : onActivateReinforce,
       role: 'Commander',
@@ -281,10 +388,10 @@ export function PlayerHUD({
         icon: 'archeryTarget',
         title: t('roles.Commander.abilities.commandoRaid.title' as never),
         description: t('roles.Commander.abilities.commandoRaid.description' as never),
-        shortDescription: t('roles.Commander.abilities.commandoRaid.shortDesc' as never),
         status: t('phase6.commandoSelectTarget' as never),
         className: 'player-hud__ability player-hud__ability--targeting',
-        accentColor: ROLE_ACCENT_COLORS.Commander,
+        stateTone: 'targeting',
+        accentClassName: ROLE_ACCENT_CLASSES.Commander,
         onClick: () => setCommandoTargetingMode(false),
         role: 'Commander',
         abilityKey: 'commandoRaid',
@@ -295,12 +402,13 @@ export function PlayerHUD({
         icon: 'archeryTarget',
         title: t('roles.Commander.abilities.commandoRaid.title' as never),
         description: t('roles.Commander.abilities.commandoRaid.description' as never),
-        shortDescription: t('roles.Commander.abilities.commandoRaid.shortDesc' as never),
         status: commandoOnCooldown
           ? formatStatus('cooldown', commandoCooldownTime)
           : formatStatus('activate'),
+        badgeText: commandoCooldownTime,
         className: `player-hud__ability ${commandoOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-        accentColor: ROLE_ACCENT_COLORS.Commander,
+        stateTone: commandoOnCooldown ? 'cooldown' : 'standby',
+        accentClassName: ROLE_ACCENT_CLASSES.Commander,
         disabled: commandoOnCooldown,
         onClick: commandoOnCooldown ? undefined : () => setCommandoTargetingMode(true),
         role: 'Commander',
@@ -320,33 +428,35 @@ export function PlayerHUD({
       icon: 'wrench',
       title: t('roles.Engineer.abilities.emergencyRepair.title' as never),
       description: t('roles.Engineer.abilities.emergencyRepair.description' as never),
-      shortDescription: t('roles.Engineer.abilities.emergencyRepair.shortDesc' as never),
       status: sabotageActive
         ? formatStatus('inProgress')
         : sabotageOnCooldown
           ? formatStatus('cooldown', sabotageCooldownTime)
           : formatStatus('activate'),
-      className: `player-hud__ability ${sabotageActive ? 'player-hud__ability--active ability-btn-active' : ''} ${sabotageOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      accentColor: ROLE_ACCENT_COLORS.Engineer,
-      disabled: sabotageActive || sabotageOnCooldown,
-      onClick: sabotageActive || sabotageOnCooldown ? undefined : onActivateEmergencyRepair,
+      badgeText: sabotageCooldownTime,
+      className: `player-hud__ability ${sabotageActive ? 'player-hud__ability--active' : ''} ${sabotageOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      stateTone: sabotageActive ? 'inProgress' : sabotageOnCooldown ? 'cooldown' : 'standby',
+      accentClassName: ROLE_ACCENT_CLASSES.Engineer,
+      disabled: sabotageActive || sabotageOnCooldown || selectedIsAllied,
+      onClick: sabotageActive || sabotageOnCooldown || selectedIsAllied ? undefined : onActivateEmergencyRepair,
       role: 'Engineer',
       abilityKey: 'emergencyRepair',
     });
 
     abilityButtons.push({
       key: 'demolish',
-      icon: 'gearHammer',
+      icon: 'hammerDrop',
       title: t('roles.Engineer.abilities.demolish.title' as never),
       description: t('roles.Engineer.abilities.demolish.description' as never),
-      shortDescription: t('roles.Engineer.abilities.demolish.shortDesc' as never),
       status: demolishInProgress
         ? formatStatus('inProgress', demolishProgressTime)
         : demolishOnCooldown
           ? formatStatus('cooldown', demolishCooldownTime)
           : formatStatus('activate'),
-      className: `player-hud__ability ${demolishInProgress ? 'player-hud__ability--active ability-btn-active' : ''} ${demolishOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      accentColor: ROLE_ACCENT_COLORS.Engineer,
+      badgeText: demolishInProgress ? demolishProgressTime : demolishCooldownTime,
+      className: `player-hud__ability ${demolishInProgress ? 'player-hud__ability--active' : ''} ${demolishOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
+      stateTone: demolishInProgress ? 'inProgress' : demolishOnCooldown ? 'cooldown' : 'standby',
+      accentClassName: ROLE_ACCENT_CLASSES.Engineer,
       disabled: demolishInProgress || demolishOnCooldown,
       onClick: demolishInProgress || demolishOnCooldown ? undefined : onStartDemolish,
       role: 'Engineer',
@@ -361,168 +471,276 @@ export function PlayerHUD({
       title: t('phase5.beacon' as never),
       description: t('phase5.beaconDesc' as never),
       status: player.isBeacon ? formatStatus('active') : formatStatus('activate'),
-      className: `player-hud__ability ${player.isBeacon ? 'player-hud__ability--active ability-btn-active' : ''}`,
+      className: `player-hud__ability player-hud__ability--beacon ${player.isBeacon ? 'player-hud__ability--active player-hud__ability--beacon-active' : ''}`,
+      stateTone: player.isBeacon ? 'active' : 'standby',
+      accentClassName: 'player-hud__ability--beacon',
       onClick: player.isBeacon ? onDeactivateBeacon : onActivateBeacon,
+      isPressed: player.isBeacon,
     });
   }
 
+  const isCollapsedForZoom = isStrategicZoom && !isStrategicExpanded;
+  const persistentAbilityButtons = abilityButtons.filter((ability) => (ability.stateTone ?? 'standby') !== 'standby');
+  const visibleAbilityButtons = isCollapsedForZoom ? persistentAbilityButtons : abilityButtons;
   const hasAbilities = abilityButtons.length > 0;
+  const hasVisibleAbilities = visibleAbilityButtons.length > 0;
+  const showCompactIdle = !isCollapsedForZoom && !hasActions && !hasAbilities;
+  const showIdlePrompt = !isCollapsedForZoom && !hasActions && Boolean(interactionPrompt?.message);
+  const showIdleGuidance = !isCollapsedForZoom && !hasActions && !showIdlePrompt && Boolean(guidanceHint);
+  const showIdleContext = showIdlePrompt || showIdleGuidance;
+  const strategicToggleLabel = isCollapsedForZoom
+    ? t('game.hudTapToExpand' as never)
+    : t('game.hudTapToCollapse' as never);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(i18n.resolvedLanguage, {
+    notation: 'compact',
+    compactDisplay: 'short',
+    maximumFractionDigits: 1,
+  }), [i18n.resolvedLanguage]);
+  const formattedCarriedTroops = useMemo(() => numberFormatter.format(carriedTroops), [carriedTroops, numberFormatter]);
+  const attackRequirementRatio = attackRequirement
+    ? Math.max(0, Math.min(attackRequirement.current / attackRequirement.required, 1))
+    : 0;
+  const attackRequirementTone = attackRequirementRatio >= 1
+    ? 'ready'
+    : attackRequirementRatio >= 0.8
+      ? 'close'
+      : 'low';
+  void playerColor;
 
   return (
-    <div
-      className={`player-hud ${hasActions ? 'player-hud--active' : 'player-hud--idle'} player-hud--${relation}`}
-      style={{ '--dock-accent': accentColor } as React.CSSProperties}
-    >
-      {(hasActions || currentHex) && (
-        <div className="player-hud__context">
-          {carriedTroops > 0 && (
-            <span
-              className="player-hud__carried"
-              style={{ '--player-color': playerColor } as React.CSSProperties}
-            >
-              <GameIcon name="chest" size="sm" /> {carriedTroops}
-            </span>
-          )}
-
-          <span className={`player-hud__relation player-hud__relation--${relation}`}>
-            {t(`game.dock.relation.${relation}`)}
-          </span>
-
-          {relation === 'team' && myAllianceName && (
-            <span className="player-hud__owner">
+    <>
+      <style>{PLAYER_HUD_TOKEN_STYLES}</style>
+      <div
+        className={[
+          'player-hud',
+          hasActions ? 'player-hud--active' : 'player-hud--idle',
+          showCompactIdle ? 'player-hud--compact' : '',
+          isStrategicZoom ? 'player-hud--zoom-strategic' : '',
+          isCollapsedForZoom ? 'player-hud--collapsed' : '',
+          selectedIsEnemy ? 'player-hud--enemy' : '',
+          `player-hud--${relation}`,
+        ].filter(Boolean).join(' ')}
+      >
+        {isStrategicZoom && (
+          <div className="player-hud__zoom-summary">
+            {carriedTroops > 0 ? (
               <span
-                className="player-hud__owner-dot"
-                style={{ background: targetCell?.ownerColor ?? 'var(--muted)' }}
-              />
-              {myAllianceName}
-              {targetCell?.ownerName && (
-                <span className="player-hud__claimer">{targetCell.ownerName}</span>
-              )}
-            </span>
-          )}
-
-          {relation === 'enemy' && targetCell?.ownerName && (
-            <span className="player-hud__owner">
-              <span
-                className="player-hud__owner-dot"
-                style={{ background: targetCell.ownerColor ?? 'var(--muted)' }}
-              />
-              {targetCell.ownerName}
-            </span>
-          )}
-
-          {targetCell && targetCell.troops > 0 && (
-            <span className="player-hud__troops"><GameIcon name="contested" size="sm" /> {targetCell.troops}</span>
-          )}
-
-          {targetCell?.isFortified && (
-            <span className="player-hud__badge" title={t('phase3.fortifiedDesc' as never)}><GameIcon name="shield" size="sm" /></span>
-          )}
-          {targetCell?.isFort && (
-            <span className="player-hud__badge" title={t('game.dock.fort' as never)}><GameIcon name="fort" size="sm" /></span>
-          )}
-          {(relation === 'own' || relation === 'team') && targetCell?.ownerId && (
-            <span className="player-hud__badge player-hud__badge--boost" title={t('game.tileInfo.presenceBoost' as never)}>
-              <GameIcon name="rallyTroops" size="sm" /> 3×
-            </span>
-          )}
-        </div>
-      )}
-
-      {hasActions && (
-        <div className="player-hud__tile-actions">
-          {actions.map((action, index) => (
-            <button
-              key={action.type}
-              className={`player-hud__btn player-hud__btn--${action.tone}`}
-              disabled={!action.enabled}
-              onClick={() => onAction(action.type)}
-              style={{ animationDelay: `${index * 40}ms` } as React.CSSProperties}
-              aria-label={t(action.label as never)}
-            >
-              <span className="player-hud__btn-icon" aria-hidden>
-                <GameIcon name={action.icon} />
+                className="player-hud__carried player-hud__carried--strategic"
+                aria-label={t('game.carriedTroops')}
+                title={t('game.carriedTroops')}
+              >
+                <span className="player-hud__carried-icon" aria-hidden="true">
+                  <GameIcon name="chest" size="sm" />
+                </span>
+                <span className="player-hud__carried-count">{formattedCarriedTroops}</span>
               </span>
-              <span className="player-hud__btn-label">
-                {t(action.label as never)}
-              </span>
-              {!action.enabled && <span className="player-hud__btn-locked" aria-hidden><GameIcon name="shield" size="sm" /></span>}
-            </button>
-          ))}
-        </div>
-      )}
+            ) : (
+              <span className="player-hud__zoom-summary-spacer" aria-hidden="true" />
+            )}
 
-      {hasActions && disabledReasonText && (
-        <div className="player-hud__disabled-reason">
-          {disabledReasonText}
-        </div>
-      )}
-
-      {hasAbilities && (
-        <div className="player-hud__abilities">
-          {abilityButtons.map((ability) => (
             <button
-              key={ability.key}
               type="button"
-              className={ability.className}
-              onClick={() => handleAbilityClick(ability)}
-              onPointerDown={() => handleAbilityPointerDown(ability)}
-              onPointerUp={handleAbilityPointerEnd}
-              onPointerCancel={handleAbilityPointerEnd}
-              onPointerLeave={handleAbilityPointerEnd}
-              title={ability.description}
-              aria-disabled={ability.disabled || undefined}
+              className="player-hud__zoom-toggle"
+              onClick={() => setIsStrategicExpanded((expanded) => !expanded)}
+              aria-label={strategicToggleLabel}
+              title={strategicToggleLabel}
             >
-              <span className="player-hud__ability-main">
-                <span className="player-hud__ability-title-group">
-                  <span
-                    className="player-hud__ability-icon"
-                    style={{ '--ability-accent': ability.accentColor } as React.CSSProperties}
-                  >
+              <span className="player-hud__zoom-toggle-label">{strategicToggleLabel}</span>
+              <span className="player-hud__zoom-toggle-chevron" aria-hidden="true">⌃</span>
+            </button>
+          </div>
+        )}
+
+        {!isCollapsedForZoom && hasVisibleAbilities && (
+          <div className="player-hud__modules-row player-hud__abilities">
+            {visibleAbilityButtons.map((ability) => (
+              <button
+                key={ability.key}
+                type="button"
+                className={`${ability.className} ${ability.accentClassName ?? ''}`.trim()}
+                disabled={ability.disabled}
+                onClick={() => handleAbilityClick(ability)}
+                onPointerDown={() => handleAbilityPointerDown(ability)}
+                onPointerUp={handleAbilityPointerEnd}
+                onPointerCancel={handleAbilityPointerEnd}
+                onPointerLeave={handleAbilityPointerEnd}
+                onContextMenu={(e) => e.preventDefault()}
+                aria-label={`${ability.role ? `${ability.role}: ` : ''}${ability.title}. ${ability.status}`}
+                {...(ability.isPressed !== undefined ? { 'aria-pressed': ability.isPressed } : {})}
+                title={`${ability.title} — ${ability.status}`}
+              >
+                <span className="player-hud__ability-circle" aria-hidden="true">
+                  <span className="player-hud__ability-icon">
                     <GameIcon name={ability.icon} />
                   </span>
-                  <span className="player-hud__ability-label">{ability.title}</span>
+                  {ability.badgeText && (
+                    <span className={`player-hud__ability-badge player-hud__ability-badge--${ability.stateTone ?? 'standby'}`}>
+                      {ability.badgeText}
+                    </span>
+                  )}
+                  {ability.stateTone === 'targeting' && <span className="player-hud__ability-targeting-indicator" />}
                 </span>
-                <span className="player-hud__countdown">{ability.status}</span>
-              </span>
-              {ability.shortDescription && (
-                <span className="ability-subtitle">{ability.shortDescription}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+                <span className="player-hud__ability-label">{ability.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-      {infoSheet && (
-        <AbilityInfoSheet
-          role={infoSheet.role}
-          abilityKey={infoSheet.abilityKey}
-          onClose={() => setInfoSheet(null)}
-        />
-      )}
+        {!isCollapsedForZoom && (hasActions || selectedCell) && (
+          <div className="player-hud__primary-row player-hud__tile-actions">
+            {actions.map((action) => (
+              (() => {
+                const actionTitle = !action.enabled
+                  ? getTileActionDisabledReasonDetailText(t, action.disabledReason, action.disabledReasonParams)
+                    ?? getTileActionDisabledReasonText(t, action.disabledReason, action.disabledReasonParams)
+                    ?? undefined
+                  : undefined;
+                const actionDisabledReason = !action.enabled
+                  ? getTileActionDisabledReasonText(t, action.disabledReason, action.disabledReasonParams)
+                  : null;
 
-      {!hasActions && !hasAbilities && (
-        <div className="player-hud__empty">
-          {emptyReason === 'noLocation' && (
-            <>
-              <span className="player-hud__empty-icon"><GameIcon name="pin" /></span>
-              <span>{t('game.dock.noLocation')}</span>
-            </>
-          )}
-          {emptyReason === 'outsideGrid' && (
-            <>
-              <span className="player-hud__empty-icon"><GameIcon name="treasureMap" /></span>
-              <span>{t('game.dock.outsideGrid')}</span>
-            </>
-          )}
-          {emptyReason === 'noActions' && (
-            <>
-              <span className="player-hud__empty-icon"><GameIcon name="flag" /></span>
-              <span>{t('game.dock.noActions')}</span>
-            </>
-          )}
-        </div>
-      )}
-    </div>
+                return (
+                  <button
+                    key={action.type}
+                    className={`player-hud__btn tile-action-btn tone-${action.tone} player-hud__btn--${action.tone}`}
+                    disabled={!action.enabled}
+                    onClick={() => onAction(action.type)}
+                    aria-label={t(action.label as never)}
+                    aria-disabled={action.enabled ? 'false' : 'true'}
+                    title={actionTitle}
+                  >
+                    <span className="player-hud__btn-icon" aria-hidden>
+                      <GameIcon name={action.icon} />
+                    </span>
+                    <span className="player-hud__btn-label">
+                      {t(action.label as never)}
+                    </span>
+                    {!action.enabled && actionDisabledReason && (
+                      <span className="btn-disabled-reason">
+                        {actionDisabledReason}
+                      </span>
+                    )}
+                    {!action.enabled && (
+                      <span className={`player-hud__btn-locked ${action.type === 'attack' ? 'player-hud__btn-locked--attack' : ''}`} aria-hidden>
+                        {action.type === 'attack' ? <AttackLockGlyph /> : <GameIcon name="shield" size="sm" />}
+                      </span>
+                    )}
+                  </button>
+                );
+              })()
+            ))}
+          </div>
+        )}
+
+        {!isCollapsedForZoom && hasActions && disabledReasonText && (
+          attackRequirement ? (
+            <div
+              className={[
+                'player-hud__disabled-reason',
+                'player-hud__disabled-reason--comparison',
+                `player-hud__disabled-reason--${attackRequirementTone}`,
+              ].join(' ')}
+              title={disabledReasonTitle ?? undefined}
+            >
+              <span className="player-hud__disabled-reason-title">{disabledReasonText}</span>
+              <div className="player-hud__attack-comparison-summary" aria-hidden="true">
+                <span className="player-hud__attack-comparison-metric player-hud__attack-comparison-metric--current">
+                  <span className="player-hud__attack-comparison-icon">
+                    <GameIcon name="helmet" size="sm" />
+                  </span>
+                  <span>{attackRequirement.current}</span>
+                </span>
+                <span className="player-hud__attack-comparison-separator">/</span>
+                <span className="player-hud__attack-comparison-metric player-hud__attack-comparison-metric--required">
+                  <span className="player-hud__attack-comparison-icon">
+                    <GameIcon name="shield" size="sm" />
+                  </span>
+                  <span>{attackRequirement.required}</span>
+                </span>
+              </div>
+              <meter
+                className="player-hud__attack-comparison-meter"
+                min={0}
+                max={attackRequirement.required}
+                value={attackRequirement.current}
+              />
+            </div>
+          ) : (
+            <div className="player-hud__disabled-reason" title={disabledReasonTitle ?? undefined}>
+              {disabledReasonText}
+            </div>
+          )
+        )}
+
+        {!isCollapsedForZoom && !hasActions && showIdleContext && (
+          <div
+            className={[
+              'player-hud__idle-context',
+              showIdlePrompt ? 'player-hud__idle-context--prompt' : 'player-hud__idle-context--guidance',
+              interactionPrompt?.tone === 'error' ? 'player-hud__idle-context--danger' : '',
+              showIdlePrompt || guidanceVisible ? 'enter-active' : '',
+            ].filter(Boolean).join(' ')}
+          >
+            <span className="player-hud__idle-icon" aria-hidden="true">
+              <GameIcon name={showIdlePrompt ? (interactionPrompt?.tone === 'error' ? 'shield' : 'compass') : 'lightning'} size="sm" />
+            </span>
+            <span className="player-hud__idle-text">
+              {showIdlePrompt ? interactionPrompt?.message : guidanceHint}
+            </span>
+          </div>
+        )}
+
+        {infoSheet && createPortal(
+          (() => {
+            const matchedAbility = abilityButtons.find(a => a.abilityKey === infoSheet.abilityKey);
+            return (
+              <AbilityInfoSheet
+                role={infoSheet.role}
+                abilityKey={infoSheet.abilityKey}
+                onClose={() => setInfoSheet(null)}
+                stateTone={matchedAbility?.stateTone ?? 'standby'}
+                badgeText={matchedAbility?.badgeText}
+                disabled={matchedAbility?.disabled ?? false}
+                onActivate={matchedAbility?.onClick}
+              />
+            );
+          })(),
+          document.body
+        )}
+
+        {!isCollapsedForZoom && !hasActions && !hasAbilities && !showIdleContext && (
+          <div className="player-hud__empty">
+            {emptyReason === 'noLocation' && (
+              <>
+                <span className="player-hud__empty-icon"><GameIcon name="pin" /></span>
+                <span>{t('game.dock.noLocation')}</span>
+              </>
+            )}
+            {emptyReason === 'outsideGrid' && (
+              <>
+                <span className="player-hud__empty-icon"><GameIcon name="treasureMap" /></span>
+                <span>{t('game.dock.outsideGrid')}</span>
+              </>
+            )}
+            {emptyReason === 'noActions' && (
+              <>
+                <span className="player-hud__empty-icon"><GameIcon name="flag" /></span>
+                <span>{t('game.dock.noActions')}</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function AttackLockGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="player-hud__lock-glyph">
+      <path d="M4.75 7V5.75a3.25 3.25 0 1 1 6.5 0V7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <rect x="3.25" y="7" width="9.5" height="6" rx="2" fill="currentColor" fillOpacity="0.18" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="10" r="1" fill="currentColor" />
+    </svg>
   );
 }

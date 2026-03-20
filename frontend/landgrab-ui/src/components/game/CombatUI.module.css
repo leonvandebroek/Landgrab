@@ -14,14 +14,22 @@
 .modal {
     width: min(100%, 25rem);
     max-width: 25rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 1.25rem;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-top: 3px solid #00FFFF;
+    border-radius: 0;
+    clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
     background:
         radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 42%),
-        linear-gradient(180deg, #1a1c23 0%, #111216 100%);
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.38);
+        linear-gradient(180deg, #1a1c23 0%, #111216 100%),
+        linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 15px 15px, 15px 15px;
+    box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.05), 0 24px 64px rgba(0, 0, 0, 0.38);
     color: #f3f6fb;
     overflow: hidden;
+    max-height: calc(100dvh - 2rem);
+    display: flex;
+    flex-direction: column;
     animation: slideUp 220ms ease-out;
 }
 
@@ -29,6 +37,17 @@
     display: grid;
     gap: 1rem;
     padding: 1.2rem;
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.footer {
+    flex-shrink: 0;
+    padding: 0 1.2rem 1.2rem;
+    border-top: 1px solid rgba(0, 255, 255, 0.08);
+    background: #111216;
 }
 
 .badgeRow {
@@ -43,13 +62,31 @@
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #c9d5e7;
-    font-size: 0.78rem;
+    border-radius: 0;
+    color: #FFA500;
+    border: 1px solid #FFA500;
+    background: rgba(255, 165, 0, 0.1);
+    box-shadow: inset 0 0 5px rgba(255, 165, 0, 0.3);
+    font-size: 0.7rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    font-family: 'Courier New', 'Space Mono', monospace;
+}
+
+.modeBadgeInverted {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 2px 8px;
+    border-radius: 0;
+    background: #00FFFF;
+    color: #0a0a14;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-family: 'Courier New', 'Space Mono', monospace;
 }
 
 .subtleText {
@@ -66,11 +103,19 @@
     margin: 0;
     font-size: 1.75rem;
     line-height: 1;
-    letter-spacing: 0.02em;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #00FFFF;
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
 }
 
 .titleVictory {
-    color: #5be08b;
+    color: #00FFFF;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
 }
 
 .titleDefeat {
@@ -90,13 +135,31 @@
     gap: 0.75rem;
 }
 
+.versusContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
 .combatant {
     display: grid;
     gap: 0.85rem;
     padding: 1rem;
-    border-radius: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+    background: rgba(0, 255, 255, 0.03);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 255, 255, 0.15);
+}
+
+.attacker {
+    border-left: 3px solid #00FFFF;
+}
+
+.defender {
+    border-left: 3px solid #FF4500;
 }
 
 .combatantHeader {
@@ -105,8 +168,8 @@
 }
 
 .combatantLabel {
-    color: rgba(223, 232, 244, 0.64);
-    font-size: 0.72rem;
+    color: rgba(0, 255, 255, 0.7);
+    font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -120,26 +183,30 @@
 
 .combatantMeta {
     color: rgba(223, 232, 244, 0.7);
-    font-size: 0.83rem;
+    font-size: 0.9rem;
 }
 
 .troopCount {
-    font-size: 3.5rem;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    font-size: 2rem;
     line-height: 0.9;
-    font-weight: 800;
-    letter-spacing: -0.04em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
 .metricLabel {
-    color: rgba(223, 232, 244, 0.62);
-    font-size: 0.78rem;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
 
 .metricValue {
-    font-size: 1.15rem;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    font-size: 2rem;
     font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
 .vsDivider {
@@ -147,10 +214,14 @@
     align-items: center;
     justify-content: center;
     min-width: 2.5rem;
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 0.85rem;
-    font-weight: 800;
-    letter-spacing: 0.22em;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    color: #00FFFF;
+    border: 1px solid #00FFFF;
+    background: #0a0a14;
+    padding: 4px 8px;
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
 }
 
 .probabilityCard,
@@ -159,9 +230,9 @@
     display: grid;
     gap: 0.7rem;
     padding: 0.95rem 1rem;
-    border-radius: 1rem;
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(0, 255, 255, 0.15);
 }
 
 .probabilityRow,
@@ -181,15 +252,17 @@
 .barTrack {
     overflow: hidden;
     width: 100%;
-    height: 0.8rem;
-    border-radius: 999px;
+    height: 8px;
+    border-radius: 0;
+    position: relative;
     background: rgba(255, 255, 255, 0.08);
 }
 
 .barFill {
     height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #ff5858 0%, #f9be4a 45%, #44d97a 100%);
+    border-radius: 0;
+    background: repeating-linear-gradient(90deg, #00FFFF, #00FFFF 3px, transparent 3px, transparent 5px);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
     transition: width 180ms ease-out;
 }
 
@@ -246,31 +319,145 @@
 }
 
 .primaryButton {
-    background: linear-gradient(180deg, #ff5f56 0%, #d53c39 100%);
-    color: #fff6f6;
+    background: repeating-linear-gradient(45deg, #8B0000, #8B0000 10px, #700000 10px, #700000 20px);
+    color: #ffffff;
+    border-radius: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    border: 1px solid #FF3333;
+    box-shadow: 0 0 10px rgba(255, 51, 51, 0.4);
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    font-family: 'Courier New', 'Space Mono', monospace;
 }
 
 .primarySuccessButton {
-    background: linear-gradient(180deg, #4ee084 0%, #219e58 100%);
-    color: #08170e;
+    background: rgba(0, 255, 255, 0.05);
+    color: #00FFFF;
+    border-radius: 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border: 1px solid #00FFFF;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    font-family: 'Courier New', 'Space Mono', monospace;
+}
+.primarySuccessButton:active {
+    background: #00FFFF;
+    color: #0a0a14;
+}
+
+.primaryClaimButton {
+    background: #00FFFF;
+    color: #0a0a14;
+    border-radius: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: none;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    font-family: 'Courier New', 'Space Mono', monospace;
+    font-weight: bold;
+}
+.primaryClaimButton:active {
+    background: #FFA500;
 }
 
 .secondaryButton {
     background: transparent;
-    color: #d7dfec;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(0, 255, 255, 0.8);
+    border-radius: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: 1px dashed rgba(0, 255, 255, 0.4);
+    font-family: 'Courier New', 'Space Mono', monospace;
 }
 
-.slider {
+.slider,
+.deploySlider {
     width: 100%;
-    accent-color: #44d97a;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+.slider::-webkit-slider-runnable-track,
+.deploySlider::-webkit-slider-runnable-track {
+    height: 2px;
+    background: #1a1a24;
+    border-radius: 0;
+}
+.slider::-moz-range-track,
+.deploySlider::-moz-range-track {
+    height: 2px;
+    background: #1a1a24;
+    border-radius: 0;
+}
+
+.slider::-webkit-slider-thumb,
+.deploySlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 18px;
+    background: #00FFFF;
+    border: 1px solid #ffffff;
+    border-radius: 0;
+    cursor: ew-resize;
+    margin-top: -8px; /* centering vertically */
+}
+.slider::-moz-range-thumb,
+.deploySlider::-moz-range-thumb {
+    width: 8px;
+    height: 18px;
+    background: #00FFFF;
+    border: 1px solid #ffffff;
+    border-radius: 0;
+    cursor: ew-resize;
+}
+
+.sliderHint {
+    font-family: 'Courier New', 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.barThreshold {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #00FFFF;
+    height: 100%;
+}
+
+.recapRowDivider {
+    border-bottom: 1px solid rgba(0, 255, 255, 0.15);
+    padding-bottom: 0.55rem;
+}
+
+.statValuePrimary {
+    font-family: 'Courier New', 'Space Mono', monospace;
+    color: #00FFFF;
+}
+
+.statValueCasualty {
+    font-family: 'Courier New', 'Space Mono', monospace;
+    color: #FFA500;
+}
+
+.statValueDanger {
+    font-family: 'Courier New', 'Space Mono', monospace;
+    color: #FF3333;
 }
 
 .deploymentValue {
-    font-size: 2.1rem;
+    font-size: 2rem;
     line-height: 1;
     font-weight: 800;
-    letter-spacing: -0.03em;
+    font-style: normal;
+    font-family: 'Courier New', 'Space Mono', monospace;
+    color: #00FFFF;
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.6);
 }
 
 .recapGrid {
@@ -313,4 +500,81 @@
     .content {
         padding: 1.35rem;
     }
+
+    .footer {
+        padding: 0 1.35rem 1.35rem;
+    }
+}
+
+/* ── Mobile layout adjustments ── */
+@media (max-width: 480px) {
+  .modal {
+    width: calc(100vw - 1rem);
+    max-width: unset;
+  }
+
+  .content {
+    padding: 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .versus {
+    gap: 0.4rem;
+  }
+
+  .combatant {
+    padding: 0.65rem;
+    gap: 0.6rem;
+  }
+
+  .troopCount {
+    font-size: 2.5rem;
+  }
+
+  .vsDivider {
+    min-width: 1.8rem;
+    font-size: 0.72rem;
+  }
+
+  .probabilityCard,
+  .recapCard,
+  .sliderCard {
+    padding: 0.65rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .recapRow,
+  .summaryRow {
+    font-size: 0.85rem;
+  }
+
+  .combatantLabel {
+    font-size: 0.68rem;
+  }
+
+  .metricLabel {
+    font-size: 0.72rem;
+  }
+
+  .bonusName {
+    font-size: 0.78rem;
+  }
+
+  .modeBadge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .footer {
+        padding: 0 0.85rem 0.85rem;
+  }
+
+  .btn {
+    min-height: 48px;
+    font-size: 0.92rem;
+  }
 }

@@ -369,6 +369,48 @@ export default function App() {
     return nextLocation;
   }, [applyDebugLocation, currentLocation, gameState, mapCenterLocation]);
 
+  useEffect(() => {
+    const ARROW_MAP: Record<string, [number, number]> = {
+      ArrowUp:    [0,  1],
+      ArrowDown:  [0, -1],
+      ArrowLeft:  [-1, 0],
+      ArrowRight: [1,  0],
+    };
+    function handleKeyDown(e: KeyboardEvent) {
+      const delta = ARROW_MAP[e.key];
+      if (!delta || !canStepDebugByHex) return;
+      e.preventDefault();
+      stepDebugLocationByHex(delta[0], delta[1]);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canStepDebugByHex, stepDebugLocationByHex]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const { pickupPrompt, reinforcePrompt, combatPreview } = useGameplayStore.getState();
+        if (pickupPrompt) {
+          handleConfirmPickup();
+        } else if (reinforcePrompt) {
+          void handleConfirmReinforce();
+        } else if (combatPreview) {
+          void handleConfirmAttack();
+        } else {
+          const primary = currentHexActions.find(a => a.enabled);
+          if (primary) handleCurrentHexAction(primary.type);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleDismissTileActions();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentHexActions, handleConfirmAttack, handleConfirmPickup, handleConfirmReinforce, handleCurrentHexAction, handleDismissTileActions]);
+
   // ── Connection / session banner ──────────────────────────────────────────
   const savedRoomCode = savedSession?.roomCode ?? '';
   const connectionBanner = autoResuming

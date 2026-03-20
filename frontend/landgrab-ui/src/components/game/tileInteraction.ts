@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type { GameState, Player } from '../../types/game';
+import type { GameState, HexCell, Player } from '../../types/game';
 import { hexKey, hexNeighbors } from '../map/HexMath';
 import type { GameIconName } from '../../utils/gameIcons';
 
@@ -11,18 +11,27 @@ export interface MapInteractionFeedback {
   targetHex?: [number, number] | null;
 }
 
-/* ── Explicit tile-action types (used by TileActionPanel) ── */
+/* ── Explicit tile-action types for the in-game tile action UI ── */
 
 export type TileActionType = 'claim' | 'claimAlliance' | 'claimSelf' | 'attack' | 'reinforce' | 'pickup';
+
+export type TileActionRelation = 'own' | 'team' | 'enemy' | 'neutral' | 'unclaimed';
 
 export interface TileAction {
   type: TileActionType;
   label: string;   // i18n key
+  shortLabel?: string; // i18n key
   icon: GameIconName;
   tone: 'primary' | 'danger' | 'neutral' | 'info';
   enabled: boolean;
   disabledReason?: string; // i18n key
   disabledReasonParams?: Record<string, unknown>;
+}
+
+export interface TileActionAttackRequirement {
+  current: number;
+  required: number;
+  defence: number;
 }
 
 export function getTileActionDisabledReasonText(
@@ -43,10 +52,60 @@ export function getTileActionDisabledReasonText(
   return t(disabledReason as never, params);
 }
 
+export function getTileActionDisabledReasonDetailText(
+  t: TFunction,
+  disabledReason?: string,
+  params?: Record<string, unknown>,
+): string | null {
+  if (!disabledReason) {
+    return null;
+  }
+
+  if (disabledReason === 'guidance.adjacencyRequired') {
+    return t('guidance.adjacencyRequired' as never, {
+      defaultValue: t('rules.claiming.adjacencyRequired' as never),
+    });
+  }
+
+  if (disabledReason === 'game.tileAction.enemyAttackBlocked') {
+    const required = toFiniteNumber(params?.required) ?? toFiniteNumber(params?.count);
+    const defence = toFiniteNumber(params?.defence);
+
+    if (required === null || defence === null) {
+      return getTileActionDisabledReasonText(t, disabledReason, params);
+    }
+
+    return t('game.tileAction.enemyAttackBlockedDetail' as never, {
+      ...params,
+      count: required,
+      required,
+      defence,
+    });
+  }
+
+  return getTileActionDisabledReasonText(t, disabledReason, params);
+}
+
+export function getTileActionAttackRequirement(action?: TileAction | null): TileActionAttackRequirement | null {
+  if (!action || action.type !== 'attack' || action.enabled) {
+    return null;
+  }
+
+  const current = toFiniteNumber(action.disabledReasonParams?.current);
+  const required = toFiniteNumber(action.disabledReasonParams?.required) ?? toFiniteNumber(action.disabledReasonParams?.count);
+  const defence = toFiniteNumber(action.disabledReasonParams?.defence) ?? (required !== null ? required - 1 : null);
+
+  if (current === null || required === null || defence === null) {
+    return null;
+  }
+
+  return { current, required, defence };
+}
+
 /**
  * Returns the set of explicit actions available for a tile the player is
- * standing on.  Returns an empty array when no panel should be shown
- * (e.g. player is on a different hex, or target is the master tile).
+ * standing on. Returns an empty array when no panel should be shown
+ * (e.g. the target is the master tile or the player context is missing).
  */
 export function getTileActions({
   state,
@@ -65,8 +124,15 @@ export function getTileActions({
 }): TileAction[] {
   if (!targetHex || !targetCell || !player || !currentHex) return [];
 
-  // Player must be standing on the target hex (unless host GPS bypass is active)
-  if (!isHostBypass && (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1])) return [];
+  // Player must be standing on the target hex unless host GPS bypass is active.
+  // When they are inspecting a remote hex, return disabled contextual actions
+  // so the HUD can describe what would be possible from the correct position.
+  if (!isHostBypass && (currentHex[0] !== targetHex[0] || currentHex[1] !== targetHex[1])) {
+    return getRemoteTileActions({
+      targetCell,
+      relation: getTileRelation(targetCell, player),
+    });
+  }
 
   // No actions on the master tile
   if (targetCell.isMasterTile) return [];
@@ -99,6 +165,7 @@ export function getTileActions({
       actions.push({
         type: 'claimAlliance',
         label: 'game.tileAction.claimAllianceBtn',
+        shortLabel: 'game.tileAction.claimBtnShort',
         icon: 'fort',
         tone: 'primary',
         enabled: claimEnabled,
@@ -108,6 +175,7 @@ export function getTileActions({
       actions.push({
         type: 'claim',
         label: 'game.tileAction.claimBtn',
+        shortLabel: 'game.tileAction.claimBtnShort',
         icon: 'flag',
         tone: 'primary',
         enabled: claimEnabled,
@@ -125,14 +193,21 @@ export function getTileActions({
     const effectiveAttack = carriedTroops;
     const effectiveDefence = targetCell.troops + defenderBonusVal + fortBonus;
     const canAttack = effectiveAttack > effectiveDefence;
+    const requiredAttack = effectiveDefence + 1;
     actions.push({
       type: 'attack',
       label: 'game.tileAction.attackBtn',
+      shortLabel: 'game.tileAction.attackBtnShort',
       icon: 'contested',
       tone: 'danger',
       enabled: canAttack,
       disabledReason: canAttack ? undefined : 'game.tileAction.enemyAttackBlocked',
-      disabledReasonParams: canAttack ? undefined : { count: effectiveDefence },
+      disabledReasonParams: canAttack ? undefined : {
+        count: requiredAttack,
+        current: effectiveAttack,
+        required: requiredAttack,
+        defence: effectiveDefence,
+      },
     });
     return actions;
   }
@@ -143,6 +218,7 @@ export function getTileActions({
       actions.push({
         type: 'reinforce',
         label: 'game.tileAction.reinforceBtn',
+        shortLabel: 'game.tileAction.reinforceBtnShort',
         icon: 'shield',
         tone: 'info',
         enabled: true,
@@ -152,8 +228,9 @@ export function getTileActions({
       actions.push({
         type: 'pickup',
         label: 'game.tileAction.pickupBtn',
+        shortLabel: 'game.tileAction.pickupBtnShort',
         icon: 'helmet',
-        tone: 'info',
+        tone: 'primary',
         enabled: true,
       });
     }
@@ -166,6 +243,7 @@ export function getTileActions({
       actions.push({
         type: 'reinforce',
         label: 'game.tileAction.reinforceBtn',
+        shortLabel: 'game.tileAction.reinforceBtnShort',
         icon: 'shield',
         tone: 'info',
         enabled: true,
@@ -175,12 +253,74 @@ export function getTileActions({
       actions.push({
         type: 'pickup',
         label: 'game.tileAction.pickupBtn',
+        shortLabel: 'game.tileAction.pickupBtnShort',
         icon: 'helmet',
-        tone: 'info',
+        tone: 'primary',
         enabled: true,
       });
     }
     return actions;
+  }
+
+  return [];
+}
+
+export function getRemoteTileActions({
+  targetCell,
+  relation,
+}: {
+  targetCell: HexCell;
+  relation: TileActionRelation;
+}): TileAction[] {
+  if (targetCell.isMasterTile) {
+    return [];
+  }
+
+  if (relation === 'enemy') {
+    return [{
+      type: 'attack',
+      label: 'game.tileAction.attackBtn',
+      shortLabel: 'game.tileAction.attackBtnShort',
+      icon: 'contested',
+      tone: 'danger',
+      enabled: false,
+      disabledReason: 'game.tileAction.outOfRange',
+    }];
+  }
+
+  if (relation === 'own' || relation === 'team') {
+    return [
+      {
+        type: 'reinforce',
+        label: 'game.tileAction.reinforceBtn',
+        shortLabel: 'game.tileAction.reinforceBtnShort',
+        icon: 'shield',
+        tone: 'info',
+        enabled: false,
+        disabledReason: 'game.tileAction.adjacencyRequired',
+      },
+      {
+        type: 'pickup',
+        label: 'game.tileAction.pickupBtn',
+        shortLabel: 'game.tileAction.pickupBtnShort',
+        icon: 'rallyTroops',
+        tone: 'primary',
+        enabled: false,
+        disabledReason: 'game.tileAction.adjacencyRequired',
+      },
+    ];
+  }
+
+  if (relation === 'neutral' || relation === 'unclaimed') {
+    return [{
+      type: 'claim',
+      label: 'game.tileAction.claimBtn',
+      shortLabel: 'game.tileAction.claimBtnShort',
+      icon: 'shield',
+      tone: 'info',
+      enabled: false,
+      disabledReason: 'game.tileAction.adjacencyRequired',
+    }];
   }
 
   return [];
@@ -337,12 +477,17 @@ export function getTileInteractionStatus({
   const fortBonus = state.dynamics?.playerRolesEnabled && targetCell.isFort ? 1 : 0;
   const effectiveAttack = carriedTroops;
   const effectiveDefence = targetCell.troops + defenderBonusVal + fortBonus;
+  const requiredAttack = effectiveDefence + 1;
 
   if (effectiveAttack <= effectiveDefence) {
     return {
       action: 'none',
       tone: 'error',
-      message: t('game.tileAction.enemyAttackBlocked', { count: effectiveDefence })
+      message: t('game.tileAction.enemyAttackBlocked', {
+        count: requiredAttack,
+        required: requiredAttack,
+        defence: effectiveDefence,
+      })
     };
   }
 
@@ -394,4 +539,33 @@ function getAdjacencyDisabledReason(
   return hasOwnedTerritory(grid, player)
     ? 'guidance.adjacencyRequired'
     : 'guidance.noFrontierYet';
+}
+
+function getTileRelation(targetCell: HexCell, player: Player): TileActionRelation {
+  if (targetCell.ownerId === player.id) {
+    return 'own';
+  }
+
+  if (player.allianceId && targetCell.ownerAllianceId === player.allianceId) {
+    return 'team';
+  }
+
+  if (!targetCell.ownerId) {
+    return 'unclaimed';
+  }
+
+  return 'enemy';
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }

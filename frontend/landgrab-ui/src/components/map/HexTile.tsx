@@ -91,7 +91,12 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const myPlayer = playersById.get(myUserId);
 
   const isMine = Boolean(cell?.ownerId && cell.ownerId === myUserId);
-  const isHostile = Boolean(cell?.ownerId && cell.ownerId !== myUserId && !isMine);
+  const isFriendlyAllianceCell = Boolean(
+    cell?.ownerAllianceId
+    && myPlayer?.allianceId
+    && cell.ownerAllianceId === myPlayer.allianceId,
+  );
+  const isHostile = Boolean(cell?.ownerId && cell.ownerId !== myUserId && !isFriendlyAllianceCell);
 
   const neighborhoodGrid = useMemo<Record<string, HexCell>>(() => {
     const grid: Record<string, HexCell> = {};
@@ -130,6 +135,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     
     return {
       center: { x: geometry.center[0], y: geometry.center[1] },
+      topVertex: { x: geometry.center[0], y: geometry.center[1] - R * 0.87 },
       topRight: { x: geometry.center[0] + R * f, y: geometry.center[1] - R * f },
       topLeft: { x: geometry.center[0] - R * f, y: geometry.center[1] - R * f },
       bottomLeft: { x: geometry.center[0] - R * f, y: geometry.center[1] + R * f },
@@ -145,6 +151,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const territoryStatus = getHexTerritoryStatus(cell, neighborhoodGrid, false);
   const fillStyle = getHexFillStyle({
     cell,
+    isContested: territoryStatus.isContested || isContested,
     isInactive,
     ownerColor,
     hostColor: DEFAULT_HOST_COLOR,
@@ -152,10 +159,12 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const borderStyle = getHexBorderStyle({
     cell,
     isCurrentHex: isCurrent,
+    isFrontier: territoryStatus.isFrontier,
     isHQ,
     isHostile,
     isInactive,
     isSelected,
+    isContested: territoryStatus.isContested || isContested,
   });
   const polygonClassName = getHexPolygonClassName({
     cell,
@@ -206,6 +215,17 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
         style={polygonStyle}
       />
 
+      {cell.isFort && !isInactive && (
+        <polygon
+          className="hex-fort-hatch-overlay"
+          points={geometry.points}
+          fill="url(#fort-hatch-pattern)"
+          fillOpacity={0.55}
+          stroke="none"
+          pointerEvents="none"
+        />
+      )}
+
       {/* Raid Marker: Top Left */}
       {hasActiveRaid && !isInactive ? (
         <>
@@ -241,11 +261,32 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
         html: `<div class="fort-progress-ring" style="--progress:${engineerBuildProgress.toFixed(4)}"></div>`,
       }) : null}
 
-      {/* Buildings (Fort/HQ/Master): Bottom Left */}
+      {isHQ && !isInactive && (
+        <>
+          <circle
+            className="hq-radar-ring"
+            cx={slots.topVertex.x}
+            cy={slots.topVertex.y}
+            r={12 * scale}
+            fill="none"
+            pointerEvents="none"
+          />
+          <circle
+            className="hq-radar-ring"
+            cx={slots.topVertex.x}
+            cy={slots.topVertex.y}
+            r={12 * scale}
+            fill="none"
+            pointerEvents="none"
+          />
+        </>
+      )}
+
+      {/* Buildings (Fort/HQ/Master): Top Vertex */}
       {cell.isFort && !isInactive ? renderForeignObject({
         className: 'hex-fo-fort hex-fort-icon-wrapper',
-        x: slots.bottomLeft.x - (9 * scale),
-        y: slots.bottomLeft.y - (9 * scale),
+        x: slots.topVertex.x - (9 * scale),
+        y: slots.topVertex.y - (18 * scale),
         width: 18 * scale,
         height: 18 * scale,
         html: iconHtml('fort', 'sm'),
@@ -253,8 +294,8 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
 
       {cell.isMasterTile && !isInactive ? renderForeignObject({
         className: 'hex-fo-building hex-building-icon',
-        x: slots.bottomLeft.x - (14 * scale),
-        y: slots.bottomLeft.y - (14 * scale),
+        x: slots.topVertex.x - (14 * scale),
+        y: slots.topVertex.y - (28 * scale),
         width: 28 * scale,
         height: 28 * scale,
         html: `<div class="building master" aria-hidden="true">${gameIcons.master}</div>`,
@@ -262,8 +303,8 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
 
       {isHQ && !cell.isMasterTile && !isInactive ? renderForeignObject({
         className: 'hex-fo-building hex-building-icon',
-        x: slots.bottomLeft.x - (14 * scale),
-        y: slots.bottomLeft.y - (14 * scale),
+        x: slots.topVertex.x - (14 * scale),
+        y: slots.topVertex.y - (28 * scale),
         width: 28 * scale,
         height: 28 * scale,
         html: iconHtml('hq'),
@@ -297,10 +338,16 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
               isHQ={isHQ}
               isMasterTile={cell.isMasterTile}
               isForestBlind={false}
+              isEnemy={cell.ownerId ? isHostile : undefined}
+              q={cell.q}
+              r={cell.r}
+              showCoords={false}
             />
           </div>
         </foreignObject>
       ) : null}
+
+      {/* TODO: At zoom > 17, inject coordinate label DivIcon here */}
     </g>
   );
 });

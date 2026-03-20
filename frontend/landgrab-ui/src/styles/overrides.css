@@ -1,35 +1,31 @@
 
 /* --- CRITICAL VISIBILITY OVERRIDES --- */
 
-/* Current player: always glowing, pulsing brightness */
-@keyframes current-player-hex-pulse {
-  0%, 100% {
-    stroke-width: 7px;
-    stroke-opacity: 1;
-    fill-opacity: 0.35;
-    filter: drop-shadow(0 0 8px rgba(46, 204, 113, 0.6)) drop-shadow(0 0 16px rgba(46, 204, 113, 0.3));
-  }
-  50% {
-    stroke-width: 9px;
-    stroke-opacity: 1;
-    fill-opacity: 0.45;
-    filter: drop-shadow(0 0 14px rgba(46, 204, 113, 0.8)) drop-shadow(0 0 24px rgba(46, 204, 113, 0.4));
+/* Current player: sci-fi tactical scanning reticle */
+@keyframes hex-scanner-march {
+  to {
+    stroke-dashoffset: -64;
   }
 }
 
-/* Selected hex: steady glow with subtle pulse */
-@keyframes hex-pulse-cyan {
+@keyframes hex-scanner-glow {
   0%, 100% {
-    stroke-width: 6px;
-    stroke-opacity: 1;
-    filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.6)) drop-shadow(0 0 12px rgba(34, 211, 238, 0.3));
+    filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.9)) drop-shadow(0 0 12px rgba(46, 204, 113, 0.45));
   }
   50% {
-    stroke-width: 8px;
-    stroke-opacity: 1;
-    filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.8)) drop-shadow(0 0 18px rgba(34, 211, 238, 0.4));
+    filter: drop-shadow(0 0 10px rgba(46, 204, 113, 1.0)) drop-shadow(0 0 20px rgba(46, 204, 113, 0.7));
   }
 }
+
+/* Selected hex: marching dashes in opposite direction */
+@keyframes hex-selected-march {
+  to {
+    stroke-dashoffset: 56;
+  }
+}
+
+/* Kept for backwards compatibility — no longer used */
+@keyframes current-player-hex-pulse {}
 
 .hex-active-player,
 .hex-selected-overlay,
@@ -40,11 +36,23 @@
 
 .hex-active-player,
 .hex-active-player.is-current-player-hex {
-  animation: current-player-hex-pulse 2s infinite ease-in-out !important;
+  animation: hex-scanner-march 2.4s linear infinite, hex-scanner-glow 1.8s ease-in-out infinite !important;
+  filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.9)) drop-shadow(0 0 12px rgba(46, 204, 113, 0.45));
   stroke: #2ecc71 !important;
 }
 
 .hex-selected-overlay {
-  animation: hex-pulse-cyan 2s infinite ease-in-out !important;
+  animation: hex-selected-march 3s linear infinite !important;
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.7));
   stroke: #22d3ee !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-active-player,
+  .hex-active-player.is-current-player-hex {
+    animation: none !important;
+  }
+  .hex-selected-overlay {
+    animation: none !important;
+  }
 }

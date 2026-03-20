@@ -120,9 +120,21 @@ function GameOverlayLayerComponent({
   }
 
   return createPortal(
-    <g data-zoom-level={zoomCategory}>
-      {showWorldDimMask ? (
-        <WorldDimMask
+    <>
+      <defs>
+        <pattern
+          id="fort-hatch-pattern"
+          patternUnits="userSpaceOnUse"
+          width="8"
+          height="8"
+          patternTransform="rotate(45)"
+        >
+          <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+        </pattern>
+      </defs>
+      <g data-zoom-level={zoomCategory}>
+        {showWorldDimMask ? (
+          <WorldDimMask
           tileKeys={tileKeys}
           hexGeometries={hexGeometries}
           mapBounds={mapBounds}
@@ -144,15 +156,16 @@ function GameOverlayLayerComponent({
         );
       })}
       <g className="hex-highlights" style={{ pointerEvents: 'none' }}>
-        {selectedHexKey && hexGeometries[selectedHexKey] ? (
+        {selectedHexKey && hexGeometries[selectedHexKey] && selectedHexKey !== currentHexKey ? (
           <polygon
             className="hex-selected-overlay"
             data-hex-id={selectedHexKey}
             points={hexGeometries[selectedHexKey].points}
-            fill="rgba(34, 211, 238, 0.35)"
+            fill="rgba(34, 211, 238, 0.06)"
             stroke="#22d3ee"
-            strokeWidth={6}
-            strokeOpacity={1}
+            strokeWidth={2}
+            strokeDasharray="6 8"
+            strokeLinecap="round"
             pointerEvents="none"
           />
         ) : null}
@@ -161,15 +174,17 @@ function GameOverlayLayerComponent({
             className="hex-active-player is-current-player-hex"
             data-hex-id={currentHexKey}
             points={hexGeometries[currentHexKey].points}
-            fill="rgba(46, 204, 113, 0.40)"
+            fill="rgba(46, 204, 113, 0.08)"
             stroke="#2ecc71"
-            strokeWidth={7}
-            strokeOpacity={1}
+            strokeWidth={2.5}
+            strokeDasharray="10 6"
+            strokeLinecap="round"
             pointerEvents="none"
           />
         ) : null}
       </g>
-    </g>,
+    </g>
+    </>,
     svgRoot,
   );
 }

@@ -10,7 +10,7 @@ import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 import { useUiStore } from '../../stores/uiStore';
 import { GameEventLog } from './GameEventLog';
 import { GameRulesPage } from './GameRulesPage';
-import { GuidanceBanner } from './GuidanceBanner';
+import { useGuidanceBannerState } from './GuidanceBanner';
 import { HelpOverlay } from './HelpOverlay';
 import { InfoLedge } from './InfoLedge';
 import { PlayerDisplaySettings } from './PlayerDisplaySettings';
@@ -51,6 +51,16 @@ interface Props {
   onNavigateMap?: (lat: number, lng: number) => void;
 }
 
+function getPlayerHudInitials(name: string): string {
+  const compactName = name.trim();
+
+  if (!compactName) {
+    return '??';
+  }
+
+  return compactName.slice(0, 2).toUpperCase();
+}
+
 export function PlayingHud({
   myUserId,
   currentHex,
@@ -78,7 +88,7 @@ export function PlayingHud({
   children,
   onNavigateMap,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toggleSound } = useSound();
   const state = useGameStore((store) => store.gameState);
   const selectedHexKey = useGameplayStore((store) => store.selectedHexKey);
@@ -95,9 +105,16 @@ export function PlayingHud({
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  const [showDevSection, setShowDevSection] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const layoutRef = useRef<HTMLDivElement>(null);
+  const menuHeaderTapCountRef = useRef(0);
+  const menuHeaderTapResetTimeoutRef = useRef<number | null>(null);
+  const menuHeaderLongPressTimeoutRef = useRef<number | null>(null);
+  const menuHeaderLongPressTriggeredRef = useRef(false);
+  const isDevBuild = import.meta.env.DEV;
+  const shouldShowDevSection = isDevBuild && showDevSection;
 
   const isTimedGame = state?.winConditionType === 'TimedGame' && !!state.gameStartedAt && !!state.gameDurationMinutes;
   const effectiveShowReturnConfirm = activeModal === 'menu' && showReturnConfirm;
@@ -110,6 +127,9 @@ export function PlayingHud({
     return selectedHexKey.split(',').map(Number) as [number, number];
   }, [selectedHexKey]);
   const myAlliance = state?.alliances?.find((alliance) => alliance.id === me?.allianceId);
+  const roleTitle = me?.role && me.role !== 'None' && state?.dynamics?.playerRolesEnabled
+    ? t(`roles.${me.role}.title` as never, { defaultValue: t(`phase4.role${me.role}` as never) })
+    : null;
   const needsClock = Boolean(
     state
     && isTimedGame
@@ -139,6 +159,18 @@ export function PlayingHud({
     return () => {
       observer.disconnect();
       layout.style.removeProperty('--player-hud-h');
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (menuHeaderTapResetTimeoutRef.current !== null) {
+        window.clearTimeout(menuHeaderTapResetTimeoutRef.current);
+      }
+
+      if (menuHeaderLongPressTimeoutRef.current !== null) {
+        window.clearTimeout(menuHeaderLongPressTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -229,6 +261,12 @@ export function PlayingHud({
   const carriedTroops = me?.carriedTroops ?? 0;
   const isInOwnHex = Boolean(currentHexCell && me && currentHexCell.ownerId === me.id);
   const isHost = Boolean(me?.isHost);
+  const guidanceState = useGuidanceBannerState({
+    carriedTroops,
+    isInOwnHex,
+    hasLocation,
+    currentHex,
+  });
 
   const allianceTileTroops = useMemo(() => {
     if (!state || !me) return 0;
@@ -253,6 +291,21 @@ export function PlayingHud({
   }, [state, me, carriedTroops]);
 
   const allianceTotalTroops = allianceTileTroops + allianceCarriedTroops;
+  const territoryCount = myAlliance?.territoryCount ?? me?.territoryCount ?? 0;
+  const playerAvatarGlyph = (me?.emoji?.trim() || getPlayerHudInitials(currentPlayerName)).slice(0, 2);
+  const hasEmojiAvatar = Boolean(me?.emoji?.trim());
+
+  const compactNumberFormatter = useMemo(() => {
+    return new Intl.NumberFormat(i18n.resolvedLanguage, {
+      notation: 'compact',
+      compactDisplay: 'short',
+      maximumFractionDigits: 1,
+    });
+  }, [i18n.resolvedLanguage]);
+
+  const formattedTerritoryCount = compactNumberFormatter.format(territoryCount);
+  const formattedTotalTroops = compactNumberFormatter.format(allianceTotalTroops);
+  const hasAmbientCoordinates = me?.currentHexQ != null && me?.currentHexR != null;
 
   const sortedPlayers = useMemo(() => {
     if (!state) {
@@ -269,98 +322,111 @@ export function PlayingHud({
   const interactionStatus = useMemo(() => {
     if (!state || pickupPrompt || reinforcePrompt) return null;
 
-    const targetCell = selectedHexKey
-      ? state.grid[selectedHexKey] ?? undefined
+    const effectiveHex = currentHex;
+    const effectiveKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
+    const targetCell = effectiveKey
+      ? state.grid[effectiveKey] ?? undefined
       : undefined;
 
     return getTileInteractionStatus({
       state,
       player: me ?? null,
-      targetHex: selectedHex,
+      targetHex: effectiveHex,
       targetCell,
       currentHex,
       t,
     });
-  }, [currentHex, me, pickupPrompt, reinforcePrompt, selectedHex, selectedHexKey, state, t]);
+  }, [currentHex, me, pickupPrompt, reinforcePrompt, state, t]);
 
   const selectedCell: HexCell | undefined = state && selectedHexKey
     ? state.grid[selectedHexKey] ?? undefined
     : undefined;
 
-  const showRemoteTileInfoCard = Boolean(
-    selectedHex
-    && !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1])
-    && onDismissTileActions,
+  const hasExplicitRemoteSelection = Boolean(
+    selectedHexKey
+    && selectedHex
+    && selectedCell
+    && !(currentHex && selectedHex[0] === currentHex[0] && selectedHex[1] === currentHex[1]),
   );
+
+  const showRemoteTileInfoCard = Boolean(hasExplicitRemoteSelection && onDismissTileActions);
+  const hasCurrentHexActions = (currentHexActions?.length ?? 0) > 0;
+  const canShowIntegratedIdleContext = !pickupPrompt && !reinforcePrompt && !showRemoteTileInfoCard;
 
   if (!state) {
     return null;
   }
 
+  const clearMenuHeaderLongPress = () => {
+    if (menuHeaderLongPressTimeoutRef.current !== null) {
+      window.clearTimeout(menuHeaderLongPressTimeoutRef.current);
+      menuHeaderLongPressTimeoutRef.current = null;
+    }
+  };
+
+  const clearMenuHeaderTapReset = () => {
+    if (menuHeaderTapResetTimeoutRef.current !== null) {
+      window.clearTimeout(menuHeaderTapResetTimeoutRef.current);
+      menuHeaderTapResetTimeoutRef.current = null;
+    }
+  };
+
+  const toggleDevSectionVisibility = () => {
+    setShowDevSection((current) => !current);
+  };
+
+  const handleMenuHeaderPointerDown = () => {
+    if (!isDevBuild) {
+      return;
+    }
+
+    menuHeaderLongPressTriggeredRef.current = false;
+    clearMenuHeaderLongPress();
+    menuHeaderLongPressTimeoutRef.current = window.setTimeout(() => {
+      menuHeaderLongPressTriggeredRef.current = true;
+      menuHeaderTapCountRef.current = 0;
+      clearMenuHeaderTapReset();
+      toggleDevSectionVisibility();
+      menuHeaderLongPressTimeoutRef.current = null;
+    }, 600);
+  };
+
+  const handleMenuHeaderPointerUp = () => {
+    if (!isDevBuild) {
+      return;
+    }
+
+    const wasLongPress = menuHeaderLongPressTriggeredRef.current;
+    clearMenuHeaderLongPress();
+
+    if (wasLongPress) {
+      menuHeaderLongPressTriggeredRef.current = false;
+      return;
+    }
+
+    menuHeaderTapCountRef.current += 1;
+
+    if (menuHeaderTapCountRef.current >= 3) {
+      menuHeaderTapCountRef.current = 0;
+      clearMenuHeaderTapReset();
+      toggleDevSectionVisibility();
+      return;
+    }
+
+    clearMenuHeaderTapReset();
+    menuHeaderTapResetTimeoutRef.current = window.setTimeout(() => {
+      menuHeaderTapCountRef.current = 0;
+      menuHeaderTapResetTimeoutRef.current = null;
+    }, 900);
+  };
+
+  const handleMenuHeaderPointerCancel = () => {
+    menuHeaderLongPressTriggeredRef.current = false;
+    clearMenuHeaderLongPress();
+  };
+
   return (
     <div className="game-layout hud-active playing-hud-layout" ref={layoutRef}>
-      <div className="top-status-bar">
-        <div className="top-stats-row">
-          <div className="hud-stats-flat">
-            {currentPlayerName && (
-              <div className="stat-item">
-                <span
-                  className="stat-value primary"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', maxWidth: '12rem' }}
-                >
-                  {me?.emoji && <span aria-hidden="true" style={{ lineHeight: 1 }}>{me.emoji}</span>}
-                  <span
-                    style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {currentPlayerName}
-                  </span>
-                </span>
-                <span className="stat-label">{t('game.you' as never, { defaultValue: 'You' })}</span>
-              </div>
-            )}
-            {me?.role && me.role !== 'None' && state.dynamics?.playerRolesEnabled && (
-              <div className="stat-item">
-                <span className="stat-value secondary" style={{ fontSize: '0.8rem' }}>
-                  {t(`roles.${me.role}.title` as never, { defaultValue: t(`phase4.role${me.role}` as never) })}
-                </span>
-                <span className="stat-label">{t('game.hudYourRole' as never)}</span>
-              </div>
-            )}
-            <div className="stat-item">
-              <span className="stat-value primary">{myAlliance?.territoryCount ?? me?.territoryCount ?? 0}</span>
-              <span className="stat-label">{t('game.hudLands')}</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-value secondary stat-value-with-detail">
-                <span>{allianceTotalTroops}</span>
-                {carriedTroops > 0 && (
-                  <span className="stat-value-detail" aria-label={t('game.carriedTroops')}>
-                    (+{carriedTroops}<GameIcon name="chest" size="sm" />)
-                  </span>
-                )}
-              </span>
-              <span className="stat-label">{t('game.hudTroops')}</span>
-            </div>
-            {displayTimeRemaining !== null && (
-              <div className="stat-item">
-                <span className={`stat-value ${displayTimeRemaining < 60000 ? 'danger' : displayTimeRemaining < 300000 ? 'warning' : 'primary'}`}>
-                  {formatTimeRemaining(displayTimeRemaining)}
-                </span>
-                <span className="stat-label">{t('game.hudTimer')}</span>
-              </div>
-            )}
-          </div>
-          <button className="hud-menu-btn-flat" onClick={() => setActiveModal('menu')} aria-label={t('game.hudMenu')}>
-            <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-          </button>
-        </div>
-        <InfoLedge />
-      </div>
-
       <div className="map-area-wrapper map-area-wrapper--with-player-hud">
         <div className="map-container">
           {children}
@@ -368,10 +434,18 @@ export function PlayingHud({
 
         <div className="bottom-hud-overlay">
           {pickupPrompt && (
-            <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
-              <div>{t('game.pickupPrompt')} (1 - {pickupPrompt.max})</div>
-              <div className="pickup-controls">
-                <span>1</span>
+            <div className="glass-panel hud-context-pill context-info directive-panel directive-panel--interactive directive-panel--actionable hud-prompt-shell">
+              <div className="directive-panel__swipe-handle" />
+              <span className="directive-panel__meta">SYS.LOCK // ACTIVE</span>
+              <div className="directive-panel__header">
+                <span className="directive-panel__status-led" />
+                <div className="directive-panel__eyebrow">Directive</div>
+              </div>
+              <div className="directive-panel__title">
+                {t('game.pickupPrompt')}
+                <span className="directive-panel__title-range">1 – {pickupPrompt.max}</span>
+              </div>
+              <div className="pickup-controls directive-panel__slider">
                 <input
                   type="range"
                   data-testid="pickup-count-slider"
@@ -381,22 +455,35 @@ export function PlayingHud({
                   aria-label={t('game.pickupPrompt')}
                   title={t('game.pickupPrompt')}
                   onChange={(event) => setPickupCount(Number(event.target.value))}
+                  style={{ '--slider-fill-pct': `${((pickupCount - 1) / Math.max(1, pickupPrompt.max - 1)) * 100}%` } as React.CSSProperties}
                 />
-                <span>{pickupPrompt.max}</span>
+                <div className="directive-panel__slider-labels">
+                  <span>1</span>
+                  <span>{pickupPrompt.max}</span>
+                </div>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }} data-testid="pickup-count-display">{pickupCount}</div>
-              <div className="hud-action-bar">
-                <button className="hud-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary" data-testid="pickup-confirm" onClick={onConfirmPickup}>{t('game.confirm')}</button>
+              <div className="directive-panel__value" data-testid="pickup-count-display">{pickupCount}</div>
+              <div className="hud-action-bar directive-panel__actions">
+                <button className="hud-btn directive-panel__cancel-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
+                <button className="hud-btn primary directive-panel__confirm-btn" data-testid="pickup-confirm" onClick={onConfirmPickup}>{t('game.confirm')}</button>
               </div>
+              <div className="directive-panel__divider" aria-hidden="true" />
             </div>
           )}
 
           {reinforcePrompt && (
-            <div className="glass-panel hud-context-pill context-info" style={{ flexDirection: 'column', width: '100%', pointerEvents: 'auto' }}>
-              <div>{t('game.reinforcePrompt')} (1 - {reinforcePrompt.max})</div>
-              <div className="pickup-controls">
-                <span>1</span>
+            <div className="glass-panel hud-context-pill context-info directive-panel directive-panel--interactive directive-panel--actionable hud-prompt-shell">
+              <div className="directive-panel__swipe-handle" />
+              <span className="directive-panel__meta">SYS.LOCK // ACTIVE</span>
+              <div className="directive-panel__header">
+                <span className="directive-panel__status-led" />
+                <div className="directive-panel__eyebrow">Directive</div>
+              </div>
+              <div className="directive-panel__title">
+                {t('game.reinforcePrompt')}
+                <span className="directive-panel__title-range">1 – {reinforcePrompt.max}</span>
+              </div>
+              <div className="pickup-controls directive-panel__slider">
                 <input
                   type="range"
                   data-testid="reinforce-count-slider"
@@ -406,14 +493,19 @@ export function PlayingHud({
                   aria-label={t('game.reinforcePrompt')}
                   title={t('game.reinforcePrompt')}
                   onChange={(event) => setReinforceCount(Number(event.target.value))}
+                  style={{ '--slider-fill-pct': `${((reinforceCount - 1) / Math.max(1, reinforcePrompt.max - 1)) * 100}%` } as React.CSSProperties}
                 />
-                <span>{reinforcePrompt.max}</span>
+                <div className="directive-panel__slider-labels">
+                  <span>1</span>
+                  <span>{reinforcePrompt.max}</span>
+                </div>
               </div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.2rem' }} data-testid="reinforce-count-display">{reinforceCount}</div>
-              <div className="hud-action-bar">
-                <button className="hud-btn" onClick={() => setReinforcePrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary" data-testid="reinforce-confirm" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
+              <div className="directive-panel__value" data-testid="reinforce-count-display">{reinforceCount}</div>
+              <div className="hud-action-bar directive-panel__actions">
+                <button className="hud-btn directive-panel__cancel-btn" onClick={() => setReinforcePrompt(null)}>{t('game.cancel')}</button>
+                <button className="hud-btn primary directive-panel__confirm-btn" data-testid="reinforce-confirm" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
               </div>
+              <div className="directive-panel__divider" aria-hidden="true" />
             </div>
           )}
 
@@ -433,27 +525,78 @@ export function PlayingHud({
             />
           )}
 
-          {!pickupPrompt && !reinforcePrompt && !showRemoteTileInfoCard && (
-            <div className="hud-context-area">
-              {!(interactionStatus && interactionStatus.action !== 'none') && (
-                <GuidanceBanner
-                  carriedTroops={carriedTroops}
-                  isInOwnHex={isInOwnHex}
-                  hasLocation={hasLocation}
-                />
-              )}
-              {interactionStatus && interactionStatus.action !== 'none' && (
-                <div className={`context-item action-prompt enter-active ${interactionStatus.tone === 'error' ? 'context-danger' : ''}`}>
-                  <span className="context-icon" aria-hidden="true">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                  </span>
-                  <span>{interactionStatus.message}</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
+
+      <div className="top-status-bar">
+        <div className="top-stats-row top-shell">
+          <div className="top-shell__module top-shell__module--identity scanner-callsign">
+            <span
+              className={`scanner-callsign__avatar ${hasEmojiAvatar ? 'scanner-callsign__avatar--emoji' : 'scanner-callsign__avatar--initials'}`}
+              aria-hidden="true"
+            >
+              {playerAvatarGlyph}
+            </span>
+            <div className="scanner-callsign__info">
+              <div className="scanner-callsign__name-row">
+                <span className="scanner-callsign__text" title={currentPlayerName}>{currentPlayerName}</span>
+                {roleTitle && <span className="scanner-callsign__role-badge">{roleTitle}</span>}
+              </div>
+              {hasAmbientCoordinates && (
+                <span className="coord-display">
+                  Q{me.currentHexQ} R{me.currentHexR}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="top-shell__center-col">
+            <div className="top-shell__module top-shell__module--telemetry telemetry-cluster">
+              <div className="telemetry-cluster__readout stat-item">
+                <div className="telemetry-stat__number-row">
+                  <GameIcon name="shield" className="telemetry-stat__icon" />
+                  <span className="stat-value primary stat-value--numeric">{formattedTerritoryCount}</span>
+                </div>
+                <span className="stat-label">{t('game.hudLands')}</span>
+              </div>
+
+              <div className="telemetry-cluster__readout stat-item">
+                <div className="telemetry-stat__number-row stat-value secondary stat-value-with-detail stat-value-with-detail--troops">
+                  <GameIcon name="rallyTroops" className="telemetry-stat__icon" />
+                  <span className="stat-value--numeric">{formattedTotalTroops}</span>
+                </div>
+                <span className="stat-label">{t('game.hudTroops')}</span>
+              </div>
+            </div>
+
+            {displayTimeRemaining !== null && (
+              <div className="top-shell__module top-shell__module--timer timer-module">
+                <span className={`timer-module__value stat-value ${displayTimeRemaining < 60000 ? 'danger' : displayTimeRemaining < 300000 ? 'warning' : 'primary'}`}>
+                  {formatTimeRemaining(displayTimeRemaining)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="top-shell__module top-shell__module--menu menu-control-pod">
+            <button
+              className="hud-menu-btn-flat menu-control-pod__button"
+              onClick={() => setActiveModal('menu')}
+              aria-label={t('game.hudMenu')}
+              title={t('game.hudMenu')}
+            >
+              <span className="hamburger-button-icon" aria-hidden="true">
+                <span className="hamburger-button-icon__line" />
+                <span className="hamburger-button-icon__line" />
+                <span className="hamburger-button-icon__line" />
+              </span>
+            </button>
+          </div>
+        </div>
+        <InfoLedge />
+      </div>
+
+      {activeModal && <div className="hud-modal-backdrop" onClick={() => setActiveModal(null)} />}
 
       <div className={`hud-modal-sheet ${activeModal === 'players' ? 'open' : ''}`}>
         <div className="hud-modal-header">
@@ -465,18 +608,13 @@ export function PlayingHud({
             const alliancePlayers = sortedPlayers.filter(p => p.allianceId === alliance.id);
             if (alliancePlayers.length === 0) return null;
             return (
-              <div key={alliance.id} style={{ marginBottom: '0.75rem' }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  padding: '0.5rem 0.6rem', borderRadius: '0.4rem',
-                  background: 'rgba(255,255,255,0.06)', marginBottom: '0.25rem',
-                }}>
-                  <span style={{
-                    display: 'inline-block', width: 14, height: 14,
-                    borderRadius: '50%', background: alliance.color, flexShrink: 0,
-                  }} />
-                  <strong style={{ flex: 1 }}>{alliance.name}</strong>
-                  <span style={{ opacity: 0.7, fontSize: '0.85rem' }}>
+              <div key={alliance.id} className="player-list-section">
+                <div className="player-list-header alliance-header">
+                  <svg className="alliance-color-dot" viewBox="0 0 14 14" aria-hidden="true">
+                    <circle cx="7" cy="7" r="7" fill={alliance.color} />
+                  </svg>
+                  <strong className="alliance-header__name">{alliance.name}</strong>
+                  <span className="alliance-header__meta">
                     {alliance.territoryCount} {t('game.hudLands').toLowerCase()}
                   </span>
                 </div>
@@ -490,10 +628,8 @@ export function PlayingHud({
             const unallied = sortedPlayers.filter(p => !p.allianceId);
             if (unallied.length === 0) return null;
             return (
-              <div style={{ marginBottom: '0.75rem' }}>
-                <div style={{
-                  padding: '0.5rem 0.6rem', opacity: 0.6, marginBottom: '0.25rem',
-                }}>
+              <div className="player-list-section">
+                <div className="player-list-header unallied-header">
                   <strong>{t('game.unallied' as never, { defaultValue: 'Unallied' })}</strong>
                 </div>
                 {unallied.map(player => (
@@ -510,87 +646,107 @@ export function PlayingHud({
           <h3>{t('game.hudActivityFeed')}</h3>
           <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
         </div>
-        <GameEventLog events={state.eventLog} players={state.players} />
+        <div className="hud-modal-content log-viewer">
+          <GameEventLog events={state.eventLog} players={state.players} />
+        </div>
       </div>
 
       <div className={`hud-modal-sheet ${activeModal === 'menu' ? 'open' : ''}`}>
         <div className="hud-modal-header">
-          <h3>{t('game.hudMenu')}</h3>
+          <h3
+            className={isDevBuild ? 'hud-modal-header__secret-trigger' : undefined}
+            onPointerDown={handleMenuHeaderPointerDown}
+            onPointerUp={handleMenuHeaderPointerUp}
+            onPointerCancel={handleMenuHeaderPointerCancel}
+            onPointerLeave={handleMenuHeaderPointerCancel}
+          >
+            <span>▶ {t('game.hudMenu')}</span>
+          </h3>
           <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('players')}>
-              <GameIcon name="helmet" size="sm" /> {t('game.hudPlayers')}
-            </button>
-            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
-              {t('game.hudPlayersDesc' as never, { defaultValue: 'Scoreboard and player list' })}
-            </span>
+        {hasAmbientCoordinates && (
+          <div className="menu-header-ambient">
+            {`Q${me.currentHexQ} R${me.currentHexR} · ${formattedTerritoryCount} ZONES`}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('log')}>
-              <GameIcon name="hourglass" size="sm" /> {t('game.hudActivityFeed')}
-            </button>
-            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
-              {t('game.hudFeedDesc' as never, { defaultValue: 'Game event history' })}
-            </span>
-          </div>
-          <div className="menu-nav-separator" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={toggleSound}>
-              <GameIcon name="radioTower" size="sm" /> {t('game.soundToggle')}
-            </button>
-            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
-              {t('game.hudSoundDesc' as never, { defaultValue: 'Toggle sound effects' })}
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('help')}>
-              <GameIcon name="compass" size="sm" /> {t('guidance.helpTitle')}
-            </button>
-            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
-              {t('game.hudHelpDesc' as never, { defaultValue: 'Rules and mechanics guide' })}
-            </span>
-          </div>
-          <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('rules')}>
-            <GameIcon name="master" size="sm" /> {t('rules.title')}
-          </button>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setActiveModal('displaySettings')}>
-              <GameIcon name="gearHammer" size="sm" /> {t('settings.display.title')}
-            </button>
-            <span className="hint" style={{ fontSize: '0.7rem', textAlign: 'center', opacity: 0.6 }}>
-              {t('game.hudDisplayDesc' as never, { defaultValue: 'Map layers and visual options' })}
-            </span>
-          </div>
-          {isHost && onSetObserverMode && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <button className="btn-secondary" style={{ width: '100%' }} onClick={() => onSetObserverMode(true)}>
-                <GameIcon name="archeryTarget" size="sm" /> {t('observer.switchToObserver' as never)}
+        )}
+        <div className="menu-nav">
+          <section className="menu-nav__section" aria-label={t('game.menuSectionGame' as never)}>
+            <div className="menu-nav__section-header">{t('game.menuSectionGame' as never)}</div>
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={() => setActiveModal('players')}>
+                <GameIcon name="helmet" size="sm" /> <span className="menu-item-label">{t('game.hudPlayers')}</span>
               </button>
-              <span className="hint" style={{ fontSize: '0.75rem', textAlign: 'center', paddingInline: '0.25rem' }}>
-                {t('observer.switchToObserverDesc' as never)}
-              </span>
             </div>
-          )}
-          {debugToggle}
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={() => setActiveModal('log')}>
+                <GameIcon name="hourglass" size="sm" /> <span className="menu-item-label">{t('game.hudActivityFeed')}</span>
+              </button>
+            </div>
+          </section>
+
+          <div className="menu-nav-separator" />
+
+          <section className="menu-nav__section" aria-label={t('game.menuSectionSettings' as never)}>
+            <div className="menu-nav__section-header">{t('game.menuSectionSettings' as never)}</div>
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={toggleSound}>
+                <GameIcon name="radioTower" size="sm" /> <span className="menu-item-label">{t('game.soundToggle')}</span>
+              </button>
+            </div>
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={() => setActiveModal('displaySettings')}>
+                <GameIcon name="gearHammer" size="sm" /> <span className="menu-item-label">{t('settings.display.title')}</span>
+              </button>
+            </div>
+          </section>
+
+          <div className="menu-nav-separator" />
+
+          <section className="menu-nav__section" aria-label={t('game.menuSectionHelp' as never)}>
+            <div className="menu-nav__section-header">{t('game.menuSectionHelp' as never)}</div>
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={() => setActiveModal('help')}>
+                <GameIcon name="compass" size="sm" /> <span className="menu-item-label">{t('guidance.helpTitle')}</span>
+              </button>
+            </div>
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={() => setActiveModal('rules')}>
+                <GameIcon name="treasureMap" size="sm" /> <span className="menu-item-label">{t('rules.title')}</span>
+              </button>
+            </div>
+          </section>
+
+          <div className="menu-nav-separator" />
+
+          <section className="menu-nav__section" aria-label={t('game.menuSectionSession' as never)}>
+            <div className="menu-nav__section-header">{t('game.menuSectionSession' as never)}</div>
+            {isHost && onSetObserverMode && (
+              <div className="menu-nav__group">
+                <button className="btn-secondary menu-nav__btn" onClick={() => onSetObserverMode(true)}>
+                  <GameIcon name="archeryTarget" size="sm" /> <span className="menu-item-label">{t('observer.switchToObserver' as never)}</span>
+                </button>
+              </div>
+            )}
+          </section>
+
+          {shouldShowDevSection && debugToggle}
+          <div className="menu-nav-separator menu-nav-separator--footer" />
           {!effectiveShowReturnConfirm ? (
             <button
-              className="btn-secondary"
-              style={{ width: '100%', color: 'var(--danger, #e74c3c)' }}
+              className="btn-secondary menu-nav__btn menu-nav__btn--danger"
               onClick={() => setShowReturnConfirm(true)}
             >
-              {t('game.returnToLobby')}
+              <GameIcon name="returnArrow" size="sm" /> <span className="menu-item-label">{t('game.returnToLobby')}</span>
             </button>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.5rem', borderRadius: '0.5rem', background: 'rgba(231,76,60,0.1)' }}>
-              <span style={{ textAlign: 'center', fontWeight: 500 }}>{t('game.returnToLobbyConfirm' as never, { defaultValue: 'Leave the game? This cannot be undone.' })}</span>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowReturnConfirm(false)}>
-                  {t('game.returnToLobbyConfirmNo' as never, { defaultValue: 'Stay' })}
+            <div className="return-confirm-box">
+              <span className="return-confirm-box__message">{t('game.returnToLobbyConfirm' as never, { defaultValue: 'Leave the game? This cannot be undone.' })}</span>
+              <div className="return-confirm-box__actions">
+                <button className="btn-secondary menu-nav__btn menu-nav__btn--split" onClick={() => setShowReturnConfirm(false)}>
+                  <span className="menu-item-label">{t('game.returnToLobbyConfirmNo' as never, { defaultValue: 'Stay' })}</span>
                 </button>
-                <button className="btn-secondary" style={{ flex: 1, color: 'var(--danger, #e74c3c)' }} onClick={onReturnToLobby}>
-                  {t('game.returnToLobbyConfirmYes' as never, { defaultValue: 'Leave' })}
+                <button className="btn-secondary menu-nav__btn menu-nav__btn--danger menu-nav__btn--split" onClick={onReturnToLobby}>
+                  <span className="menu-item-label">{t('game.returnToLobbyConfirmYes' as never, { defaultValue: 'Leave' })}</span>
                 </button>
               </div>
             </div>
@@ -612,7 +768,7 @@ export function PlayingHud({
             <h3>{t('settings.display.title')}</h3>
             <button className="hud-modal-close" onClick={() => setActiveModal(null)}>×</button>
           </div>
-          <div className="hud-modal-content">
+          <div className="hud-modal-content settings-section">
             <PlayerDisplaySettings
               prefs={playerDisplayPrefs}
               onPrefsChange={onPlayerDisplayPrefsChange}
@@ -623,7 +779,7 @@ export function PlayingHud({
         </div>
       )}
 
-      {!activeModal && debugPanel}
+      {!activeModal && shouldShowDevSection && debugPanel}
 
       <PlayerHUD
         actions={currentHexActions ?? []}
@@ -644,6 +800,14 @@ export function PlayingHud({
         onActivateReinforce={onActivateReinforce ?? (() => { })}
         onActivateEmergencyRepair={onActivateEmergencyRepair ?? (() => { })}
         onStartDemolish={onStartDemolish ?? (() => { })}
+        guidanceHint={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.hint : null}
+        guidanceVisible={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.isVisible : false}
+        interactionPrompt={canShowIntegratedIdleContext && !hasCurrentHexActions && interactionStatus && interactionStatus.action !== 'none'
+          ? {
+            tone: interactionStatus.tone,
+            message: interactionStatus.message,
+          }
+          : null}
       />
 
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (

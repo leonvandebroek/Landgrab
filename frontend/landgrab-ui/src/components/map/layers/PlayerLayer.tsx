@@ -3,10 +3,14 @@ import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import { usePlayerLayerStore } from '../../../stores/playerLayerStore';
 import type { Player } from '../../../types/game';
+import type { MapLayerPreferences } from '../../../types/mapLayerPreferences';
 import { ReactSvgOverlay } from '../ReactSvgOverlay';
+import { useGameStore } from '../../../stores/gameStore';
+import { latLngToRoomHex, hexKey as computeHexKey } from '../HexMath';
 
 interface PlayerLayerProps {
   map: L.Map;
+  layerPreferences?: MapLayerPreferences;
 }
 
 interface ProjectedPlayer {
@@ -14,10 +18,7 @@ interface ProjectedPlayer {
   point: L.Point;
   color: string;
   label: string;
-  emoji: string | null;
-  initials: string;
   isCurrentUser: boolean;
-  width: number;
 }
 
 interface ProjectedBeacon {
@@ -30,15 +31,35 @@ interface ProjectedBeacon {
 const DEFAULT_PLAYER_COLOR = '#4f8cff';
 const OVERLAY_PANE = 'overlayPane';
 const PLAYER_PANE = 'game-map-player-pane';
-const PLAYER_MARKER_HEIGHT = 40;
-const PLAYER_MARKER_MIN_WIDTH = 96;
-const PLAYER_MARKER_MAX_WIDTH = 200;
 
-function PlayerLayerComponent({ map }: PlayerLayerProps) {
+function getOrbitalOffset(
+  index: number,
+  total: number,
+  hexRadius: number = 18,
+): { dx: number; dy: number } {
+  if (hexRadius < 12) return { dx: 0, dy: 0 };
+  if (total === 1) return { dx: 0, dy: 18 };
+  if (total === 2) {
+    return index === 0 ? { dx: -10, dy: 14 } : { dx: 10, dy: 14 };
+  }
+  if (total <= 4) {
+    const offsets: Array<{ dx: number; dy: number }> = [
+      { dx: -12, dy: -12 },
+      { dx: 12, dy: -12 },
+      { dx: -12, dy: 12 },
+      { dx: 12, dy: 12 },
+    ];
+    return offsets[index] ?? { dx: 0, dy: 14 };
+  }
+  return { dx: 0, dy: 14 };
+}
+
+function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   const [svgRoot, setSvgRoot] = useState<SVGGElement | null>(null);
   const [projectionTick, setProjectionTick] = useState(0);
   const players = usePlayerLayerStore((state) => state.players);
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
+  const gameState = useGameStore((state) => state.gameState);
 
   useEffect(() => {
     const pane = map.getPane(PLAYER_PANE) ? PLAYER_PANE : OVERLAY_PANE;
@@ -80,7 +101,6 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
       }
 
       const point = map.latLngToLayerPoint(L.latLng(location[0], location[1]));
-      const emoji = normalizeEmoji(player.emoji);
       const label = player.id === myUserId ? `${player.name} (You)` : player.name;
 
       return [{
@@ -88,13 +108,41 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
         point,
         color: player.allianceColor ?? player.color ?? DEFAULT_PLAYER_COLOR,
         label,
-        emoji,
-        initials: getPlayerInitials(player.name),
         isCurrentUser: player.id === myUserId,
-        width: getPlayerMarkerWidth(label, Boolean(emoji), Boolean(player.isBeacon)),
       }];
     });
   }, [map, myUserId, players, projectionTick]);
+
+  const hexGroups = useMemo(() => {
+    const groups = new Map<string, number[]>();
+    
+    projectedPlayers.forEach((p, i) => {
+      let key = `fallback-${p.point.x.toFixed(0)}-${p.point.y.toFixed(0)}`;
+      
+      if (gameState?.mapLat != null && gameState?.mapLng != null && gameState?.tileSizeMeters != null) {
+         if (p.player.currentLat && p.player.currentLng) {
+            const [q, r] = latLngToRoomHex(p.player.currentLat, p.player.currentLng, gameState.mapLat, gameState.mapLng, gameState.tileSizeMeters);
+            key = computeHexKey(q, r);
+         }
+      } else {
+         for (const [existingKey, indices] of groups.entries()) {
+            if (existingKey.startsWith('fallback-')) {
+               const rep = projectedPlayers[indices[0]];
+               if (Math.hypot(rep.point.x - p.point.x, rep.point.y - p.point.y) < 20) {
+                 key = existingKey;
+                 break;
+               }
+            }
+         }
+      }
+      
+      const list = groups.get(key) || [];
+      list.push(i);
+      groups.set(key, list);
+    });
+    
+    return groups;
+  }, [projectedPlayers, gameState]);
 
   const projectedBeacons = useMemo<ProjectedBeacon[]>(() => {
     void projectionTick;
@@ -122,6 +170,10 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
     return null;
   }
 
+  if (layerPreferences?.playerMarkers === false) {
+    return createPortal(<g className="player-layer" pointerEvents="none" />, svgRoot);
+  }
+
   return createPortal(
     <g className="player-layer" pointerEvents="none">
       {projectedBeacons.map((beacon) => (
@@ -129,195 +181,89 @@ function PlayerLayerComponent({ map }: PlayerLayerProps) {
           <circle
             cx={beacon.point.x}
             cy={beacon.point.y}
-            r={18}
+            r={22}
             fill={beacon.color}
-            fillOpacity={0.08}
+            fillOpacity={0.18}
             stroke={beacon.color}
             strokeOpacity={0.72}
             strokeDasharray="8 4"
-            strokeWidth={2}
+            strokeWidth={3}
           />
           <circle
             cx={beacon.point.x}
             cy={beacon.point.y}
-            r={10}
+            r={12}
             fill={beacon.color}
-            fillOpacity={0.18}
+            fillOpacity={0.45}
             stroke="#ffffff"
             strokeOpacity={0.95}
-            strokeWidth={2}
+            strokeWidth={3}
           />
-          <foreignObject
-            x={beacon.point.x - 12}
-            y={beacon.point.y - 12}
-            width={24}
-            height={24}
-            pointerEvents="none"
+          <text
+            x={beacon.point.x}
+            y={beacon.point.y + 6}
+            fontSize="16"
+            fontWeight="bold"
+            fill="#ffffff"
+            textAnchor="middle"
+            aria-label={beacon.label}
           >
-            <div
-              aria-label={beacon.label}
-              style={{
-                alignItems: 'center',
-                color: '#ffffff',
-                display: 'flex',
-                fontSize: 14,
-                fontWeight: 700,
-                height: '100%',
-                justifyContent: 'center',
-                lineHeight: 1,
-                textShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
-                width: '100%',
-              }}
-            >
-              📡
-            </div>
-          </foreignObject>
+            📡
+          </text>
         </g>
       ))}
 
-      {projectedPlayers.map((projectedPlayer) => {
-        const markerX = projectedPlayer.point.x - projectedPlayer.width / 2;
-        const markerY = projectedPlayer.point.y - PLAYER_MARKER_HEIGHT / 2;
+      {projectedPlayers.map((projectedPlayer, playerIndex) => {
+        let groupSize = 1;
+        let groupIndex = 0;
         
-        // Playful styling variables
-        const isMe = projectedPlayer.isCurrentUser;
-        const baseColor = projectedPlayer.color;
+        for (const [, indices] of hexGroups.entries()) {
+           if (indices.includes(playerIndex)) {
+              groupSize = indices.length;
+              groupIndex = indices.indexOf(playerIndex);
+              break;
+           }
+        }
         
-        // Playful Dark Arcade Pill Style
-        const markerBackground = isMe
-          ? `linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))` // Slate-800 to Slate-900
-          : `linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9))`;
+        if (groupSize >= 5 && groupIndex !== 0) {
+           return null;
+        }
 
-        // Colored border for pop - Thicker neon
-        const markerBorder = isMe
-          ? `2px solid ${baseColor}`
-          : `2px solid ${withAlpha(baseColor, 0.7)}`;
-          
-        // Bouncy shadow + Neon Glow
-        const markerShadow = isMe
-          ? `0 0 15px ${withAlpha(baseColor, 0.5)}, 0 4px 8px rgba(0,0,0,0.4)`
-          : `0 0 10px ${withAlpha(baseColor, 0.3)}, 0 4px 6px rgba(0,0,0,0.3)`;
+        const { dx, dy } = getOrbitalOffset(groupIndex, groupSize);
 
-        // Text styling - White for dark mode
-        const labelColor = '#f1f5f9'; // Slate-100
-        const labelShadow = '0 1px 2px rgba(0,0,0,0.8)';
+        const markerX = projectedPlayer.point.x;
+        const markerY = projectedPlayer.point.y;
+        const baseColor = projectedPlayer.color || '#00f3ff';
+        const reticleColor = projectedPlayer.isCurrentUser ? '#ffffff' : baseColor;
+
+        let labelText = '';
+        if (groupSize >= 5 && groupIndex === 0) {
+           labelText = `[${groupSize}]`;
+        } else {
+           labelText = projectedPlayer.player.name.trim().substring(0, 4).toUpperCase();
+        }
+        const labelWidth = labelText.length * 5 + 4;
 
         return (
-          <foreignObject
-            key={projectedPlayer.player.id}
-            x={markerX}
-            y={markerY}
-            width={projectedPlayer.width}
-            height={PLAYER_MARKER_HEIGHT}
+          <g
+            key={projectedPlayer.player.id ?? projectedPlayer.player.name}
+            className="player-marker-reticle tricorder-chevron-marker"
+            transform={`translate(${markerX + dx}, ${markerY + dy})`}
             pointerEvents="none"
-            className={isMe ? 'player-marker-me' : 'player-marker-other'}
           >
-            <div
-              style={{
-                alignItems: 'center',
-                background: markerBackground,
-                border: markerBorder,
-                borderRadius: '99px', // Pill shape
-                boxShadow: markerShadow,
-                color: labelColor,
-                display: 'flex',
-                gap: 8,
-                height: '100%',
-                padding: '0 12px 0 4px', 
-                width: '100%',
-                transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                position: 'relative',
-                overflow: 'hidden',
-              }}
-            >
-              {/* Avatar Circle */}
-              <div
-                aria-hidden="true"
-                style={{
-                  alignItems: 'center',
-                  background: baseColor,
-                  border: '2px solid white',
-                  borderRadius: '50%',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                  color: '#ffffff',
-                  display: 'flex',
-                  flex: '0 0 auto',
-                  fontSize: projectedPlayer.emoji ? 16 : 13,
-                  fontWeight: 700,
-                  height: 32, 
-                  width: 32,
-                  justifyContent: 'center',
-                  lineHeight: 1,
-                }}
-              >
-                {projectedPlayer.emoji ?? projectedPlayer.initials}
-              </div>
-
-              {/* Name & Label */}
-              <div
-                style={{
-                  display: 'flex',
-                  flex: '1 1 auto',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: isMe ? 700 : 600,
-                    letterSpacing: '0.01em',
-                    lineHeight: 1.2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    textShadow: labelShadow,
-                    whiteSpace: 'nowrap',
-                    fontFamily: '"Fredoka", system-ui, sans-serif',
-                  }}
-                >
-                  {projectedPlayer.label}
-                </div>
-              </div>
-
-              {/* Beacon Icon */}
-              {projectedPlayer.player.isBeacon && getValidLocation(projectedPlayer.player.beaconLat, projectedPlayer.player.beaconLng) ? (
-                 <div
-                  aria-label="Beacon active"
-                  className="beacon-pulse-icon" // Animated via CSS
-                  style={{
-                    alignItems: 'center',
-                    background: 'rgba(34, 197, 94, 0.2)', // Green-500 tint
-                    border: '1px solid rgba(34, 197, 94, 0.5)',
-                    borderRadius: '50%',
-                    color: '#4ade80', // Green-400
-                    display: 'flex',
-                    flex: '0 0 auto',
-                    fontSize: 12,
-                    height: 20,
-                    width: 20,
-                    justifyContent: 'center',
-                    marginLeft: 4,
-                  }}
-                >
-                  📡
-                </div>
-              ) : null}
-              
-              {/* Sheen effect for premium feel */}
-              <div 
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '50%',
-                  background: 'linear-gradient(to bottom, rgba(255,255,255,0.07), transparent)',
-                  pointerEvents: 'none',
-                }}
-              />
-            </div>
-          </foreignObject>
+            <path d="M -7 -3 L 0 4 L 7 -3" fill="none" stroke="#000000" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M -7 -3 L 0 4 L 7 -3" fill="none" stroke={reticleColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+            
+            {projectedPlayer.isCurrentUser && (
+              <path d="M -11 -6 L 0 6 L 11 -6" fill="none" stroke={reticleColor} strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" opacity={0.6} />
+            )}
+            
+            <line x1="7" y1="-3" x2="16" y2="-10" stroke={reticleColor} strokeWidth={1} opacity={0.7} />
+            <rect x="16" y="-18" width={labelWidth} height="10" rx="1" fill="rgba(0,0,0,0.75)" />
+            <text x="18" y="-10" fontFamily="'Share Tech Mono', ui-monospace, monospace" fontSize="8" fill={reticleColor} letterSpacing="0.04em">
+              {labelText}
+            </text>
+          </g>
         );
       })}
     </g>,
@@ -331,57 +277,6 @@ function getValidLocation(lat?: number | null, lng?: number | null): [number, nu
   }
 
   return [lat, lng];
-}
-
-function normalizeEmoji(emoji?: string): string | null {
-  const trimmedEmoji = emoji?.trim();
-  return trimmedEmoji ? trimmedEmoji : null;
-}
-
-function getPlayerMarkerWidth(label: string, hasEmoji: boolean, hasBeacon: boolean): number {
-  const textWidth = label.length * 7;
-  const iconWidth = hasEmoji ? 28 : 26;
-  const beaconWidth = hasBeacon ? 24 : 0;
-  const width = textWidth + iconWidth + beaconWidth + 34;
-
-  return Math.max(PLAYER_MARKER_MIN_WIDTH, Math.min(PLAYER_MARKER_MAX_WIDTH, width));
-}
-
-function getPlayerInitials(name: string): string {
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    return '?';
-  }
-
-  const parts = trimmedName.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) {
-    return parts[0].charAt(0).toUpperCase();
-  }
-
-  return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
-}
-
-function withAlpha(color: string, alpha: number): string {
-  const sanitizedColor = color.trim();
-
-  if (sanitizedColor.startsWith('#')) {
-    const hex = sanitizedColor.slice(1);
-    const expandedHex = hex.length === 3
-      ? hex.split('').map((value) => `${value}${value}`).join('')
-      : hex;
-
-    if (expandedHex.length === 6) {
-      const red = Number.parseInt(expandedHex.slice(0, 2), 16);
-      const green = Number.parseInt(expandedHex.slice(2, 4), 16);
-      const blue = Number.parseInt(expandedHex.slice(4, 6), 16);
-
-      if (Number.isFinite(red) && Number.isFinite(green) && Number.isFinite(blue)) {
-        return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-      }
-    }
-  }
-
-  return sanitizedColor;
 }
 
 export const PlayerLayer = memo(PlayerLayerComponent);

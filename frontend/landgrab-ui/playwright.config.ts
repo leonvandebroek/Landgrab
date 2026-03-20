@@ -1,6 +1,5 @@
 /// <reference types="node" />
 import { defineConfig, devices } from '@playwright/test';
-import type { Config } from '@playwright/test';
 
 export {};
 

@@ -1,0 +1,17 @@
+--- frontend/landgrab-ui/src/components/game/CombatUI.module.css
++++ frontend/landgrab-ui/src/components/game/CombatUI.module.css
+@@ -58,7 +58,11 @@
+ }
+ 
+ .titleVictory {
+-    color: #5be08b;
++    font-family: 'Courier New', monospace;
++    text-transform: uppercase;
++    letter-spacing: 0.15em;
++    font-weight: 700;
++    color: #00FFFF;
++    text-shadow: 0 0 8px rgba(0, 255, 255, 0.4);
++    font-size: 1.8rem;
+ }
+ 
+ .titleDefeat {

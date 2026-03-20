@@ -4,7 +4,13 @@ import { GameIcon } from '../../common/GameIcon';
 
 export function MapLegend() {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('landgrab_legend_seen') !== 'true';
+    } catch {
+      return true;
+    }
+  });
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,7 +30,7 @@ export function MapLegend() {
             <h3>{t('mapLegend.title' as never)}</h3>
             <button 
               className="map-legend-close"
-              onClick={() => setIsExpanded(false)}
+              onClick={() => { try { localStorage.setItem('landgrab_legend_seen', 'true'); } catch { /* ignore */ } setIsExpanded(false); }}
               aria-label={t('mapLegend.collapseLegend' as never)}
             >
               ✕
