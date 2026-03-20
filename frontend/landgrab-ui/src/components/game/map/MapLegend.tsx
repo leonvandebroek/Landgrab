@@ -18,7 +18,7 @@ export function MapLegend() {
   const rootRef = useCallback((node: HTMLDivElement | null) => {
     const host = node?.closest('.game-map-container');
     const nextPanelHost = host instanceof HTMLElement ? host : null;
-    setPanelHost((currentPanelHost) => currentPanelHost === nextPanelHost ? currentPanelHost : nextPanelHost);
+    setPanelHost(nextPanelHost);
   }, []);
 
   useEffect(() => {
