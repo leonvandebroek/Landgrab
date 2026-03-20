@@ -27,6 +27,8 @@ builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
 builder.Services.AddSingleton<GameStateService>();
 builder.Services.AddSingleton<DerivedMapStateService>();
+builder.Services.AddSingleton<VisibilityService>();
+builder.Services.AddSingleton<VisibilityBroadcastHelper>();
 builder.Services.AddSingleton<AllianceConfigService>();
 builder.Services.AddSingleton<MapAreaService>();
 builder.Services.AddSingleton<GameTemplateService>();

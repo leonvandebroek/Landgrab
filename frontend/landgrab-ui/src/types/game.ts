@@ -15,6 +15,7 @@ export interface GameDynamics {
   hqEnabled: boolean;
   hqAutoAssign: boolean;
   tileDecayEnabled: boolean;
+  enemySightingMemorySeconds?: number;
 }
 
 export interface HexCoordinate {
@@ -82,12 +83,19 @@ export interface HexCell {
   ownerColor?: string;
   troops: number;
   isMasterTile: boolean;
+  visibilityTier?: 'Visible' | 'Remembered' | 'Hidden';
+  lastKnownTroops?: number | null;
+  lastKnownOwnerId?: string | null;
+  lastKnownOwnerName?: string | null;
+  lastKnownOwnerColor?: string | null;
+  lastKnownOwnerAllianceId?: string | null;
+  lastKnownIsFort?: boolean;
+  lastKnownIsMasterTile?: boolean;
   // Phase 3: Rally
   isFortified?: boolean;
   // Phase 3: Shepherd
   lastVisitedAt?: string;
   // Phase 4: Engineer
-  engineerBuiltAt?: string;
   isFort?: boolean;
   sabotagedUntil?: string;
 }
@@ -127,15 +135,17 @@ export interface Player {
   rallyPointQ?: number;
   rallyPointR?: number;
   // Engineer abilities
-  sabotageActive?: boolean;
-  sabotageStartedAt?: string;
+  fortTargetQ?: number;
+  fortTargetR?: number;
+  fortPerimeterVisited?: string[];
   sabotageTargetQ?: number;
   sabotageTargetR?: number;
+  sabotagePerimeterVisited?: string[];
   sabotageCooldownUntil?: string;
-  demolishActive?: boolean;
   demolishTargetKey?: string;
-  demolishStartedAt?: string;
+  demolishApproachDirectionsMade?: string[];
   demolishCooldownUntil?: string;
+  previousHexKey?: string;
 }
 
 export interface AllianceDto {

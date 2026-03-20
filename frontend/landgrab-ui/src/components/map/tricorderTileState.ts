@@ -1,13 +1,12 @@
 import { getTileActions } from '../game/tileInteraction';
 import type { ActiveCommandoRaid, AllianceDto, ClaimMode, GameDynamics, HexCell, Player } from '../../types/game';
 
-const FORT_BUILD_DURATION_MS = 10 * 60 * 1000;
-const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
-const SABOTAGE_DURATION_MS = 1 * 60 * 1000;
 const COPRESENCE_TARGET_COUNT = 3;
 
 export interface TricorderTileState {
   baseState: 'neutral' | 'allied' | 'enemy';
+  visibilityTier: 'Visible' | 'Remembered' | 'Hidden';
+  isRemembered: boolean;
   strengthUnknown: boolean;
   presenceBoosted: boolean;
   relationState: {
@@ -24,8 +23,8 @@ export interface TricorderTileState {
   progressState: {
     type: 'none' | 'build' | 'demolish' | 'sabotage';
     progress: number;
-    startedAt?: string;
-    duration?: number;
+    stepsCompleted?: number;
+    stepsRequired?: number;
   };
   structureState: {
     type: 'none' | 'hq' | 'fort' | 'master';
@@ -167,23 +166,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     rallyDeadline,
   };
 
-  const sabotageProgress = Object.values(players).find((player) =>
-    player.sabotageActive
-    && player.sabotageTargetQ === cell?.q
-    && player.sabotageTargetR === cell?.r,
-  );
-  const demolishProgress = Object.values(players).find((player) =>
-    player.demolishActive
-    && player.demolishTargetKey === hexKey,
-  );
-
-  const progressState: TricorderTileState['progressState'] = sabotageProgress
-    ? createProgressState('sabotage', sabotageProgress.sabotageStartedAt, SABOTAGE_DURATION_MS, now)
-    : demolishProgress
-      ? createProgressState('demolish', demolishProgress.demolishStartedAt, DEMOLISH_DURATION_MS, now)
-      : cell?.engineerBuiltAt && !cell.isFort
-        ? createProgressState('build', cell.engineerBuiltAt, FORT_BUILD_DURATION_MS, now)
-        : { type: 'none', progress: 0 };
+  const progressState = getProgressState(cell, hexKey, currentPlayer);
 
   const isHQ = Boolean(cell) && alliances.some(
     (alliance) => alliance.hqHexQ === cell.q && alliance.hqHexR === cell.r,
@@ -225,10 +208,65 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     chips.push({ type: 'regenBlocked' });
   }
 
-  const troopCount = cell?.troops ?? 0;
+  const visibilityTier = cell?.visibilityTier ?? 'Visible';
+  const isHidden = visibilityTier === 'Hidden';
+  const isRemembered = visibilityTier === 'Remembered';
+
+  const troopCount = isRemembered ? (cell?.lastKnownTroops ?? 0) : (cell?.troops ?? 0);
+
+  // Hidden tiles reveal nothing
+  if (isHidden) {
+    return {
+      baseState: 'neutral',
+      visibilityTier,
+      isRemembered,
+      strengthUnknown: true,
+      presenceBoosted: false,
+      relationState,
+      urgencyState: { isContested: false, hasActiveRaid: false, rallyObjective: false },
+      progressState: { type: 'none', progress: 0 },
+      structureState: { type: 'none', isFortified: false },
+      chips: chips.filter(c => c.type === 'reachable' || c.type === 'unreachable'),
+      badge: { visible: false, count: 0 },
+      regenBlocked: false,
+      regenBlockedUntil: undefined,
+      ownerColor: undefined,
+      isOwned: false,
+      isMine: false,
+      isAlly: false,
+    };
+  }
+
+  // Remembered tiles show stale info
+  if (isRemembered) {
+    return {
+      baseState,
+      visibilityTier,
+      isRemembered,
+      strengthUnknown: true, // Hide enemy strength gradients
+      presenceBoosted: false,
+      relationState,
+      urgencyState: { isContested: false, hasActiveRaid: false, rallyObjective: false },
+      progressState: { type: 'none', progress: 0 },
+      structureState: {
+        type: cell?.lastKnownIsMasterTile ? 'master' : (cell?.lastKnownIsFort ? 'fort' : 'none'),
+        isFortified: Boolean(cell?.lastKnownIsFort),
+      },
+      chips: chips.filter(c => c.type === 'reachable' || c.type === 'unreachable'),
+      badge: { visible: troopCount > 0, count: troopCount },
+      regenBlocked: false, // Hide tactical overlays
+      regenBlockedUntil: undefined,
+      ownerColor: cell?.lastKnownOwnerColor ?? ownerColor,
+      isOwned: Boolean(cell?.lastKnownOwnerId),
+      isMine: false,
+      isAlly: false,
+    };
+  }
 
   return {
     baseState,
+    visibilityTier,
+    isRemembered,
     strengthUnknown,
     presenceBoosted,
     relationState,
@@ -249,6 +287,43 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
   };
 }
 
+export function getProgressState(
+  cell: HexCell | undefined,
+  hexKey: string,
+  currentPlayer: Player | undefined,
+): TricorderTileState['progressState'] {
+  if (!currentPlayer || !cell) {
+    return { type: 'none', progress: 0 };
+  }
+
+  if (
+    currentPlayer.fortTargetQ != null
+    && currentPlayer.fortTargetR != null
+    && cell.q === currentPlayer.fortTargetQ
+    && cell.r === currentPlayer.fortTargetR
+  ) {
+    const visited = currentPlayer.fortPerimeterVisited?.length ?? 0;
+    return { type: 'build', progress: visited / 6, stepsCompleted: visited, stepsRequired: 6 };
+  }
+
+  if (
+    currentPlayer.sabotageTargetQ != null
+    && currentPlayer.sabotageTargetR != null
+    && cell.q === currentPlayer.sabotageTargetQ
+    && cell.r === currentPlayer.sabotageTargetR
+  ) {
+    const visited = currentPlayer.sabotagePerimeterVisited?.length ?? 0;
+    return { type: 'sabotage', progress: visited / 3, stepsCompleted: visited, stepsRequired: 3 };
+  }
+
+  if (currentPlayer.demolishTargetKey && currentPlayer.demolishTargetKey === hexKey) {
+    const approaches = currentPlayer.demolishApproachDirectionsMade?.length ?? 0;
+    return { type: 'demolish', progress: approaches / 3, stepsCompleted: approaches, stepsRequired: 3 };
+  }
+
+  return { type: 'none', progress: 0 };
+}
+
 function getStrengthUnknownState({
   cell,
   baseState,
@@ -260,32 +335,7 @@ function getStrengthUnknownState({
     return false;
   }
 
-  // TODO: Use backend-provided fog-of-war / visibility state once HexCell exposes it.
-  // Current frontend HexCell has no terrain or troop-visibility fields to derive hidden strength.
-  return false;
-}
-
-function createProgressState(
-  type: Exclude<TricorderTileState['progressState']['type'], 'none'>,
-  startedAt: string | undefined,
-  duration: number,
-  now: number,
-): TricorderTileState['progressState'] {
-  return {
-    type,
-    progress: getNormalizedProgress(startedAt, duration, now),
-    startedAt,
-    duration,
-  };
-}
-
-function getNormalizedProgress(startedAt: string | undefined, duration: number, now: number): number {
-  const startedAtMs = parseIsoMs(startedAt);
-  if (startedAtMs === undefined) {
-    return 0;
-  }
-
-  return clamp01((now - startedAtMs) / duration);
+  return cell.visibilityTier === 'Hidden';
 }
 
 function getEarliestFutureIso(values: string[], now: number): string | undefined {
@@ -372,10 +422,6 @@ function parseIsoMs(value: string | undefined): number | undefined {
 
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
 }
 
 function getReachabilityState({

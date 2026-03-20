@@ -26,9 +26,11 @@ export function hasHexChanged(previousCell: HexCell, nextCell: HexCell): boolean
     || previousCell.troops !== nextCell.troops
     || previousCell.isFort !== nextCell.isFort
     || previousCell.isFortified !== nextCell.isFortified
-    || previousCell.engineerBuiltAt !== nextCell.engineerBuiltAt
     || previousCell.isMasterTile !== nextCell.isMasterTile
-    || previousCell.lastVisitedAt !== nextCell.lastVisitedAt;
+    || previousCell.lastVisitedAt !== nextCell.lastVisitedAt
+    || previousCell.visibilityTier !== nextCell.visibilityTier
+    || previousCell.lastKnownTroops !== nextCell.lastKnownTroops
+    || previousCell.lastKnownOwnerId !== nextCell.lastKnownOwnerId;
 }
 
 /**

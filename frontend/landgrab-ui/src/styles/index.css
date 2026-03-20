@@ -3921,6 +3921,38 @@ input:focus {
   line-height: 1.4;
 }
 
+.toggle-row--nested {
+  padding-left: 1.5rem;
+}
+
+.wizard-hint--nested {
+  padding-left: 1.5rem;
+}
+
+.wizard-hint--info {
+  color: #6ec6ff;
+}
+
+.wizard-hint--warning {
+  color: #f4b350;
+}
+
+.wizard-hint--compact-top {
+  margin: 0.35rem 0 0;
+}
+
+.settings-row--top-aligned {
+  align-items: center;
+}
+
+.settings-row--spaced-top {
+  margin-top: 1rem;
+}
+
+.wizard-setting-copy {
+  min-width: 0;
+}
+
 /* ── Player Display Settings ────────────────────────────────────────────── */
 .display-settings-container {
   display: flex;

@@ -371,9 +371,32 @@ public sealed class AbilityServiceTests
 
         result.error.Should().BeNull();
         var engineer = result.state!.Players.First(p => p.Id == "p1");
-        engineer.SabotageActive.Should().BeTrue();
         engineer.SabotageTargetQ.Should().Be(1);
         engineer.SabotageTargetR.Should().Be(0);
+        engineer.SabotagePerimeterVisited.Should().BeEmpty();
+        engineer.SabotageCooldownUntil.Should().BeNull();
+    }
+
+    [Fact]
+    public void StartFortConstruction_OnOwnedHex_StartsPerimeterTracking()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Engineer)
+            .AddAlliance("a1", "Alpha", "p1")
+            .OwnHex(0, 0, "p1", "a1", troops: 2)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.StartFortConstruction(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        context.Player("p1").FortTargetQ.Should().Be(0);
+        context.Player("p1").FortTargetR.Should().Be(0);
+        context.Player("p1").FortPerimeterVisited.Should().BeEmpty();
+        context.State.EventLog.Should().Contain(entry => entry.Type == "FortConstructionStarted" && entry.PlayerId == "p1");
     }
 
     [Fact]
@@ -392,7 +415,7 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void StartDemolish_OnEnemyFort_StartsChannelAndCooldown()
+    public void StartDemolish_OnEnemyFort_StartsBreachTracking()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -407,15 +430,13 @@ public sealed class AbilityServiceTests
             .Build();
         state.Grid[HexService.Key(1, 0)].IsFort = true;
         var context = new ServiceTestContext(state);
-        var beforeActivation = DateTime.UtcNow;
 
         var result = context.AbilityService.StartDemolish(ServiceTestContext.RoomCode, "p1");
 
         result.error.Should().BeNull();
-        context.Player("p1").DemolishActive.Should().BeTrue();
         context.Player("p1").DemolishTargetKey.Should().Be(HexService.Key(1, 0));
-        context.Player("p1").DemolishStartedAt.Should().BeCloseTo(beforeActivation, TimeSpan.FromSeconds(10));
-        context.Player("p1").DemolishCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(30), TimeSpan.FromSeconds(10));
+        context.Player("p1").DemolishApproachDirectionsMade.Should().BeEmpty();
+        context.Player("p1").DemolishCooldownUntil.Should().BeNull();
     }
 
 }

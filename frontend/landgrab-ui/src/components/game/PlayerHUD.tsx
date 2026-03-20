@@ -42,6 +42,7 @@ interface PlayerHUDProps {
   onActivateReinforce: () => void;
   onActivateEmergencyRepair: () => void;
   onStartDemolish: () => void;
+  onStartFortConstruction: () => void;
   guidanceHint?: string | null;
   guidanceVisible?: boolean;
   interactionPrompt?: {
@@ -141,7 +142,7 @@ function getHexRelation(
   return 'enemy';
 }
 
-const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const STRATEGIC_ZOOM_THRESHOLD = 14;
 const STRATEGIC_ZOOM_DEBOUNCE_MS = 160;
 
@@ -156,19 +157,7 @@ function formatTimeRemaining(until: string | undefined): string | null {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function formatDurationRemaining(startedAt: string | undefined, durationMs: number): string | null {
-  if (!startedAt) {
-    return null;
-  }
-
-  const startTime = new Date(startedAt).getTime();
-
-  if (Number.isNaN(startTime)) {
-    return null;
-  }
-
-  return formatTimeRemaining(new Date(startTime + durationMs).toISOString());
-}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 
 export function PlayerHUD({
   actions,
@@ -188,6 +177,7 @@ export function PlayerHUD({
   onActivateReinforce,
   onActivateEmergencyRepair,
   onStartDemolish,
+  onStartFortConstruction,
   guidanceHint,
   guidanceVisible = false,
   interactionPrompt,
@@ -212,8 +202,8 @@ export function PlayerHUD({
   const rallyPointCooldownTime = formatTimeRemaining(player?.rallyPointCooldownUntil);
   const commandoCooldownTime = formatTimeRemaining(player?.commandoRaidCooldownUntil);
   const sabotageCooldownTime = formatTimeRemaining(player?.sabotageCooldownUntil);
-  const demolishProgressTime = formatDurationRemaining(player?.demolishStartedAt, DEMOLISH_DURATION_MS);
   const demolishCooldownTime = formatTimeRemaining(player?.demolishCooldownUntil);
+  const demolishProgressTime = null; // Physical presence moves away from time based tracking
   const hasActiveCountdown = [
     tacticalStrikeTime,
     tacticalStrikeCooldownTime,
@@ -418,10 +408,30 @@ export function PlayerHUD({
   }
 
   if (rolesEnabled && player?.role === 'Engineer') {
-    const demolishInProgress = Boolean(player.demolishActive && demolishProgressTime);
+    const demolishInProgress = Boolean(player.demolishTargetKey !== undefined && player.demolishApproachDirectionsMade && player.demolishApproachDirectionsMade.length > 0);
     const demolishOnCooldown = !demolishInProgress && demolishCooldownTime !== null;
-    const sabotageActive = Boolean(player.sabotageActive);
+    const demolishProgressText = demolishInProgress ? `${player.demolishApproachDirectionsMade?.length ?? 0}/3` : null;
+    const sabotageActive = Boolean(player.sabotageTargetQ !== undefined && player.sabotagePerimeterVisited && player.sabotagePerimeterVisited.length > 0);
     const sabotageOnCooldown = !sabotageActive && sabotageCooldownTime !== null;
+    const sabotageProgressText = sabotageActive ? `${player.sabotagePerimeterVisited?.length ?? 0}/3` : null;
+    const fortInProgress = Boolean(player.fortTargetQ !== undefined && player.fortPerimeterVisited && player.fortPerimeterVisited.length > 0);
+    const fortProgressText = fortInProgress ? `${player.fortPerimeterVisited?.length ?? 0}/6` : null;
+
+    abilityButtons.push({
+      key: 'fortConstruction',
+      icon: 'fort',
+      title: t('roles.Engineer.abilities.fortConstruction.title' as never),
+      description: t('roles.Engineer.abilities.fortConstruction.description' as never),
+      status: fortInProgress ? formatStatus('inProgress', fortProgressText) : formatStatus('activate'),
+      badgeText: fortProgressText,
+      className: `player-hud__ability ${fortInProgress ? 'player-hud__ability--active' : ''}`,
+      stateTone: fortInProgress ? 'inProgress' : 'standby',
+      accentClassName: ROLE_ACCENT_CLASSES.Engineer,
+      disabled: fortInProgress,
+      onClick: fortInProgress ? undefined : onStartFortConstruction,
+      role: 'Engineer',
+      abilityKey: 'fortConstruction',
+    });
 
     abilityButtons.push({
       key: 'sabotage',
@@ -429,11 +439,11 @@ export function PlayerHUD({
       title: t('roles.Engineer.abilities.emergencyRepair.title' as never),
       description: t('roles.Engineer.abilities.emergencyRepair.description' as never),
       status: sabotageActive
-        ? formatStatus('inProgress')
+        ? formatStatus('inProgress', sabotageProgressText)
         : sabotageOnCooldown
           ? formatStatus('cooldown', sabotageCooldownTime)
           : formatStatus('activate'),
-      badgeText: sabotageCooldownTime,
+      badgeText: sabotageActive ? sabotageProgressText : sabotageCooldownTime,
       className: `player-hud__ability ${sabotageActive ? 'player-hud__ability--active' : ''} ${sabotageOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
       stateTone: sabotageActive ? 'inProgress' : sabotageOnCooldown ? 'cooldown' : 'standby',
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
@@ -449,11 +459,11 @@ export function PlayerHUD({
       title: t('roles.Engineer.abilities.demolish.title' as never),
       description: t('roles.Engineer.abilities.demolish.description' as never),
       status: demolishInProgress
-        ? formatStatus('inProgress', demolishProgressTime)
+        ? formatStatus('inProgress', demolishProgressText)
         : demolishOnCooldown
           ? formatStatus('cooldown', demolishCooldownTime)
           : formatStatus('activate'),
-      badgeText: demolishInProgress ? demolishProgressTime : demolishCooldownTime,
+      badgeText: demolishInProgress ? demolishProgressText : demolishCooldownTime,
       className: `player-hud__ability ${demolishInProgress ? 'player-hud__ability--active' : ''} ${demolishOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
       stateTone: demolishInProgress ? 'inProgress' : demolishOnCooldown ? 'cooldown' : 'standby',
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
@@ -606,7 +616,6 @@ export function PlayerHUD({
                     disabled={!action.enabled}
                     onClick={() => onAction(action.type)}
                     aria-label={t(action.label as never)}
-                    aria-disabled={action.enabled ? 'false' : 'true'}
                     title={actionTitle}
                   >
                     <span className="player-hud__btn-icon" aria-hidden>

@@ -159,6 +159,25 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task StartFortConstruction()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.StartFortConstruction(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     public async Task ActivateEmergencyRepair()
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
@@ -235,7 +254,11 @@ public partial class GameHub
             return;
         }
 
-        await Clients.Group(room.Code).SendAsync("PlayersMoved", result.state!.Players);
+        await visibilityBroadcastHelper.BroadcastPlayersPerViewer(
+            room,
+            result.state!,
+            connectionId => Clients.Client(connectionId),
+            visibilityService);
     }
 
     public async Task PickUpTroops(int q, int r, int count, double playerLat, double playerLng)
@@ -298,10 +321,24 @@ public partial class GameHub
         if (previousOwnerId != null)
         {
             var lostConnections = room.ConnectionMap
-                .Where(kv => kv.Value == previousOwnerId)
-                .Select(kv => kv.Key);
-            foreach (var connId in lostConnections)
+                .Where(kv => kv.Value == previousOwnerId);
+            foreach (var (connId, recipientUserId) in lostConnections)
             {
+                var shouldNotify = state!.GameMode != GameMode.Alliances
+                    || state.Phase != GamePhase.Playing
+                    || (room.State.HostObserverMode && GameStateCommon.IsHost(room, recipientUserId));
+
+                if (!shouldNotify)
+                {
+                    var visibleHexKeys = visibilityService.ComputeVisibleHexKeys(state, recipientUserId);
+                    shouldNotify = visibleHexKeys.Contains(HexService.Key(q, r));
+                }
+
+                if (!shouldNotify)
+                {
+                    continue;
+                }
+
                 await Clients.Client(connId).SendAsync("TileLost", new { Q = q, R = r, AttackerName = Username });
             }
         }

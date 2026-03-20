@@ -25,7 +25,19 @@ public partial class GameHub
             return;
         }
 
-        await Clients.Group(room.Code).SendAsync("GameStarted", state);
+        room.VisibilityMemory.Clear();
+        foreach (var player in state!.Players)
+        {
+            room.VisibilityMemory.TryAdd(player.Id, new PlayerVisibilityMemory());
+        }
+
+        await visibilityBroadcastHelper.BroadcastPerViewer(
+            room,
+            state,
+            Clients.Group(room.Code),
+            connectionId => Clients.Client(connectionId),
+            derivedMapStateService,
+            "GameStarted");
     }
 
     public async Task SetHostBypassGps(string roomCode, bool bypass)

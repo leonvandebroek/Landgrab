@@ -19,6 +19,7 @@ interface ProjectedPlayer {
   color: string;
   label: string;
   isCurrentUser: boolean;
+  isStale?: boolean;
 }
 
 interface RenderedPlayerMarker {
@@ -145,6 +146,9 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       return leftPriority - rightPriority;
     });
 
+    const myPlayer = players.find(p => p.id === myUserId);
+    const grid = gameState?.grid;
+
     return sortedPlayers.flatMap((player) => {
       const location = getValidLocation(player.currentLat, player.currentLng);
       if (!location) {
@@ -153,6 +157,16 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
 
       const point = map.latLngToLayerPoint(L.latLng(location[0], location[1]));
       const label = player.id === myUserId ? `${player.name} (You)` : player.name;
+      
+      const isAlly = Boolean(player.allianceId && myPlayer?.allianceId === player.allianceId && player.id !== myUserId);
+      const isMe = player.id === myUserId;
+      let isStale = false;
+      if (!isMe && !isAlly && player.currentHexQ != null && player.currentHexR != null && grid) {
+        const hexKey = `${player.currentHexQ},${player.currentHexR}`;
+        if (grid[hexKey] && grid[hexKey].visibilityTier !== 'Visible') {
+          isStale = true;
+        }
+      }
 
       return [{
         player,
@@ -160,9 +174,10 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         color: player.allianceColor ?? player.color ?? DEFAULT_PLAYER_COLOR,
         label,
         isCurrentUser: player.id === myUserId,
+        isStale,
       }];
     });
-  }, [map, myUserId, players, projectionTick]);
+  }, [map, myUserId, players, projectionTick, gameState]);
 
   const hexGroups = useMemo(() => {
     const groups = new Map<string, number[]>();
@@ -369,6 +384,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
             className="player-marker-reticle tricorder-chevron-marker"
             transform={`translate(${markerX + dx}, ${markerY + dy})`}
             pointerEvents="none"
+            opacity={projectedPlayer.isStale ? 0.4 : 1.0}
+            style={projectedPlayer.isStale ? { filter: 'saturate(0.3)' } : undefined}
           >
             <polygon
               points={computeHexPoints(0, 0, 12)}

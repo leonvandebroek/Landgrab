@@ -287,7 +287,7 @@ export function useSignalRHandlers({
       if (newLog.length > prevLog.length) {
         const newEntries = newLog.slice(prevLog.length);
         for (const entry of newEntries) {
-          if (entry.type === 'CommandoRaidStarted' || entry.type === 'CommandoRaidSuccess' || entry.type === 'CommandoRaidFailed' || entry.type === 'RallyPointActivated' || entry.type === 'RallyPointResolved' || entry.type === 'SabotageStarted' || entry.type === 'SabotageComplete') {
+          if (entry.type === 'CommandoRaidStarted' || entry.type === 'CommandoRaidSuccess' || entry.type === 'CommandoRaidFailed' || entry.type === 'RallyPointActivated' || entry.type === 'RallyPointResolved' || entry.type === 'SabotageStarted' || entry.type === 'SabotageComplete' || entry.type === 'FortConstructionStarted' || entry.type === 'FortBuilt' || entry.type === 'DemolishStarted' || entry.type === 'DemolishCompleted') {
             useInfoLedgeStore.getState().push({
               severity: 'gameEvent',
               source: 'gameToast',

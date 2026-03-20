@@ -34,6 +34,7 @@ interface Props {
   onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetBeaconEnabled: (enabled: boolean) => void;
   onSetTileDecayEnabled: (enabled: boolean) => void;
+  onSetEnemySightingMemory: (seconds: number) => void;
   onSetGameDynamics: (dynamics: GameDynamics) => void;
   onSetPlayerRole?: (role: string) => void;
   onSetMasterTile: (lat: number, lng: number) => void;
@@ -77,6 +78,7 @@ export function GameLobby({
   onSetWinCondition,
   onSetBeaconEnabled,
   onSetTileDecayEnabled,
+  onSetEnemySightingMemory,
   onSetGameDynamics,
   onSetPlayerRole,
   onSetMasterTileByHex,
@@ -260,6 +262,7 @@ export function GameLobby({
         onSetWinCondition={onSetWinCondition}
         onSetBeaconEnabled={onSetBeaconEnabled}
         onSetTileDecayEnabled={onSetTileDecayEnabled}
+        onSetEnemySightingMemory={onSetEnemySightingMemory}
         onSetGameDynamics={onSetGameDynamics}
         onSetPlayerRole={onSetPlayerRole}
         onSetMasterTileByHex={onSetMasterTileByHex}
