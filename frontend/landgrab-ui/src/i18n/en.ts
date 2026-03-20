@@ -570,6 +570,11 @@ const en = {
     layerOsm: 'OpenStreetMap',
     basemapUnavailable: 'Map background unavailable. You can still play on the grid.',
     basemapRetry: 'Retry map',
+    contestedLabel: 'Contested',
+    contestedDescription: 'borders enemy territory',
+    tooltipSabotage: 'Sabotage',
+    tooltipDemolish: 'Demolish',
+    tooltipFortBuild: 'Fort construction',
   },
   mapLayers: {
     title: 'Map Layers',

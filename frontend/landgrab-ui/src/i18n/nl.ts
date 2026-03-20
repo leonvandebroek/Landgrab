@@ -570,6 +570,11 @@ const nl = {
     layerOsm: 'OpenStreetMap',
     basemapUnavailable: 'Kaartachtergrond niet beschikbaar. Je kunt nog steeds op het raster spelen.',
     basemapRetry: 'Kaart opnieuw proberen',
+    contestedLabel: 'Betwist',
+    contestedDescription: 'grenst aan vijandelijk gebied',
+    tooltipSabotage: 'Sabotage',
+    tooltipDemolish: 'Slopen',
+    tooltipFortBuild: 'Fortbouw',
   },
   mapLayers: {
     title: 'Kaartlagen',
