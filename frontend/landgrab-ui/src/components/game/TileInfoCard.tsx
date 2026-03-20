@@ -26,6 +26,7 @@ const DEFAULT_DYNAMICS: GameDynamics = {
   hqEnabled: false,
   hqAutoAssign: false,
   tileDecayEnabled: false,
+  enemySightingMemorySeconds: 0,
 };
 const TILE_INFO_CARD_TOKEN_STYLES = `
   .tile-info-card {
@@ -75,24 +76,17 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
   });
 
   const hexKey = `${targetHex[0]},${targetHex[1]}`;
-  const hasOwner = Boolean(targetCell?.ownerId);
-  const safeOwnerColor = sanitizeCssColor(targetCell?.ownerColor);
-  const tokenStyles = useMemo(() => {
-    if (!safeOwnerColor) {
-      return TILE_INFO_CARD_TOKEN_STYLES;
-    }
 
-    return `${TILE_INFO_CARD_TOKEN_STYLES}\n.tile-info-card__color-dot--owned {\n  background: ${safeOwnerColor};\n}`;
-  }, [safeOwnerColor]);
   const playersRecord = useMemo<Record<string, Player>>(() => {
     if (players.length === 0) {
       return EMPTY_PLAYERS_RECORD;
     }
-
     return Object.fromEntries(players.map((player) => [player.id, player])) as Record<string, Player>;
   }, [players]);
+
   const playerPositions = useMemo(() => buildPlayerPositions(players), [players]);
   const currentPlayer = playersRecord[myUserId];
+
   const tileState = useMemo(() => deriveTileState({
     cell: targetCell,
     hexKey,
@@ -125,6 +119,30 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     selectedHexKey,
     targetCell,
   ]);
+
+  const isRemembered = tileState.visibilityTier === 'Remembered';
+  const isHidden = tileState.visibilityTier === 'Hidden';
+
+  const displayOwnerId = isRemembered ? targetCell?.lastKnownOwnerId : targetCell?.ownerId;
+  const displayOwnerName = isRemembered 
+    ? (targetCell?.lastKnownOwnerName ? `${targetCell.lastKnownOwnerName} ${t('game.tileInfo.lastKnown', '(last known)')}` : t('game.unknown'))
+    : (targetCell?.ownerName ?? t('game.unknown'));
+  const displayOwnerColor = isRemembered ? targetCell?.lastKnownOwnerColor : targetCell?.ownerColor;
+  const displayTroops = isRemembered ? (targetCell?.lastKnownTroops ?? 0) : (targetCell?.troops ?? 0);
+  const displayIsFort = isRemembered ? targetCell?.lastKnownIsFort : targetCell?.isFort;
+  const displayIsFortified = isRemembered ? false : targetCell?.isFortified;
+  const displayIsMasterTile = isRemembered ? targetCell?.lastKnownIsMasterTile : targetCell?.isMasterTile;
+
+  const hasOwner = Boolean(displayOwnerId);
+  const safeOwnerColor = sanitizeCssColor(displayOwnerColor ?? undefined);
+  const tokenStyles = useMemo(() => {
+    if (!safeOwnerColor) {
+      return TILE_INFO_CARD_TOKEN_STYLES;
+    }
+
+    return `${TILE_INFO_CARD_TOKEN_STYLES}\n.tile-info-card__color-dot--owned {\n  background: ${safeOwnerColor};\n}`;
+  }, [safeOwnerColor]);
+
   const friendlyPlayerCount = useMemo(() => countFriendlyPlayersOnHex({
     hexKey,
     currentPlayerAllianceId: currentPlayer?.allianceId,
@@ -170,44 +188,51 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
         </div>
 
         <div className="tile-info-card__body">
-          {hasOwner && (
+          {isHidden ? (
             <div className="tile-info-card__row">
-              <span className="tile-info-card__label">{t('game.tileInfo.owner')}</span>
-              <span className="tile-info-card__value">
-                <span className={`tile-info-card__color-dot ${safeOwnerColor ? 'tile-info-card__color-dot--owned' : 'tile-info-card__color-dot--fallback'}`} />
-                {targetCell.ownerName ?? t('game.unknown')}
-              </span>
+              <span className="tile-info-card__label">{t('game.tileInfo.status', 'Status')}</span>
+              <span className="tile-info-card__value">{t('game.tileInfo.unknownTerritory', 'Unknown territory')}</span>
             </div>
-          )}
+          ) : (
+            <>
+              {hasOwner && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__label">{t('game.tileInfo.owner')}</span>
+                  <span className="tile-info-card__value">
+                    <span className={`tile-info-card__color-dot ${safeOwnerColor ? 'tile-info-card__color-dot--owned' : 'tile-info-card__color-dot--fallback'}`} />
+                    {displayOwnerName}
+                  </span>
+                </div>
+              )}
 
-          {targetCell.troops > 0 && (
-            <div className="tile-info-card__row">
-              <span className="tile-info-card__label">{t('game.tileInfo.troops')}</span>
-              <span className="tile-info-card__value"><GameIcon name="contested" size="sm" /> {targetCell.troops}</span>
-            </div>
-          )}
+              {displayTroops > 0 && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__label">{t('game.tileInfo.troops')}</span>
+                  <span className="tile-info-card__value"><GameIcon name="contested" size="sm" /> {isRemembered ? t('game.tileInfo.staleTroops' as never, { count: displayTroops, defaultValue: '~{{count}}' }) : displayTroops}</span>
+                </div>
+              )}
 
-          {targetCell.isFortified && (
-            <div className="tile-info-card__row">
-              <span className="tile-info-card__label">{t('game.tileInfo.status')}</span>
-              <span className="tile-info-card__value"><GameIcon name="shield" size="sm" /> {t('game.dock.fortified')}</span>
-            </div>
-          )}
+              {displayIsFortified && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__label">{t('game.tileInfo.status')}</span>
+                  <span className="tile-info-card__value"><GameIcon name="shield" size="sm" /> {t('game.dock.fortified')}</span>
+                </div>
+              )}
 
-          {targetCell.isFort && (
-            <div className="tile-info-card__row">
-              <span className="tile-info-card__label">{t('game.tileInfo.status')}</span>
-              <span className="tile-info-card__value"><GameIcon name="fort" size="sm" /> {t('game.dock.fort')}</span>
-            </div>
-          )}
+              {displayIsFort && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__label">{t('game.tileInfo.status')}</span>
+                  <span className="tile-info-card__value"><GameIcon name="fort" size="sm" /> {t('game.dock.fort')}</span>
+                </div>
+              )}
 
-          {targetCell.isMasterTile && (
-            <div className="tile-info-card__row">
-              <span className="tile-info-card__value tile-info-card__master">
-                <GameIcon name="crown" size="sm" /> {t('game.tileAction.masterTile')}
-              </span>
-            </div>
-          )}
+              {displayIsMasterTile && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__value tile-info-card__master">
+                    <GameIcon name="crown" size="sm" /> {t('game.tileAction.masterTile')}
+                  </span>
+                </div>
+              )}
 
           {tileState.progressState.type === 'sabotage' && (
             <div className="tile-info-card__section">
@@ -298,20 +323,22 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
             </div>
           )}
 
-          {!hasOwner && !targetCell.isMasterTile && (
-            <div className="tile-info-card__row">
-              <span className="tile-info-card__value tile-info-card__neutral">
-                {t('game.tileInfo.unclaimed')}
-              </span>
-            </div>
-          )}
+              {!hasOwner && !displayIsMasterTile && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__value tile-info-card__neutral">
+                    {t('game.tileInfo.unclaimed')}
+                  </span>
+                </div>
+              )}
 
-          {showPresenceBoost && (
-            <div className="tile-info-card__row">
-              <span className="tile-info-card__value tile-info-card__value--positive">
-                <GameIcon name="rallyTroops" size="sm" /> {t('game.tileInfo.presenceBoost' as never)}
-              </span>
-            </div>
+              {showPresenceBoost && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__value tile-info-card__value--positive">
+                    <GameIcon name="rallyTroops" size="sm" /> {t('game.tileInfo.presenceBoost' as never)}
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

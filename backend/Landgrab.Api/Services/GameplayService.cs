@@ -75,8 +75,16 @@ public class GameplayService(
             var gridChanged = false;
             SetPlayerLocation(room.State, player, lat, lng);
 
+            var currentHexKey = player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue
+                ? HexService.Key(player.CurrentHexQ.Value, player.CurrentHexR.Value)
+                : null;
+
             if (room.State.Dynamics.PlayerRolesEnabled)
-                gridChanged |= UpdateDemolishProgress(room.State, player);
+            {
+                gridChanged |= UpdateFortConstructionProgress(room.State, player, currentHexKey);
+                gridChanged |= UpdateSabotageProgress(room.State, player, currentHexKey);
+                gridChanged |= UpdateDemolishProgress(room.State, player, currentHexKey);
+            }
 
             // ── Phase 3: Rally — update IsFortified for all hexes ──
             foreach (var cell in room.State.Grid.Values.Where(c => c.OwnerId != null))
@@ -108,57 +116,10 @@ public class GameplayService(
                 }
             }
 
-            // Phase 4: Engineer — staying in own hex builds fort over time
-            if (room.State.Dynamics.PlayerRolesEnabled && player.Role == PlayerRole.Engineer
-                && room.State.HasMapLocation)
+            if (player.IsBeacon)
             {
-                var engHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var engKey = HexService.Key(engHex.q, engHex.r);
-                if (room.State.Grid.TryGetValue(engKey, out var engCell)
-                    && (engCell.OwnerId == userId
-                        || (player.AllianceId != null && engCell.OwnerAllianceId == player.AllianceId)))
-                {
-                    if (engCell.EngineerBuiltAt == null)
-                    {
-                        engCell.EngineerBuiltAt = DateTime.UtcNow;
-                        gridChanged = true;
-                    }
-
-                    // Check if engineer has been building for ≥10 minutes
-                    if (!engCell.IsFort && engCell.EngineerBuiltAt.HasValue
-                        && (DateTime.UtcNow - engCell.EngineerBuiltAt.Value).TotalMinutes >= 10)
-                    {
-                        engCell.IsFort = true;
-                        gridChanged = true;
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "FortBuilt",
-                            Message = $"{player.Name} (Engineer) built a fort at ({engHex.q}, {engHex.r}).",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            Q = engHex.q,
-                            R = engHex.r
-                        });
-                    }
-                }
-            }
-
-            // Phase 5: Beacon auto-deactivate — if player moves >1 hex from beacon position
-            if (player.IsBeacon && player.BeaconLat.HasValue && player.BeaconLng.HasValue
-                && room.State.HasMapLocation)
-            {
-                var beaconHex = HexService.LatLngToHexForRoom(player.BeaconLat.Value, player.BeaconLng.Value,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var currentPlayerHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var dist = HexService.HexDistance(beaconHex.q - currentPlayerHex.q, beaconHex.r - currentPlayerHex.r);
-                if (dist > 1)
-                {
-                    player.IsBeacon = false;
-                    player.BeaconLat = null;
-                    player.BeaconLng = null;
-                }
+                player.BeaconLat = lat;
+                player.BeaconLng = lng;
             }
 
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
@@ -734,55 +695,7 @@ public class GameplayService(
 
     public void ResolveActiveSabotages(string roomCode)
     {
-        var room = GetRoom(roomCode);
-        if (room == null) return;
-
-        lock (room.SyncRoot)
-        {
-            var now = DateTime.UtcNow;
-            var engineers = room.State.Players
-                .Where(p => p.SabotageActive && p.SabotageTargetQ.HasValue)
-                .ToList();
-
-            foreach (var engineer in engineers)
-            {
-                var key = HexService.Key(engineer.SabotageTargetQ!.Value, engineer.SabotageTargetR!.Value);
-                if (!room.State.Grid.TryGetValue(key, out var cell)) { engineer.SabotageActive = false; continue; }
-
-                var stillPresent = TryGetCurrentHex(room.State, engineer, out var eq, out var er)
-                    && eq == engineer.SabotageTargetQ && er == engineer.SabotageTargetR;
-
-                if (!stillPresent)
-                {
-                    engineer.SabotageActive = false;
-                    engineer.SabotageStartedAt = null;
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "SabotageCancelled",
-                        Message = $"{engineer.Name}'s sabotage was interrupted.",
-                        Q = engineer.SabotageTargetQ, R = engineer.SabotageTargetR
-                    });
-                    continue;
-                }
-
-                if (engineer.SabotageStartedAt.HasValue &&
-                    (now - engineer.SabotageStartedAt.Value).TotalMinutes >= 1)
-                {
-                    cell.SabotagedUntil = now.AddMinutes(10);
-                    engineer.SabotageActive = false;
-                    engineer.SabotageStartedAt = null;
-                    engineer.SabotageTargetQ = null;
-                    engineer.SabotageTargetR = null;
-
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "SabotageComplete",
-                        Message = $"Sabotage complete! ({cell.Q}, {cell.R}) will not regenerate troops for 10 minutes.",
-                        Q = cell.Q, R = cell.R
-                    });
-                }
-            }
-        }
+        _ = roomCode;
     }
 
     public void ResolveExpiredRallyPoints(string roomCode)
@@ -1043,6 +956,10 @@ public class GameplayService(
 
     internal static void SetPlayerLocation(GameState state, PlayerDto player, double? lat, double? lng)
     {
+        player.PreviousHexKey = TryGetCurrentHex(state, player, out var previousQ, out var previousR)
+            ? HexService.Key(previousQ, previousR)
+            : null;
+
         player.CurrentLat = lat;
         player.CurrentLng = lng;
 
@@ -1064,44 +981,211 @@ public class GameplayService(
         player.CurrentHexR = currentHex.r;
     }
 
-    private static bool UpdateDemolishProgress(GameState state, PlayerDto player)
+    private static bool UpdateFortConstructionProgress(GameState state, PlayerDto player, string? currentHexKey)
     {
-        if (!player.DemolishActive || player.DemolishTargetKey == null || player.DemolishStartedAt == null)
+        if (player.Role != PlayerRole.Engineer
+            || !player.FortTargetQ.HasValue
+            || !player.FortTargetR.HasValue)
             return false;
 
-        if (!TryGetCurrentHex(state, player, out var currentQ, out var currentR))
-            return false;
-
-        var currentHexKey = HexService.Key(currentQ, currentR);
-        if (currentHexKey != player.DemolishTargetKey)
+        var targetKey = HexService.Key(player.FortTargetQ.Value, player.FortTargetR.Value);
+        if (!state.Grid.TryGetValue(targetKey, out var targetCell) || targetCell.OwnerId != player.Id)
         {
-            player.DemolishActive = false;
-            player.DemolishTargetKey = null;
-            player.DemolishStartedAt = null;
-            return false;
-        }
-
-        if ((DateTime.UtcNow - player.DemolishStartedAt.Value).TotalMinutes < 2)
-            return false;
-
-        if (state.Grid.TryGetValue(player.DemolishTargetKey, out var targetCell) && targetCell.IsFort)
-        {
-            targetCell.IsFort = false;
+            var cancelledQ = player.FortTargetQ;
+            var cancelledR = player.FortTargetR;
+            ClearFortConstructionTracking(player);
             AppendEventLog(state, new GameEventLogEntry
             {
-                Type = "DemolishCompleted",
-                Message = $"{player.Name} demolished the fort at ({targetCell.Q}, {targetCell.R}).",
+                Type = "FortConstructionCancelled",
+                Message = $"{player.Name}'s fort construction was cancelled.",
                 PlayerId = player.Id,
                 PlayerName = player.Name,
-                Q = targetCell.Q,
-                R = targetCell.R
+                Q = cancelledQ,
+                R = cancelledR
             });
+            return true;
         }
 
-        player.DemolishActive = false;
-        player.DemolishTargetKey = null;
-        player.DemolishStartedAt = null;
+        if (string.IsNullOrEmpty(currentHexKey))
+            return false;
+
+        var perimeterKeys = HexService.Neighbors(player.FortTargetQ.Value, player.FortTargetR.Value)
+            .Select(neighbor => HexService.Key(neighbor.q, neighbor.r))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var stateChanged = false;
+        if (perimeterKeys.Contains(currentHexKey)
+            && !player.FortPerimeterVisited.Contains(currentHexKey, StringComparer.Ordinal))
+        {
+            player.FortPerimeterVisited.Add(currentHexKey);
+            stateChanged = true;
+        }
+
+        if (player.FortPerimeterVisited.Count < 6)
+            return stateChanged;
+
+        if (!targetCell.IsFort)
+        {
+            targetCell.IsFort = false;
+        }
+
+        targetCell.IsFort = true;
+        ClearFortConstructionTracking(player);
+        AppendEventLog(state, new GameEventLogEntry
+        {
+            Type = "FortBuilt",
+            Message = $"{player.Name} completed fort construction at ({targetCell.Q}, {targetCell.R}).",
+            PlayerId = player.Id,
+            PlayerName = player.Name,
+            Q = targetCell.Q,
+            R = targetCell.R
+        });
         return true;
+    }
+
+    private static bool UpdateSabotageProgress(GameState state, PlayerDto player, string? currentHexKey)
+    {
+        if (player.Role != PlayerRole.Engineer
+            || !player.SabotageTargetQ.HasValue
+            || !player.SabotageTargetR.HasValue)
+            return false;
+
+        var targetKey = HexService.Key(player.SabotageTargetQ.Value, player.SabotageTargetR.Value);
+        if (!state.Grid.TryGetValue(targetKey, out var targetCell)
+            || targetCell.OwnerId == null
+            || IsFriendlyCell(player, targetCell))
+        {
+            var cancelledQ = player.SabotageTargetQ;
+            var cancelledR = player.SabotageTargetR;
+            ClearSabotageTracking(player);
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "SabotageCancelled",
+                Message = $"{player.Name}'s sabotage was cancelled.",
+                PlayerId = player.Id,
+                PlayerName = player.Name,
+                Q = cancelledQ,
+                R = cancelledR
+            });
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(currentHexKey))
+            return false;
+
+        var perimeterKeys = HexService.Neighbors(player.SabotageTargetQ.Value, player.SabotageTargetR.Value)
+            .Select(neighbor => HexService.Key(neighbor.q, neighbor.r))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var stateChanged = false;
+        if (perimeterKeys.Contains(currentHexKey)
+            && !player.SabotagePerimeterVisited.Contains(currentHexKey, StringComparer.Ordinal))
+        {
+            player.SabotagePerimeterVisited.Add(currentHexKey);
+            stateChanged = true;
+        }
+
+        if (player.SabotagePerimeterVisited.Count < 3)
+            return stateChanged;
+
+        targetCell.SabotagedUntil = DateTime.UtcNow.AddMinutes(10);
+        player.SabotageCooldownUntil = DateTime.UtcNow.AddMinutes(20);
+        ClearSabotageTracking(player);
+        AppendEventLog(state, new GameEventLogEntry
+        {
+            Type = "SabotageComplete",
+            Message = $"Sabotage complete! ({targetCell.Q}, {targetCell.R}) will not regenerate troops for 10 minutes.",
+            PlayerId = player.Id,
+            PlayerName = player.Name,
+            Q = targetCell.Q,
+            R = targetCell.R
+        });
+        return true;
+    }
+
+    private static bool UpdateDemolishProgress(GameState state, PlayerDto player, string? currentHexKey)
+    {
+        if (player.Role != PlayerRole.Engineer || string.IsNullOrEmpty(player.DemolishTargetKey))
+            return false;
+
+        if (!state.Grid.TryGetValue(player.DemolishTargetKey, out var targetCell)
+            || !targetCell.IsFort
+            || targetCell.OwnerId == null
+            || IsFriendlyCell(player, targetCell))
+        {
+            ClearDemolishTracking(player);
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(currentHexKey)
+            || !string.Equals(currentHexKey, player.DemolishTargetKey, StringComparison.Ordinal)
+            || string.IsNullOrEmpty(player.PreviousHexKey)
+            || string.Equals(player.PreviousHexKey, player.DemolishTargetKey, StringComparison.Ordinal))
+            return false;
+
+        var approachKey = player.PreviousHexKey;
+        var validApproachKeys = HexService.Neighbors(targetCell.Q, targetCell.R)
+            .Select(neighbor => HexService.Key(neighbor.q, neighbor.r))
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (!validApproachKeys.Contains(approachKey)
+            || !state.Grid.TryGetValue(approachKey, out var approachCell))
+            return false;
+
+        var hostilePresent = GetPlayersInHex(state, approachCell.Q, approachCell.R)
+            .Any(candidate => candidate.Id != player.Id && IsHostileToPlayer(player, candidate));
+        if (hostilePresent)
+            return false;
+
+        var stateChanged = false;
+        if (!player.DemolishApproachDirectionsMade.Contains(approachKey, StringComparer.Ordinal))
+        {
+            player.DemolishApproachDirectionsMade.Add(approachKey);
+            stateChanged = true;
+        }
+
+        if (player.DemolishApproachDirectionsMade.Count < 3)
+            return stateChanged;
+
+        targetCell.IsFort = false;
+        player.DemolishCooldownUntil = DateTime.UtcNow.AddMinutes(30);
+        ClearDemolishTracking(player);
+        AppendEventLog(state, new GameEventLogEntry
+        {
+            Type = "DemolishCompleted",
+            Message = $"{player.Name} demolished the fort at ({targetCell.Q}, {targetCell.R}).",
+            PlayerId = player.Id,
+            PlayerName = player.Name,
+            Q = targetCell.Q,
+            R = targetCell.R
+        });
+        return true;
+    }
+
+    private static void ClearFortConstructionTracking(PlayerDto player)
+    {
+        player.FortTargetQ = null;
+        player.FortTargetR = null;
+        player.FortPerimeterVisited.Clear();
+    }
+
+    private static void ClearSabotageTracking(PlayerDto player)
+    {
+        player.SabotageTargetQ = null;
+        player.SabotageTargetR = null;
+        player.SabotagePerimeterVisited.Clear();
+    }
+
+    private static void ClearDemolishTracking(PlayerDto player)
+    {
+        player.DemolishTargetKey = null;
+        player.DemolishApproachDirectionsMade.Clear();
+    }
+
+    private static bool IsHostileToPlayer(PlayerDto player, PlayerDto other)
+    {
+        return other.Id != player.Id
+            && (player.AllianceId == null || other.AllianceId != player.AllianceId);
     }
 
     private static void ExpireTimedAbilities(GameState state, DateTime now)

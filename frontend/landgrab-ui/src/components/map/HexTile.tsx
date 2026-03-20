@@ -42,6 +42,7 @@ const DEFAULT_DYNAMICS: GameDynamics = {
   hqEnabled: false,
   hqAutoAssign: false,
   tileDecayEnabled: false,
+  enemySightingMemorySeconds: 0,
 };
 
 let cachedPlayers: Player[] = [];
@@ -263,9 +264,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
       shouldShowBorderEffects: true,
     }),
     borderStyle.animationClass ?? '',
+    tileState.visibilityTier === 'Hidden' ? 'hex-hidden-hostile' : '',
+    tileState.visibilityTier === 'Remembered' ? 'hex-remembered' : '',
   ].filter(Boolean).join(' ');
   const showTroopBadge = !isInactive
-    && (Boolean(cell.ownerId) || cell.isMasterTile)
+    && (Boolean(cell.ownerId) || cell.isMasterTile || tileState.visibilityTier === 'Remembered')
     && (tileState.badge.visible || cell.isFort || derivedIsHQ || cell.isMasterTile || territoryStatus.isFrontier);
   const polygonStyle: HexPolygonStyle = {
     '--hex-owner-color': ownerColor,
@@ -511,13 +514,14 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
             }}
           >
             <TroopBadge
-              troops={cell.troops}
+              troops={tileState.badge.count}
               ownerColor={ownerColor}
-              isFort={cell.isFort}
-              isHQ={derivedIsHQ}
-              isMasterTile={cell.isMasterTile}
+              isFort={tileState.structureState.type === 'fort'}
+              isHQ={tileState.structureState.type === 'hq'}
+              isMasterTile={tileState.structureState.type === 'master'}
               isForestBlind={tileState.strengthUnknown}
-              isEnemy={cell.ownerId ? isHostile : undefined}
+              isEnemy={tileState.isOwned ? isHostile : undefined}
+              isStale={tileState.isRemembered}
               q={cell.q}
               r={cell.r}
               showCoords={false}

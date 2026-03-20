@@ -129,3 +129,28 @@
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* Fog of War Visibility Tiers */
+/* Remembered tile — muted, stale intel */
+.hex-polygon.hex-remembered {
+  opacity: 0.55;
+  filter: saturate(0.4);
+}
+
+/* Hidden hostile tile — fogged out */
+.hex-polygon.hex-hidden-hostile {
+  opacity: 0.15;
+  filter: saturate(0) brightness(0.5);
+}
+
+/* Stale troop badge — desaturated, italic feel */
+.stale-badge {
+  opacity: 0.6;
+  filter: saturate(0.3);
+  font-style: italic;
+}
+
+.tooltip-player-name--remembered {
+  opacity: 0.7;
+  font-style: italic;
+}

@@ -576,10 +576,10 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void UpdatePlayerLocation_WhenDemolishChannelCompletes_RemovesFortAndClearsState()
+    public void UpdatePlayerLocation_WhenThirdUniqueDemolishApproachCompletes_RemovesFortAndClearsState()
     {
         var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
+            .WithGrid(3)
             .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice", "a1")
             .AddPlayer("p2", "Bob", "a2")
@@ -587,12 +587,15 @@ public sealed class GameplayServiceTests
             .AddAlliance("a2", "Beta", "p2")
             .WithPlayerRole("p1", PlayerRole.Engineer)
             .OwnHex(1, 0, "p2", "a2", troops: 3)
-            .WithPlayerPosition("p1", 1, 0)
+            .WithPlayerPosition("p1", 0, 0)
             .Build();
         state.Grid[HexService.Key(1, 0)].IsFort = true;
-        state.Players.Single(player => player.Id == "p1").DemolishActive = true;
         state.Players.Single(player => player.Id == "p1").DemolishTargetKey = HexService.Key(1, 0);
-        state.Players.Single(player => player.Id == "p1").DemolishStartedAt = DateTime.UtcNow.AddMinutes(-3);
+        state.Players.Single(player => player.Id == "p1").DemolishApproachDirectionsMade =
+        [
+            HexService.Key(2, -1),
+            HexService.Key(1, -1)
+        ];
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
@@ -601,9 +604,9 @@ public sealed class GameplayServiceTests
         result.error.Should().BeNull();
         result.gridChanged.Should().BeTrue();
         context.Cell(1, 0).IsFort.Should().BeFalse();
-        context.Player("p1").DemolishActive.Should().BeFalse();
         context.Player("p1").DemolishTargetKey.Should().BeNull();
-        context.Player("p1").DemolishStartedAt.Should().BeNull();
+        context.Player("p1").DemolishApproachDirectionsMade.Should().BeEmpty();
+        context.Player("p1").DemolishCooldownUntil.Should().NotBeNull();
         context.State.EventLog.Should().Contain(entry => entry.Type == "DemolishCompleted" && entry.PlayerId == "p1");
     }
 
@@ -653,7 +656,7 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void ResolveSabotage_EngineerStaysOneMinute_DisablesHexRegen()
+    public void UpdatePlayerLocation_WhenThirdSabotagePerimeterHexIsVisited_DisablesHexRegen()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
@@ -662,23 +665,30 @@ public sealed class GameplayServiceTests
             .AddPlayer("p2", "Bob", allianceId: "a2")
             .OwnHex(1, 0, "p2", allianceId: "a2")
             .WithTroops(1, 0, 3)
+            .WithPlayerPosition("p1", 0, 0)
             .Build();
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
         var engineer = state.Players.First(p => p.Id == "p1");
-        engineer.CurrentLat = lat;
-        engineer.CurrentLng = lng;
-        engineer.SabotageActive = true;
-        engineer.SabotageStartedAt = DateTime.UtcNow.AddMinutes(-1).AddSeconds(-1);
         engineer.SabotageTargetQ = 1;
         engineer.SabotageTargetR = 0;
+        engineer.SabotagePerimeterVisited =
+        [
+            HexService.Key(2, 0),
+            HexService.Key(2, -1)
+        ];
         var context = new ServiceTestContext(state);
 
-        context.GameplayService.ResolveActiveSabotages(ServiceTestContext.RoomCode);
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
 
+        result.error.Should().BeNull();
+        result.gridChanged.Should().BeTrue();
         context.Cell(1, 0).SabotagedUntil.Should().NotBeNull();
         context.Cell(1, 0).SabotagedUntil!.Value.Should().BeCloseTo(
             DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(10));
-        engineer.SabotageActive.Should().BeFalse();
+        engineer.SabotageTargetQ.Should().BeNull();
+        engineer.SabotageTargetR.Should().BeNull();
+        engineer.SabotagePerimeterVisited.Should().BeEmpty();
+        engineer.SabotageCooldownUntil.Should().NotBeNull();
     }
 
     [Fact]

@@ -69,6 +69,7 @@ public class GameDynamics
     public bool PlayerRolesEnabled { get; set; }
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
+    public int EnemySightingMemorySeconds { get; set; }
 }
 
 public class HexCoordinateDto
@@ -226,6 +227,8 @@ public class GameRoom
     public object SyncRoot { get; } = new();
     [JsonIgnore]
     public ConcurrentDictionary<string, string> ConnectionMap { get; } = new();
+    [JsonIgnore]
+    public ConcurrentDictionary<string, PlayerVisibilityMemory> VisibilityMemory { get; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAt { get; set; }
 }

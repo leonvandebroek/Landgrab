@@ -40,6 +40,7 @@ interface Props {
   onActivateReinforce?: () => void;
   onActivateEmergencyRepair?: () => void;
   onStartDemolish?: () => void;
+  onStartFortConstruction?: () => void;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -78,6 +79,7 @@ export function PlayingHud({
   onActivateReinforce,
   onActivateEmergencyRepair,
   onStartDemolish,
+  onStartFortConstruction,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   currentPlayerName,
@@ -809,6 +811,7 @@ export function PlayingHud({
         onActivateReinforce={onActivateReinforce ?? (() => { })}
         onActivateEmergencyRepair={onActivateEmergencyRepair ?? (() => { })}
         onStartDemolish={onStartDemolish ?? (() => { })}
+        onStartFortConstruction={onStartFortConstruction ?? (() => { })}
         guidanceHint={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.hint : null}
         guidanceVisible={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.isVisible : false}
         interactionPrompt={canShowIntegratedIdleContext && !hasCurrentHexActions && interactionStatus && interactionStatus.action !== 'none'

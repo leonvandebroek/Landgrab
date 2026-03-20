@@ -238,6 +238,53 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
     public (GameState? state, string? error) ActivateShieldWall(string roomCode, string userId)
         => (null, "Shield Wall has been removed.");
 
+    public (GameState? state, string? error) StartFortConstruction(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (room.State.Phase != GamePhase.Playing)
+                return (null, "Fort construction only works during gameplay.");
+            if (!room.State.Dynamics.PlayerRolesEnabled)
+                return (null, "Player roles are not active.");
+
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+            if (player.Role != PlayerRole.Engineer)
+                return (null, "Only an Engineer can start fort construction.");
+            if (!TryGetCurrentHex(room.State, player, out var currentCell))
+                return (null, "Your location is required to start fort construction.");
+            if (currentCell.OwnerId != userId)
+                return (null, "Fort construction must start on one of your own hexes.");
+            if (currentCell.IsFort)
+                return (null, "This hex is already a fort.");
+            if (player.FortTargetQ.HasValue)
+                return (null, "You are already constructing a fort.");
+
+            player.FortTargetQ = currentCell.Q;
+            player.FortTargetR = currentCell.R;
+            player.FortPerimeterVisited.Clear();
+
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "FortConstructionStarted",
+                Message = $"Fort construction started at ({currentCell.Q}, {currentCell.R}).",
+                PlayerId = userId,
+                PlayerName = player.Name,
+                Q = currentCell.Q,
+                R = currentCell.R
+            });
+
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId)
     {
         var room = GetRoom(roomCode);
@@ -261,11 +308,9 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
             if (IsFriendlyCell(player, currentCell) || currentCell.OwnerId == null)
                 return (null, "You can only sabotage an enemy hex.");
 
-            player.SabotageActive = true;
-            player.SabotageStartedAt = DateTime.UtcNow;
             player.SabotageTargetQ = currentCell.Q;
             player.SabotageTargetR = currentCell.R;
-            player.SabotageCooldownUntil = DateTime.UtcNow.AddMinutes(20);
+            player.SabotagePerimeterVisited.Clear();
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
@@ -308,10 +353,8 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
             if (IsFriendlyCell(player, currentCell) || currentCell.OwnerId == null)
                 return (null, "Demolish requires an enemy fort.");
 
-            player.DemolishActive = true;
             player.DemolishTargetKey = HexService.Key(currentCell.Q, currentCell.R);
-            player.DemolishStartedAt = DateTime.UtcNow;
-            player.DemolishCooldownUntil = DateTime.UtcNow.AddMinutes(30);
+            player.DemolishApproachDirectionsMade.Clear();
 
             AppendEventLog(room.State, new GameEventLogEntry
             {

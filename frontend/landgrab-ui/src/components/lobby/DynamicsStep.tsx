@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import type { CombatMode, GameDynamics, GameState } from '../../types/game';
+import { CustomSelect } from './CustomSelect';
 import { FEATURE_KEYS } from '../../utils/dynamics';
 import type { FeatureKey } from '../../utils/dynamics';
 
 const COMBAT_MODES: CombatMode[] = ['Classic', 'Balanced', 'Siege'];
+const ENEMY_SIGHTING_MEMORY_OPTIONS = [0, 15, 30, 60, 120] as const;
 
 /* ── Component ────────────────────────────────────────────────────────── */
 
@@ -12,6 +14,7 @@ interface Props {
     isHost: boolean;
     onSetBeaconEnabled: (enabled: boolean) => void;
     onSetTileDecayEnabled: (enabled: boolean) => void;
+    onSetEnemySightingMemory: (seconds: number) => void;
     onSetGameDynamics: (dynamics: GameDynamics) => void;
 }
 
@@ -20,6 +23,7 @@ export function DynamicsStep({
     isHost,
     onSetBeaconEnabled,
     onSetTileDecayEnabled,
+    onSetEnemySightingMemory,
     onSetGameDynamics,
 }: Props) {
     const { t } = useTranslation();
@@ -78,6 +82,19 @@ export function DynamicsStep({
         updateDynamics({ combatMode: mode });
     };
 
+    const handleEnemySightingMemoryChange = (value: string) => {
+        if (!isHost) {
+            return;
+        }
+
+        const seconds = Number(value);
+        if (!Number.isFinite(seconds)) {
+            return;
+        }
+
+        onSetEnemySightingMemory(seconds);
+    };
+
     /* ── Render ────────────────────────────────────────────────────── */
 
     return (
@@ -111,7 +128,7 @@ export function DynamicsStep({
                             </label>
                             {key === 'hq' && dynamics.hqEnabled && (
                                 <>
-                                    <label className="toggle-row" style={{ paddingLeft: '1.5rem' }}>
+                                    <label className="toggle-row toggle-row--nested">
                                         <input
                                             type="checkbox"
                                             checked={dynamics.hqAutoAssign ?? true}
@@ -124,7 +141,7 @@ export function DynamicsStep({
                                         </span>
                                     </label>
                                     {dynamics.hqAutoAssign && (
-                                        <p className="wizard-hint" style={{ color: '#6ec6ff', paddingLeft: '1.5rem' }}>
+                                        <p className="wizard-hint wizard-hint--info wizard-hint--nested">
                                             {t('dynamics.info.hqAutoAssignNote')}
                                         </p>
                                     )}
@@ -134,7 +151,7 @@ export function DynamicsStep({
                     ))}
 
                     {showHqAssignmentWarning && (
-                        <p className="wizard-hint" role="alert" style={{ color: '#f4b350' }}>
+                        <p className="wizard-hint wizard-hint--warning" role="alert">
                             {alliancesMissingHq.length === 1
                                 ? t('dynamics.warning.missingSingleHq' as never, {
                                     defaultValue: 'HQ is enabled, but 1 alliance still needs an HQ assigned in Review.',
@@ -145,6 +162,26 @@ export function DynamicsStep({
                                 })}
                         </p>
                     )}
+
+                    <div className="settings-row settings-row--top-aligned settings-row--spaced-top">
+                        <div className="wizard-setting-copy">
+                            <strong>{t('lobby.settings.enemySightingMemory' as never)}</strong>
+                            <p className="wizard-hint wizard-hint--compact-top">
+                                {t('lobby.settings.enemySightingMemoryDesc' as never)}
+                            </p>
+                        </div>
+                        <CustomSelect
+                            value={String(dynamics.enemySightingMemorySeconds ?? 0)}
+                            options={ENEMY_SIGHTING_MEMORY_OPTIONS.map((seconds) => ({
+                                value: String(seconds),
+                                label: seconds === 0
+                                    ? t('lobby.settings.enemySightingMemoryOff' as never)
+                                    : t('lobby.settings.enemySightingMemorySeconds' as never, { seconds }),
+                            }))}
+                            disabled={!isHost}
+                            onChange={handleEnemySightingMemoryChange}
+                        />
+                    </div>
                 </div>
 
                 <div className="wizard-rule-card">

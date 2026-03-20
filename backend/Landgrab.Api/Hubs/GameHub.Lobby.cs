@@ -399,6 +399,31 @@ public async Task SetWinCondition(string type, int value)
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task SetEnemySightingMemory(int seconds)
+    {
+        if (seconds < 0 || seconds > 300)
+        {
+            await SendError(InvalidRequestCode, "Enemy sighting memory must be between 0 and 300 seconds.");
+            return;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.SetEnemySightingMemory(room.Code, UserId, seconds);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
     public async Task SetGameDynamics(GameDynamics dynamics)
     {
         if (dynamics == null)

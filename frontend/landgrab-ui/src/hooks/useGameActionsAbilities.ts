@@ -10,6 +10,7 @@ interface UseGameActionsAbilitiesResult {
   handleActivateReinforce: () => Promise<void>;
   handleActivateEmergencyRepair: () => Promise<void>;
   handleStartDemolish: () => Promise<void>;
+  handleStartFortConstruction: () => Promise<void>;
 }
 
 export function useGameActionsAbilities({
@@ -101,6 +102,18 @@ export function useGameActionsAbilities({
     }
   }, [invoke, setError]);
 
+  const handleStartFortConstruction = useCallback(async (): Promise<void> => {
+    if (!invoke) {
+      return;
+    }
+
+    try {
+      await invoke('StartFortConstruction');
+    } catch (error) {
+      setError(String(error));
+    }
+  }, [invoke, setError]);
+
   return {
     handleActivateBeacon,
     handleDeactivateBeacon,
@@ -109,5 +122,6 @@ export function useGameActionsAbilities({
     handleActivateReinforce,
     handleActivateEmergencyRepair,
     handleStartDemolish,
+    handleStartFortConstruction,
   };
 }
