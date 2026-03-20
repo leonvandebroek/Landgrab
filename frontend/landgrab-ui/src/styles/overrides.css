@@ -1,29 +1,6 @@
 
 /* --- CRITICAL VISIBILITY OVERRIDES --- */
 
-/* Current player: sci-fi tactical scanning reticle */
-@keyframes hex-scanner-march {
-  to {
-    stroke-dashoffset: -64;
-  }
-}
-
-@keyframes hex-scanner-glow {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.9)) drop-shadow(0 0 12px rgba(46, 204, 113, 0.45));
-  }
-  50% {
-    filter: drop-shadow(0 0 10px rgba(46, 204, 113, 1.0)) drop-shadow(0 0 20px rgba(46, 204, 113, 0.7));
-  }
-}
-
-/* Selected hex: marching dashes in opposite direction */
-@keyframes hex-selected-march {
-  to {
-    stroke-dashoffset: 56;
-  }
-}
-
 /* Kept for backwards compatibility — no longer used */
 @keyframes current-player-hex-pulse {}
 
@@ -36,15 +13,15 @@
 
 .hex-active-player,
 .hex-active-player.is-current-player-hex {
-  animation: hex-scanner-march 2.4s linear infinite, hex-scanner-glow 1.8s ease-in-out infinite !important;
-  filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.9)) drop-shadow(0 0 12px rgba(46, 204, 113, 0.45));
+  animation: none !important;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 170, 0.8)) drop-shadow(0 0 14px rgba(0, 255, 170, 0.4));
   stroke: #2ecc71 !important;
 }
 
 .hex-selected-overlay {
-  animation: hex-selected-march 3s linear infinite !important;
-  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.7));
-  stroke: #22d3ee !important;
+  animation: PulseSlow 2s ease-in-out infinite !important;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+  stroke: #ffffff !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -53,6 +30,53 @@
     animation: none !important;
   }
   .hex-selected-overlay {
+    animation: none !important;
+  }
+}
+
+.hex-polygon.is-strobe {
+  animation: StrobeCritical 0.5s ease-in-out infinite;
+}
+
+.hex-polygon.is-pulse {
+  animation: PulseSlow 2s ease-in-out infinite;
+}
+
+.hex-polygon.is-march {
+  animation: MarchingAnts 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-polygon.is-strobe,
+  .hex-polygon.is-pulse,
+  .hex-polygon.is-march {
+    animation: none !important;
+  }
+}
+
+/* Contested edge animations */
+.hex-threat-breathe {
+  animation: threat-breathe 3s ease-in-out infinite;
+}
+
+.contested-edge-heat {
+  animation: heat-pulse 2s ease-in-out infinite;
+  will-change: opacity, filter;
+}
+
+.contested-edge-march {
+  animation: friction-march linear infinite;
+}
+
+.contested-edge-spark {
+  animation: spark-strobe 2s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-threat-breathe,
+  .contested-edge-heat,
+  .contested-edge-march,
+  .contested-edge-spark {
     animation: none !important;
   }
 }

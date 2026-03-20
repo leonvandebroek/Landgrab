@@ -1,17 +1,18 @@
 import { memo, useCallback, useMemo } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useEffectsStore } from '../../stores/effectsStore';
 import { useGameStore } from '../../stores/gameStore';
+import { useGameplayStore } from '../../stores/gameplayStore';
 import { usePlayerLayerStore } from '../../stores/playerLayerStore';
-import type { HexCell, Player } from '../../types/game';
-import { gameIcons, iconHtml } from '../../utils/gameIcons';
+import type { ActiveCommandoRaid, AllianceDto, ClaimMode, GameDynamics, HexCell, Player } from '../../types/game';
+import { iconHtml } from '../../utils/gameIcons';
 import type { HexPixelGeometry } from '../../hooks/useHexGeometries';
 import { TroopBadge } from './TroopBadge';
+import { deriveTileState, type TileChip, type TricorderTileState } from './tricorderTileState';
 import {
   getHexBorderStyle,
   getHexFillStyle,
-  getHexOwnerColor,
   getHexPolygonClassName,
   getHexTerritoryStatus,
 } from '../game/map/hexRendering';
@@ -25,25 +26,59 @@ interface HexTileProps {
 }
 
 const DEFAULT_OWNER_COLOR = '#4f8cff';
-const DEFAULT_HOST_COLOR = '#f1c40f';
 const HEX_NEIGHBOR_OFFSETS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-const FORT_BUILD_DURATION_MS = 10 * 60 * 1000;
 type HexPolygonStyle = CSSProperties & { 
   '--hex-owner-color': string;
   '--hex-player-highlight-color'?: string;
 };
 const EMPTY_NEIGHBORS: Array<HexCell | undefined> = [];
+const EMPTY_GRID: Record<string, HexCell> = {};
+const EMPTY_RAIDS: ActiveCommandoRaid[] = [];
+const EMPTY_ALLIANCES: AllianceDto[] = [];
+const DEFAULT_CLAIM_MODE: ClaimMode = 'PresenceOnly';
+const DEFAULT_DYNAMICS: GameDynamics = {
+  playerRolesEnabled: false,
+  beaconEnabled: false,
+  hqEnabled: false,
+  hqAutoAssign: false,
+  tileDecayEnabled: false,
+};
 
 let cachedPlayers: Player[] = [];
 let cachedPlayersById = new Map<string, Player>();
+let cachedPlayersRecord: Record<string, Player> = {};
+let cachedPlayerPositions = new Map<string, string[]>();
 
 function getPlayersById(players: Player[]): ReadonlyMap<string, Player> {
   if (players !== cachedPlayers) {
     cachedPlayers = players;
     cachedPlayersById = new Map(players.map((player) => [player.id, player]));
+    cachedPlayersRecord = Object.fromEntries(cachedPlayersById) as Record<string, Player>;
+    cachedPlayerPositions = new Map<string, string[]>();
+
+    for (const player of players) {
+      if (!Number.isFinite(player.currentHexQ) || !Number.isFinite(player.currentHexR)) {
+        continue;
+      }
+
+      const playerHexKey = `${player.currentHexQ},${player.currentHexR}`;
+      const positionedPlayers = cachedPlayerPositions.get(playerHexKey) ?? [];
+      positionedPlayers.push(player.id);
+      cachedPlayerPositions.set(playerHexKey, positionedPlayers);
+    }
   }
 
   return cachedPlayersById;
+}
+
+function getPlayersRecord(players: Player[]): Readonly<Record<string, Player>> {
+  getPlayersById(players);
+  return cachedPlayersRecord;
+}
+
+function getPlayerPositions(players: Player[]): ReadonlyMap<string, string[]> {
+  getPlayersById(players);
+  return cachedPlayerPositions;
 }
 
 export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSelected, onHexClick }: HexTileProps) {
@@ -53,6 +88,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
       (alliance) => `${alliance.hqHexQ ?? ''},${alliance.hqHexR ?? ''}` === hexId,
     ),
   );
+  const alliances = useGameStore((state) => state.gameState?.alliances ?? EMPTY_ALLIANCES);
+  const activeRaids = useGameStore((state) => state.gameState?.activeRaids ?? EMPTY_RAIDS);
+  const claimMode = useGameStore((state) => state.gameState?.claimMode ?? DEFAULT_CLAIM_MODE);
+  const dynamics = useGameStore((state) => state.gameState?.dynamics ?? DEFAULT_DYNAMICS);
+  const grid = useGameStore((state) => (state.gridOverride ?? state.gameState?.grid) ?? EMPTY_GRID);
   const neighborCells = useGameStore(useShallow((state) => {
     const grid = state.gridOverride ?? state.gameState?.grid;
     if (!grid) return EMPTY_NEIGHBORS;
@@ -64,14 +104,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const hasGridOverride = useGameStore((state) => state.gridOverride !== null);
   // isInactive = full fading (ReviewStep preview only)
   const isInactive = hasGridOverride && !cell;
-  const isContested = useEffectsStore((state) => state.contestedHexKeys.has(hexId));
-  const hasActiveRaid = useGameStore(
-    (state) => (state.gameState?.activeRaids ?? []).some(
-      (raid) => `${raid.targetQ},${raid.targetR}` === hexId,
-    ),
-  );
+  const contestedHexKeys = useEffectsStore((state) => state.contestedHexKeys);
   const players = usePlayerLayerStore((state) => state.players);
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
+  const currentHexKey = useGameplayStore((state) => state.currentHexKey);
+  const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
 
   const handleClick = useCallback(() => {
     if (cell && onHexClick) {
@@ -87,16 +124,47 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   }, [handleClick]);
 
   const playersById = getPlayersById(players);
+  const playersRecord = getPlayersRecord(players);
+  const playerPositions = getPlayerPositions(players);
 
   const myPlayer = playersById.get(myUserId);
 
-  const isMine = Boolean(cell?.ownerId && cell.ownerId === myUserId);
-  const isFriendlyAllianceCell = Boolean(
-    cell?.ownerAllianceId
-    && myPlayer?.allianceId
-    && cell.ownerAllianceId === myPlayer.allianceId,
-  );
-  const isHostile = Boolean(cell?.ownerId && cell.ownerId !== myUserId && !isFriendlyAllianceCell);
+  const tileState = useMemo(() => deriveTileState({
+    cell: cell ?? undefined,
+    hexKey: hexId,
+    currentPlayerId: myUserId,
+    currentPlayerAllianceId: myPlayer?.allianceId,
+    playerHexKey: currentHexKey,
+    currentHexKey,
+    selectedHexKey,
+    alliances,
+    players: playersRecord,
+    activeRaids,
+    contestedHexKeys,
+    grid,
+    claimMode,
+    dynamics,
+    playerPositions,
+  }), [
+    activeRaids,
+    alliances,
+    cell,
+    claimMode,
+    contestedHexKeys,
+    currentHexKey,
+    dynamics,
+    grid,
+    hexId,
+    myPlayer?.allianceId,
+    myUserId,
+    playerPositions,
+    playersRecord,
+    selectedHexKey,
+  ]);
+
+  const isMine = tileState.isMine;
+  const isFriendlyAllianceCell = tileState.isAlly;
+  const isHostile = tileState.baseState === 'enemy';
 
   const neighborhoodGrid = useMemo<Record<string, HexCell>>(() => {
     const grid: Record<string, HexCell> = {};
@@ -135,11 +203,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     
     return {
       center: { x: geometry.center[0], y: geometry.center[1] },
-      topVertex: { x: geometry.center[0], y: geometry.center[1] - R * 0.87 },
+      topCenter: { x: geometry.center[0], y: geometry.center[1] - R * 0.68 },
       topRight: { x: geometry.center[0] + R * f, y: geometry.center[1] - R * f },
       topLeft: { x: geometry.center[0] - R * f, y: geometry.center[1] - R * f },
-      bottomLeft: { x: geometry.center[0] - R * f, y: geometry.center[1] + R * f },
-      bottomRight: { x: geometry.center[0] + R * f, y: geometry.center[1] + R * f },
+      bottomRight: { x: geometry.center[0] + R * 0.55, y: geometry.center[1] + R * 0.52 },
+      bottomLeft: { x: geometry.center[0] - R * 0.55, y: geometry.center[1] + R * 0.52 },
     };
   }, [geometry.center, radius]);
 
@@ -147,43 +215,58 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     return null;
   }
 
-  const ownerColor = getHexOwnerColor(cell, playersById, cell.ownerColor ?? DEFAULT_OWNER_COLOR);
-  const territoryStatus = getHexTerritoryStatus(cell, neighborhoodGrid, false);
+  const ownerColor = tileState.ownerColor ?? DEFAULT_OWNER_COLOR;
+  const territoryStatus = getHexTerritoryStatus(cell, neighborhoodGrid, isFriendlyAllianceCell && false);
+  const derivedIsHQ = tileState.structureState.type === 'hq' || isHQ;
+  const isContested = tileState.urgencyState.isContested;
+  const hasActiveRaid = tileState.urgencyState.hasActiveRaid;
+  const showRaidObjective = hasActiveRaid && !isInactive;
+  const showRallyObjective = !showRaidObjective && tileState.urgencyState.rallyObjective && !isInactive;
+  const showContestedOverlay = !showRaidObjective && !showRallyObjective && isContested && !isInactive;
+  const selectionType = tileState.relationState.selectionType;
+  const structureGlyphClassName = getStructureGlyphClassName(tileState.structureState.type);
+  const progressRing = getProgressRingDescriptor(tileState.progressState);
+  const presenceChip = getPresenceChip(tileState.chips);
+  const reachabilityChip = tileState.regenBlocked ? undefined : getReachabilityChip(tileState.chips);
   const fillStyle = getHexFillStyle({
     cell,
     isContested: territoryStatus.isContested || isContested,
     isInactive,
+    isHQ: derivedIsHQ,
     ownerColor,
-    hostColor: DEFAULT_HOST_COLOR,
   });
   const borderStyle = getHexBorderStyle({
     cell,
     isCurrentHex: isCurrent,
     isFrontier: territoryStatus.isFrontier,
-    isHQ,
-    isHostile,
+    isEngineeringInProgress: tileState.progressState.type === 'build',
+    isHQ: derivedIsHQ,
     isInactive,
     isSelected,
-    isContested: territoryStatus.isContested || isContested,
+    selectionType,
+    ownerColor,
   });
-  const polygonClassName = getHexPolygonClassName({
-    cell,
-    cellKey: hexId,
-    isCurrentHex: isCurrent,
-    isFrontier: territoryStatus.isFrontier,
-    isHQ,
-    isInactive,
-    isMine,
-    isSelected,
-    isContested: territoryStatus.isContested || isContested,
-    newlyClaimedKeys: EMPTY_KEYS,
-    newlyRevealedKeys: EMPTY_KEYS,
-    shouldShowBorderEffects: true,
-  });
-  const showTroopBadge = !isInactive && (Boolean(cell.ownerId) || cell.isMasterTile);
-  const engineerBuildProgress = !cell.isFort && !isInactive
-    ? getEngineerBuildProgress(cell.engineerBuiltAt)
-    : null;
+  const polygonClassName = [
+    getHexPolygonClassName({
+      cell,
+      cellKey: hexId,
+      isCurrentHex: isCurrent,
+      isFrontier: territoryStatus.isFrontier,
+      isHQ: derivedIsHQ,
+      isInactive,
+      isMine,
+      isSelected,
+      selectionType,
+      isContested: territoryStatus.isContested || isContested,
+      newlyClaimedKeys: EMPTY_KEYS,
+      newlyRevealedKeys: EMPTY_KEYS,
+      shouldShowBorderEffects: true,
+    }),
+    borderStyle.animationClass ?? '',
+  ].filter(Boolean).join(' ');
+  const showTroopBadge = !isInactive
+    && (Boolean(cell.ownerId) || cell.isMasterTile)
+    && (tileState.badge.visible || cell.isFort || derivedIsHQ || cell.isMasterTile || territoryStatus.isFrontier);
   const polygonStyle: HexPolygonStyle = {
     '--hex-owner-color': ownerColor,
     '--hex-player-highlight-color': myPlayer?.allianceColor ?? myPlayer?.color ?? '#22d3ee',
@@ -215,15 +298,75 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
         style={polygonStyle}
       />
 
-      {cell.isFort && !isInactive && (
+      {showRallyObjective ? renderForeignObject({
+        className: 'hex-fo-halo',
+        x: slots.center.x - (radius * 1.15),
+        y: slots.center.y - (radius * 1.15),
+        width: radius * 2.3,
+        height: radius * 2.3,
+        contentClassName: 'hex-halo-rally',
+        contentStyle: {
+          position: 'relative',
+          top: 'auto',
+          left: 'auto',
+          transform: 'none',
+          width: '100%',
+          height: '100%',
+        },
+      }) : null}
+
+      {showContestedOverlay && (
         <polygon
-          className="hex-fort-hatch-overlay"
           points={geometry.points}
-          fill="url(#fort-hatch-pattern)"
-          fillOpacity={0.55}
+          fill="rgba(255, 255, 255, 0.12)"
           stroke="none"
           pointerEvents="none"
+          className="hex-threat-breathe"
+          aria-hidden="true"
         />
+      )}
+
+      {tileState.regenBlocked && !isInactive ? (
+        <polygon
+          points={geometry.points}
+          className="hex-indicator-corrupt"
+          pointerEvents="none"
+          aria-hidden="true"
+        />
+      ) : null}
+
+      {structureGlyphClassName && !isInactive ? renderForeignObject({
+        className: 'hex-fo-glyph',
+        x: slots.topCenter.x - (14 * scale),
+        y: slots.topCenter.y - (14 * scale),
+        width: 28 * scale,
+        height: 28 * scale,
+        contentClassName: structureGlyphClassName,
+        contentStyle: {
+          position: 'relative',
+          top: 'auto',
+          left: 'auto',
+          transform: 'none',
+          width: '100%',
+          height: '100%',
+        },
+      }) : null}
+
+      {isCurrent && !isInactive && (
+        <text
+          x={slots.center.x}
+          y={slots.center.y}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={Math.floor(radius * 0.7)}
+          fill="#00ffaa"
+          opacity={0.7}
+          pointerEvents="none"
+          className="hex-gps-crosshair"
+          aria-hidden="true"
+        >
+          [·]
+        </text>
       )}
 
       {/* Raid Marker: Top Left */}
@@ -239,6 +382,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
             strokeWidth={3}
             strokeOpacity={0.95}
             pointerEvents="none"
+            aria-hidden="true"
           />
           {renderForeignObject({
             className: 'hex-fo-raid hex-commando-raid-marker',
@@ -251,63 +395,97 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
         </>
       ) : null}
 
-      {/* Fort Progress: Center (under badge) */}
-      {engineerBuildProgress != null ? renderForeignObject({
-        className: 'hex-fo-progress hex-fort-progress',
-        x: slots.center.x - (18 * scale),
-        y: slots.center.y - (18 * scale),
+      {progressRing && !isInactive ? renderForeignObject({
+        className: 'hex-fo-progress',
+        x: slots.topRight.x - (18 * scale),
+        y: slots.topRight.y - (18 * scale),
         width: 36 * scale,
         height: 36 * scale,
-        html: `<div class="fort-progress-ring" style="--progress:${engineerBuildProgress.toFixed(4)}"></div>`,
+        contentClassName: progressRing.className,
+        contentStyle: {
+          '--progress': progressRing.progress.toFixed(4),
+          '--ring-color': progressRing.color,
+          position: 'relative',
+          top: 'auto',
+          left: 'auto',
+          transform: 'none',
+          width: '100%',
+          height: '100%',
+          boxSizing: 'border-box',
+        } as CSSProperties,
+        children: (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background: 'conic-gradient(var(--ring-color) calc(var(--progress, 0) * 1turn), rgba(255,255,255,0.08) 0)',
+              WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 0)',
+              mask: 'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 0)',
+              opacity: 0.72,
+            }}
+          />
+        ),
       }) : null}
 
-      {isHQ && !isInactive && (
-        <>
-          <circle
-            className="hq-radar-ring"
-            cx={slots.topVertex.x}
-            cy={slots.topVertex.y}
-            r={12 * scale}
-            fill="none"
-            pointerEvents="none"
-          />
-          <circle
-            className="hq-radar-ring"
-            cx={slots.topVertex.x}
-            cy={slots.topVertex.y}
-            r={12 * scale}
-            fill="none"
-            pointerEvents="none"
-          />
-        </>
-      )}
+      {presenceChip && !isInactive ? renderForeignObject({
+        className: 'hex-fo-chip hex-fo-chip-left',
+        x: slots.bottomLeft.x - (18 * scale),
+        y: slots.bottomLeft.y - (11 * scale),
+        width: Math.max(28, 16 + ((presenceChip.label?.length ?? 0) * 7)) * scale,
+        height: 22 * scale,
+        contentClassName: getChipClassName(presenceChip),
+        contentStyle: {
+          position: 'relative',
+          top: 'auto',
+          left: 'auto',
+          transform: 'none',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          whiteSpace: 'nowrap',
+        },
+        children: presenceChip.label,
+      }) : null}
 
-      {/* Buildings (Fort/HQ/Master): Top Vertex */}
-      {cell.isFort && !isInactive ? renderForeignObject({
-        className: 'hex-fo-fort hex-fort-icon-wrapper',
-        x: slots.topVertex.x - (9 * scale),
-        y: slots.topVertex.y - (18 * scale),
+      {reachabilityChip && !isInactive ? renderForeignObject({
+        className: 'hex-fo-chip hex-fo-chip-right',
+        x: slots.bottomRight.x - (9 * scale),
+        y: slots.bottomRight.y - (9 * scale),
         width: 18 * scale,
         height: 18 * scale,
-        html: iconHtml('fort', 'sm'),
+        contentClassName: getChipClassName(reachabilityChip),
+        contentStyle: {
+          position: 'relative',
+          top: 'auto',
+          left: 'auto',
+          transform: 'none',
+          width: '100%',
+          height: '100%',
+        },
       }) : null}
 
-      {cell.isMasterTile && !isInactive ? renderForeignObject({
-        className: 'hex-fo-building hex-building-icon',
-        x: slots.topVertex.x - (14 * scale),
-        y: slots.topVertex.y - (28 * scale),
-        width: 28 * scale,
-        height: 28 * scale,
-        html: `<div class="building master" aria-hidden="true">${gameIcons.master}</div>`,
-      }) : null}
-
-      {isHQ && !cell.isMasterTile && !isInactive ? renderForeignObject({
-        className: 'hex-fo-building hex-building-icon',
-        x: slots.topVertex.x - (14 * scale),
-        y: slots.topVertex.y - (28 * scale),
-        width: 28 * scale,
-        height: 28 * scale,
-        html: iconHtml('hq'),
+      {tileState.presenceBoosted && !isInactive ? renderForeignObject({
+        className: 'hex-fo-presence-boost',
+        x: slots.center.x + (radius * 0.18) - (9 * scale),
+        y: slots.center.y - (radius * 0.34) - (9 * scale),
+        width: 18 * scale,
+        height: 18 * scale,
+        contentClassName: 'hex-presence-boost-indicator',
+        contentStyle: {
+          position: 'relative',
+          top: 'auto',
+          left: 'auto',
+          transform: 'none',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        children: '↑',
       }) : null}
 
       {/* Troop Badge: Always Center */}
@@ -319,6 +497,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
           width={38 * scale}
           height={38 * scale}
           pointerEvents="none"
+          aria-hidden="true"
         >
           <div
             style={{
@@ -335,9 +514,9 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
               troops={cell.troops}
               ownerColor={ownerColor}
               isFort={cell.isFort}
-              isHQ={isHQ}
+              isHQ={derivedIsHQ}
               isMasterTile={cell.isMasterTile}
-              isForestBlind={false}
+              isForestBlind={tileState.strengthUnknown}
               isEnemy={cell.ownerId ? isHostile : undefined}
               q={cell.q}
               r={cell.r}
@@ -365,19 +544,6 @@ function parseHexId(hexId: string): [number, number] | null {
   return [q, r];
 }
 
-function getEngineerBuildProgress(engineerBuiltAt?: string): number | null {
-  if (!engineerBuiltAt) {
-    return null;
-  }
-
-  const builtAtMs = Date.parse(engineerBuiltAt);
-  if (!Number.isFinite(builtAtMs)) {
-    return null;
-  }
-
-  return Math.max(0, Math.min(1, (Date.now() - builtAtMs) / FORT_BUILD_DURATION_MS));
-}
-
 function renderForeignObject({
   className,
   x,
@@ -385,13 +551,19 @@ function renderForeignObject({
   width,
   height,
   html,
+  children,
+  contentClassName,
+  contentStyle,
 }: {
   className: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  html: string;
+  html?: string;
+  children?: ReactNode;
+  contentClassName?: string;
+  contentStyle?: CSSProperties;
 }) {
   return (
     <foreignObject
@@ -401,21 +573,90 @@ function renderForeignObject({
       width={width}
       height={height}
       pointerEvents="none"
+      aria-hidden="true"
     >
       <div
         style={{
           width: '100%',
           height: '100%',
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          overflow: 'visible',
           fontSize: `${height}px`, // Ensure 1em SVGs fill the container
           fontFamily: '"Rajdhani", system-ui, sans-serif',
         }}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      >
+        {html ? (
+          <div dangerouslySetInnerHTML={{ __html: html }} />
+        ) : (
+          <div className={contentClassName} style={contentStyle}>
+            {children}
+          </div>
+        )}
+      </div>
     </foreignObject>
   );
 }
 
 const EMPTY_KEYS = new Set<string>();
+
+function getStructureGlyphClassName(structureType: TricorderTileState['structureState']['type']): string | undefined {
+  if (structureType === 'none') {
+    return undefined;
+  }
+
+  return `hex-glyph-base hex-glyph-${structureType}`;
+}
+
+function getProgressRingDescriptor(progressState: TricorderTileState['progressState']) {
+  if (progressState.type === 'none') {
+    return undefined;
+  }
+
+  if (progressState.type === 'build') {
+    return {
+      className: 'hex-ring-base hex-ring-build',
+      color: 'var(--hex-ring-build)',
+      progress: progressState.progress,
+    };
+  }
+
+  if (progressState.type === 'demolish') {
+    return {
+      className: 'hex-ring-base hex-ring-demolish',
+      color: 'var(--hex-ring-demo)',
+      progress: progressState.progress,
+    };
+  }
+
+  return {
+    className: 'hex-ring-base hex-ring-sabotage',
+    color: 'var(--hex-ring-sab)',
+    progress: progressState.progress,
+  };
+}
+
+function getPresenceChip(chips: TileChip[]): TileChip | undefined {
+  return chips.find((chip) => chip.type === 'presenceCritical' || chip.type === 'presenceSatisfied');
+}
+
+function getReachabilityChip(chips: TileChip[]): TileChip | undefined {
+  return chips.find((chip) => chip.type === 'reachable' || chip.type === 'unreachable');
+}
+
+function getChipClassName(chip: TileChip): string {
+  switch (chip.type) {
+    case 'reachable':
+      return 'hex-chip-base hex-chip-reachable';
+    case 'unreachable':
+      return 'hex-chip-base hex-chip-unreachable';
+    case 'presenceCritical':
+      return 'hex-chip-copresence hex-chip-copresence-critical';
+    case 'presenceSatisfied':
+      return 'hex-chip-copresence hex-chip-copresence-satisfied';
+    default:
+      return 'hex-chip-base';
+  }
+}

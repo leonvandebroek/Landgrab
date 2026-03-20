@@ -1,0 +1,444 @@
+import { getTileActions } from '../game/tileInteraction';
+import type { ActiveCommandoRaid, AllianceDto, ClaimMode, GameDynamics, HexCell, Player } from '../../types/game';
+
+const FORT_BUILD_DURATION_MS = 10 * 60 * 1000;
+const DEMOLISH_DURATION_MS = 2 * 60 * 1000;
+const SABOTAGE_DURATION_MS = 1 * 60 * 1000;
+const COPRESENCE_TARGET_COUNT = 3;
+
+export interface TricorderTileState {
+  baseState: 'neutral' | 'allied' | 'enemy';
+  strengthUnknown: boolean;
+  presenceBoosted: boolean;
+  relationState: {
+    isCurrent: boolean;
+    selectionType: 'none' | 'selectedFriendly' | 'selectedHostile';
+    reachability: 'none' | 'reachable' | 'unreachable';
+  };
+  urgencyState: {
+    isContested: boolean;
+    hasActiveRaid: boolean;
+    rallyObjective: boolean;
+    rallyDeadline?: string;
+  };
+  progressState: {
+    type: 'none' | 'build' | 'demolish' | 'sabotage';
+    progress: number;
+    startedAt?: string;
+    duration?: number;
+  };
+  structureState: {
+    type: 'none' | 'hq' | 'fort' | 'master';
+    isFortified: boolean;
+  };
+  chips: TileChip[];
+  badge: {
+    visible: boolean;
+    count: number;
+  };
+  regenBlocked: boolean;
+  regenBlockedUntil?: string;
+  ownerColor?: string;
+  isOwned: boolean;
+  isMine: boolean;
+  isAlly: boolean;
+}
+
+export type TileChipType =
+  | 'presenceCritical'
+  | 'presenceSatisfied'
+  | 'reachable'
+  | 'unreachable'
+  | 'regenBlocked'
+  | 'raidOnly';
+
+export interface TileChip {
+  type: TileChipType;
+  label?: string;
+}
+
+export interface DeriveTileStateParams {
+  cell: HexCell | undefined;
+  hexKey: string;
+  currentPlayerId: string;
+  currentPlayerAllianceId?: string;
+  playerHexKey: string | null;
+  currentHexKey: string | null;
+  selectedHexKey: string | null;
+  alliances: AllianceDto[];
+  players: Record<string, Player>;
+  activeRaids: ActiveCommandoRaid[];
+  contestedHexKeys: Set<string>;
+  grid: Record<string, HexCell>;
+  claimMode?: ClaimMode;
+  dynamics?: GameDynamics;
+  playerPositions?: ReadonlyMap<string, string[]>;
+}
+
+export function deriveTileState(params: DeriveTileStateParams): TricorderTileState {
+  const {
+    hexKey,
+    currentPlayerId,
+    currentPlayerAllianceId,
+    playerHexKey,
+    currentHexKey,
+    selectedHexKey,
+    alliances,
+    players,
+    activeRaids,
+    contestedHexKeys,
+    grid,
+    claimMode,
+    dynamics,
+    playerPositions,
+  } = params;
+
+  const cell = params.cell ?? grid[hexKey];
+  const now = Date.now();
+  const ownerPlayer = cell?.ownerId ? players[cell.ownerId] : undefined;
+  const currentPlayer = players[currentPlayerId];
+  const isMine = Boolean(cell?.ownerId && cell.ownerId === currentPlayerId);
+  const isAlly = Boolean(
+    cell?.ownerAllianceId
+    && currentPlayerAllianceId
+    && cell.ownerAllianceId === currentPlayerAllianceId
+    && !isMine,
+  );
+  const isOwned = Boolean(cell?.ownerId);
+  const ownerColor = ownerPlayer?.allianceColor ?? ownerPlayer?.color ?? cell?.ownerColor;
+  const baseState: TricorderTileState['baseState'] = !isOwned
+    ? 'neutral'
+    : (isMine || isAlly)
+      ? 'allied'
+      : 'enemy';
+  const isAlliedCell = isMine || isAlly;
+  const presenceBoosted = isAlliedCell && hexKey === playerHexKey;
+  const strengthUnknown = getStrengthUnknownState({
+    cell,
+    baseState,
+  });
+
+  const relationState: TricorderTileState['relationState'] = {
+    isCurrent: hexKey === currentHexKey,
+    selectionType: hexKey === selectedHexKey
+      ? baseState === 'enemy'
+        ? 'selectedHostile'
+        : baseState === 'allied'
+          ? 'selectedFriendly'
+          : 'none'
+      : 'none',
+    reachability: getReachabilityState({
+      cell,
+      currentHexKey,
+      currentPlayer,
+      dynamics,
+      grid,
+      hexKey,
+      claimMode,
+      selectedHexKey,
+    }),
+  };
+
+  const currentAlliance = currentPlayerAllianceId
+    ? alliances.find((alliance) => alliance.id === currentPlayerAllianceId)
+    : undefined;
+  const relevantRallyPlayerIds = new Set(
+    currentAlliance?.memberIds.length
+      ? currentAlliance.memberIds
+      : [currentPlayerId],
+  );
+  const rallyPlayers = Object.values(players).filter((player) =>
+    player.rallyPointActive
+    && player.rallyPointQ === cell?.q
+    && player.rallyPointR === cell?.r
+    && relevantRallyPlayerIds.has(player.id),
+  );
+  const rallyDeadline = getEarliestFutureIso(
+    rallyPlayers
+      .map((player) => player.rallyPointDeadline)
+      .filter((value): value is string => Boolean(value)),
+    now,
+  );
+
+  const urgencyState: TricorderTileState['urgencyState'] = {
+    isContested: contestedHexKeys.has(hexKey),
+    hasActiveRaid: activeRaids.some((raid) => `${raid.targetQ},${raid.targetR}` === hexKey),
+    rallyObjective: rallyPlayers.length > 0,
+    rallyDeadline,
+  };
+
+  const sabotageProgress = Object.values(players).find((player) =>
+    player.sabotageActive
+    && player.sabotageTargetQ === cell?.q
+    && player.sabotageTargetR === cell?.r,
+  );
+  const demolishProgress = Object.values(players).find((player) =>
+    player.demolishActive
+    && player.demolishTargetKey === hexKey,
+  );
+
+  const progressState: TricorderTileState['progressState'] = sabotageProgress
+    ? createProgressState('sabotage', sabotageProgress.sabotageStartedAt, SABOTAGE_DURATION_MS, now)
+    : demolishProgress
+      ? createProgressState('demolish', demolishProgress.demolishStartedAt, DEMOLISH_DURATION_MS, now)
+      : cell?.engineerBuiltAt && !cell.isFort
+        ? createProgressState('build', cell.engineerBuiltAt, FORT_BUILD_DURATION_MS, now)
+        : { type: 'none', progress: 0 };
+
+  const isHQ = Boolean(cell) && alliances.some(
+    (alliance) => alliance.hqHexQ === cell.q && alliance.hqHexR === cell.r,
+  );
+  const structureState: TricorderTileState['structureState'] = {
+    type: cell?.isMasterTile
+      ? 'master'
+      : isHQ
+        ? 'hq'
+        : cell?.isFort
+          ? 'fort'
+          : 'none',
+    isFortified: Boolean(cell?.isFortified),
+  };
+
+  const regenBlockedUntil = isFutureIso(cell?.sabotagedUntil, now) ? cell?.sabotagedUntil : undefined;
+  const regenBlocked = Boolean(regenBlockedUntil);
+  const chips: TileChip[] = [];
+  const copresenceChip = getCopresenceChip({
+    hexKey,
+    currentPlayerId,
+    currentPlayerAllianceId,
+    alliances,
+    players,
+    playerPositions,
+  });
+
+  if (copresenceChip) {
+    chips.push(copresenceChip);
+  }
+
+  if (relationState.reachability === 'reachable') {
+    chips.push({ type: 'reachable' });
+  } else if (relationState.reachability === 'unreachable') {
+    chips.push({ type: 'unreachable' });
+  }
+
+  if (regenBlocked) {
+    chips.push({ type: 'regenBlocked' });
+  }
+
+  const troopCount = cell?.troops ?? 0;
+
+  return {
+    baseState,
+    strengthUnknown,
+    presenceBoosted,
+    relationState,
+    urgencyState,
+    progressState,
+    structureState,
+    chips,
+    badge: {
+      visible: troopCount > 0,
+      count: troopCount,
+    },
+    regenBlocked,
+    regenBlockedUntil,
+    ownerColor,
+    isOwned,
+    isMine,
+    isAlly,
+  };
+}
+
+function getStrengthUnknownState({
+  cell,
+  baseState,
+}: {
+  cell: HexCell | undefined;
+  baseState: TricorderTileState['baseState'];
+}): boolean {
+  if (baseState !== 'enemy' || !cell) {
+    return false;
+  }
+
+  // TODO: Use backend-provided fog-of-war / visibility state once HexCell exposes it.
+  // Current frontend HexCell has no terrain or troop-visibility fields to derive hidden strength.
+  return false;
+}
+
+function createProgressState(
+  type: Exclude<TricorderTileState['progressState']['type'], 'none'>,
+  startedAt: string | undefined,
+  duration: number,
+  now: number,
+): TricorderTileState['progressState'] {
+  return {
+    type,
+    progress: getNormalizedProgress(startedAt, duration, now),
+    startedAt,
+    duration,
+  };
+}
+
+function getNormalizedProgress(startedAt: string | undefined, duration: number, now: number): number {
+  const startedAtMs = parseIsoMs(startedAt);
+  if (startedAtMs === undefined) {
+    return 0;
+  }
+
+  return clamp01((now - startedAtMs) / duration);
+}
+
+function getEarliestFutureIso(values: string[], now: number): string | undefined {
+  let earliestValue: string | undefined;
+  let earliestMs = Number.POSITIVE_INFINITY;
+
+  for (const value of values) {
+    const valueMs = parseIsoMs(value);
+    if (valueMs === undefined || valueMs <= now || valueMs >= earliestMs) {
+      continue;
+    }
+
+    earliestMs = valueMs;
+    earliestValue = value;
+  }
+
+  return earliestValue;
+}
+
+function getCopresenceChip({
+  hexKey,
+  currentPlayerId,
+  currentPlayerAllianceId,
+  alliances,
+  players,
+  playerPositions,
+}: {
+  hexKey: string;
+  currentPlayerId: string;
+  currentPlayerAllianceId?: string;
+  alliances: AllianceDto[];
+  players: Record<string, Player>;
+  playerPositions?: ReadonlyMap<string, string[]>;
+}): TileChip | undefined {
+  const playerIds = playerPositions?.get(hexKey);
+  if (!playerIds?.length) {
+    return undefined;
+  }
+
+  const currentAlliance = currentPlayerAllianceId
+    ? alliances.find((alliance) => alliance.id === currentPlayerAllianceId)
+    : undefined;
+  const requiredCount = Math.max(
+    1,
+    Math.min(COPRESENCE_TARGET_COUNT, currentAlliance?.memberIds.length ?? 1),
+  );
+
+  const alliedCount = playerIds.reduce((count, playerId) => {
+    const player = players[playerId];
+    if (!player) {
+      return count;
+    }
+
+    const isFriendlyPlayer = player.id === currentPlayerId
+      || (
+        currentPlayerAllianceId !== undefined
+        && player.allianceId === currentPlayerAllianceId
+      );
+
+    return isFriendlyPlayer ? count + 1 : count;
+  }, 0);
+
+  if (alliedCount <= 0) {
+    return undefined;
+  }
+
+  const displayedCount = Math.min(alliedCount, requiredCount);
+
+  return {
+    type: alliedCount >= requiredCount ? 'presenceSatisfied' : 'presenceCritical',
+    label: `${displayedCount}/${requiredCount}`,
+  };
+}
+
+function isFutureIso(value: string | undefined, now: number): boolean {
+  const valueMs = parseIsoMs(value);
+  return valueMs !== undefined && valueMs > now;
+}
+
+function parseIsoMs(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function getReachabilityState({
+  cell,
+  currentHexKey,
+  currentPlayer,
+  dynamics,
+  grid,
+  hexKey,
+  claimMode,
+  selectedHexKey,
+}: {
+  cell: HexCell | undefined;
+  currentHexKey: string | null;
+  currentPlayer?: Player;
+  dynamics?: GameDynamics;
+  grid: Record<string, HexCell>;
+  hexKey: string;
+  claimMode?: ClaimMode;
+  selectedHexKey: string | null;
+}): TricorderTileState['relationState']['reachability'] {
+  if (!cell || !currentPlayer || !claimMode || !dynamics || selectedHexKey !== hexKey) {
+    return 'none';
+  }
+
+  const targetHex = parseHexKey(hexKey);
+  const currentHex = parseHexKey(currentHexKey);
+
+  if (!targetHex) {
+    return 'none';
+  }
+
+  const actions = getTileActions({
+    state: {
+      grid,
+      claimMode,
+      dynamics,
+    } as never,
+    player: currentPlayer,
+    targetHex,
+    targetCell: cell,
+    currentHex,
+  });
+
+  if (actions.length === 0) {
+    return 'none';
+  }
+
+  return actions.some((action) => action.enabled) ? 'reachable' : 'unreachable';
+}
+
+function parseHexKey(hexKey: string | null): [number, number] | null {
+  if (!hexKey) {
+    return null;
+  }
+
+  const [qText, rText] = hexKey.split(',');
+  const q = Number(qText);
+  const r = Number(rText);
+
+  if (!Number.isFinite(q) || !Number.isFinite(r)) {
+    return null;
+  }
+
+  return [q, r];
+}

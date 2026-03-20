@@ -21,16 +21,45 @@ interface ProjectedPlayer {
   isCurrentUser: boolean;
 }
 
+interface RenderedPlayerMarker {
+  projectedPlayer: ProjectedPlayer;
+  groupSize: number;
+  groupIndex: number;
+  dx: number;
+  dy: number;
+  baseColor: string;
+  reticleColor: string;
+  labelText: string;
+  labelWidth: number;
+  markerInitials: string;
+}
+
 interface ProjectedBeacon {
-  key: string;
+  beacon: ActiveBeacon;
   point: L.Point;
+}
+
+interface ActiveBeacon {
+  key: string;
+  location: [number, number];
   color: string;
   label: string;
+  revealRadiusMeters: number;
 }
 
 const DEFAULT_PLAYER_COLOR = '#4f8cff';
 const OVERLAY_PANE = 'overlayPane';
 const PLAYER_PANE = 'game-map-player-pane';
+const BEACON_RADIUS_PANE = 'game-map-beacon-radius-pane';
+const DEFAULT_BEACON_REVEAL_RADIUS_METERS = 200;
+const BEACON_RADIUS_STYLE: Omit<L.CircleOptions, 'radius'> = {
+  color: 'rgba(0, 243, 255, 0.4)',
+  fillColor: 'rgba(0, 243, 255, 0.08)',
+  fillOpacity: 1,
+  weight: 1,
+  dashArray: '8 4',
+  interactive: false,
+};
 
 function getOrbitalOffset(
   index: number,
@@ -38,20 +67,29 @@ function getOrbitalOffset(
   hexRadius: number = 18,
 ): { dx: number; dy: number } {
   if (hexRadius < 12) return { dx: 0, dy: 0 };
-  if (total === 1) return { dx: 0, dy: 18 };
+  if (total === 1) return { dx: 0, dy: 22 };
   if (total === 2) {
-    return index === 0 ? { dx: -10, dy: 14 } : { dx: 10, dy: 14 };
+    return index === 0 ? { dx: -14, dy: 18 } : { dx: 14, dy: 18 };
+  }
+  if (total === 3) {
+    const offsets: Array<{ dx: number; dy: number }> = [
+      { dx: 0, dy: 22 },
+      { dx: -16, dy: -10 },
+      { dx: 16, dy: -10 },
+    ];
+
+    return offsets[index] ?? { dx: 0, dy: 22 };
   }
   if (total <= 4) {
     const offsets: Array<{ dx: number; dy: number }> = [
-      { dx: -12, dy: -12 },
-      { dx: 12, dy: -12 },
-      { dx: -12, dy: 12 },
-      { dx: 12, dy: 12 },
+      { dx: -16, dy: -16 },
+      { dx: 16, dy: -16 },
+      { dx: -16, dy: 16 },
+      { dx: 16, dy: 16 },
     ];
-    return offsets[index] ?? { dx: 0, dy: 14 };
+    return offsets[index] ?? { dx: 0, dy: 22 };
   }
-  return { dx: 0, dy: 14 };
+  return index === 0 ? { dx: 0, dy: 22 } : { dx: 0, dy: 14 };
 }
 
 function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
@@ -62,6 +100,12 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   const gameState = useGameStore((state) => state.gameState);
 
   useEffect(() => {
+    if (!map.getPane(BEACON_RADIUS_PANE)) {
+      const beaconRadiusPane = map.createPane(BEACON_RADIUS_PANE);
+      beaconRadiusPane.style.zIndex = '625';
+      beaconRadiusPane.style.pointerEvents = 'none';
+    }
+
     const pane = map.getPane(PLAYER_PANE) ? PLAYER_PANE : OVERLAY_PANE;
     const overlay = new ReactSvgOverlay({ pane });
     overlay.addTo(map);
@@ -84,6 +128,13 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       map.off('zoomend moveend viewreset', handleProjectionChange);
     };
   }, [map]);
+
+  const defaultBeaconRevealRadiusMeters = useMemo(() => {
+    return Math.max(
+      DEFAULT_BEACON_REVEAL_RADIUS_METERS,
+      (gameState?.tileSizeMeters ?? 0) * 3,
+    );
+  }, [gameState?.tileSizeMeters]);
 
   const projectedPlayers = useMemo<ProjectedPlayer[]>(() => {
     void projectionTick;
@@ -144,9 +195,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
     return groups;
   }, [projectedPlayers, gameState]);
 
-  const projectedBeacons = useMemo<ProjectedBeacon[]>(() => {
-    void projectionTick;
-
+  const activeBeacons = useMemo<ActiveBeacon[]>(() => {
     return players.flatMap((player) => {
       if (!player.isBeacon) {
         return [];
@@ -157,14 +206,96 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         return [];
       }
 
+      const revealRadiusMeters = getBeaconRevealRadiusMeters(player, defaultBeaconRevealRadiusMeters);
+
       return [{
         key: `${player.id}-beacon`,
-        point: map.latLngToLayerPoint(L.latLng(location[0], location[1])),
+        location,
         color: player.allianceColor ?? player.color ?? DEFAULT_PLAYER_COLOR,
         label: `${player.name} beacon`,
+        revealRadiusMeters,
       }];
     });
-  }, [map, players, projectionTick]);
+  }, [defaultBeaconRevealRadiusMeters, players]);
+
+  const projectedBeacons = useMemo<ProjectedBeacon[]>(() => {
+    void projectionTick;
+
+    return activeBeacons.map((beacon) => ({
+      beacon,
+      point: map.latLngToLayerPoint(L.latLng(beacon.location[0], beacon.location[1])),
+    }));
+  }, [activeBeacons, map, projectionTick]);
+
+  useEffect(() => {
+    if (layerPreferences?.playerMarkers === false) {
+      return;
+    }
+
+    const beaconRadiusLayers = activeBeacons.map((beacon) => {
+      return L.circle(beacon.location, {
+        ...BEACON_RADIUS_STYLE,
+        pane: BEACON_RADIUS_PANE,
+        radius: beacon.revealRadiusMeters,
+      }).addTo(map);
+    });
+
+    return () => {
+      beaconRadiusLayers.forEach((layer) => layer.remove());
+    };
+  }, [activeBeacons, layerPreferences?.playerMarkers, map]);
+
+  const renderedPlayerMarkers = useMemo<RenderedPlayerMarker[]>(() => {
+    return projectedPlayers.flatMap((projectedPlayer, playerIndex) => {
+      let groupSize = 1;
+      let groupIndex = 0;
+
+      for (const indices of hexGroups.values()) {
+        if (indices.includes(playerIndex)) {
+          groupSize = indices.length;
+          groupIndex = indices.indexOf(playerIndex);
+          break;
+        }
+      }
+
+      if (groupSize >= 5 && groupIndex !== 0) {
+        return [];
+      }
+
+      const { dx, dy } = getOrbitalOffset(groupIndex, groupSize);
+      const baseColor = projectedPlayer.color || '#00f3ff';
+      const reticleColor = projectedPlayer.isCurrentUser ? '#ffffff' : baseColor;
+
+      let labelText = '';
+      if (groupSize >= 5 && groupIndex === 0) {
+        labelText = `[${groupSize}]`;
+      } else {
+        labelText = projectedPlayer.player.name.trim().substring(0, 4).toUpperCase();
+      }
+
+      const labelWidth = labelText.length * 5 + 4;
+      const markerInitials = groupSize >= 5 && groupIndex === 0
+        ? `[${groupSize}]`
+        : (projectedPlayer.player.emoji || projectedPlayer.player.name?.trim().substring(0, 2).toUpperCase() || '??');
+
+      return [{
+        projectedPlayer,
+        groupSize,
+        groupIndex,
+        dx,
+        dy,
+        baseColor,
+        reticleColor,
+        labelText,
+        labelWidth,
+        markerInitials,
+      }];
+    });
+  }, [hexGroups, projectedPlayers]);
+
+  const playerGlowColors = useMemo<string[]>(() => {
+    return Array.from(new Set(renderedPlayerMarkers.map((marker) => marker.baseColor)));
+  }, [renderedPlayerMarkers]);
 
   if (!svgRoot) {
     return null;
@@ -176,11 +307,26 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
 
   return createPortal(
     <g className="player-layer" pointerEvents="none">
-      {projectedBeacons.map((beacon) => (
+      <defs>
+        {playerGlowColors.map((color) => (
+          <filter
+            key={color}
+            id={`player-glow-${sanitizeColorId(color)}`}
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+          >
+            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor={color} floodOpacity="0.7" />
+          </filter>
+        ))}
+      </defs>
+
+      {projectedBeacons.map(({ beacon, point }) => (
         <g key={beacon.key} className="player-layer__beacon" pointerEvents="none">
           <circle
-            cx={beacon.point.x}
-            cy={beacon.point.y}
+            cx={point.x}
+            cy={point.y}
             r={22}
             fill={beacon.color}
             fillOpacity={0.18}
@@ -190,8 +336,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
             strokeWidth={3}
           />
           <circle
-            cx={beacon.point.x}
-            cy={beacon.point.y}
+            cx={point.x}
+            cy={point.y}
             r={12}
             fill={beacon.color}
             fillOpacity={0.45}
@@ -200,8 +346,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
             strokeWidth={3}
           />
           <text
-            x={beacon.point.x}
-            y={beacon.point.y + 6}
+            x={point.x}
+            y={point.y + 6}
             fontSize="16"
             fontWeight="bold"
             fill="#ffffff"
@@ -213,36 +359,9 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         </g>
       ))}
 
-      {projectedPlayers.map((projectedPlayer, playerIndex) => {
-        let groupSize = 1;
-        let groupIndex = 0;
-        
-        for (const [, indices] of hexGroups.entries()) {
-           if (indices.includes(playerIndex)) {
-              groupSize = indices.length;
-              groupIndex = indices.indexOf(playerIndex);
-              break;
-           }
-        }
-        
-        if (groupSize >= 5 && groupIndex !== 0) {
-           return null;
-        }
-
-        const { dx, dy } = getOrbitalOffset(groupIndex, groupSize);
-
+      {renderedPlayerMarkers.map(({ projectedPlayer, dx, dy, baseColor, reticleColor, labelText, labelWidth, markerInitials }) => {
         const markerX = projectedPlayer.point.x;
         const markerY = projectedPlayer.point.y;
-        const baseColor = projectedPlayer.color || '#00f3ff';
-        const reticleColor = projectedPlayer.isCurrentUser ? '#ffffff' : baseColor;
-
-        let labelText = '';
-        if (groupSize >= 5 && groupIndex === 0) {
-           labelText = `[${groupSize}]`;
-        } else {
-           labelText = projectedPlayer.player.name.trim().substring(0, 4).toUpperCase();
-        }
-        const labelWidth = labelText.length * 5 + 4;
 
         return (
           <g
@@ -251,12 +370,44 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
             transform={`translate(${markerX + dx}, ${markerY + dy})`}
             pointerEvents="none"
           >
-            <path d="M -7 -3 L 0 4 L 7 -3" fill="none" stroke="#000000" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M -7 -3 L 0 4 L 7 -3" fill="none" stroke={reticleColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-            
+            <polygon
+              points={computeHexPoints(0, 0, 12)}
+              fill="rgba(0,0,0,0.85)"
+              stroke={projectedPlayer.isCurrentUser ? '#ffffff' : baseColor}
+              strokeWidth={projectedPlayer.isCurrentUser ? 2 : 1.5}
+              filter={`url(#player-glow-${sanitizeColorId(baseColor)})`}
+            />
+
             {projectedPlayer.isCurrentUser && (
-              <path d="M -11 -6 L 0 6 L 11 -6" fill="none" stroke={reticleColor} strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" opacity={0.6} />
+              <circle
+                r={14}
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth={1}
+                strokeDasharray="4 8"
+              >
+                <animateTransform
+                  attributeName="transform"
+                  type="rotate"
+                  from="0"
+                  to="360"
+                  dur="4s"
+                  repeatCount="indefinite"
+                />
+              </circle>
             )}
+
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              y={0.5}
+              fontSize={markerInitials.length > 2 ? 9 : 11}
+              fill="#ffffff"
+              fontFamily="var(--font-mono, monospace)"
+              pointerEvents="none"
+            >
+              {markerInitials}
+            </text>
             
             <line x1="7" y1="-3" x2="16" y2="-10" stroke={reticleColor} strokeWidth={1} opacity={0.7} />
             <rect x="16" y="-18" width={labelWidth} height="10" rx="1" fill="rgba(0,0,0,0.75)" />
@@ -279,4 +430,27 @@ function getValidLocation(lat?: number | null, lng?: number | null): [number, nu
   return [lat, lng];
 }
 
+function sanitizeColorId(color: string): string {
+  return color.replace(/[^a-zA-Z0-9]/g, '');
+}
+
+function computeHexPoints(cx: number, cy: number, r: number): string {
+  return Array.from({ length: 6 }, (_, i) => {
+    const angle = (Math.PI / 180) * (60 * i);
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(' ');
+}
+
 export const PlayerLayer = memo(PlayerLayerComponent);
+
+function getBeaconRevealRadiusMeters(player: Player, fallbackRadiusMeters: number): number {
+  const candidateRadius = (player as Player & { beaconRadius?: number | null }).beaconRadius;
+
+  if (typeof candidateRadius === 'number' && Number.isFinite(candidateRadius) && candidateRadius > 0) {
+    return candidateRadius;
+  }
+
+  return fallbackRadiusMeters;
+}

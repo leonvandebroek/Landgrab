@@ -1,0 +1,301 @@
+:root {
+  /* Brand / HUD UI variables assumed from hud-updates.css */
+  --glow-cyan: #00f3ff;
+  --glow-amber: #ffaa00;
+  --glow-red: #ff3333;
+  --glow-green: #33ff33;
+  --glass-bg: rgba(10, 20, 30, 0.85);
+
+  /* New Map Specific Colors */
+  --hex-sel-friendly: #00f3ff;
+  --hex-sel-hostile: #ff3333;
+  --hex-chip-reach-yes: #00ffcc;
+  --hex-chip-reach-no: #ffaa00;
+  --hex-presence-boost: #38f5c7;
+  --hex-ring-build: #00f3ff;
+  --hex-ring-demo: #cc00ff;
+  --hex-ring-sab: #ff3300;
+  --hex-halo-rally: #00ff88;
+  --hex-corrupt-bg: rgba(255, 50, 0, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   CLASS MAPPING
+   -------------
+   1. Selection       : .hex-selection-friendly, .hex-selection-hostile
+   2. Reachability    : .hex-chip-reachable, .hex-chip-unreachable
+   3. Progress Rings  : .hex-ring-build, .hex-ring-demolish, .hex-ring-sabotage
+   4. Rally Halo      : .hex-halo-rally
+   5. Regen Blocked   : .hex-indicator-corrupt
+   6. Glyphs          : .hex-glyph-hq, .hex-glyph-fort, .hex-glyph-master
+   7. Copresence      : .hex-chip-copresence-critical, .hex-chip-copresence-satisfied
+  8. Presence Boost  : .hex-presence-boost-indicator
+  9. Beacon          : .hex-radius-beacon
+   -------------------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------------------
+   1. Selection Border Split (Friendly vs Hostile)
+   These apply to an SVG path or overlay element matching the hex shape.
+   -------------------------------------------------------------------------- */
+.hex-selection-friendly {
+  stroke: var(--hex-sel-friendly);
+  stroke-width: 4px;
+  stroke-dasharray: 8 8;
+  filter: drop-shadow(0 0 6px var(--hex-sel-friendly));
+  animation: hex-dash-scroll 2s linear infinite;
+}
+
+.hex-selection-hostile {
+  stroke: var(--hex-sel-hostile);
+  stroke-width: 4px;
+  stroke-dasharray: 12 6;
+  filter: drop-shadow(0 0 6px var(--hex-sel-hostile));
+  animation: hex-dash-scroll-reverse 1.5s linear infinite;
+  stroke-linecap: square;
+}
+
+@keyframes hex-dash-scroll {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -32; }
+}
+@keyframes hex-dash-scroll-reverse {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 36; }
+}
+
+/* --------------------------------------------------------------------------
+   2. Reachability Chips
+   Tiny indicators at the bottom corner of the hex.
+   -------------------------------------------------------------------------- */
+.hex-chip-base {
+  position: absolute;
+  bottom: 8%;
+  right: 15%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 4px rgba(0,0,0,0.8);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hex-chip-reachable {
+  background-color: var(--hex-chip-reach-yes);
+  box-shadow: 0 0 8px var(--hex-chip-reach-yes);
+}
+.hex-chip-reachable::after {
+  content: "";
+  display: block;
+  width: 6px; height: 6px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.hex-chip-unreachable {
+  background-color: var(--hex-chip-reach-no);
+  box-shadow: 0 0 8px var(--hex-chip-reach-no);
+}
+.hex-chip-unreachable::after {
+  content: "";
+  display: block;
+  width: 8px; height: 2px;
+  background: #000;
+}
+
+/* --------------------------------------------------------------------------
+   3. Progress Rings
+   Circular progress elements for timed actions.
+   -------------------------------------------------------------------------- */
+.hex-ring-base {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  z-index: 5;
+}
+
+.hex-ring-build {
+  border-left-color: var(--hex-ring-build);
+  border-top-color: var(--hex-ring-build);
+  filter: drop-shadow(0 0 4px var(--hex-ring-build));
+  animation: hex-spin 2s linear infinite;
+}
+
+.hex-ring-demolish {
+  border-right-color: var(--hex-ring-demo);
+  border-bottom-color: var(--hex-ring-demo);
+  filter: drop-shadow(0 0 4px var(--hex-ring-demo));
+  animation: hex-spin-reverse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.hex-ring-sabotage {
+  border-color: var(--hex-ring-sab);
+  border-style: dashed;
+  filter: drop-shadow(0 0 6px var(--hex-ring-sab));
+  animation: hex-spin 1s linear infinite, hex-pulse-urgent 0.5s alternate infinite;
+}
+
+@keyframes hex-spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes hex-spin-reverse { 100% { transform: translate(-50%, -50%) rotate(-360deg); } }
+@keyframes hex-pulse-urgent {
+  0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+}
+
+/* --------------------------------------------------------------------------
+   4. Rally Objective Halo
+   Convergence beacon visual matching a blue/green energy.
+   -------------------------------------------------------------------------- */
+.hex-halo-rally {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%; height: 120%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,255,136,0.3) 0%, rgba(0,255,136,0) 70%);
+  z-index: 1;
+  pointer-events: none;
+  animation: hex-convergence 2s ease-out infinite;
+}
+
+@keyframes hex-convergence {
+  0% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   5. Regen Blocked Indicator (Sabotaged/Degraded)
+   -------------------------------------------------------------------------- */
+.hex-indicator-corrupt {
+  fill: var(--hex-corrupt-bg);
+  stroke: var(--hex-ring-sab);
+  stroke-dasharray: 4 12;
+  stroke-width: 2px;
+  animation: hex-glitch-border 3s steps(2, start) infinite;
+}
+
+@keyframes hex-glitch-border {
+  0%, 100% { stroke-dashoffset: 0; opacity: 1; }
+  10% { stroke-dashoffset: 5; opacity: 0.7; }
+  20% { stroke-dashoffset: -5; opacity: 0.9; }
+  30% { stroke-dashoffset: 10; opacity: 0.5; }
+}
+
+/* --------------------------------------------------------------------------
+   6. Structure Glyphs (HQ, Fort, Master)
+   Top-aligned structure identifiers using inline SVG backgrounds
+   -------------------------------------------------------------------------- */
+.hex-glyph-base {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  z-index: 15;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));
+}
+
+.hex-glyph-hq {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FFD700" stroke="%23000" stroke-width="1"><polygon points="12,2 15,9 22,9 16,14 18,21 12,17 6,21 8,14 2,9 9,9"/></svg>');
+}
+
+.hex-glyph-fort {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23AAAAAA" stroke="%23FFFFFF" stroke-width="1.5"><path d="M4,22 L4,10 L7,10 L7,14 L10,14 L10,10 L14,10 L14,14 L17,14 L17,10 L20,10 L20,22 Z M2,10 L6,5 L6,10 Z M18,10 L22,5 L22,10 Z"/></svg>');
+}
+
+.hex-glyph-master {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF00FF" stroke="%23FFFFFF" stroke-width="1"><path d="M2,20 L22,20 L22,22 L2,22 Z M3,8 L8,14 L12,6 L16,14 L21,8 L19,18 L5,18 Z"/></svg>');
+  filter: drop-shadow(0 0 6px #ff00ff);
+}
+
+/* --------------------------------------------------------------------------
+   7. Copresence Chips
+   Chips showing actual/required counts (e.g., "2/3")
+   -------------------------------------------------------------------------- */
+.hex-chip-copresence {
+  position: absolute;
+  bottom: 8%;
+  left: 15%; /* Opposite side of reachability chip */
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: bold;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.5);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.9);
+  z-index: 10;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.hex-chip-copresence-critical {
+  background-color: rgba(255, 170, 0, 0.8);
+  border-color: var(--hex-chip-reach-no);
+  animation: pulse-border 1s infinite alternate;
+}
+
+.hex-chip-copresence-satisfied {
+  background-color: rgba(0, 200, 100, 0.8);
+  border-color: var(--hex-chip-reach-yes);
+}
+
+@keyframes pulse-border {
+  from { border-color: rgba(255, 170, 0, 0.5); }
+  to { border-color: rgba(255, 170, 0, 1); }
+}
+
+/* --------------------------------------------------------------------------
+   8. Beacon Reveal Radius
+   Translucent scan field tracking the player marker
+   -------------------------------------------------------------------------- */
+.hex-presence-boost-indicator {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.95), rgba(56, 245, 199, 0.85) 48%, rgba(6, 95, 70, 0.95) 100%);
+  border: 1px solid rgba(212, 255, 246, 0.85);
+  color: #032a22;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 8px rgba(56, 245, 199, 0.45);
+  opacity: 0.92;
+}
+
+/* --------------------------------------------------------------------------
+  9. Beacon Reveal Radius
+  Translucent scan field tracking the player marker
+  -------------------------------------------------------------------------- */
+.hex-radius-beacon {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px; /* Adjust via inline style based on actual radius scale */
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 243, 255, 0.1) 0%, rgba(0, 243, 255, 0.05) 60%, rgba(0, 243, 255, 0.3) 98%, rgba(0, 243, 255, 0) 100%);
+  border: 1px dashed rgba(0, 243, 255, 0.4);
+  pointer-events: none;
+  z-index: 0; /* Below tiles */
+  animation: beacon-scan-rotate 8s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes beacon-scan-rotate {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}

@@ -23,6 +23,7 @@ function formatTroopCount(n: number): string {
 
 export const TroopBadge = memo(function TroopBadge({
   troops,
+  ownerColor,
   isFort = false,
   isHQ = false,
   isMasterTile = false,
@@ -34,10 +35,8 @@ export const TroopBadge = memo(function TroopBadge({
 }: TroopBadgeProps) {
   const troopLabel = isForestBlind ? '?' : formatTroopCount(troops);
 
-  const prefixMarkup = getPrefixMarkup(isMasterTile, isHQ);
-  const fortPrefixMarkup = isFort
-    ? gameIcons.fort.replace('<svg', '<svg width="10" height="10" style="vertical-align:middle;opacity:0.8;margin-right:2px"')
-    : '';
+  const masterPrefixText = isMasterTile ? '★ ' : '';
+  const hqPrefixMarkup = !isMasterTile ? getHqPrefixMarkup(isHQ) : '';
 
   const badgeClassName = [
     'hex-troop-badge',
@@ -50,10 +49,11 @@ export const TroopBadge = memo(function TroopBadge({
     troops === 0 ? 'zero-troops' : '',
   ].filter(Boolean).join(' ');
 
-  const badgeStyle: CSSProperties = {
+  const badgeStyle: CSSProperties & { '--badge-border-color'?: string } = {
     height: isHQ ? 22 : 18,
     minWidth: isHQ ? 22 : 18,
     padding: isHQ ? '0 8px' : '0 4px',
+    '--badge-border-color': ownerColor ?? 'rgba(255,255,255,0.25)',
   };
 
   const coordinateLabel = showCoords && q != null && r != null
@@ -62,12 +62,21 @@ export const TroopBadge = memo(function TroopBadge({
 
   const troopDisplayContent = (
     <>
-      {prefixMarkup ? (
+      {masterPrefixText ? (
         <span
           className="troop-badge-prefix"
           aria-hidden="true"
           style={{ marginRight: '2px', display: 'flex', alignItems: 'center' }}
-          dangerouslySetInnerHTML={{ __html: prefixMarkup }}
+        >
+          {masterPrefixText}
+        </span>
+      ) : null}
+      {hqPrefixMarkup ? (
+        <span
+          className="troop-badge-prefix"
+          aria-hidden="true"
+          style={{ marginRight: '2px', display: 'flex', alignItems: 'center' }}
+          dangerouslySetInnerHTML={{ __html: hqPrefixMarkup }}
         />
       ) : null}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
@@ -80,9 +89,6 @@ export const TroopBadge = memo(function TroopBadge({
             justifyContent: 'center',
           }}
         >
-          {fortPrefixMarkup ? (
-            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: fortPrefixMarkup }} />
-          ) : null}
           {troopLabel}
         </span>
         {coordinateLabel ? (
@@ -94,22 +100,18 @@ export const TroopBadge = memo(function TroopBadge({
 
   return (
     <div className={badgeClassName} style={badgeStyle}>
-      {troops === 1 && !isHQ && !isMasterTile && !isFort
-        ? <span className="troop-pip" aria-label="1 troop" />
-        : troopDisplayContent
-      }
+      {isHQ ? (
+        <span className="hq-badge-inner">{troopDisplayContent}</span>
+      ) : troops === 1 && !isMasterTile && !isFort ? (
+        <span className="troop-pip" aria-label="1 troop" />
+      ) : (
+        troopDisplayContent
+      )}
     </div>
   );
 });
 
-function getPrefixMarkup(isMasterTile: boolean, isHQ: boolean): string {
-  if (isMasterTile) {
-    return gameIcons.master.replace(
-      /<svg\b([^>]*)>/i,
-      '<svg$1 width="0.9em" height="0.9em" style="color:#fcd34d">', // Amber-300
-    );
-  }
-
+function getHqPrefixMarkup(isHQ: boolean): string {
   if (isHQ) {
     return gameIcons.hq.replace(
       /<svg\b([^>]*)>/i,

@@ -17,9 +17,6 @@ public class HexCell
     // Phase 3: Shepherd — tracks last allied player visit
     public DateTime? LastVisitedAt { get; set; }
 
-    // Phase 4: Engineer — tracks when engineer started building
-    public DateTime? EngineerBuiltAt { get; set; }
-
     // Phase 4: Engineer — permanent fort status
     public bool IsFort { get; set; }
 

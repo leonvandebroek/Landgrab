@@ -24,6 +24,7 @@ interface ProjectedLine {
   opacity: number;
   strokeWidth: number;
   strokeDasharray?: string;
+  style?: React.CSSProperties;
   x1: number;
   y1: number;
   x2: number;
@@ -125,27 +126,40 @@ function EffectsLayerComponent({
       const endCorner = corners[endCornerIndex];
       const startPoint = map.latLngToLayerPoint([startCorner[0], startCorner[1]]);
       const endPoint = map.latLngToLayerPoint([endCorner[0], endCorner[1]]);
-      const intensityClass = edge.intensity > 0.6 ? ' contested-edge-intense' : '';
-
-      // Premium effect: render two lines for the "clash"
-      // Dark Arcade: Red danger zone base + colored clash
       return [{
-        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:base`,
-        className: `contested-edge-base${intensityClass}`,
-        stroke: '#ef4444', // Red danger base
-        opacity: 0.3,
-        strokeWidth: 8,
+        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:heat`,
+        className: 'contested-edge-heat',
+        stroke: '#FF00AA',
+        opacity: 0.35,
+        strokeWidth: 7.5 + edge.intensity * 6,
         x1: startPoint.x,
         y1: startPoint.y,
         x2: endPoint.x,
         y2: endPoint.y,
+        style: {
+          '--intensity': edge.intensity,
+        } as React.CSSProperties,
       }, {
-        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:clash`,
-        className: `contested-edge-clash${intensityClass}`,
-        stroke: '#ffffff', // White clash marks for max contrast
-        opacity: 0.8,
-        strokeWidth: 4,
-        strokeDasharray: '4 6', // Sharp dashes
+        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:march`,
+        className: 'contested-edge-march',
+        stroke: '#FF00AA',
+        opacity: 0.85,
+        strokeWidth: 5,
+        strokeDasharray: '6 6',
+        x1: startPoint.x,
+        y1: startPoint.y,
+        x2: endPoint.x,
+        y2: endPoint.y,
+        style: {
+          animationDuration: `${Math.max(0.5, 1.5 - edge.intensity)}s`,
+        } as React.CSSProperties,
+      }, {
+        key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:spark`,
+        className: 'contested-edge-spark',
+        stroke: '#ffffff',
+        opacity: 0.6,
+        strokeWidth: 2,
+        strokeDasharray: '1 12',
         x1: startPoint.x,
         y1: startPoint.y,
         x2: endPoint.x,
@@ -186,6 +200,7 @@ function EffectsLayerComponent({
               stroke={line.stroke}
               strokeWidth={line.strokeWidth}
               strokeOpacity={line.opacity}
+              style={line.style}
               strokeLinecap="round"
             />
           ))

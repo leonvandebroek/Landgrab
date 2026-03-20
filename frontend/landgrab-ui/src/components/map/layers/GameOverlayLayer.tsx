@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { useHexGeometries } from '../../../hooks/useHexGeometries';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { usePlayerLayerStore } from '../../../stores/playerLayerStore';
 import { ReactSvgOverlay } from '../ReactSvgOverlay';
 import { HexTile } from '../HexTile';
 import { WorldDimMask } from '../WorldDimMask';
@@ -41,7 +42,36 @@ function GameOverlayLayerComponent({
   const grid = useGameStore((state) => state.gridOverride ?? state.gameState?.grid);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
   const currentHexKey = useGameplayStore((state) => state.currentHexKey);
+  const players = usePlayerLayerStore((state) => state.players);
+  const myUserId = usePlayerLayerStore((state) => state.myUserId);
   const tileKeys = useMemo(() => grid ? Object.keys(grid) : [], [grid]);
+
+  const selectedSelectionType = useMemo<'none' | 'selectedFriendly' | 'selectedHostile'>(() => {
+    if (!selectedHexKey || !grid) {
+      return 'none';
+    }
+
+    const selectedCell = grid[selectedHexKey];
+    const currentPlayer = players.find((player) => player.id === myUserId);
+
+    if (!selectedCell?.ownerId || !currentPlayer) {
+      return 'none';
+    }
+
+    if (selectedCell.ownerId === myUserId) {
+      return 'selectedFriendly';
+    }
+
+    if (
+      selectedCell.ownerAllianceId
+      && currentPlayer.allianceId
+      && selectedCell.ownerAllianceId === currentPlayer.allianceId
+    ) {
+      return 'selectedFriendly';
+    }
+
+    return 'selectedHostile';
+  }, [grid, myUserId, players, selectedHexKey]);
 
   const hexGeometries = useHexGeometries(
     map,
@@ -121,48 +151,41 @@ function GameOverlayLayerComponent({
 
   return createPortal(
     <>
-      <defs>
-        <pattern
-          id="fort-hatch-pattern"
-          patternUnits="userSpaceOnUse"
-          width="8"
-          height="8"
-          patternTransform="rotate(45)"
-        >
-          <line x1="0" y1="0" x2="0" y2="8" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
-        </pattern>
-      </defs>
       <g data-zoom-level={zoomCategory}>
         {showWorldDimMask ? (
-          <WorldDimMask
-          tileKeys={tileKeys}
-          hexGeometries={hexGeometries}
-          mapBounds={mapBounds}
-        />
-      ) : null}
-      {tileKeys.map((key) => {
-        const geometry = hexGeometries[key];
-        if (!geometry) return null;
+          <WorldDimMask tileKeys={tileKeys} hexGeometries={hexGeometries} mapBounds={mapBounds} />
+        ) : null}
+        {tileKeys.map((hexId) => {
+          const geometry = hexGeometries[hexId];
 
-        return (
-          <HexTile
-            key={key}
-            hexId={key}
-            geometry={geometry}
-            isCurrent={currentHexKey === key}
-            isSelected={selectedHexKey === key}
-            onHexClick={handleHexClick}
-          />
-        );
-      })}
+          if (!geometry) {
+            return null;
+          }
+
+          return (
+            <HexTile
+              key={hexId}
+              hexId={hexId}
+              geometry={geometry}
+              isCurrent={hexId === currentHexKey}
+              isSelected={hexId === selectedHexKey}
+              onHexClick={handleHexClick}
+            />
+          );
+        })}
+      </g>
       <g className="hex-highlights" style={{ pointerEvents: 'none' }}>
         {selectedHexKey && hexGeometries[selectedHexKey] && selectedHexKey !== currentHexKey ? (
           <polygon
-            className="hex-selected-overlay"
+            className={[
+              'hex-selected-overlay',
+              selectedSelectionType === 'selectedFriendly' ? 'hex-selection-friendly' : '',
+              selectedSelectionType === 'selectedHostile' ? 'hex-selection-hostile' : '',
+            ].filter(Boolean).join(' ')}
             data-hex-id={selectedHexKey}
             points={hexGeometries[selectedHexKey].points}
-            fill="rgba(34, 211, 238, 0.06)"
-            stroke="#22d3ee"
+            fill="rgba(255,255,255,0.04)"
+            stroke="#ffffff"
             strokeWidth={2}
             strokeDasharray="6 8"
             strokeLinecap="round"
@@ -174,16 +197,14 @@ function GameOverlayLayerComponent({
             className="hex-active-player is-current-player-hex"
             data-hex-id={currentHexKey}
             points={hexGeometries[currentHexKey].points}
-            fill="rgba(46, 204, 113, 0.08)"
-            stroke="#2ecc71"
-            strokeWidth={2.5}
-            strokeDasharray="10 6"
+            fill="rgba(0,255,170,0.06)"
+            stroke="#00ffaa"
+            strokeWidth={2}
             strokeLinecap="round"
             pointerEvents="none"
           />
         ) : null}
       </g>
-    </g>
     </>,
     svgRoot,
   );
@@ -196,6 +217,7 @@ function getMapBounds(map: L.Map): { minX: number; minY: number; maxX: number; m
   const pixelOrigin = map.getPixelOrigin();
   const minPoint = pixelBounds.min;
   const maxPoint = pixelBounds.max;
+
   if (!minPoint || !maxPoint) {
     return null;
   }

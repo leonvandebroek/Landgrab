@@ -32,6 +32,7 @@ import {
 } from './utils/debugLocationSession';
 import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
+import './styles/tricorder-v2.css';
 
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV;
 

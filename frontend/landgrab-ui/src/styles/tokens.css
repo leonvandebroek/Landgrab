@@ -61,6 +61,7 @@
 
   /* ── PlayerHUD height tracking ── */
   --player-hud-h: 0px;
+  --player-hud-safe-inset: 0px;
 }
 
 .tactical-glass {
