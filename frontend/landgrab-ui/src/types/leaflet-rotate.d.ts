@@ -1,4 +1,4 @@
-import * as L from 'leaflet';
+import 'leaflet';
 
 declare module 'leaflet' {
   interface MapOptions {

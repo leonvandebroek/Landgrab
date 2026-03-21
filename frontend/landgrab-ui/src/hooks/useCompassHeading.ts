@@ -2,6 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 type CompassPermissionState = 'unavailable' | 'prompt' | 'granted' | 'denied';
 
+interface DeviceOrientationEventWithPermission {
+  requestPermission?: () => Promise<string>;
+}
+
+interface DeviceOrientationEventWithWebkit extends DeviceOrientationEvent {
+  webkitCompassHeading?: number;
+}
+
 interface CompassHeadingState {
   heading: number | null;
   supported: boolean;
@@ -20,7 +28,7 @@ function getInitialCompassState(): {
     };
   }
 
-  const requestPermission = (window.DeviceOrientationEvent as any)?.requestPermission;
+  const requestPermission = (window.DeviceOrientationEvent as unknown as DeviceOrientationEventWithPermission)?.requestPermission;
 
   return {
     supported: true,
@@ -43,7 +51,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
       return;
     }
 
-    const requestPermissionFn = (window.DeviceOrientationEvent as any)?.requestPermission;
+    const requestPermissionFn = (window.DeviceOrientationEvent as unknown as DeviceOrientationEventWithPermission)?.requestPermission;
 
     if (typeof requestPermissionFn !== 'function') {
       setSupported(true);
@@ -68,12 +76,10 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
 
   useEffect(() => {
     if (!enabled || !supported || permissionState !== 'granted') {
-      setHeading(null);
       return;
     }
 
     if (typeof window === 'undefined' || typeof document === 'undefined') {
-      setHeading(null);
       return;
     }
 
@@ -101,7 +107,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         }
       }
 
-      const webkitCompassHeading = (event as any).webkitCompassHeading;
+      const webkitCompassHeading = (event as DeviceOrientationEventWithWebkit).webkitCompassHeading;
       const rawHeading =
         typeof webkitCompassHeading === 'number'
           ? webkitCompassHeading
@@ -142,7 +148,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
   }, [enabled, permissionState, supported]);
 
   return {
-    heading: enabled ? heading : null,
+    heading: enabled && supported && permissionState === 'granted' ? heading : null,
     supported,
     permissionState,
     requestPermission
