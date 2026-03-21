@@ -3,10 +3,11 @@ import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 
 interface BeaconCardProps {
   myUserId: string;
-  onActivateBeacon: () => Promise<boolean> | void;
+  onActivateBeacon: (heading: number) => Promise<boolean> | void;
   onDeactivateBeacon: () => Promise<boolean> | void;
 }
 
@@ -24,6 +25,8 @@ export function BeaconCard({
   const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
 
+  const { heading } = useDeviceOrientation(abilityUi.mode === 'targeting' || abilityUi.mode === 'active');
+
   const isBeaconLive = Boolean(player?.isBeacon) || abilityUi.mode === 'active';
 
   const handleBackToHud = () => {
@@ -36,7 +39,10 @@ export function BeaconCard({
   };
 
   const handleActivate = async () => {
-    const succeeded = await Promise.resolve(onActivateBeacon());
+    // If heading is null, we pass 0 or maybe we can't activate?
+    // Using 0 as fallback if sensor is completely unavailable.
+    const activeHeading = heading ?? 0;
+    const succeeded = await Promise.resolve(onActivateBeacon(activeHeading));
     if (succeeded === false) {
       return;
     }
@@ -99,10 +105,21 @@ export function BeaconCard({
       onBackToHud={handleBackToHud}
     >
       <div className="ability-card__stack">
+        {!isBeaconLive && (
+          <div className="ability-card__sensor-status ability-card__sensor-status--panel">
+            <span className="ability-card__sensor-label">
+              Current Heading
+            </span>
+            <strong className="ability-card__sensor-value">
+              {heading !== null ? `${Math.round(heading)}°` : 'Searching...'}
+            </strong>
+          </div>
+        )}
         <div className="ability-card__copy">
           <ul className="ability-card__detail-list">
             <li>{t('abilities.beacon.effect' as never)}</li>
             <li>{t('abilities.beacon.rangeInfo' as never)}</li>
+            <li>Reveals a directional sector based on your compass heading. Reactivate to change direction.</li>
           </ul>
         </div>
       </div>

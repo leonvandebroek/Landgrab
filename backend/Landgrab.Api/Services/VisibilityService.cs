@@ -8,7 +8,7 @@ namespace Landgrab.Api.Services;
 public class VisibilityService
 {
     private const int VisibilityRadius = 1;
-    private const int BeaconRevealRadius = 2;
+    private const int BeaconRevealRadius = 4;
 
     private static readonly HashSet<string> GameWideEventTypes =
     [
@@ -62,7 +62,23 @@ public class VisibilityService
                     state.MapLng!.Value,
                     state.TileSizeMeters);
 
-                AddRadiusKeys(state, visibleHexKeys, beaconHex.q, beaconHex.r, BeaconRevealRadius);
+                if (alliedPlayer.BeaconHeading.HasValue)
+                {
+                    AddSectorKeys(
+                        state,
+                        visibleHexKeys,
+                        beaconHex.q,
+                        beaconHex.r,
+                        alliedPlayer.BeaconLat.Value,
+                        alliedPlayer.BeaconLng.Value,
+                        alliedPlayer.BeaconHeading.Value,
+                        BeaconRevealRadius,
+                        state.Dynamics.BeaconSectorAngle);
+                }
+                else if (state.Grid.ContainsKey(HexService.Key(beaconHex.q, beaconHex.r)))
+                {
+                    visibleHexKeys.Add(HexService.Key(beaconHex.q, beaconHex.r));
+                }
             }
         }
 
@@ -289,6 +305,56 @@ public class VisibilityService
         }
     }
 
+    private static void AddSectorKeys(
+        GameState state,
+        HashSet<string> visibleHexKeys,
+        int centerQ,
+        int centerR,
+        double beaconLat,
+        double beaconLng,
+        double heading,
+        int range,
+        int sectorAngle)
+    {
+        var centerKey = HexService.Key(centerQ, centerR);
+        if (state.Grid.ContainsKey(centerKey))
+        {
+            visibleHexKeys.Add(centerKey);
+        }
+
+        var normalizedHeading = HexService.NormalizeHeading(heading);
+        var halfSectorAngle = Math.Clamp(sectorAngle, 1, 360) / 2d;
+
+        foreach (var (candidateQ, candidateR) in HexService.SpiralSearch(centerQ, centerR, range))
+        {
+            if (HexService.HexDistance(centerQ, centerR, candidateQ, candidateR) > range)
+                continue;
+
+            var candidateKey = HexService.Key(candidateQ, candidateR);
+            if (!state.Grid.ContainsKey(candidateKey))
+                continue;
+
+            if (candidateQ == centerQ && candidateR == centerR)
+            {
+                visibleHexKeys.Add(candidateKey);
+                continue;
+            }
+
+            var (candidateLat, candidateLng) = HexService.HexToLatLng(
+                candidateQ,
+                candidateR,
+                state.MapLat!.Value,
+                state.MapLng!.Value,
+                state.TileSizeMeters);
+            var candidateBearing = HexService.BearingDegrees(beaconLat, beaconLng, candidateLat, candidateLng);
+
+            if (HexService.HeadingDiff(normalizedHeading, candidateBearing) <= halfSectorAngle)
+            {
+                visibleHexKeys.Add(candidateKey);
+            }
+        }
+    }
+
     private static void ApplyRememberedCell(HexCell cell, RememberedHex rememberedHex)
     {
         cell.VisibilityTier = VisibilityTier.Remembered;
@@ -393,19 +459,26 @@ public class VisibilityService
         player.CarriedTroops = 0;
         player.CarriedTroopsSourceQ = null;
         player.CarriedTroopsSourceR = null;
+    player.CurrentHeading = null;
         player.Role = PlayerRole.None;
         player.IsBeacon = false;
         player.BeaconLat = null;
         player.BeaconLng = null;
+        player.BeaconHeading = null;
         player.CommandoRaidCooldownUntil = null;
         player.TacticalStrikeActive = false;
         player.TacticalStrikeExpiry = null;
         player.TacticalStrikeCooldownUntil = null;
+        player.TacticalStrikeTargetQ = null;
+        player.TacticalStrikeTargetR = null;
         player.RallyPointActive = false;
         player.RallyPointDeadline = null;
         player.RallyPointCooldownUntil = null;
         player.RallyPointQ = null;
         player.RallyPointR = null;
+        player.SabotageAlertNearby = false;
+        player.InterceptTargetId = null;
+        player.InterceptLockStartAt = null;
         player.FortTargetQ = null;
         player.FortTargetR = null;
         player.FortPerimeterVisited.Clear();
@@ -413,8 +486,11 @@ public class VisibilityService
         player.SabotageTargetR = null;
         player.SabotagePerimeterVisited.Clear();
         player.SabotageCooldownUntil = null;
+        player.SabotageBlockedTiles.Clear();
         player.DemolishTargetKey = null;
         player.DemolishApproachDirectionsMade.Clear();
+        player.DemolishFacingLockStartAt = null;
+        player.DemolishFacingHexKey = null;
         player.PreviousHexKey = null;
         player.DemolishCooldownUntil = null;
     }

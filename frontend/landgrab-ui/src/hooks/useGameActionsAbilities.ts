@@ -3,17 +3,20 @@ import { useUiStore } from '../stores/uiStore';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 
 interface UseGameActionsAbilitiesResult {
-  handleActivateBeacon: () => Promise<boolean>;
+  handleActivateBeacon: (heading: number) => Promise<boolean>;
   handleDeactivateBeacon: () => Promise<boolean>;
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
-  handleActivateTacticalStrike: () => Promise<boolean>;
-  handleActivateReinforce: () => Promise<boolean>;
+  resolveRaidTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  handleActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
+  resolveTacticalStrikeTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  handleActivateRallyPoint: () => Promise<boolean>;
   handleActivateSabotage: () => Promise<boolean>;
   handleCancelFortConstruction: () => Promise<boolean>;
   handleCancelSabotage: () => Promise<boolean>;
   handleCancelDemolish: () => Promise<boolean>;
   handleStartDemolish: () => Promise<boolean>;
   handleStartFortConstruction: () => Promise<boolean>;
+  attemptIntercept: (heading: number) => Promise<{ status: string; seconds?: number }>;
 }
 
 export function useGameActionsAbilities({
@@ -21,13 +24,13 @@ export function useGameActionsAbilities({
 }: Pick<UseGameActionsOptions, 'invoke'>): UseGameActionsAbilitiesResult {
   const setError = useUiStore(state => state.setError);
 
-  const handleActivateBeacon = useCallback(async (): Promise<boolean> => {
+  const handleActivateBeacon = useCallback(async (heading: number): Promise<boolean> => {
     if (!invoke) {
       return false;
     }
 
     try {
-      await invoke('ActivateBeacon');
+      await invoke('ActivateBeacon', heading);
       return true;
     } catch (error) {
       setError(String(error));
@@ -63,13 +66,27 @@ export function useGameActionsAbilities({
     }
   }, [invoke, setError]);
 
-  const handleActivateTacticalStrike = useCallback(async (): Promise<boolean> => {
+  const resolveRaidTarget = useCallback(async (heading: number): Promise<{ targetQ: number; targetR: number } | null> => {
+    if (!invoke) {
+      return null;
+    }
+
+    try {
+      return await invoke<{ targetQ: number; targetR: number } | null>('ResolveRaidTarget', heading);
+    } catch (error) {
+      // Don't show global error for polling
+      console.warn("ResolveRaidTarget error:", error);
+      return null;
+    }
+  }, [invoke]);
+
+  const handleActivateTacticalStrike = useCallback(async (targetQ: number, targetR: number): Promise<boolean> => {
     if (!invoke) {
       return false;
     }
 
     try {
-      await invoke('ActivateTacticalStrike');
+      await invoke('ActivateTacticalStrike', targetQ, targetR);
       return true;
     } catch (error) {
       setError(String(error));
@@ -77,13 +94,26 @@ export function useGameActionsAbilities({
     }
   }, [invoke, setError]);
 
-  const handleActivateReinforce = useCallback(async (): Promise<boolean> => {
+  const resolveTacticalStrikeTarget = useCallback(async (heading: number): Promise<{ targetQ: number; targetR: number } | null> => {
+    if (!invoke) {
+      return null;
+    }
+
+    try {
+      return await invoke<{ targetQ: number; targetR: number } | null>('ResolveTacticalStrikeTarget', heading);
+    } catch (error) {
+      console.warn("ResolveTacticalStrikeTarget error:", error);
+      return null;
+    }
+  }, [invoke]);
+
+  const handleActivateRallyPoint = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
       return false;
     }
 
     try {
-      await invoke('ActivateReinforce');
+      await invoke('ActivateRallyPoint');
       return true;
     } catch (error) {
       setError(String(error));
@@ -175,17 +205,32 @@ export function useGameActionsAbilities({
     }
   }, [invoke, setError]);
 
+  const attemptIntercept = useCallback(async (heading: number): Promise<{ status: string; seconds?: number }> => {
+    if (!invoke) {
+      return { status: 'noTarget' };
+    }
+    try {
+      return await invoke<{ status: string; seconds?: number }>('AttemptIntercept', heading);
+    } catch (error) {
+      console.warn("AttemptIntercept error:", error);
+      return { status: 'noTarget' };
+    }
+  }, [invoke]);
+
   return {
     handleActivateBeacon,
     handleDeactivateBeacon,
     handleActivateCommandoRaid,
+    resolveRaidTarget,
     handleActivateTacticalStrike,
-    handleActivateReinforce,
+    resolveTacticalStrikeTarget,
+    handleActivateRallyPoint,
     handleActivateSabotage,
     handleCancelFortConstruction,
     handleCancelSabotage,
     handleCancelDemolish,
     handleStartDemolish,
     handleStartFortConstruction,
+    attemptIntercept,
   };
 }

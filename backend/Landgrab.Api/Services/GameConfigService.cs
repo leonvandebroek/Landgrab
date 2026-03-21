@@ -152,6 +152,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
                 return (null, "Game dynamics can only be changed in the lobby.");
 
             room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
+            room.State.Dynamics.BeaconSectorAngle = dynamics.BeaconSectorAngle;
             room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
             room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;

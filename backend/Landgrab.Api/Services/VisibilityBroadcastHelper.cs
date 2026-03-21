@@ -228,6 +228,7 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
             CarriedTroopsSourceR = player.CarriedTroopsSourceR,
             CurrentLat = player.CurrentLat,
             CurrentLng = player.CurrentLng,
+            CurrentHeading = player.CurrentHeading,
             CurrentHexQ = player.CurrentHexQ,
             CurrentHexR = player.CurrentHexR,
             IsHost = player.IsHost,
@@ -237,15 +238,21 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
             IsBeacon = player.IsBeacon,
             BeaconLat = player.BeaconLat,
             BeaconLng = player.BeaconLng,
+            BeaconHeading = player.BeaconHeading,
             CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
             TacticalStrikeActive = player.TacticalStrikeActive,
             TacticalStrikeExpiry = player.TacticalStrikeExpiry,
             TacticalStrikeCooldownUntil = player.TacticalStrikeCooldownUntil,
+            TacticalStrikeTargetQ = player.TacticalStrikeTargetQ,
+            TacticalStrikeTargetR = player.TacticalStrikeTargetR,
             RallyPointActive = player.RallyPointActive,
             RallyPointDeadline = player.RallyPointDeadline,
             RallyPointCooldownUntil = player.RallyPointCooldownUntil,
             RallyPointQ = player.RallyPointQ,
             RallyPointR = player.RallyPointR,
+            SabotageAlertNearby = player.SabotageAlertNearby,
+            InterceptTargetId = player.InterceptTargetId,
+            InterceptLockStartAt = player.InterceptLockStartAt,
             FortTargetQ = player.FortTargetQ,
             FortTargetR = player.FortTargetR,
             FortPerimeterVisited = [.. player.FortPerimeterVisited],
@@ -253,8 +260,11 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
             SabotageTargetR = player.SabotageTargetR,
             SabotagePerimeterVisited = [.. player.SabotagePerimeterVisited],
             SabotageCooldownUntil = player.SabotageCooldownUntil,
+            SabotageBlockedTiles = player.SabotageBlockedTiles.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal),
             DemolishTargetKey = player.DemolishTargetKey,
             DemolishApproachDirectionsMade = [.. player.DemolishApproachDirectionsMade],
+            DemolishFacingLockStartAt = player.DemolishFacingLockStartAt,
+            DemolishFacingHexKey = player.DemolishFacingHexKey,
             PreviousHexKey = player.PreviousHexKey,
             DemolishCooldownUntil = player.DemolishCooldownUntil
         };
@@ -274,19 +284,26 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
         player.CarriedTroops = 0;
         player.CarriedTroopsSourceQ = null;
         player.CarriedTroopsSourceR = null;
+    player.CurrentHeading = null;
         player.Role = PlayerRole.None;
         player.IsBeacon = false;
         player.BeaconLat = null;
         player.BeaconLng = null;
+        player.BeaconHeading = null;
         player.CommandoRaidCooldownUntil = null;
         player.TacticalStrikeActive = false;
         player.TacticalStrikeExpiry = null;
         player.TacticalStrikeCooldownUntil = null;
+        player.TacticalStrikeTargetQ = null;
+        player.TacticalStrikeTargetR = null;
         player.RallyPointActive = false;
         player.RallyPointDeadline = null;
         player.RallyPointCooldownUntil = null;
         player.RallyPointQ = null;
         player.RallyPointR = null;
+        player.SabotageAlertNearby = false;
+        player.InterceptTargetId = null;
+        player.InterceptLockStartAt = null;
         player.FortTargetQ = null;
         player.FortTargetR = null;
         player.FortPerimeterVisited.Clear();
@@ -294,8 +311,11 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
         player.SabotageTargetR = null;
         player.SabotagePerimeterVisited.Clear();
         player.SabotageCooldownUntil = null;
+        player.SabotageBlockedTiles.Clear();
         player.DemolishTargetKey = null;
         player.DemolishApproachDirectionsMade.Clear();
+        player.DemolishFacingLockStartAt = null;
+        player.DemolishFacingHexKey = null;
         player.PreviousHexKey = null;
         player.DemolishCooldownUntil = null;
     }

@@ -84,46 +84,45 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
     }
 
     let isListening = false;
-    let hasValidatedAbsolute = false;
+
+    // Android/Chrome: `deviceorientationabsolute` always carries an absolute
+    // magnetic-north heading via `alpha` (event.absolute === true guaranteed).
+    const handleAbsoluteOrientation = (event: DeviceOrientationEvent) => {
+      if (typeof event.alpha !== 'number') {
+        return;
+      }
+      const rawHeading = (360 - event.alpha) % 360;
+      setHeading(prev => prev === null ? rawHeading : 0.7 * prev + 0.3 * rawHeading);
+    };
+
+    // iOS Safari: never fires `deviceorientationabsolute`. Instead it fires the
+    // plain `deviceorientation` event and exposes the compass heading via the
+    // proprietary `webkitCompassHeading` property (0–360, clockwise from north).
+    // On Chrome/Android the plain event fires too but without `webkitCompassHeading`,
+    // so this handler is effectively a no-op there — no double-update risk.
+    const handleiOSOrientation = (event: DeviceOrientationEvent) => {
+      const webkitCompassHeading = (event as DeviceOrientationEventWithWebkit).webkitCompassHeading;
+      if (typeof webkitCompassHeading !== 'number' || isNaN(webkitCompassHeading)) {
+        return;
+      }
+      setHeading(prev => prev === null ? webkitCompassHeading : 0.7 * prev + 0.3 * webkitCompassHeading);
+    };
 
     const stopListening = () => {
       if (!isListening) {
         return;
       }
-
-      window.removeEventListener('deviceorientationabsolute', handleOrientation);
+      window.removeEventListener('deviceorientationabsolute', handleAbsoluteOrientation);
+      window.removeEventListener('deviceorientation', handleiOSOrientation);
       isListening = false;
-    };
-
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      if (!hasValidatedAbsolute) {
-        hasValidatedAbsolute = true;
-
-        if (event.absolute !== true) {
-          stopListening();
-          setHeading(null);
-          setSupported(false);
-          return;
-        }
-      }
-
-      const webkitCompassHeading = (event as DeviceOrientationEventWithWebkit).webkitCompassHeading;
-      const rawHeading =
-        typeof webkitCompassHeading === 'number'
-          ? webkitCompassHeading
-          : (360 - (event.alpha ?? 0)) % 360;
-
-      setHeading(previousHeading =>
-        previousHeading === null ? rawHeading : 0.7 * previousHeading + 0.3 * rawHeading
-      );
     };
 
     const startListening = () => {
       if (document.hidden || isListening) {
         return;
       }
-
-      window.addEventListener('deviceorientationabsolute', handleOrientation);
+      window.addEventListener('deviceorientationabsolute', handleAbsoluteOrientation);
+      window.addEventListener('deviceorientation', handleiOSOrientation);
       isListening = true;
     };
 

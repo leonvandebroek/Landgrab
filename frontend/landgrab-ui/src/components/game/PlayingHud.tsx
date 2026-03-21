@@ -25,6 +25,7 @@ import { FortConstructionCard } from './abilities/FortConstructionCard';
 import { RallyPointCard } from './abilities/RallyPointCard';
 import { SabotageCard } from './abilities/SabotageCard';
 import { TacticalStrikeCard } from './abilities/TacticalStrikeCard';
+import { InterceptCard } from './abilities/InterceptCard';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
@@ -42,17 +43,20 @@ interface Props {
   currentHexActions?: TileAction[];
   onCurrentHexAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
-  onActivateBeacon?: () => Promise<boolean> | void;
+  onActivateBeacon?: (heading: number) => Promise<boolean> | void;
   onDeactivateBeacon?: () => Promise<boolean> | void;
-  onActivateTacticalStrike?: () => Promise<boolean> | void;
+  onActivateTacticalStrike?: (targetQ: number, targetR: number) => Promise<boolean> | void;
+  onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
   onActivateCommandoRaid?: (targetQ: number, targetR: number) => Promise<boolean> | void;
-  onActivateReinforce?: () => Promise<boolean> | void;
+  onResolveRaidTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  onActivateRallyPoint?: () => Promise<boolean> | void;
   onActivateSabotage?: () => Promise<boolean> | void;
   onCancelFortConstruction?: () => Promise<boolean> | void;
   onCancelSabotage?: () => Promise<boolean> | void;
   onCancelDemolish?: () => Promise<boolean> | void;
   onStartDemolish?: () => Promise<boolean> | void;
   onStartFortConstruction?: () => Promise<boolean> | void;
+  onAttemptIntercept?: (heading: number) => Promise<{ status: string; seconds?: number }>;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -88,14 +92,17 @@ export function PlayingHud({
   onActivateBeacon,
   onDeactivateBeacon,
   onActivateTacticalStrike,
+  onResolveTacticalStrikeTarget,
   onActivateCommandoRaid,
-  onActivateReinforce,
+  onResolveRaidTarget,
+  onActivateRallyPoint,
   onActivateSabotage,
   onCancelFortConstruction,
   onCancelSabotage,
   onCancelDemolish,
   onStartDemolish,
   onStartFortConstruction,
+  onAttemptIntercept,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   currentPlayerName,
@@ -857,17 +864,20 @@ export function PlayingHud({
           <TacticalStrikeCard
             myUserId={myUserId}
             onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
+            onResolveTacticalStrikeTarget={onResolveTacticalStrikeTarget ?? (async () => null)}
+            currentHex={currentHex}
           />
         ) : abilityUi.activeAbility === 'rallyPoint' ? (
           <RallyPointCard
             myUserId={myUserId}
             currentHex={currentHex}
-            onActivateReinforce={onActivateReinforce ?? (() => { })}
+            onActivateRallyPoint={onActivateRallyPoint ?? (() => { })}
           />
         ) : abilityUi.activeAbility === 'commandoRaid' ? (
           <CommandoRaidCard
             myUserId={myUserId}
             onActivateCommandoRaid={onActivateCommandoRaid ?? (() => { })}
+            onResolveRaidTarget={onResolveRaidTarget ?? (async () => null)}
           />
         ) : abilityUi.activeAbility === 'fortConstruction' ? (
           <FortConstructionCard
@@ -889,6 +899,11 @@ export function PlayingHud({
             currentHex={currentHex}
             onStartDemolish={onStartDemolish ?? (() => { })}
             onCancelDemolish={onCancelDemolish ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'intercept' ? (
+          <InterceptCard
+            myUserId={myUserId}
+            onAttemptIntercept={onAttemptIntercept ?? (async () => ({ status: 'noTarget' }))}
           />
         ) : (
           <AbilityCard
@@ -927,7 +942,7 @@ export function PlayingHud({
           onActivateBeacon={onActivateBeacon ?? (() => { })}
           onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
           onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
-          onActivateReinforce={onActivateReinforce ?? (() => { })}
+          onActivateRallyPoint={onActivateRallyPoint ?? (() => { })}
           onActivateSabotage={onActivateSabotage ?? (() => { })}
           onStartDemolish={onStartDemolish ?? (() => { })}
           onStartFortConstruction={onStartFortConstruction ?? (() => { })}

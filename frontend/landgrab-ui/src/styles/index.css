@@ -7805,3 +7805,24 @@ input:checked+.display-settings-slider:before {
 }
 
 
+
+.debug-panels-container {
+  position: fixed;
+  right: 1rem;
+  top: 3.75rem;
+  bottom: auto;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.debug-panels-container > .debug-gps-panel {
+  position: static;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  z-index: auto;
+  pointer-events: auto;
+}

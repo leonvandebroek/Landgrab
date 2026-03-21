@@ -61,6 +61,11 @@ public static class HexService
         return Math.Max(Math.Abs(q), Math.Max(Math.Abs(r), Math.Abs(s)));
     }
 
+    public static int HexDistance(int q1, int r1, int q2, int r2)
+    {
+        return HexDistance(q2 - q1, r2 - r1);
+    }
+
     public static int InferRadius(IEnumerable<(int q, int r)> coordinates)
     {
         return coordinates.Select(coord => HexDistance(coord.q, coord.r)).DefaultIfEmpty(0).Max();
@@ -174,6 +179,49 @@ public static class HexService
         var cosLat = Math.Cos(mapLat * Math.PI / 180d);
         var lng = mapLng + xMeters / (MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d));
         return (lat, lng);
+    }
+
+    /// <summary>
+    /// Calculates the initial bearing from one latitude/longitude coordinate to another.
+    /// Bearings are normalized to the range 0-360 where north is 0 and values increase clockwise.
+    /// </summary>
+    public static double BearingDegrees(double lat1, double lng1, double lat2, double lng2)
+    {
+        if (lat1 == lat2 && lng1 == lng2)
+            return 0d;
+
+        var phi1 = lat1 * Math.PI / 180d;
+        var phi2 = lat2 * Math.PI / 180d;
+        var deltaLambda = (lng2 - lng1) * Math.PI / 180d;
+
+        var y = Math.Sin(deltaLambda) * Math.Cos(phi2);
+        var x = Math.Cos(phi1) * Math.Sin(phi2) -
+                Math.Sin(phi1) * Math.Cos(phi2) * Math.Cos(deltaLambda);
+
+        var bearing = Math.Atan2(y, x) * 180d / Math.PI;
+        return (bearing + 360d) % 360d;
+    }
+
+    /// <summary>
+    /// Returns the smallest absolute angular difference between two headings.
+    /// The result is always in the range 0-180 degrees.
+    /// </summary>
+    public static double HeadingDiff(double a, double b)
+    {
+        var diff = Math.Abs(a - b);
+        return Math.Min(diff, 360d - diff);
+    }
+
+    public static double NormalizeHeading(double heading)
+    {
+        if (!double.IsFinite(heading))
+            return 0d;
+
+        var normalized = heading % 360d;
+        if (normalized < 0d)
+            normalized += 360d;
+
+        return normalized;
     }
 
     public static (int q, int r) LatLngToHexForRoom(double lat, double lng, double mapLat,

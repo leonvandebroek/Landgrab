@@ -34,6 +34,8 @@ interface UiStore {
   showDebugTools: boolean;
   debugLocationEnabled: boolean;
   debugLocation: DebugLocationPoint | null;
+  debugHeading: number | null;
+  debugPitch: number | null;
   mainMapBounds: MainMapBounds | null;
   selectedHexScreenPos: ScreenPosition | null;
   mapCameraController: MapCameraController | null;
@@ -46,6 +48,8 @@ interface UiStore {
   setShowDebugTools: (show: boolean) => void;
   setDebugLocationEnabled: (enabled: boolean) => void;
   setDebugLocation: (loc: DebugLocationPoint | null) => void;
+  setDebugHeading: (heading: number | null) => void;
+  setDebugPitch: (pitch: number | null) => void;
   setMainMapBounds: (bounds: MainMapBounds | null) => void;
   setSelectedHexScreenPos: (pos: ScreenPosition | null) => void;
   setMapCameraController: (controller: MapCameraController | null) => void;
@@ -60,6 +64,8 @@ export const useUiStore = create<UiStore>()((set) => ({
   showDebugTools: false,
   debugLocationEnabled: false,
   debugLocation: null,
+  debugHeading: null,
+  debugPitch: null,
   mainMapBounds: null,
   selectedHexScreenPos: null,
   mapCameraController: null,
@@ -72,6 +78,8 @@ export const useUiStore = create<UiStore>()((set) => ({
   setShowDebugTools: (showDebugTools) => set({ showDebugTools }),
   setDebugLocationEnabled: (debugLocationEnabled) => set({ debugLocationEnabled }),
   setDebugLocation: (debugLocation) => set({ debugLocation }),
+  setDebugHeading: (debugHeading) => set({ debugHeading }),
+  setDebugPitch: (debugPitch) => set({ debugPitch }),
   setMainMapBounds: (mainMapBounds) => set({ mainMapBounds }),
   setSelectedHexScreenPos: (selectedHexScreenPos) => set({ selectedHexScreenPos }),
   setMapCameraController: (mapCameraController) => set({ mapCameraController }),

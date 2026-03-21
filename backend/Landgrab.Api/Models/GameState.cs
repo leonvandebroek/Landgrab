@@ -64,6 +64,7 @@ public enum PlayerRole
 public class GameDynamics
 {
     public bool BeaconEnabled { get; set; }
+    public int BeaconSectorAngle { get; set; } = 45;
     public bool TileDecayEnabled { get; set; }
     public CombatMode CombatMode { get; set; } = CombatMode.Balanced;
     public bool PlayerRolesEnabled { get; set; }
@@ -92,6 +93,7 @@ public class PlayerDto
     public int? CarriedTroopsSourceR { get; set; }
     public double? CurrentLat { get; set; }
     public double? CurrentLng { get; set; }
+    public double? CurrentHeading { get; set; }
     public int? CurrentHexQ { get; set; }
     public int? CurrentHexR { get; set; }
     public bool IsHost { get; set; }
@@ -105,6 +107,7 @@ public class PlayerDto
     public bool IsBeacon { get; set; }
     public double? BeaconLat { get; set; }
     public double? BeaconLng { get; set; }
+    public double? BeaconHeading { get; set; }
 
     // Phase 6: CommandoRaid cooldown (raid itself is now game-level via ActiveRaids)
     public DateTime? CommandoRaidCooldownUntil { get; set; }
@@ -113,11 +116,18 @@ public class PlayerDto
     public bool TacticalStrikeActive { get; set; }
     public DateTime? TacticalStrikeExpiry { get; set; }
     public DateTime? TacticalStrikeCooldownUntil { get; set; }
+    public int? TacticalStrikeTargetQ { get; set; }
+    public int? TacticalStrikeTargetR { get; set; }
     public bool RallyPointActive { get; set; }
     public DateTime? RallyPointDeadline { get; set; }
     public DateTime? RallyPointCooldownUntil { get; set; }
     public int? RallyPointQ { get; set; }
     public int? RallyPointR { get; set; }
+
+    // Scout abilities
+    public bool SabotageAlertNearby { get; set; }
+    public string? InterceptTargetId { get; set; }
+    public DateTime? InterceptLockStartAt { get; set; }
 
     // Engineer abilities
     public int? FortTargetQ { get; set; }
@@ -127,8 +137,11 @@ public class PlayerDto
     public int? SabotageTargetR { get; set; }
     public List<string> SabotagePerimeterVisited { get; set; } = new();
     public DateTime? SabotageCooldownUntil { get; set; }
+    public Dictionary<string, DateTime> SabotageBlockedTiles { get; set; } = [];
     public string? DemolishTargetKey { get; set; }
     public List<string> DemolishApproachDirectionsMade { get; set; } = new();
+    public DateTime? DemolishFacingLockStartAt { get; set; }
+    public string? DemolishFacingHexKey { get; set; }
     public string? PreviousHexKey { get; set; }
     public DateTime? DemolishCooldownUntil { get; set; }
 }
@@ -261,6 +274,8 @@ public class CombatPreviewDto
     public string DefenderName { get; set; } = "";
     public string? DefenderAllianceName { get; set; }
 }
+
+public sealed record InterceptAttemptResult(string Status, double? Seconds = null);
 
 public class CombatResult
 {

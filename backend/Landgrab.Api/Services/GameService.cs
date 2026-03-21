@@ -69,11 +69,13 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error) AssignStartingTile(string roomCode, string userId, int q, int r, string targetPlayerId) => lobbyService.AssignStartingTile(roomCode, userId, q, r, targetPlayerId);
     public (GameState? state, string? error) StartGame(string roomCode, string userId) => lobbyService.StartGame(roomCode, userId);
 
-    public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId) => abilityService.ActivateBeacon(roomCode, userId);
+    public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId, double heading) => abilityService.ActivateBeacon(roomCode, userId, heading);
     public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => abilityService.DeactivateBeacon(roomCode, userId);
+    public ((int targetQ, int targetR)? target, string? error) ResolveRaidTarget(string roomCode, string userId, double heading) => abilityService.ResolveRaidTarget(roomCode, userId, heading);
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
-    public (GameState? state, string? error) ActivateTacticalStrike(string roomCode, string userId) => abilityService.ActivateTacticalStrike(roomCode, userId);
-    public (GameState? state, string? error) ActivateReinforce(string roomCode, string userId) => abilityService.ActivateReinforce(roomCode, userId);
+    public ((int targetQ, int targetR)? target, string? error) ResolveTacticalStrikeTarget(string roomCode, string userId, double heading) => abilityService.ResolveTacticalStrikeTarget(roomCode, userId, heading);
+    public (GameState? state, string? error) ActivateTacticalStrike(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateTacticalStrike(roomCode, userId, targetQ, targetR);
+    public (GameState? state, string? error) ActivateRallyPoint(string roomCode, string userId) => abilityService.ActivateRallyPoint(roomCode, userId);
     public (GameState? state, string? error) ActivateShieldWall(string roomCode, string userId) => abilityService.ActivateShieldWall(roomCode, userId);
     public (GameState? state, string? error) StartFortConstruction(string roomCode, string userId) => abilityService.StartFortConstruction(roomCode, userId);
     public (GameState? state, string? error) CancelFortConstruction(string roomCode, string userId) => abilityService.CancelFortConstruction(roomCode, userId);
@@ -81,9 +83,10 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error) CancelSabotage(string roomCode, string userId) => abilityService.CancelSabotage(roomCode, userId);
     public (GameState? state, string? error) StartDemolish(string roomCode, string userId) => abilityService.StartDemolish(roomCode, userId);
     public (GameState? state, string? error) CancelDemolish(string roomCode, string userId) => abilityService.CancelDemolish(roomCode, userId);
-    public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)
+    public (InterceptAttemptResult? result, string? error) AttemptIntercept(string roomCode, string userId, double heading) => abilityService.AttemptIntercept(roomCode, userId, heading);
+    public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng, double? heading)
     {
-        return gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);
+        return gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng, heading);
     }
 
     public (GameState? state, string? error) PickUpTroops(string roomCode, string userId, int q, int r, int count, double playerLat, double playerLng)

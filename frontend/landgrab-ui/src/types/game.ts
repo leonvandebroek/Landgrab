@@ -11,6 +11,7 @@ export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Engineer';
 export interface GameDynamics {
   playerRolesEnabled: boolean;
   beaconEnabled: boolean;
+  beaconSectorAngle?: number;
   combatMode?: CombatMode;
   hqEnabled: boolean;
   hqAutoAssign: boolean;
@@ -146,6 +147,24 @@ export interface Player {
   demolishApproachDirectionsMade?: string[];
   demolishCooldownUntil?: string;
   previousHexKey?: string;
+
+  // Compass / heading
+  currentHeading?: number | null;
+  beaconHeading?: number | null;
+
+  // Demolish facing lock  
+  demolishFacingLockStartAt?: string | null;  // ISO date string from backend DateTime
+  demolishFacingHexKey?: string | null;
+
+  // Tactical Strike targeting
+  tacticalStrikeTargetQ?: number | null;
+  tacticalStrikeTargetR?: number | null;
+
+  // Scout Intercept
+  interceptLockStartAt?: string | null;       // ISO date string from backend DateTime
+  interceptTargetId?: string | null;
+  sabotageAlertNearby?: boolean;
+  sabotageBlockedTiles?: Record<string, string>;  // key: "q,r", value: ISO date string
 }
 
 export interface AllianceDto {

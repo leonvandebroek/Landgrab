@@ -1,13 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 
 interface CommandoRaidCardProps {
   myUserId: string;
   onActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean> | void;
+  onResolveRaidTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
 }
 
 function formatTimeRemaining(until: string | undefined): string | null {
@@ -25,37 +27,51 @@ function formatTimeRemaining(until: string | undefined): string | null {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function parseHexKey(hexKey: string | null): [number, number] | null {
-  if (!hexKey) {
-    return null;
-  }
-
-  const [q, r] = hexKey.split(',').map(Number);
-  if (Number.isNaN(q) || Number.isNaN(r)) {
-    return null;
-  }
-
-  return [q, r];
-}
-
 export function CommandoRaidCard({
   myUserId,
   onActivateCommandoRaid,
+  onResolveRaidTarget,
 }: CommandoRaidCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
   );
-  const selectedHexKey = useGameplayStore((store) => store.selectedHexKey);
+  // We no longer rely on hex clicks for commando raid
   const abilityUi = useGameplayStore((store) => store.abilityUi);
   const activateAbility = useGameplayStore((store) => store.activateAbility);
-  const enterAbilityMode = useGameplayStore((store) => store.enterAbilityMode);
   const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
 
-  const selectedTargetHexKey = abilityUi.pendingTargetHexKey ?? abilityUi.targetHexKey ?? selectedHexKey;
-  const selectedTarget = parseHexKey(selectedTargetHexKey);
+  const { heading } = useDeviceOrientation(abilityUi.mode === 'targeting');
+  const [resolvedTarget, setResolvedTarget] = useState<[number, number] | null>(null);
+
+  useEffect(() => {
+    let handle = -1;
+    if (abilityUi.mode === 'targeting' && !player?.commandoRaidCooldownUntil && onResolveRaidTarget) {
+      handle = window.setInterval(() => {
+        const h = heading ?? 0;
+        void onResolveRaidTarget(h).then(res => {
+          if (res) {
+            setResolvedTarget([res.targetQ, res.targetR]);
+          } else {
+            setResolvedTarget(null);
+          }
+        });
+      }, 500);
+    } else {
+      setTimeout(() => { setResolvedTarget(null); }, 0);
+    }
+    
+    return () => {
+      if (handle !== -1) {
+        window.clearInterval(handle);
+      }
+    };
+  }, [abilityUi.mode, heading, onResolveRaidTarget, player?.commandoRaidCooldownUntil]);
+
+  const selectedTargetHexKey = resolvedTarget ? `${resolvedTarget[0]},${resolvedTarget[1]}` : null;
+  const selectedTarget = resolvedTarget;
   const selectedCell = selectedTargetHexKey && gameState
     ? gameState.grid[selectedTargetHexKey] ?? null
     : null;
@@ -77,9 +93,7 @@ export function CommandoRaidCard({
   const raidCountdown = formatTimeRemaining(activeRaid?.deadline);
   const cooldownCountdown = formatTimeRemaining(player?.commandoRaidCooldownUntil);
   const isRaidActive = Boolean(activeRaid) || abilityUi.mode === 'active';
-  const isConfirmingSelection = !isRaidActive
-    && Boolean(selectedTargetHexKey)
-    && (abilityUi.mode === 'confirming' || abilityUi.mode === 'targeting');
+  const isTargeting = !isRaidActive && abilityUi.mode === 'targeting' && !cooldownCountdown;
   const activeTarget = activeRaid
     ? [activeRaid.targetQ, activeRaid.targetR] as [number, number]
     : selectedTarget;
@@ -98,10 +112,6 @@ export function CommandoRaidCard({
     }
 
     exitAbilityMode();
-  };
-
-  const handleBackToTargeting = () => {
-    enterAbilityMode('commandoRaid', 'targeting', abilityUi.mapFocusPreset || 'strategicTargeting');
   };
 
   const handleLaunchRaid = async () => {
@@ -126,8 +136,8 @@ export function CommandoRaidCard({
           <div className={`ability-card__status-pill ${isRaidActive ? 'ability-card__status-pill--armed' : ''}`}>
             <GameIcon name="archeryTarget" size="sm" />
             <span>
-              {isConfirmingSelection
-                ? t('abilities.commandoRaid.confirming' as never)
+              {isTargeting
+                ? t('abilities.commandoRaid.targeting' as never)
                 : isRaidActive
                   ? t('abilities.commandoRaid.active' as never)
                   : cooldownCountdown
@@ -137,34 +147,32 @@ export function CommandoRaidCard({
           </div>
 
           <p className="ability-card__status-copy">
-            {abilityUi.mode === 'targeting' && !isRaidActive && !cooldownCountdown
-              ? t('abilities.commandoRaid.targetingSummary' as never)
-              : isConfirmingSelection
-                ? t('abilities.commandoRaid.confirmSummary' as never)
-                : activeRaid
-                  ? t('abilities.commandoRaid.activeSummary' as never)
-                  : t('abilities.commandoRaid.cooldownSummary' as never)}
+            {isTargeting
+              ? (selectedTarget ? 'Target acquired.' : 'Point your device to find a target')
+              : activeRaid
+                ? t('abilities.commandoRaid.activeSummary' as never)
+                : t('abilities.commandoRaid.cooldownSummary' as never)}
           </p>
 
-          {(isConfirmingSelection || isRaidActive || cooldownCountdown) && (
+          {(isTargeting || isRaidActive || cooldownCountdown) && (
             <div className="ability-card__meta-row">
               <span className="ability-card__meta-label">{t('abilities.commandoRaid.targetLabel' as never)}</span>
-              <span className="ability-card__meta-value">{activeTargetLabel}</span>
+              <span className="ability-card__meta-value">{selectedTarget ? activeTargetLabel : 'No target in direction'}</span>
             </div>
           )}
 
-          {(isConfirmingSelection || isRaidActive || cooldownCountdown) && (
+          {(isTargeting || isRaidActive || cooldownCountdown) && selectedTarget && (
             <div className="ability-card__meta-row">
               <span className="ability-card__meta-label">{t('abilities.commandoRaid.ownerLabel' as never)}</span>
               <span className="ability-card__meta-value">
-                {(isConfirmingSelection ? selectedCell : activeTargetCell)?.ownerName
-                  ?? (isConfirmingSelection ? selectedCell : activeTargetCell)?.lastKnownOwnerName
+                {(isTargeting ? selectedCell : activeTargetCell)?.ownerName
+                  ?? (isTargeting ? selectedCell : activeTargetCell)?.lastKnownOwnerName
                   ?? t('abilities.commandoRaid.unclaimedOwner' as never)}
               </span>
             </div>
           )}
 
-          {isConfirmingSelection && targetAlliance && (
+          {isTargeting && targetAlliance && selectedTarget && (
             <div className="ability-card__meta-row">
               <span className="ability-card__meta-label">{t('abilities.commandoRaid.hqBadgeLabel' as never)}</span>
               <span className="ability-card__meta-value">{targetAlliance.name}</span>
@@ -190,7 +198,7 @@ export function CommandoRaidCard({
           )}
         </>
       )}
-      footerContent={isConfirmingSelection ? (
+      footerContent={isTargeting ? (
         <>
           <button
             type="button"
@@ -200,31 +208,20 @@ export function CommandoRaidCard({
             }}
             disabled={!selectedTarget}
           >
-            {t('abilities.commandoRaid.launch' as never)}
-          </button>
-
-          <button
-            type="button"
-            className="ability-card__secondary-btn"
-            onClick={handleBackToTargeting}
-          >
-            {t('abilities.commandoRaid.backToTargeting' as never)}
+            Lock Target
           </button>
         </>
       ) : undefined}
       onBackToHud={handleBackToHud}
     >
       <div className="ability-card__stack">
-        {abilityUi.mode === 'targeting' && !isRaidActive && !cooldownCountdown ? (
+        {isTargeting ? (
           <div className="ability-card__copy">
             <ul className="ability-card__detail-list">
               <li>{t('abilities.commandoRaid.ruleAnyHex' as never)}</li>
               <li>{t('abilities.commandoRaid.ruleAlliance' as never)}</li>
               <li>{t('abilities.commandoRaid.ruleHq' as never)}</li>
             </ul>
-          </div>
-        ) : isConfirmingSelection ? (
-          <div className="ability-card__copy">
             {targetAlliance && (
               <p className="ability-card__warning">{t('abilities.commandoRaid.hqTarget' as never, { name: targetAlliance.name })}</p>
             )}

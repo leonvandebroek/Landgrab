@@ -39,8 +39,14 @@ public partial class GameHub
         return preview;
     }
 
-    public async Task ActivateBeacon()
+    public async Task ActivateBeacon(double heading)
     {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -48,7 +54,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateBeacon(room.Code, UserId);
+        var (state, error) = gameService.ActivateBeacon(room.Code, UserId, heading);
         if (error != null)
         {
             await SendError(error);
@@ -56,6 +62,34 @@ public partial class GameHub
         }
 
         await BroadcastState(room.Code, state!);
+    }
+
+    public async Task<object?> ResolveRaidTarget(double heading)
+    {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (target, error) = gameService.ResolveRaidTarget(room.Code, UserId, heading);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        if (target is not { } resolvedTarget)
+            return null;
+
+        return new { targetQ = resolvedTarget.targetQ, targetR = resolvedTarget.targetR };
     }
 
     public async Task DeactivateBeacon()
@@ -102,8 +136,42 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateTacticalStrike()
+    public async Task<object?> ResolveTacticalStrikeTarget(double heading)
     {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (target, error) = gameService.ResolveTacticalStrikeTarget(room.Code, UserId, heading);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        if (target is not { } resolvedTarget)
+            return null;
+
+        return new { targetQ = resolvedTarget.targetQ, targetR = resolvedTarget.targetR };
+    }
+
+    public async Task ActivateTacticalStrike(int targetQ, int targetR)
+    {
+        if (!ValidateCoordRange(targetQ, targetR))
+        {
+            await SendError(InvalidRequestCode, "Invalid target coordinates.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -111,7 +179,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateTacticalStrike(room.Code, UserId);
+        var (state, error) = gameService.ActivateTacticalStrike(room.Code, UserId, targetQ, targetR);
         if (error != null)
         {
             await SendError(error);
@@ -121,7 +189,7 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateReinforce()
+    public async Task ActivateRallyPoint()
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
@@ -130,7 +198,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateReinforce(room.Code, UserId);
+        var (state, error) = gameService.ActivateRallyPoint(room.Code, UserId);
         if (error != null)
         {
             await SendError(error);
@@ -138,6 +206,39 @@ public partial class GameHub
         }
 
         await BroadcastState(room.Code, state!);
+    }
+
+    // Backward compatibility — old clients may still call ActivateReinforce
+    public async Task ActivateReinforce() => await ActivateRallyPoint();
+
+    public async Task<object?> AttemptIntercept(double heading)
+    {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (result, error) = gameService.AttemptIntercept(room.Code, UserId, heading);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        if (result == null)
+            return null;
+
+        return result.Seconds.HasValue
+            ? new { status = result.Status, seconds = result.Seconds.Value }
+            : new { status = result.Status };
     }
 
     public async Task ActivateShieldWall()
@@ -273,7 +374,7 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task UpdatePlayerLocation(double lat, double lng)
+    public async Task UpdatePlayerLocation(double lat, double lng, double? heading = null)
     {
         if (!ValidateLatLng(lat, lng))
         {
@@ -298,7 +399,7 @@ public partial class GameHub
             return;
         }
 
-        var result = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng);
+        var result = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng, heading);
         if (result.error != null)
         {
             await SendError(result.error);

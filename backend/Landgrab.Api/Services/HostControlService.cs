@@ -50,6 +50,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                 return (null, "Live dynamics changes require an active game.");
 
             room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
+            room.State.Dynamics.BeaconSectorAngle = dynamics.BeaconSectorAngle;
             room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
             room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;

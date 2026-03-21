@@ -165,6 +165,9 @@ public partial class GameHub : Hub
         lat >= -90 && lat <= 90 &&
         lng >= -180 && lng <= 180;
 
+    private static bool ValidateHeading(double heading) =>
+        double.IsFinite(heading);
+
     private static bool ValidateRoomCode(string? roomCode) =>
         !string.IsNullOrWhiteSpace(roomCode) && ValidateStringLength(roomCode, MaxRoomCodeLength);
 
@@ -186,6 +189,7 @@ public partial class GameHub : Hub
         return new GameDynamics
         {
             BeaconEnabled = dynamics.BeaconEnabled,
+            BeaconSectorAngle = Math.Clamp(dynamics.BeaconSectorAngle, 1, 360),
             TileDecayEnabled = dynamics.TileDecayEnabled,
             CombatMode = Enum.IsDefined(dynamics.CombatMode) ? dynamics.CombatMode : CombatMode.Balanced,
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,

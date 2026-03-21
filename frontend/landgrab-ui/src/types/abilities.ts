@@ -5,7 +5,8 @@ export type AbilityKey =
   | 'commandoRaid'
   | 'fortConstruction'
   | 'sabotage'
-  | 'demolish';
+  | 'demolish'
+  | 'intercept';
 
 export type AbilityMode = 'idle' | 'targeting' | 'confirming' | 'active' | 'inProgress';
 

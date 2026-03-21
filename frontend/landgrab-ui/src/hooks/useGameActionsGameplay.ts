@@ -32,7 +32,7 @@ type ClaimTileActionType = 'claim' | 'reinforce' | 'claimAlliance' | 'claimSelf'
 
 type UseGameActionsGameplayOptions = Pick<
   UseGameActionsOptions,
-  'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
+  'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHeading' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
 >;
 
 interface UseGameActionsGameplayResult {
@@ -57,6 +57,7 @@ export function useGameActionsGameplay({
   connected,
   gameState,
   currentLocation,
+  currentHeading,
   currentHex,
   myPlayer,
   isHostBypass,
@@ -77,15 +78,19 @@ export function useGameActionsGameplay({
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
   const setNeutralClaimResult = useGameplayStore(state => state.setNeutralClaimResult);
   const setSelectedHexKey = useGameplayStore(state => state.setSelectedHexKey);
-  const setAbilityTarget = useGameplayStore(state => state.setAbilityTarget);
-  const confirmAbilityTarget = useGameplayStore(state => state.confirmAbilityTarget);
   const setError = useUiStore(state => state.setError);
   const clearError = useUiStore(state => state.clearError);
   const lastSentPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const locationThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const currentHeadingRef = useRef<number | null>(null);
   const lastSendTimeRef = useRef<number>(0);
   const previousCurrentHexRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentHeadingRef.current = currentHeading ?? null;
+  }, [currentHeading]);
+
   const selectedHex = useMemo<[number, number] | null>(() => {
     if (!selectedHexKey) {
       return null;
@@ -142,7 +147,7 @@ export function useGameActionsGameplay({
 
     lastSendTimeRef.current = Date.now();
 
-    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng)
+    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng, currentHeadingRef.current)
       .then(() => {
         lastSentPositionRef.current = { lat: pendingLocation.lat, lng: pendingLocation.lng };
         clearLocationThrottle();
@@ -296,12 +301,6 @@ export function useGameActionsGameplay({
     const nextSelectedHexKey = `${q},${r}`;
 
     if (abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming') {
-      if (abilityUi.activeAbility === 'commandoRaid' && abilityUi.mode === 'targeting') {
-        setSelectedHexKey(nextSelectedHexKey);
-        setAbilityTarget(nextSelectedHexKey);
-        confirmAbilityTarget();
-      }
-
       return;
     }
 
@@ -346,16 +345,13 @@ export function useGameActionsGameplay({
     setMapFeedback(null);
   }, [
     auth,
-    abilityUi.activeAbility,
     abilityUi.mode,
     clearError,
-    confirmAbilityTarget,
     currentHex,
     gameState,
     isHostBypass,
     myPlayer,
     setSelectedHexKey,
-    setAbilityTarget,
     setMapFeedback,
     setPickupPrompt,
     setReinforcePrompt,

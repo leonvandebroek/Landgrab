@@ -6,12 +6,14 @@ import { useGameActions } from './hooks/useGameActions';
 import { useSignalR } from './hooks/useSignalR';
 import { useSignalRHandlers } from './hooks/useSignalRHandlers';
 import { useGeolocation } from './hooks/useGeolocation';
+import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
+import { DebugSensorPanel } from './components/game/debug/DebugSensorPanel';
 import { GameOver } from './components/game/GameOver';
 import { GameView } from './components/GameView';
 import type { GameViewActions } from './components/GameView';
@@ -92,6 +94,7 @@ export default function App() {
     || isHostOnLocationSetupStep
   );
   const location = useGeolocation(shouldEnableGeolocation);
+  const { heading } = useDeviceOrientation(shouldEnableGeolocation);
   const { playSound } = useSound();
 
   // ── SignalR wiring ───────────────────────────────────────────────────────
@@ -273,14 +276,17 @@ export default function App() {
     handleActivateBeacon,
     handleDeactivateBeacon,
     handleActivateCommandoRaid,
+    resolveRaidTarget,
     handleActivateTacticalStrike,
-    handleActivateReinforce,
+    resolveTacticalStrikeTarget,
+    handleActivateRallyPoint,
     handleActivateSabotage,
     handleCancelFortConstruction,
     handleCancelSabotage,
     handleCancelDemolish,
     handleStartDemolish,
     handleStartFortConstruction,
+    attemptIntercept,
     handleSetMasterTile,
     handleSetMasterTileByHex,
     handleAssignStartingTile,
@@ -311,6 +317,7 @@ export default function App() {
     pendingResumeRef,
     gameState,
     currentLocation,
+    currentHeading: heading,
     currentHex,
     myPlayer,
     isHostBypass,
@@ -479,14 +486,17 @@ export default function App() {
   const visibleRecentRooms = auth && connected ? myRooms : [];
 
   const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && showDebugTools && view !== 'gameover' ? (
-    <DebugLocationPanel
-      enabled={usingDebugLocation}
-      mapCenter={mapCenterLocation}
-      canStepByHex={canStepDebugByHex}
-      onApply={applyDebugLocation}
-      onDisable={disableDebugLocation}
-      onStepByHex={stepDebugLocationByHex}
-    />
+    <div className="debug-panels-container">
+      <DebugLocationPanel
+        enabled={usingDebugLocation}
+        mapCenter={mapCenterLocation}
+        canStepByHex={canStepDebugByHex}
+        onApply={applyDebugLocation}
+        onDisable={disableDebugLocation}
+        onStepByHex={stepDebugLocationByHex}
+      />
+      <DebugSensorPanel />
+    </div>
   ) : null;
 
   const debugToggleButton = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
@@ -512,14 +522,17 @@ export default function App() {
     onActivateBeacon: handleActivateBeacon,
     onDeactivateBeacon: handleDeactivateBeacon,
     onActivateCommandoRaid: handleActivateCommandoRaid,
+    onResolveRaidTarget: resolveRaidTarget ?? (async () => null),
     onActivateTacticalStrike: handleActivateTacticalStrike,
-    onActivateReinforce: handleActivateReinforce,
+    onResolveTacticalStrikeTarget: resolveTacticalStrikeTarget ?? (async () => null),
+    onActivateRallyPoint: handleActivateRallyPoint,
     onActivateSabotage: handleActivateSabotage,
     onCancelFortConstruction: handleCancelFortConstruction,
     onCancelSabotage: handleCancelSabotage,
     onCancelDemolish: handleCancelDemolish,
     onStartDemolish: handleStartDemolish,
     onStartFortConstruction: handleStartFortConstruction,
+    onAttemptIntercept: attemptIntercept,
     onSetObserverMode: handleSetObserverMode,
     onUpdateDynamicsLive: handleUpdateDynamicsLive,
     onSendHostMessage: handleSendHostMessage,
@@ -529,10 +542,10 @@ export default function App() {
   }), [
     handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
-    handleActivateBeacon, handleDeactivateBeacon, handleActivateCommandoRaid, handleActivateTacticalStrike,
-    handleActivateReinforce, handleActivateSabotage, handleCancelFortConstruction,
+    handleActivateBeacon, handleDeactivateBeacon, handleActivateCommandoRaid, resolveRaidTarget, handleActivateTacticalStrike, resolveTacticalStrikeTarget,
+    handleActivateRallyPoint, handleActivateSabotage, handleCancelFortConstruction,
     handleCancelSabotage, handleCancelDemolish,
-    handleStartDemolish, handleStartFortConstruction, handleSetObserverMode,
+    handleStartDemolish, handleStartFortConstruction, attemptIntercept, handleSetObserverMode,
     handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleDeployCombatTroops,
     handleDeployNeutralClaimTroops,
   ]);

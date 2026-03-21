@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 
 interface DemolishCardProps {
   myUserId: string;
@@ -29,6 +31,9 @@ export function DemolishCard({
 
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
+  const { heading } = useDeviceOrientation(true);
+  const [holdProgressSec, setHoldProgressSec] = useState<number>(0);
+
   const isFriendlyHex = Boolean(
     currentHexCell
     && player
@@ -47,6 +52,46 @@ export function DemolishCard({
   const demolishProgress = player?.demolishApproachDirectionsMade?.length ?? 0;
   const isMissionInProgress = Boolean(player?.demolishTargetKey) || abilityUi.mode === 'inProgress';
   const currentHexLabel = currentHex ? `${currentHex[0]}, ${currentHex[1]}` : '—';
+  
+  // Demolish lock state
+  const isHolding = Boolean(player?.demolishFacingLockStartAt);
+  const lockStartAt = player?.demolishFacingLockStartAt;
+  const facingHexKey = player?.demolishFacingHexKey;
+
+  useEffect(() => {
+    if (!isHolding || !lockStartAt) {
+      if (holdProgressSec !== 0) {
+        setHoldProgressSec(0);
+      }
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      const ms = Date.now() - new Date(lockStartAt).getTime();
+      setHoldProgressSec(Math.min(5.0, Math.max(0, ms / 1000)));
+    }, 100);
+
+    return () => window.clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHolding, lockStartAt, holdProgressSec]);
+
+  const getStatusText = () => {
+    if (!isMissionInProgress) return t('abilities.demolish.targetingSummary' as never);
+
+    if (demolishProgress >= 3) {
+      return "Demolition complete!";
+    }
+
+    if (isHolding) {
+      return `Holding… ${holdProgressSec.toFixed(1)}s / 5.0s`;
+    }
+
+    if (currentHexKey !== null && currentHexKey === facingHexKey && !isHolding) {
+       return "Facing lock lost — hold steady"; // Was holding but lost lock while in the same hex area maybe? Actually we just default to "Face the fort and hold for 5 seconds"
+    }
+    
+    return "Face the fort and hold for 5 seconds";
+  };
 
   const handleBackToHud = () => {
     if (isMissionInProgress) {
@@ -95,9 +140,7 @@ export function DemolishCard({
           </div>
 
           <p className="ability-card__status-copy">
-            {isMissionInProgress
-              ? t('abilities.demolish.progressSummary' as never)
-              : t('abilities.demolish.targetingSummary' as never)}
+            {isHolding ? <strong>{getStatusText()}</strong> : getStatusText()}
           </p>
 
           <div className="ability-card__meta-row">
@@ -110,6 +153,28 @@ export function DemolishCard({
               {isMissionInProgress ? `${demolishProgress}/3` : currentHexLabel}
             </span>
           </div>
+          
+          {isMissionInProgress && (
+            <div className="ability-card__meta-row">
+              <span className="ability-card__meta-label">Target Hex</span>
+              <span className="ability-card__meta-value">
+                {player?.demolishTargetKey ?? '—'}
+              </span>
+            </div>
+          )}
+
+          <div className="ability-card__meta-row">
+            <span className="ability-card__meta-label">Heading</span>
+            <span className="ability-card__meta-value">
+              {heading !== null ? `${Math.round(heading)}°` : '—'}
+            </span>
+          </div>
+
+          {isHolding && isMissionInProgress && (
+            <div className="ability-card__progress-container">
+              <progress value={holdProgressSec} max={5.0} className="ability-card__progress-bar" />
+            </div>
+          )}
 
           {!isMissionInProgress && (
             <div className="ability-card__meta-row">

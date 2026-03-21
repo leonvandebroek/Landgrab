@@ -37,10 +37,10 @@ interface PlayerHUDProps {
   myAllianceName?: string;
   player?: Player;
   dynamics?: GameDynamics;
-  onActivateBeacon: () => Promise<boolean> | void;
+  onActivateBeacon: ((heading: number) => Promise<boolean> | void) | (() => Promise<boolean> | void);
   onDeactivateBeacon: () => Promise<boolean> | void;
-  onActivateTacticalStrike: () => Promise<boolean> | void;
-  onActivateReinforce: () => Promise<boolean> | void;
+  onActivateTacticalStrike: ((targetQ: number, targetR: number) => Promise<boolean> | void) | (() => Promise<boolean> | void);
+  onActivateRallyPoint: () => Promise<boolean> | void;
   onActivateSabotage: () => Promise<boolean> | void;
   onStartDemolish: () => Promise<boolean> | void;
   onStartFortConstruction: () => Promise<boolean> | void;
@@ -171,7 +171,7 @@ export function PlayerHUD({
   dynamics,
   onActivateBeacon,
   onActivateTacticalStrike,
-  onActivateReinforce,
+  onActivateRallyPoint,
   onActivateSabotage,
   onStartDemolish,
   onStartFortConstruction,
@@ -332,7 +332,7 @@ export function PlayerHUD({
   const getAbilityAction = (
     abilityKey: AbilityKey,
     state: AbilityButtonState,
-    fallbackAction: () => void,
+    fallbackAction: unknown,
     initialMode: AbilityMode,
     isToggle: boolean = false,
     focusPreset: 'none' | 'player' | 'strategicTargeting' | 'localTracking' = 'none'
@@ -361,7 +361,7 @@ export function PlayerHUD({
     return () => {
       if (isToggle) {
         enterAbilityMode(abilityKey, initialMode, focusPreset);
-        fallbackAction();
+        (fallbackAction as () => void)();
       } else {
         enterAbilityMode(abilityKey, initialMode, focusPreset);
       }
@@ -414,7 +414,7 @@ export function PlayerHUD({
       buttonState: rallyState,
       accentClassName: ROLE_ACCENT_CLASSES.Commander,
       disabled: rallyState === 'cooldown' || rallyState === 'blocked',
-      onClick: getAbilityAction('rallyPoint', rallyState, onActivateReinforce, 'confirming'),
+      onClick: getAbilityAction('rallyPoint', rallyState, onActivateRallyPoint, 'confirming'),
       role: 'Commander',
       abilityKey: 'rallyPoint',
     });
@@ -513,6 +513,28 @@ export function PlayerHUD({
       onClick: getAbilityAction('demolish', demolishState, onStartDemolish, 'targeting', false, 'localTracking'),
       role: 'Engineer',
       abilityKey: 'demolish',
+    });
+  }
+
+  if (player?.role === 'Scout') {
+    const interceptState = getAbilityButtonState('intercept', false, false, false);
+    
+    // Check ambient alert for Scout
+    const isSabotageAlert = !!player.sabotageAlertNearby; // ensure boolean
+
+    abilityButtons.push({
+      key: 'intercept',
+      icon: 'radioTower',
+      title: t('roles.Scout.abilities.intercept.title' as never, 'Intercept'),
+      description: t('roles.Scout.abilities.intercept.description' as never, 'Scan for enemy signals'),
+      status: isSabotageAlert ? t('abilities.intercept.alert', 'SIGNAL DETECTED!') : formatStatus('activate'),
+      className: `player-hud__ability ${isSabotageAlert ? 'player-hud__ability--active' : ''}`,
+      buttonState: interceptState,
+      accentClassName: ROLE_ACCENT_CLASSES.Scout,
+      disabled: false,
+      onClick: getAbilityAction('intercept', interceptState, () => {}, 'confirming', false, 'none'),
+      role: 'Scout',
+      abilityKey: 'intercept',
     });
   }
 

@@ -1,12 +1,16 @@
 import { useTranslation } from 'react-i18next';
+import { useState, useEffect } from 'react';
 import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 
 interface TacticalStrikeCardProps {
   myUserId: string;
-  onActivateTacticalStrike: () => Promise<boolean> | void;
+  onActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean> | void;
+  onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  currentHex: [number, number] | null;
 }
 
 function formatTimeRemaining(until: string | undefined): string | null {
@@ -27,8 +31,11 @@ function formatTimeRemaining(until: string | undefined): string | null {
 export function TacticalStrikeCard({
   myUserId,
   onActivateTacticalStrike,
+  onResolveTacticalStrikeTarget,
+  currentHex,
 }: TacticalStrikeCardProps) {
   const { t } = useTranslation();
+  const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
   );
@@ -37,8 +44,45 @@ export function TacticalStrikeCard({
   const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
 
+  const { heading } = useDeviceOrientation(!player?.tacticalStrikeActive && abilityUi.mode === 'targeting');
+  const [resolvedTarget, setResolvedTarget] = useState<[number, number] | null>(null);
+
   const strikeCountdown = formatTimeRemaining(player?.tacticalStrikeExpiry);
   const isArmed = Boolean(player?.tacticalStrikeActive) || abilityUi.mode === 'active';
+
+  let isCurrentHexValid = false;
+  if (currentHex && gameState && player) {
+    const key = `${currentHex[0]},${currentHex[1]}`;
+    const cell = gameState.grid[key];
+    if (cell && (cell.ownerId === undefined || cell.ownerAllianceId !== player.allianceId)) {
+      isCurrentHexValid = true;
+    }
+  }
+
+  useEffect(() => {
+    let handle = -1;
+    // For tactical strike, "ready" means we are targeting
+    if (!isArmed && onResolveTacticalStrikeTarget) {
+      handle = window.setInterval(() => {
+        const h = heading ?? 0;
+        void onResolveTacticalStrikeTarget(h).then(res => {
+          if (res) {
+            setResolvedTarget([res.targetQ, res.targetR]);
+          } else {
+            setResolvedTarget(null);
+          }
+        });
+      }, 500);
+    } else {
+      setTimeout(() => { setResolvedTarget(null); }, 0);
+    }
+    
+    return () => {
+      if (handle !== -1) {
+        window.clearInterval(handle);
+      }
+    };
+  }, [isArmed, heading, onResolveTacticalStrikeTarget]);
 
   const handleBackToHud = () => {
     if (isArmed) {
@@ -49,8 +93,8 @@ export function TacticalStrikeCard({
     exitAbilityMode();
   };
 
-  const handleArmStrike = async () => {
-    const succeeded = await Promise.resolve(onActivateTacticalStrike());
+  const handleArmStrike = async (targetQ: number, targetR: number) => {
+    const succeeded = await Promise.resolve(onActivateTacticalStrike(targetQ, targetR));
     if (succeeded === false) {
       return;
     }
@@ -76,8 +120,17 @@ export function TacticalStrikeCard({
           <p className="ability-card__status-copy">
             {isArmed
               ? t('abilities.tacticalStrike.armedSummary' as never)
-              : t('abilities.tacticalStrike.confirmSummary' as never)}
+              : (resolvedTarget ? 'Target acquired.' : 'Point your device to find a target')}
           </p>
+
+          {!isArmed && (
+            <div className="ability-card__meta-row">
+              <span className="ability-card__meta-label">Target Hex</span>
+              <span className="ability-card__meta-value">
+                {resolvedTarget ? `${resolvedTarget[0]}, ${resolvedTarget[1]}` : 'No target in direction'}
+              </span>
+            </div>
+          )}
 
           {strikeCountdown && (
             <div className="ability-card__meta-row">
@@ -88,15 +141,32 @@ export function TacticalStrikeCard({
         </>
       )}
       footerContent={!isArmed ? (
-        <button
-          type="button"
-          className="ability-card__primary-btn"
-          onClick={() => {
-            void handleArmStrike();
-          }}
-        >
-          {t('abilities.tacticalStrike.arm' as never)}
-        </button>
+        <>
+          <button
+            type="button"
+            className="ability-card__primary-btn"
+            onClick={() => {
+              if (resolvedTarget) {
+                void handleArmStrike(resolvedTarget[0], resolvedTarget[1]);
+              }
+            }}
+            disabled={!resolvedTarget}
+          >
+            Lock Target
+          </button>
+          
+          {isCurrentHexValid && currentHex && (
+            <button
+              type="button"
+              className="ability-card__secondary-btn"
+              onClick={() => {
+                void handleArmStrike(currentHex[0], currentHex[1]);
+              }}
+            >
+              Use Current Hex
+            </button>
+          )}
+        </>
       ) : undefined}
       onBackToHud={handleBackToHud}
     >

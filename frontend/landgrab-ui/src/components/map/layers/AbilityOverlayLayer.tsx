@@ -232,9 +232,28 @@ function AbilityOverlayLayerComponent({
     return EMPTY_OVERLAY_STATE;
   }, [abilityUi, gameState, grid, myPlayer]);
 
+  const beaconState = useMemo(() => {
+    if (!gameState || !myPlayer || myPlayer.beaconHeading == null || myPlayer.currentHexQ == null || myPlayer.currentHexR == null) {
+      return null;
+    }
+    return {
+      hexKey: toHexKey(myPlayer.currentHexQ, myPlayer.currentHexR),
+      heading: myPlayer.beaconHeading,
+      angle: gameState.dynamics?.beaconSectorAngle ?? 45,
+    };
+  }, [gameState, myPlayer]);
+
+  const allTileKeys = useMemo(() => {
+    const keys = new Set(overlayState.tileKeys);
+    if (beaconState) {
+      keys.add(beaconState.hexKey);
+    }
+    return Array.from(keys);
+  }, [overlayState.tileKeys, beaconState]);
+
   const hexGeometries = useHexGeometries(
     map,
-    overlayState.tileKeys,
+    allTileKeys,
     mapLat,
     mapLng,
     tileSizeMeters,
@@ -247,9 +266,43 @@ function AbilityOverlayLayerComponent({
     ? hexGeometries[overlayState.selectedTargetHexKey]
     : undefined;
 
-  if (!svgRoot || overlayState.mode === 'none') {
+  if (!svgRoot || (overlayState.mode === 'none' && !beaconState)) {
     return null;
   }
+
+  const renderBeaconSector = () => {
+    if (!beaconState) return null;
+    const geometry = hexGeometries[beaconState.hexKey];
+    if (!geometry) return null;
+
+    const { heading, angle } = beaconState;
+    const [cx, cy] = geometry.center;
+    
+    const length = 2000;
+    const radLeft = (heading - angle / 2 - 90) * Math.PI / 180;
+    const radRight = (heading + angle / 2 - 90) * Math.PI / 180;
+    
+    const x1 = cx + length * Math.cos(radLeft);
+    const y1 = cy + length * Math.sin(radLeft);
+    const x2 = cx + length * Math.cos(radRight);
+    const y2 = cy + length * Math.sin(radRight);
+    
+    // SVG path for a circular sector
+    const largeArcFlag = angle > 180 ? 1 : 0;
+    const pathData = `M ${cx},${cy} L ${x1},${y1} A ${length},${length} 0 ${largeArcFlag},1 ${x2},${y2} Z`;
+
+    return (
+      <g className="ability-overlay__beacon-sector" pointerEvents="none" opacity={0.3}>
+        <path d={pathData} fill="url(#beaconGradient)" />
+        <defs>
+          <radialGradient id="beaconGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+            <stop offset="0%" stopColor="yellow" stopOpacity={0.8} />
+            <stop offset="100%" stopColor="yellow" stopOpacity={0} />
+          </radialGradient>
+        </defs>
+      </g>
+    );
+  };
 
   return createPortal(
     <g className="ability-overlay-layer" pointerEvents="none">
@@ -402,6 +455,8 @@ function AbilityOverlayLayerComponent({
           </text>
         </g>
       ) : null}
+      
+      {renderBeaconSector()}
     </g>,
     svgRoot,
   );

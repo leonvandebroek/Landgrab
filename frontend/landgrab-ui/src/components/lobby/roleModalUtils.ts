@@ -22,6 +22,7 @@ export const ROLE_ABILITIES: Record<RoleModalRole, RoleAbility[]> = {
         { key: 'reinforce', icon: 'rallyTroops', type: 'active' },
     ],
     Scout: [
+        { key: 'intercept', icon: 'radioTower', type: 'active' },
         { key: 'extendedVision', icon: 'compass', type: 'passive' },
         { key: 'firstStrike', icon: 'archeryTarget', type: 'passive' },
     ],
