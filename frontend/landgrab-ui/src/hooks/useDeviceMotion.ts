@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useUiStore } from '../stores/uiStore';
 
 type DeviceMotionPermissionState = 'unavailable' | 'prompt' | 'granted' | 'denied';
@@ -14,6 +14,8 @@ export interface DeviceMotionState {
   permissionState: DeviceMotionPermissionState;
   requestPermission: () => Promise<void>;
 }
+
+const PITCH_SYNC_INTERVAL_MS = 100;
 
 function getInitialMotionState(): {
   supported: boolean;
@@ -41,6 +43,10 @@ export function useDeviceMotion(enabled: boolean): DeviceMotionState {
   const [permissionState, setPermissionState] = useState<DeviceMotionPermissionState>(
     initialState.permissionState
   );
+
+  const pitchRef = useRef<number | null>(null);
+  const lastSyncRef = useRef<number>(0);
+  const rafIdRef = useRef<number>(0);
 
   const debugPitch = useUiStore((state) => state.debugPitch);
 
@@ -85,6 +91,20 @@ export function useDeviceMotion(enabled: boolean): DeviceMotionState {
 
     let isListening = false;
 
+    const scheduleStateSync = () => {
+      if (rafIdRef.current) {
+        return;
+      }
+      rafIdRef.current = window.requestAnimationFrame(() => {
+        rafIdRef.current = 0;
+        const now = performance.now();
+        if (now - lastSyncRef.current >= PITCH_SYNC_INTERVAL_MS) {
+          lastSyncRef.current = now;
+          setPitch(pitchRef.current);
+        }
+      });
+    };
+
     const stopListening = () => {
       if (!isListening) {
         return;
@@ -104,10 +124,9 @@ export function useDeviceMotion(enabled: boolean): DeviceMotionState {
       }
 
       const rawPitch = Math.atan2(accelY, Math.sqrt(accelX * accelX + accelZ * accelZ)) * (180 / Math.PI);
-
-      setPitch(previousPitch =>
-        previousPitch === null ? rawPitch : 0.7 * previousPitch + 0.3 * rawPitch
-      );
+      const prev = pitchRef.current;
+      pitchRef.current = prev === null ? rawPitch : 0.7 * prev + 0.3 * rawPitch;
+      scheduleStateSync();
     };
 
     const startListening = () => {
@@ -136,6 +155,10 @@ export function useDeviceMotion(enabled: boolean): DeviceMotionState {
     return () => {
       stopListening();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (rafIdRef.current) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = 0;
+      }
     };
   }, [enabled, permissionState, supported]);
 

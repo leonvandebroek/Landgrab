@@ -93,7 +93,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const activeRaids = useGameStore((state) => state.gameState?.activeRaids ?? EMPTY_RAIDS);
   const claimMode = useGameStore((state) => state.gameState?.claimMode ?? DEFAULT_CLAIM_MODE);
   const dynamics = useGameStore((state) => state.gameState?.dynamics ?? DEFAULT_DYNAMICS);
-  const grid = useGameStore((state) => (state.gridOverride ?? state.gameState?.grid) ?? EMPTY_GRID);
+  const grid = useGameStore((state) => isSelected ? ((state.gridOverride ?? state.gameState?.grid) ?? EMPTY_GRID) : EMPTY_GRID);
   const neighborCells = useGameStore(useShallow((state) => {
     const grid = state.gridOverride ?? state.gameState?.grid;
     if (!grid) return EMPTY_NEIGHBORS;

@@ -32,7 +32,7 @@ type ClaimTileActionType = 'claim' | 'reinforce' | 'claimAlliance' | 'claimSelf'
 
 type UseGameActionsGameplayOptions = Pick<
   UseGameActionsOptions,
-  'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHeading' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
+  'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHeadingRef' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
 >;
 
 interface UseGameActionsGameplayResult {
@@ -57,7 +57,7 @@ export function useGameActionsGameplay({
   connected,
   gameState,
   currentLocation,
-  currentHeading,
+  currentHeadingRef,
   currentHex,
   myPlayer,
   isHostBypass,
@@ -83,13 +83,8 @@ export function useGameActionsGameplay({
   const lastSentPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const locationThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingLocationRef = useRef<{ lat: number; lng: number } | null>(null);
-  const currentHeadingRef = useRef<number | null>(null);
   const lastSendTimeRef = useRef<number>(0);
   const previousCurrentHexRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    currentHeadingRef.current = currentHeading ?? null;
-  }, [currentHeading]);
 
   const selectedHex = useMemo<[number, number] | null>(() => {
     if (!selectedHexKey) {
@@ -147,7 +142,7 @@ export function useGameActionsGameplay({
 
     lastSendTimeRef.current = Date.now();
 
-    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng, currentHeadingRef.current)
+    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng, currentHeadingRef?.current ?? null)
       .then(() => {
         lastSentPositionRef.current = { lat: pendingLocation.lat, lng: pendingLocation.lng };
         clearLocationThrottle();
@@ -156,7 +151,7 @@ export function useGameActionsGameplay({
         }, HEARTBEAT_INTERVAL_MS);
       })
       .catch(cause => setError(String(cause)));
-  }, [clearLocationThrottle, invoke, setError]);
+  }, [clearLocationThrottle, currentHeadingRef, invoke, setError]);
 
   useEffect((): void | (() => void) => {
     if (!connected || gameState?.phase !== 'Playing' || !currentLocation) {

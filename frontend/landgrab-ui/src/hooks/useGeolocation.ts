@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import i18n from '../i18n';
 
 interface GeoState {
@@ -6,6 +6,24 @@ interface GeoState {
   lng: number | null;
   error: string | null;
   loading: boolean;
+}
+
+const MIN_UPDATE_INTERVAL_MS = 500;
+const MIN_DISTANCE_METRES = 1.5;
+
+function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const earthRadiusM = 6_371_000;
+  const toRadians = (degrees: number): number => degrees * (Math.PI / 180);
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLng = toRadians(lng2 - lng1);
+  const startLat = toRadians(lat1);
+  const endLat = toRadians(lat2);
+
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusM * c;
 }
 
 export function useGeolocation(enabled = true): GeoState {
@@ -18,6 +36,8 @@ export function useGeolocation(enabled = true): GeoState {
     supported ? null : i18n.t('errors.geolocationNotSupported')
   );
 
+  const lastUpdateRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
+
   useEffect(() => {
     if (!enabled || !supported) {
       return;
@@ -28,10 +48,25 @@ export function useGeolocation(enabled = true): GeoState {
     const startWatch = () => {
       watchId = navigator.geolocation.watchPosition(
         pos => {
-          setPosition({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude
-          });
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const now = performance.now();
+          const last = lastUpdateRef.current;
+
+          if (last) {
+            const elapsed = now - last.time;
+            if (elapsed < MIN_UPDATE_INTERVAL_MS) {
+              return;
+            }
+
+            const distance = haversineDistanceM(last.lat, last.lng, lat, lng);
+            if (distance < MIN_DISTANCE_METRES) {
+              return;
+            }
+          }
+
+          lastUpdateRef.current = { lat, lng, time: now };
+          setPosition({ lat, lng });
           setError(null);
         },
         err => {
