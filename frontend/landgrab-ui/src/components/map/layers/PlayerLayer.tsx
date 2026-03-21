@@ -98,6 +98,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   const [projectionTick, setProjectionTick] = useState(0);
   const players = usePlayerLayerStore((state) => state.players);
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
+  const currentLocation = usePlayerLayerStore((state) => state.currentLocation);
   const gameState = useGameStore((state) => state.gameState);
 
   useEffect(() => {
@@ -150,7 +151,10 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
     const grid = gameState?.grid;
 
     return sortedPlayers.flatMap((player) => {
-      const location = getValidLocation(player.currentLat, player.currentLng);
+      const isMe = player.id === myUserId;
+      const location = isMe && currentLocation
+        ? [currentLocation.lat, currentLocation.lng] as [number, number]
+        : getValidLocation(player.currentLat, player.currentLng);
       if (!location) {
         return [];
       }
@@ -159,7 +163,6 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       const label = player.id === myUserId ? `${player.name} (You)` : player.name;
       
       const isAlly = Boolean(player.allianceId && myPlayer?.allianceId === player.allianceId && player.id !== myUserId);
-      const isMe = player.id === myUserId;
       let isStale = false;
       if (!isMe && !isAlly && player.currentHexQ != null && player.currentHexR != null && grid) {
         const hexKey = `${player.currentHexQ},${player.currentHexR}`;
@@ -177,7 +180,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         isStale,
       }];
     });
-  }, [map, myUserId, players, projectionTick, gameState]);
+  }, [map, myUserId, players, projectionTick, gameState, currentLocation]);
 
   const hexGroups = useMemo(() => {
     const groups = new Map<string, number[]>();

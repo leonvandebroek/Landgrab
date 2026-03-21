@@ -93,7 +93,9 @@ export const GameMap = memo(function GameMap({
 }: Props) {
   const { t } = useTranslation();
   const selectedHexKey = useGameplayStore((overlayState) => overlayState.selectedHexKey);
+  const mapFocusPreset = useGameplayStore((state) => state.abilityUi.mapFocusPreset);
   const setZoomLevel = useUiStore((uiState) => uiState.setZoomLevel);
+  const hudBottomPx = useUiStore((uiState) => uiState.hudBottomPx);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const zoomSyncTimeoutRef = useRef<number | null>(null);
@@ -108,6 +110,7 @@ export const GameMap = memo(function GameMap({
   const basemapErrorRef = useRef(false);
   const basemapDismissedRef = useRef(false);
   const followedLocationKeyRef = useRef('');
+  const currentLocationRef = useRef<LocationPoint | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const activeBaseLayerRef = useRef<BasemapLayer | null>(null);
   const basemapLayersRef = useRef<BasemapLayer[]>([]);
@@ -115,6 +118,9 @@ export const GameMap = memo(function GameMap({
   const initialCenterRef = useRef<[number, number]>(
     state.mapLat != null && state.mapLng != null ? [state.mapLat, state.mapLng] : FALLBACK_CENTER,
   );
+  const savedCameraStateRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
+  const invalidateDebounceRef = useRef<number | null>(null);
+  const repanDebounceRef = useRef<number | null>(null);
 
   const currentHex = useMemo(() => {
     if (!currentLocation || state.mapLat == null || state.mapLng == null) {
@@ -158,6 +164,31 @@ export const GameMap = memo(function GameMap({
     setBasemapDismissed(nextValue);
   }, []);
 
+  const panToOffsetLocation = useCallback((lat: number, lng: number, zoom?: number, animate = true) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const targetZoom = zoom ?? map.getZoom();
+    const containerHeight = map.getSize().y;
+    const offsetPxY = containerHeight * 0.12;
+    const targetPoint = map.project([lat, lng], targetZoom);
+    const offsetPoint = targetPoint.subtract([0, offsetPxY]);
+    const offsetLatLng = map.unproject(offsetPoint, targetZoom);
+
+    if (animate) {
+      map.panTo(offsetLatLng, {
+        animate: true,
+        duration: 0.8,
+        easeLinearity: 0.25,
+      });
+      // also ensure zoom is set smoothly if it's changing
+      if (zoom !== undefined && zoom !== map.getZoom()) {
+        map.setZoom(targetZoom, { animate: true });
+      }
+    } else {
+      map.setView(offsetLatLng, targetZoom, { animate: false });
+    }
+  }, []);
+
   const handleHexClick = useCallback((q: number, r: number) => {
     onHexClick?.(q, r, renderedGrid[`${q},${r}`]);
   }, [onHexClick, renderedGrid]);
@@ -165,9 +196,9 @@ export const GameMap = memo(function GameMap({
   const handleZoomToLocation = useCallback(() => {
     const map = mapRef.current;
     if (map && currentLocation) {
-      map.setView([currentLocation.lat, currentLocation.lng], Math.max(map.getZoom(), 17));
+      panToOffsetLocation(currentLocation.lat, currentLocation.lng, Math.max(map.getZoom(), 17));
     }
-  }, [currentLocation]);
+  }, [currentLocation, panToOffsetLocation]);
 
   const queueZoomLevelSync = useCallback((nextZoomLevel: number) => {
     if (zoomSyncTimeoutRef.current !== null) {
@@ -212,6 +243,10 @@ export const GameMap = memo(function GameMap({
   useEffect(() => {
     useGameplayStore.getState().setCurrentHexKey(toHexKey(currentHex));
   }, [currentHex]);
+
+  useEffect(() => {
+    currentLocationRef.current = currentLocation;
+  }, [currentLocation]);
 
   useEffect(() => {
     useGameStore.getState().setGridOverride(gridOverride ?? null);
@@ -321,8 +356,17 @@ export const GameMap = memo(function GameMap({
     mapRef.current = map;
     setMapInstance(map);
 
+    useUiStore.getState().setMapCameraController({
+      setView: (lat, lng, zoom) => panToOffsetLocation(lat, lng, zoom, true),
+        fitBounds: (bounds, _paddingPx) => map.fitBounds(bounds, {
+          paddingTopLeft: L.point(GRID_FIT_PADDING.x, 48),
+          paddingBottomRight: GRID_FIT_PADDING,
+        }),
+      getZoom: () => map.getZoom(),
+    });
+
     if (navigateRef) {
-      navigateRef.current = (lat: number, lng: number) => map.setView([lat, lng]);
+        navigateRef.current = (lat: number, lng: number) => panToOffsetLocation(lat, lng);
     }
 
     return () => {
@@ -345,12 +389,13 @@ export const GameMap = memo(function GameMap({
       map.remove();
       mapRef.current = null;
       setMapInstance(null);
+      useUiStore.getState().setMapCameraController(null);
       geometryKeyRef.current = '';
       if (navigateRef) {
         navigateRef.current = null;
       }
     };
-  }, [applyBasemapDismissed, applyBasemapError, constrainViewportToGrid, navigateRef, t]);
+  }, [applyBasemapDismissed, applyBasemapError, constrainViewportToGrid, navigateRef, panToOffsetLocation, t]);
 
   useEffect(() => {
     const map = mapInstance;
@@ -398,6 +443,43 @@ export const GameMap = memo(function GameMap({
   }, []);
 
   useEffect(() => {
+    if (invalidateDebounceRef.current !== null) {
+      window.clearTimeout(invalidateDebounceRef.current);
+    }
+    
+    // 150ms invalidation debounce
+    invalidateDebounceRef.current = window.setTimeout(() => {
+      invalidateDebounceRef.current = null;
+      const map = mapRef.current;
+      if (map) {
+        map.invalidateSize({ pan: false });
+      }
+
+      if (repanDebounceRef.current !== null) {
+        window.clearTimeout(repanDebounceRef.current);
+      }
+      
+      // Separate 350ms follow-me re-pan delay
+      repanDebounceRef.current = window.setTimeout(() => {
+        repanDebounceRef.current = null;
+        if (isFollowingMe && currentLocation) {
+          followedLocationKeyRef.current = ''; // force update
+          panToOffsetLocation(currentLocation.lat, currentLocation.lng);
+        }
+      }, 350);
+    }, 150);
+
+    return () => {
+      if (invalidateDebounceRef.current !== null) {
+        window.clearTimeout(invalidateDebounceRef.current);
+      }
+      if (repanDebounceRef.current !== null) {
+        window.clearTimeout(repanDebounceRef.current);
+      }
+    };
+  }, [hudBottomPx, isFollowingMe, currentLocation, panToOffsetLocation]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !onBoundsChange) {
       return;
@@ -419,6 +501,60 @@ export const GameMap = memo(function GameMap({
       map.off('moveend', handleMoveEnd);
     };
   }, [onBoundsChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    let followToggleFrameId: number | null = null;
+    const setFollowingMeDeferred = (nextValue: boolean) => {
+      followToggleFrameId = window.requestAnimationFrame(() => {
+        setIsFollowingMe(nextValue);
+      });
+    };
+
+    if (mapFocusPreset === 'player') {
+      if (!savedCameraStateRef.current) {
+        savedCameraStateRef.current = { center: map.getCenter(), zoom: map.getZoom() };
+      }
+      followedLocationKeyRef.current = '';
+      setFollowingMeDeferred(true);
+      const loc = currentLocationRef.current;
+      if (loc) {
+        panToOffsetLocation(loc.lat, loc.lng, undefined, true);
+      }
+    } else if (mapFocusPreset === 'localTracking') {
+      if (!savedCameraStateRef.current) {
+        savedCameraStateRef.current = { center: map.getCenter(), zoom: map.getZoom() };
+      }
+      followedLocationKeyRef.current = '';
+      setFollowingMeDeferred(true);
+      const loc = currentLocationRef.current;
+      if (loc) {
+        panToOffsetLocation(loc.lat, loc.lng, 17, false);
+      } else {
+        map.setZoom(17, { animate: true });
+      }
+    } else if (mapFocusPreset === 'strategicTargeting') {
+      if (!savedCameraStateRef.current) {
+        savedCameraStateRef.current = { center: map.getCenter(), zoom: map.getZoom() };
+      }
+      setFollowingMeDeferred(false);
+      map.setZoom(14, { animate: true });
+    } else if (!mapFocusPreset || mapFocusPreset === 'none' || mapFocusPreset === 'idle') {
+      if (savedCameraStateRef.current) {
+        const { center, zoom } = savedCameraStateRef.current;
+        map.setView(center, zoom, { animate: true });
+        savedCameraStateRef.current = null;
+      }
+    }
+
+    return () => {
+      if (followToggleFrameId !== null) {
+        window.cancelAnimationFrame(followToggleFrameId);
+      }
+    };
+  }, [mapFocusPreset, panToOffsetLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -477,18 +613,8 @@ export const GameMap = memo(function GameMap({
     }
 
     followedLocationKeyRef.current = locationKey;
-    const containerHeight = map.getSize().y;
-    const offsetY = containerHeight * 0.08;
-    const targetPoint = map.project([currentLocation.lat, currentLocation.lng], map.getZoom());
-    const offsetPoint = targetPoint.subtract([0, offsetY]);
-    const offsetLatLng = map.unproject(offsetPoint, map.getZoom());
-
-    map.panTo(offsetLatLng, {
-      animate: true,
-      duration: 0.8,
-      easeLinearity: 0.25,
-    });
-  }, [currentLocation, isFollowingMe]);
+    panToOffsetLocation(currentLocation.lat, currentLocation.lng, undefined, true);
+  }, [currentLocation, isFollowingMe, panToOffsetLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -513,7 +639,11 @@ export const GameMap = memo(function GameMap({
     }
 
     const bounds = L.latLngBounds(points);
-    map.fitBounds(bounds, { padding: GRID_FIT_PADDING, animate: false });
+    map.fitBounds(bounds, { 
+      paddingTopLeft: L.point(24, 48),
+      paddingBottomRight: L.point(24, 24),
+      animate: false 
+    });
 
     if (!constrainViewportToGrid) {
       return;

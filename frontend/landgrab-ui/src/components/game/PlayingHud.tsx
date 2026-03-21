@@ -160,34 +160,70 @@ export function PlayingHud({
     const layout = layoutRef.current;
     if (!layout) return;
 
-    const surface = layout.querySelector('.ability-card, .player-hud') as HTMLElement | null;
-    if (!surface) {
-      layout.style.removeProperty('--player-hud-h');
-      layout.style.removeProperty('--player-hud-safe-inset');
-      return;
-    }
-
-    const syncHudMetrics = () => {
-      const layoutRect = layout.getBoundingClientRect();
-      const surfaceRect = surface.getBoundingClientRect();
-      layout.style.setProperty('--player-hud-h', `${Math.ceil(surfaceRect.height)}px`);
-      layout.style.setProperty('--player-hud-safe-inset', `${Math.max(0, Math.ceil(layoutRect.bottom - surfaceRect.top))}px`);
-    };
-
-    syncHudMetrics();
+    let currentSurface: HTMLElement | null = null;
+    let currentBottomZone: HTMLElement | null = null;
 
     const observer = new ResizeObserver(() => {
       syncHudMetrics();
     });
 
-    observer.observe(surface);
+    const syncHudMetrics = () => {
+      // Re-query in case elements changed due to conditional rendering
+      const newSurface = layout.querySelector('.ability-card, .player-hud') as HTMLElement | null;
+      const newBottomZone = layout.querySelector('.bottom-card-zone') as HTMLElement | null;
+
+      if (newSurface !== currentSurface) {
+        if (currentSurface) observer.unobserve(currentSurface);
+        if (newSurface) observer.observe(newSurface);
+        currentSurface = newSurface;
+      }
+      
+      if (newBottomZone !== currentBottomZone) {
+        if (currentBottomZone) observer.unobserve(currentBottomZone);
+        if (newBottomZone) observer.observe(newBottomZone);
+        currentBottomZone = newBottomZone;
+      }
+
+      if (!currentSurface) {
+        layout.style.removeProperty('--player-hud-h');
+        layout.style.removeProperty('--player-hud-surface-h');
+        layout.style.removeProperty('--player-hud-safe-inset');
+        useUiStore.getState().setHudBottomPx(0);
+        return;
+      }
+
+      const layoutRect = layout.getBoundingClientRect();
+      const surfaceRect = currentSurface.getBoundingClientRect();
+      const baseSurfaceHeight = Math.ceil(surfaceRect.height);
+      const isAbilityCard = currentSurface.classList.contains('ability-card');
+      
+      let bottomZoneHeight = 0;
+      if (currentBottomZone && !isAbilityCard && currentBottomZone.childElementCount > 0) {
+        const zoneRect = currentBottomZone.getBoundingClientRect();
+        if (zoneRect.height > 0) {
+          bottomZoneHeight = Math.ceil(zoneRect.height);
+        }
+      }
+
+      const totalCombinedHeight = isAbilityCard 
+        ? baseSurfaceHeight 
+        : baseSurfaceHeight + bottomZoneHeight;
+
+      layout.style.setProperty('--player-hud-surface-h', `${baseSurfaceHeight}px`);
+      layout.style.setProperty('--player-hud-h', `${totalCombinedHeight}px`);
+      layout.style.setProperty('--player-hud-safe-inset', `${Math.max(0, Math.ceil(layoutRect.bottom - surfaceRect.top))}px`);
+      useUiStore.getState().setHudBottomPx(totalCombinedHeight);
+    };
+
     observer.observe(layout);
+    syncHudMetrics();
     window.addEventListener('resize', syncHudMetrics);
 
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', syncHudMetrics);
       layout.style.removeProperty('--player-hud-h');
+      layout.style.removeProperty('--player-hud-surface-h');
       layout.style.removeProperty('--player-hud-safe-inset');
     };
   }, []);
@@ -461,101 +497,6 @@ export function PlayingHud({
         <div className="map-container">
           {children}
         </div>
-
-        <div className="bottom-hud-overlay">
-          {pickupPrompt && (
-            <div className="glass-panel hud-context-pill context-info directive-panel directive-panel--interactive directive-panel--actionable hud-prompt-shell">
-              <div className="directive-panel__swipe-handle" />
-              <span className="directive-panel__meta">SYS.LOCK // ACTIVE</span>
-              <div className="directive-panel__header">
-                <span className="directive-panel__status-led" />
-                <div className="directive-panel__eyebrow">Directive</div>
-              </div>
-              <div className="directive-panel__title">
-                {t('game.pickupPrompt')}
-                <span className="directive-panel__title-range">1 – {pickupPrompt.max}</span>
-              </div>
-              <div className="pickup-controls directive-panel__slider">
-                <input
-                  type="range"
-                  data-testid="pickup-count-slider"
-                  min={1}
-                  max={pickupPrompt.max}
-                  value={pickupCount}
-                  aria-label={t('game.pickupPrompt')}
-                  title={t('game.pickupPrompt')}
-                  onChange={(event) => setPickupCount(Number(event.target.value))}
-                  style={{ '--slider-fill-pct': `${((pickupCount - 1) / Math.max(1, pickupPrompt.max - 1)) * 100}%` } as React.CSSProperties}
-                />
-                <div className="directive-panel__slider-labels">
-                  <span>1</span>
-                  <span>{pickupPrompt.max}</span>
-                </div>
-              </div>
-              <div className="directive-panel__value" data-testid="pickup-count-display">{pickupCount}</div>
-              <div className="hud-action-bar directive-panel__actions">
-                <button className="hud-btn directive-panel__cancel-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary directive-panel__confirm-btn" data-testid="pickup-confirm" onClick={onConfirmPickup}>{t('game.confirm')}</button>
-              </div>
-              <div className="directive-panel__divider" aria-hidden="true" />
-            </div>
-          )}
-
-          {reinforcePrompt && (
-            <div className="glass-panel hud-context-pill context-info directive-panel directive-panel--interactive directive-panel--actionable hud-prompt-shell">
-              <div className="directive-panel__swipe-handle" />
-              <span className="directive-panel__meta">SYS.LOCK // ACTIVE</span>
-              <div className="directive-panel__header">
-                <span className="directive-panel__status-led" />
-                <div className="directive-panel__eyebrow">Directive</div>
-              </div>
-              <div className="directive-panel__title">
-                {t('game.reinforcePrompt')}
-                <span className="directive-panel__title-range">1 – {reinforcePrompt.max}</span>
-              </div>
-              <div className="pickup-controls directive-panel__slider">
-                <input
-                  type="range"
-                  data-testid="reinforce-count-slider"
-                  min={1}
-                  max={reinforcePrompt.max}
-                  value={reinforceCount}
-                  aria-label={t('game.reinforcePrompt')}
-                  title={t('game.reinforcePrompt')}
-                  onChange={(event) => setReinforceCount(Number(event.target.value))}
-                  style={{ '--slider-fill-pct': `${((reinforceCount - 1) / Math.max(1, reinforcePrompt.max - 1)) * 100}%` } as React.CSSProperties}
-                />
-                <div className="directive-panel__slider-labels">
-                  <span>1</span>
-                  <span>{reinforcePrompt.max}</span>
-                </div>
-              </div>
-              <div className="directive-panel__value" data-testid="reinforce-count-display">{reinforceCount}</div>
-              <div className="hud-action-bar directive-panel__actions">
-                <button className="hud-btn directive-panel__cancel-btn" onClick={() => setReinforcePrompt(null)}>{t('game.cancel')}</button>
-                <button className="hud-btn primary directive-panel__confirm-btn" data-testid="reinforce-confirm" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
-              </div>
-              <div className="directive-panel__divider" aria-hidden="true" />
-            </div>
-          )}
-
-          {showRemoteTileInfoCard && selectedHex && (
-            <TileInfoCard
-              targetCell={selectedCell}
-              targetHex={selectedHex}
-              onDismiss={onDismissTileActions!}
-              isPresenceBoosted={Boolean(
-                selectedCell?.ownerId
-                && me
-                && (selectedCell.ownerId === me.id || (me.allianceId && selectedCell.ownerAllianceId === me.allianceId))
-                && currentHex
-                && selectedHex[0] === currentHex[0]
-                && selectedHex[1] === currentHex[1]
-              )}
-            />
-          )}
-
-        </div>
       </div>
 
       <div className="top-status-bar">
@@ -808,6 +749,100 @@ export function PlayingHud({
           </div>
         </div>
       )}
+
+      <div className="bottom-card-zone">
+        {pickupPrompt && (
+          <div className="glass-panel hud-context-pill context-info directive-panel directive-panel--interactive directive-panel--actionable hud-prompt-shell">
+            <div className="directive-panel__swipe-handle" />
+            <span className="directive-panel__meta">SYS.LOCK // ACTIVE</span>
+            <div className="directive-panel__header">
+              <span className="directive-panel__status-led" />
+              <div className="directive-panel__eyebrow">Directive</div>
+            </div>
+            <div className="directive-panel__title">
+              {t('game.pickupPrompt')}
+              <span className="directive-panel__title-range">1 – {pickupPrompt.max}</span>
+            </div>
+            <div className="pickup-controls directive-panel__slider">
+              <input
+                type="range"
+                data-testid="pickup-count-slider"
+                min={1}
+                max={pickupPrompt.max}
+                value={pickupCount}
+                aria-label={t('game.pickupPrompt')}
+                title={t('game.pickupPrompt')}
+                onChange={(event) => setPickupCount(Number(event.target.value))}
+                style={{ '--slider-fill-pct': `${((pickupCount - 1) / Math.max(1, pickupPrompt.max - 1)) * 100}%` } as React.CSSProperties}
+              />
+              <div className="directive-panel__slider-labels">
+                <span>1</span>
+                <span>{pickupPrompt.max}</span>
+              </div>
+            </div>
+            <div className="directive-panel__value" data-testid="pickup-count-display">{pickupCount}</div>
+            <div className="hud-action-bar directive-panel__actions">
+              <button className="hud-btn directive-panel__cancel-btn" onClick={() => setPickupPrompt(null)}>{t('game.cancel')}</button>
+              <button className="hud-btn primary directive-panel__confirm-btn" data-testid="pickup-confirm" onClick={onConfirmPickup}>{t('game.confirm')}</button>
+            </div>
+            <div className="directive-panel__divider" aria-hidden="true" />
+          </div>
+        )}
+
+        {reinforcePrompt && (
+          <div className="glass-panel hud-context-pill context-info directive-panel directive-panel--interactive directive-panel--actionable hud-prompt-shell">
+            <div className="directive-panel__swipe-handle" />
+            <span className="directive-panel__meta">SYS.LOCK // ACTIVE</span>
+            <div className="directive-panel__header">
+              <span className="directive-panel__status-led" />
+              <div className="directive-panel__eyebrow">Directive</div>
+            </div>
+            <div className="directive-panel__title">
+              {t('game.reinforcePrompt')}
+              <span className="directive-panel__title-range">1 – {reinforcePrompt.max}</span>
+            </div>
+            <div className="pickup-controls directive-panel__slider">
+              <input
+                type="range"
+                data-testid="reinforce-count-slider"
+                min={1}
+                max={reinforcePrompt.max}
+                value={reinforceCount}
+                aria-label={t('game.reinforcePrompt')}
+                title={t('game.reinforcePrompt')}
+                onChange={(event) => setReinforceCount(Number(event.target.value))}
+                style={{ '--slider-fill-pct': `${((reinforceCount - 1) / Math.max(1, reinforcePrompt.max - 1)) * 100}%` } as React.CSSProperties}
+              />
+              <div className="directive-panel__slider-labels">
+                <span>1</span>
+                <span>{reinforcePrompt.max}</span>
+              </div>
+            </div>
+            <div className="directive-panel__value" data-testid="reinforce-count-display">{reinforceCount}</div>
+            <div className="hud-action-bar directive-panel__actions">
+              <button className="hud-btn directive-panel__cancel-btn" onClick={() => setReinforcePrompt(null)}>{t('game.cancel')}</button>
+              <button className="hud-btn primary directive-panel__confirm-btn" data-testid="reinforce-confirm" onClick={() => void onConfirmReinforce()}>{t('game.confirm')}</button>
+            </div>
+            <div className="directive-panel__divider" aria-hidden="true" />
+          </div>
+        )}
+
+        {showRemoteTileInfoCard && selectedHex && (
+          <TileInfoCard
+            targetCell={selectedCell}
+            targetHex={selectedHex}
+            onDismiss={onDismissTileActions!}
+            isPresenceBoosted={Boolean(
+              selectedCell?.ownerId
+              && me
+              && (selectedCell.ownerId === me.id || (me.allianceId && selectedCell.ownerAllianceId === me.allianceId))
+              && currentHex
+              && selectedHex[0] === currentHex[0]
+              && selectedHex[1] === currentHex[1]
+            )}
+          />
+        )}
+      </div>
 
       {!activeModal && shouldShowDevSection && debugPanel}
 

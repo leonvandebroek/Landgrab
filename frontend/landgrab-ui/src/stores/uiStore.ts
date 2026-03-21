@@ -29,6 +29,7 @@ interface UiStore {
   view: AppView;
   error: string;
   zoomLevel: number;
+  hudBottomPx: number;
   hasAcknowledgedRules: boolean;
   showDebugTools: boolean;
   debugLocationEnabled: boolean;
@@ -40,6 +41,7 @@ interface UiStore {
   setError: (error: string) => void;
   clearError: () => void;
   setZoomLevel: (zoomLevel: number) => void;
+  setHudBottomPx: (px: number) => void;
   setHasAcknowledgedRules: (ack: boolean) => void;
   setShowDebugTools: (show: boolean) => void;
   setDebugLocationEnabled: (enabled: boolean) => void;
@@ -53,6 +55,7 @@ export const useUiStore = create<UiStore>()((set) => ({
   view: 'lobby',
   error: '',
   zoomLevel: 17,
+  hudBottomPx: 0,
   hasAcknowledgedRules: false,
   showDebugTools: false,
   debugLocationEnabled: false,
@@ -64,6 +67,7 @@ export const useUiStore = create<UiStore>()((set) => ({
   setError: (error) => set({ error }),
   clearError: () => set({ error: '' }),
   setZoomLevel: (zoomLevel) => set({ zoomLevel }),
+  setHudBottomPx: (hudBottomPx) => set({ hudBottomPx }),
   setHasAcknowledgedRules: (hasAcknowledgedRules) => set({ hasAcknowledgedRules }),
   setShowDebugTools: (showDebugTools) => set({ showDebugTools }),
   setDebugLocationEnabled: (debugLocationEnabled) => set({ debugLocationEnabled }),

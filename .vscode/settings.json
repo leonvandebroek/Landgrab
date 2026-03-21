@@ -1,7 +1,8 @@
 {
     "task.allowAutomaticTasks": "on",
     "chat.tools.terminal.autoApprove": {
-        "npm run build": true
+        "npm run build": true,
+        "npx eslint": true
     },
     "chat.mcp.serverSampling": {
         "Landgrab/.vscode/mcp.json: landgrab": {
