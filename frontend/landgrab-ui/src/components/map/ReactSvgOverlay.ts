@@ -33,7 +33,7 @@ export class ReactSvgOverlay extends L.Layer {
     pane.appendChild(this._svg);
 
     this._updatePosition();
-    map.on('zoom viewreset', this._updatePosition, this);
+    map.on('zoom viewreset rotate', this._updatePosition, this);
     map.on('moveend', this._updatePosition, this);
 
     return this;
@@ -55,7 +55,7 @@ export class ReactSvgOverlay extends L.Layer {
   }
 
   override onRemove(map: L.Map): this {
-    map.off('zoom viewreset', this._updatePosition, this);
+    map.off('zoom viewreset rotate', this._updatePosition, this);
     map.off('moveend', this._updatePosition, this);
     this._svg.remove();
     return this;

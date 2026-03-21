@@ -98,6 +98,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   const [projectionTick, setProjectionTick] = useState(0);
   const players = usePlayerLayerStore((state) => state.players);
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
+  const currentLocation = usePlayerLayerStore((state) => state.currentLocation);
   const gameState = useGameStore((state) => state.gameState);
 
   useEffect(() => {
@@ -105,6 +106,10 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       const beaconRadiusPane = map.createPane(BEACON_RADIUS_PANE);
       beaconRadiusPane.style.zIndex = '625';
       beaconRadiusPane.style.pointerEvents = 'none';
+      const rotatePane = (map as any)._rotatePane as HTMLElement | undefined;
+      if (rotatePane) {
+        rotatePane.appendChild(beaconRadiusPane);
+      }
     }
 
     const pane = map.getPane(PLAYER_PANE) ? PLAYER_PANE : OVERLAY_PANE;
@@ -121,12 +126,12 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       setProjectionTick((tick) => tick + 1);
     };
 
-    map.on('zoomend moveend viewreset', handleProjectionChange);
+    map.on('zoomend moveend viewreset rotate', handleProjectionChange);
 
     return () => {
       window.cancelAnimationFrame(frameId);
       overlay.remove();
-      map.off('zoomend moveend viewreset', handleProjectionChange);
+      map.off('zoomend moveend viewreset rotate', handleProjectionChange);
     };
   }, [map]);
 
@@ -150,7 +155,10 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
     const grid = gameState?.grid;
 
     return sortedPlayers.flatMap((player) => {
-      const location = getValidLocation(player.currentLat, player.currentLng);
+      const isMe = player.id === myUserId;
+      const location = isMe && currentLocation
+        ? [currentLocation.lat, currentLocation.lng] as [number, number]
+        : getValidLocation(player.currentLat, player.currentLng);
       if (!location) {
         return [];
       }
@@ -159,7 +167,6 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       const label = player.id === myUserId ? `${player.name} (You)` : player.name;
       
       const isAlly = Boolean(player.allianceId && myPlayer?.allianceId === player.allianceId && player.id !== myUserId);
-      const isMe = player.id === myUserId;
       let isStale = false;
       if (!isMe && !isAlly && player.currentHexQ != null && player.currentHexR != null && grid) {
         const hexKey = `${player.currentHexQ},${player.currentHexR}`;
@@ -177,7 +184,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         isStale,
       }];
     });
-  }, [map, myUserId, players, projectionTick, gameState]);
+  }, [map, myUserId, players, projectionTick, gameState, currentLocation]);
 
   const hexGroups = useMemo(() => {
     const groups = new Map<string, number[]>();

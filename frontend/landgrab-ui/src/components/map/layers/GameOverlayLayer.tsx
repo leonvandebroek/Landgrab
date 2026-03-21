@@ -121,13 +121,13 @@ function GameOverlayLayerComponent({
       }
     };
 
-    map.on('zoomend moveend viewreset', handleUpdate);
+    map.on('zoomend moveend viewreset rotate', handleUpdate);
 
     return () => {
       window.cancelAnimationFrame(frameId);
       overlayRef.current = null;
       overlay.remove();
-      map.off('zoomend moveend viewreset', handleUpdate);
+      map.off('zoomend moveend viewreset rotate', handleUpdate);
     };
   }, [map]);
 
