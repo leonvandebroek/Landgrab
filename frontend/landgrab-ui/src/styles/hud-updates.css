@@ -4040,3 +4040,51 @@ button, [role="button"] {
   margin: 16px 0;
   border-top: 1px dashed rgba(255, 255, 255, 0.12);
 }
+
+/* Compass FAB */
+.map-control-fab--compass.is-active {
+  background: rgba(10, 14, 22, 0.95);
+  border-color: rgba(255, 165, 0, 0.55);
+  box-shadow: 0 0 16px rgba(255, 165, 0, 0.35), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.map-control-fab--compass.is-active svg {
+  color: rgb(255, 165, 0);
+  fill: rgb(255, 165, 0);
+}
+
+.map-control-fab--compass svg {
+  overflow: visible;
+}
+
+.map-control-fab--compass .compass-needle {
+  transform: rotate(var(--compass-needle-deg, 0deg));
+  transform-origin: center;
+  transition: transform 0.15s ease-out;
+}
+
+.map-control-fab--compass:disabled,
+.map-control-fab--compass[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Tile label counter-rotation */
+/* When the map rotates via compass bearing, these elements counter-rotate to stay upright */
+
+.hex-troop-badge,
+.hex-fo-chip > :first-child,
+.hex-fo-glyph > :first-child,
+.hex-fo-progress > :first-child,
+.hex-fo-raid > :first-child {
+  transform: rotate(calc(-1 * var(--map-bearing, 0deg)));
+  transform-origin: center;
+  transition: transform 0.15s ease-out;
+}
+
+.hex-gps-crosshair {
+  transform: rotate(calc(-1 * var(--map-bearing, 0deg)));
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.15s ease-out;
+}

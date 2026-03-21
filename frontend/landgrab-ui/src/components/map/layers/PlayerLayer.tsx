@@ -106,6 +106,10 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       const beaconRadiusPane = map.createPane(BEACON_RADIUS_PANE);
       beaconRadiusPane.style.zIndex = '625';
       beaconRadiusPane.style.pointerEvents = 'none';
+      const rotatePane = (map as any)._rotatePane as HTMLElement | undefined;
+      if (rotatePane) {
+        rotatePane.appendChild(beaconRadiusPane);
+      }
     }
 
     const pane = map.getPane(PLAYER_PANE) ? PLAYER_PANE : OVERLAY_PANE;
@@ -122,12 +126,12 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       setProjectionTick((tick) => tick + 1);
     };
 
-    map.on('zoomend moveend viewreset', handleProjectionChange);
+    map.on('zoomend moveend viewreset rotate', handleProjectionChange);
 
     return () => {
       window.cancelAnimationFrame(frameId);
       overlay.remove();
-      map.off('zoomend moveend viewreset', handleProjectionChange);
+      map.off('zoomend moveend viewreset rotate', handleProjectionChange);
     };
   }, [map]);
 

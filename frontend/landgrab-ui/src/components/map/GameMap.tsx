@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
+import 'leaflet-rotate';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
 import { DEFAULT_MAP_LAYER_PREFS, type MapLayerPreferences } from '../../types/mapLayerPreferences';
@@ -15,6 +16,7 @@ import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { getTimePeriod } from '../../utils/timeOfDay';
 import { TroopSplashLayer } from './TroopSplashLayer';
 import { MapLayerToggle, MapLegend, TimeOverlay } from '../game/map';
+import { useCompassHeading } from '../../hooks/useCompassHeading';
 
 interface LocationPoint {
   lat: number;
@@ -121,6 +123,15 @@ export const GameMap = memo(function GameMap({
   const savedCameraStateRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
   const invalidateDebounceRef = useRef<number | null>(null);
   const repanDebounceRef = useRef<number | null>(null);
+  const [isCompassRotationEnabled, setIsCompassRotationEnabled] = useState(false);
+  const [debugCompassHeading, setDebugCompassHeading] = useState<number | null>(null);
+
+  const {
+    heading: compassHeading,
+    supported: compassSupported,
+    permissionState: compassPermission,
+    requestPermission: requestCompassPermission,
+  } = useCompassHeading(isCompassRotationEnabled);
 
   const currentHex = useMemo(() => {
     if (!currentLocation || state.mapLat == null || state.mapLng == null) {
@@ -237,6 +248,27 @@ export const GameMap = memo(function GameMap({
   }, [currentLocation, handleZoomToLocation, setIsFollowingMe]);
 
   useEffect(() => {
+    if (!isCompassRotationEnabled) {
+      return;
+    }
+
+    const wrapHeading = (value: number) => ((value % 360) + 360) % 360;
+
+    function handleCompassDebugKeyDown(event: KeyboardEvent) {
+      if (event.key === 'e' || event.key === 'E') {
+        setDebugCompassHeading((currentHeading) => wrapHeading((currentHeading ?? compassHeading ?? 0) + 5));
+      } else if (event.key === 'q' || event.key === 'Q') {
+        setDebugCompassHeading((currentHeading) => wrapHeading((currentHeading ?? compassHeading ?? 0) - 5));
+      }
+    }
+
+    window.addEventListener('keydown', handleCompassDebugKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleCompassDebugKeyDown);
+    };
+  }, [isCompassRotationEnabled, compassHeading]);
+
+  useEffect(() => {
     useGameplayStore.getState().setSelectedHexKey(toHexKey(selectedHex));
   }, [selectedHex]);
 
@@ -280,13 +312,22 @@ export const GameMap = memo(function GameMap({
       maxBoundsViscosity: constrainViewportToGrid ? 1 : undefined,
       zoom: DEFAULT_MAP_ZOOM,
       zoomControl: false,
+      rotate: true,
+      bearing: 0,
     });
 
     const hexPane = map.createPane(HEX_LAYER_PANE);
     hexPane.style.zIndex = '450';
+    const rotatePane = (map as any)._rotatePane as HTMLElement | undefined;
+    if (rotatePane) {
+      rotatePane.appendChild(hexPane);
+    }
 
     const playerPane = map.createPane(PLAYER_LAYER_PANE);
     playerPane.style.zIndex = '650';
+    if (rotatePane) {
+      rotatePane.appendChild(playerPane);
+    }
 
     const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
     const basemapLayers: BasemapLayer[] = [top25, brtStandard, brtGray];
@@ -672,6 +713,23 @@ export const GameMap = memo(function GameMap({
     });
   }
 
+  const effectiveHeading = debugCompassHeading ?? compassHeading;
+
+  useEffect(() => {
+    const container = mapRef.current?.getContainer();
+
+    if (isCompassRotationEnabled && effectiveHeading !== null) {
+      mapRef.current?.setBearing(effectiveHeading);
+    } else if (!isCompassRotationEnabled) {
+      mapRef.current?.setBearing(0);
+    }
+
+    if (container) {
+      const bearing = isCompassRotationEnabled ? (effectiveHeading ?? 0) : 0;
+      container.style.setProperty('--map-bearing', `${bearing}deg`);
+    }
+  }, [effectiveHeading, isCompassRotationEnabled]);
+
   return (
     <div className={`game-map-container time-${timePeriod}`}>
       <div ref={containerRef} className="leaflet-map" />
@@ -765,6 +823,55 @@ export const GameMap = memo(function GameMap({
             ) : (
               <polygon points="3 11 22 2 13 21 11 13 3 11" />
             )}
+          </svg>
+        </button>
+        <button
+          className={`map-control-fab map-control-fab--compass${isCompassRotationEnabled ? ' is-active' : ''}`}
+          disabled={!compassSupported}
+          title={
+            !compassSupported
+              ? t('game.compassNotSupported')
+              : compassPermission === 'prompt'
+              ? t('game.compassPermissionNeeded')
+              : isCompassRotationEnabled
+              ? t('game.disableCompassRotation')
+              : t('game.enableCompassRotation')
+          }
+          aria-label={
+            !compassSupported
+              ? t('game.compassNotSupported')
+              : isCompassRotationEnabled
+              ? t('game.disableCompassRotation')
+              : t('game.enableCompassRotation')
+          }
+          onClick={() => {
+            if (!compassSupported) return;
+            if (compassPermission === 'prompt') {
+              requestCompassPermission().then(() => {
+                setIsCompassRotationEnabled(true);
+              }).catch(() => {
+                // permission denied — do nothing
+              });
+            } else {
+              setIsCompassRotationEnabled((prev) => {
+                if (prev) {
+                  setDebugCompassHeading(null);
+                }
+                return !prev;
+              });
+            }
+          }}
+          style={{ '--compass-needle-deg': `${debugCompassHeading ?? compassHeading ?? 0}deg` } as React.CSSProperties}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10" />
+            <g className="compass-needle">
+              {/* North needle — red */}
+              <polygon points="12,4 10.5,12 12,11 13.5,12" fill="#e74c3c" stroke="none" />
+              {/* South needle — white */}
+              <polygon points="12,20 10.5,12 12,13 13.5,12" fill="white" stroke="none" />
+            </g>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" />
           </svg>
         </button>
         <button

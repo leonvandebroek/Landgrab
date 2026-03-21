@@ -79,12 +79,12 @@ function AbilityOverlayLayerComponent({
       setZoomLevel(map.getZoom());
     };
 
-    map.on('zoomend moveend viewreset', handleProjectionChange);
+    map.on('zoomend moveend viewreset rotate', handleProjectionChange);
 
     return () => {
       window.cancelAnimationFrame(frameId);
       overlay.remove();
-      map.off('zoomend moveend viewreset', handleProjectionChange);
+      map.off('zoomend moveend viewreset rotate', handleProjectionChange);
     };
   }, [map]);
 
