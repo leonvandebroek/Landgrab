@@ -145,6 +145,28 @@ function GameOverlayLayerComponent({
     onHexClick?.(q, r);
   }, [onHexClick]);
 
+  const visibleTileKeys = useMemo(() => {
+    if (!mapBounds) {
+      return tileKeys;
+    }
+
+    const bufferX = (mapBounds.maxX - mapBounds.minX) * 0.15;
+    const bufferY = (mapBounds.maxY - mapBounds.minY) * 0.15;
+    const minX = mapBounds.minX - bufferX;
+    const maxX = mapBounds.maxX + bufferX;
+    const minY = mapBounds.minY - bufferY;
+    const maxY = mapBounds.maxY + bufferY;
+
+    return tileKeys.filter((key) => {
+      const geo = hexGeometries[key];
+      if (!geo) {
+        return false;
+      }
+      const [cx, cy] = geo.center;
+      return cx >= minX && cx <= maxX && cy >= minY && cy <= maxY;
+    });
+  }, [tileKeys, hexGeometries, mapBounds]);
+
   if (!svgRoot || !mapBounds) {
     return null;
   }
@@ -155,7 +177,7 @@ function GameOverlayLayerComponent({
         {showWorldDimMask ? (
           <WorldDimMask tileKeys={tileKeys} hexGeometries={hexGeometries} mapBounds={mapBounds} />
         ) : null}
-        {tileKeys.map((hexId) => {
+        {visibleTileKeys.map((hexId) => {
           const geometry = hexGeometries[hexId];
 
           if (!geometry) {

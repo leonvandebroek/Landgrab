@@ -1,4 +1,4 @@
-import type { MutableRefObject } from 'react';
+import type { MutableRefObject, RefObject } from 'react';
 import type { TFunction } from 'i18next';
 import type { TileAction, TileActionType } from '../components/game/tileInteraction';
 import { roomHexToLatLng } from '../components/map/HexMath';
@@ -30,7 +30,7 @@ export interface UseGameActionsOptions {
   pendingResumeRef: MutableRefObject<unknown | null>;
   gameState: GameState | null;
   currentLocation: LocationPoint | null;
-  currentHeading: number | null;
+  currentHeadingRef: RefObject<number | null>;
   currentHex: [number, number] | null;
   myPlayer: Player | null;
   isHostBypass: boolean;

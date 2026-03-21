@@ -94,7 +94,7 @@ export default function App() {
     || isHostOnLocationSetupStep
   );
   const location = useGeolocation(shouldEnableGeolocation);
-  const { heading } = useDeviceOrientation(shouldEnableGeolocation);
+  const { headingRef } = useDeviceOrientation(shouldEnableGeolocation);
   const { playSound } = useSound();
 
   // ── SignalR wiring ───────────────────────────────────────────────────────
@@ -317,7 +317,7 @@ export default function App() {
     pendingResumeRef,
     gameState,
     currentLocation,
-    currentHeading: heading,
+    currentHeadingRef: headingRef,
     currentHex,
     myPlayer,
     isHostBypass,

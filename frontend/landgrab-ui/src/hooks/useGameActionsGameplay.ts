@@ -5,6 +5,7 @@ import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type { CombatPreviewDto, HexCell } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
+import { haversineDistanceM } from '../utils/geo';
 import { getErrorMessage, getPlaceSuccessMessage } from '../utils/gameHelpers';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 import { resolveActionCoordinates } from './useGameActions.shared';
@@ -13,26 +14,11 @@ const LOCATION_BROADCAST_THROTTLE_MS = 3000;
 const MIN_MOVEMENT_METRES = 5;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
-function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const earthRadiusM = 6_371_000;
-  const toRadians = (degrees: number): number => degrees * (Math.PI / 180);
-  const deltaLat = toRadians(lat2 - lat1);
-  const deltaLng = toRadians(lng2 - lng1);
-  const startLat = toRadians(lat1);
-  const endLat = toRadians(lat2);
-
-  const a = Math.sin(deltaLat / 2) ** 2
-    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusM * c;
-}
-
 type ClaimTileActionType = 'claim' | 'reinforce' | 'claimAlliance' | 'claimSelf';
 
 type UseGameActionsGameplayOptions = Pick<
   UseGameActionsOptions,
-  'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHeading' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
+  'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHeadingRef' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
 >;
 
 interface UseGameActionsGameplayResult {
@@ -57,7 +43,7 @@ export function useGameActionsGameplay({
   connected,
   gameState,
   currentLocation,
-  currentHeading,
+  currentHeadingRef,
   currentHex,
   myPlayer,
   isHostBypass,
@@ -83,13 +69,8 @@ export function useGameActionsGameplay({
   const lastSentPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const locationThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingLocationRef = useRef<{ lat: number; lng: number } | null>(null);
-  const currentHeadingRef = useRef<number | null>(null);
   const lastSendTimeRef = useRef<number>(0);
   const previousCurrentHexRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    currentHeadingRef.current = currentHeading ?? null;
-  }, [currentHeading]);
 
   const selectedHex = useMemo<[number, number] | null>(() => {
     if (!selectedHexKey) {
@@ -156,7 +137,7 @@ export function useGameActionsGameplay({
         }, HEARTBEAT_INTERVAL_MS);
       })
       .catch(cause => setError(String(cause)));
-  }, [clearLocationThrottle, invoke, setError]);
+  }, [clearLocationThrottle, currentHeadingRef, invoke, setError]);
 
   useEffect((): void | (() => void) => {
     if (!connected || gameState?.phase !== 'Playing' || !currentLocation) {

@@ -126,14 +126,23 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       setProjectionTick((tick) => tick + 1);
     });
 
+    let projectionRafId = 0;
     const handleProjectionChange = () => {
-      setProjectionTick((tick) => tick + 1);
+      if (!projectionRafId) {
+        projectionRafId = window.requestAnimationFrame(() => {
+          projectionRafId = 0;
+          setProjectionTick((tick) => tick + 1);
+        });
+      }
     };
 
     map.on('zoomend moveend viewreset rotate', handleProjectionChange);
 
     return () => {
       window.cancelAnimationFrame(frameId);
+      if (projectionRafId) {
+        window.cancelAnimationFrame(projectionRafId);
+      }
       overlay.remove();
       map.off('zoomend moveend viewreset rotate', handleProjectionChange);
     };

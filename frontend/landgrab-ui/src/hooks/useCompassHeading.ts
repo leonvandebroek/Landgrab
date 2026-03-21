@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type CompassPermissionState = 'unavailable' | 'prompt' | 'granted' | 'denied';
 
@@ -10,12 +10,15 @@ interface DeviceOrientationEventWithWebkit extends DeviceOrientationEvent {
   webkitCompassHeading?: number;
 }
 
-interface CompassHeadingState {
+export interface CompassHeadingState {
   heading: number | null;
+  headingRef: React.RefObject<number | null>;
   supported: boolean;
   permissionState: CompassPermissionState;
   requestPermission: () => Promise<void>;
 }
+
+const HEADING_SYNC_INTERVAL_MS = 150;
 
 function getInitialCompassState(): {
   supported: boolean;
@@ -43,6 +46,10 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
   const [permissionState, setPermissionState] = useState<CompassPermissionState>(
     initialState.permissionState
   );
+
+  const headingRef = useRef<number | null>(null);
+  const lastSyncRef = useRef<number>(0);
+  const rafIdRef = useRef<number>(0);
 
   const requestPermission = useCallback(async () => {
     if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) {
@@ -85,6 +92,22 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
 
     let isListening = false;
 
+    const scheduleStateSync = () => {
+      if (rafIdRef.current) {
+        return;
+      }
+      rafIdRef.current = window.requestAnimationFrame(() => {
+        rafIdRef.current = 0;
+        const now = performance.now();
+        if (now - lastSyncRef.current >= HEADING_SYNC_INTERVAL_MS) {
+          lastSyncRef.current = now;
+          setHeading(headingRef.current);
+        } else {
+          scheduleStateSync();
+        }
+      });
+    };
+
     // Android/Chrome: `deviceorientationabsolute` always carries an absolute
     // magnetic-north heading via `alpha` (event.absolute === true guaranteed).
     const handleAbsoluteOrientation = (event: DeviceOrientationEvent) => {
@@ -92,7 +115,9 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         return;
       }
       const rawHeading = (360 - event.alpha) % 360;
-      setHeading(prev => prev === null ? rawHeading : 0.7 * prev + 0.3 * rawHeading);
+      const prev = headingRef.current;
+      headingRef.current = prev === null ? rawHeading : 0.7 * prev + 0.3 * rawHeading;
+      scheduleStateSync();
     };
 
     // iOS Safari: never fires `deviceorientationabsolute`. Instead it fires the
@@ -105,7 +130,9 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
       if (typeof webkitCompassHeading !== 'number' || isNaN(webkitCompassHeading)) {
         return;
       }
-      setHeading(prev => prev === null ? webkitCompassHeading : 0.7 * prev + 0.3 * webkitCompassHeading);
+      const prev = headingRef.current;
+      headingRef.current = prev === null ? webkitCompassHeading : 0.7 * prev + 0.3 * webkitCompassHeading;
+      scheduleStateSync();
     };
 
     const stopListening = () => {
@@ -143,11 +170,16 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
     return () => {
       stopListening();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (rafIdRef.current) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = 0;
+      }
     };
   }, [enabled, permissionState, supported]);
 
   return {
     heading: enabled && supported && permissionState === 'granted' ? heading : null,
+    headingRef,
     supported,
     permissionState,
     requestPermission
