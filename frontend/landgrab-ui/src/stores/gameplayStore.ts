@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 import type {
+  AbilityKey,
+  AbilityMode,
+  AbilityUiState,
+  MapFocusPreset,
+} from '../types/abilities';
+import type {
   AttackPrompt,
   CombatPreviewState,
   CombatResult,
@@ -10,6 +16,20 @@ import type {
 } from '../types/game';
 
 const MAP_FEEDBACK_TIMEOUT_MS = 3500;
+
+const initialAbilityUiState: AbilityUiState = {
+  activeAbility: null,
+  mode: 'idle',
+  cardVisible: false,
+  targetHexKey: null,
+  pendingTargetHexKey: null,
+  validTargetHexKeys: [],
+  mapFocusPreset: 'none',
+};
+
+function isCommandoTargetingMode(abilityUi: AbilityUiState): boolean {
+  return abilityUi.activeAbility === 'commandoRaid' && abilityUi.mode === 'targeting';
+}
 
 interface GameplayStore {
   selectedHexKey: string | null;
@@ -24,6 +44,7 @@ interface GameplayStore {
   combatPreview: CombatPreviewState | null;
   combatResult: CombatResult | null;
   neutralClaimResult: NeutralClaimResult | null;
+  abilityUi: AbilityUiState;
   commandoTargetingMode: boolean;
   setSelectedHexKey: (key: string | null) => void;
   setCurrentHexKey: (key: string | null) => void;
@@ -37,6 +58,20 @@ interface GameplayStore {
   setCombatPreview: (preview: CombatPreviewState | null) => void;
   setCombatResult: (result: CombatResult | null) => void;
   setNeutralClaimResult: (result: NeutralClaimResult | null) => void;
+  enterAbilityMode: (
+    ability: AbilityKey,
+    mode: AbilityMode,
+    focusPreset?: MapFocusPreset,
+    options?: { cardVisible?: boolean }
+  ) => void;
+  setAbilityMode: (mode: AbilityMode) => void;
+  setAbilityTarget: (hexKey: string) => void;
+  confirmAbilityTarget: () => void;
+  activateAbility: () => void;
+  hideAbilityCard: () => void;
+  showAbilityCard: () => void;
+  exitAbilityMode: () => void;
+  setValidTargetHexKeys: (keys: string[]) => void;
   setCommandoTargetingMode: (mode: boolean) => void;
   clearGameplayUi: () => void;
 }
@@ -65,6 +100,7 @@ export const useGameplayStore = create<GameplayStore>()((set) => ({
   combatPreview: null,
   combatResult: null,
   neutralClaimResult: null,
+  abilityUi: initialAbilityUiState,
   commandoTargetingMode: false,
   setSelectedHexKey: (selectedHexKey) => set({ selectedHexKey }),
   setCurrentHexKey: (currentHexKey) => set({ currentHexKey }),
@@ -90,6 +126,95 @@ export const useGameplayStore = create<GameplayStore>()((set) => ({
   setCombatPreview: (combatPreview) => set({ combatPreview }),
   setCombatResult: (combatResult) => set({ combatResult }),
   setNeutralClaimResult: (neutralClaimResult) => set({ neutralClaimResult }),
+  enterAbilityMode: (ability, mode, focusPreset = 'none', options) =>
+    set(() => {
+      const abilityUi: AbilityUiState = {
+        activeAbility: ability,
+        mode,
+        cardVisible: options?.cardVisible ?? true,
+        targetHexKey: null,
+        pendingTargetHexKey: null,
+        validTargetHexKeys: [],
+        mapFocusPreset: focusPreset,
+      };
+
+      return {
+        abilityUi,
+        commandoTargetingMode: isCommandoTargetingMode(abilityUi),
+      };
+    }),
+  setAbilityMode: (mode) =>
+    set((state) => {
+      const abilityUi: AbilityUiState = {
+        ...state.abilityUi,
+        mode,
+      };
+
+      return {
+        abilityUi,
+        commandoTargetingMode: isCommandoTargetingMode(abilityUi),
+      };
+    }),
+  setAbilityTarget: (hexKey) =>
+    set((state) => ({
+      abilityUi: {
+        ...state.abilityUi,
+        pendingTargetHexKey: hexKey,
+      },
+    })),
+  confirmAbilityTarget: () =>
+    set((state) => {
+      const abilityUi: AbilityUiState = {
+        ...state.abilityUi,
+        mode: 'confirming',
+        targetHexKey: state.abilityUi.pendingTargetHexKey,
+        pendingTargetHexKey: null,
+      };
+
+      return {
+        abilityUi,
+        commandoTargetingMode: isCommandoTargetingMode(abilityUi),
+      };
+    }),
+  activateAbility: () =>
+    set((state) => {
+      const abilityUi: AbilityUiState = {
+        ...state.abilityUi,
+        mode: 'active',
+        pendingTargetHexKey: null,
+      };
+
+      return {
+        abilityUi,
+        commandoTargetingMode: isCommandoTargetingMode(abilityUi),
+      };
+    }),
+  hideAbilityCard: () =>
+    set((state) => ({
+      abilityUi: {
+        ...state.abilityUi,
+        cardVisible: false,
+      },
+    })),
+  showAbilityCard: () =>
+    set((state) => ({
+      abilityUi: {
+        ...state.abilityUi,
+        cardVisible: true,
+      },
+    })),
+  exitAbilityMode: () =>
+    set(() => ({
+      abilityUi: initialAbilityUiState,
+      commandoTargetingMode: false,
+    })),
+  setValidTargetHexKeys: (validTargetHexKeys) =>
+    set((state) => ({
+      abilityUi: {
+        ...state.abilityUi,
+        validTargetHexKeys,
+      },
+    })),
   setCommandoTargetingMode: (commandoTargetingMode) => set({ commandoTargetingMode }),
   clearGameplayUi: () => {
     clearMapFeedbackTimer();
@@ -106,6 +231,7 @@ export const useGameplayStore = create<GameplayStore>()((set) => ({
       combatPreview: null,
       combatResult: null,
       neutralClaimResult: null,
+      abilityUi: initialAbilityUiState,
       commandoTargetingMode: false,
     });
   },

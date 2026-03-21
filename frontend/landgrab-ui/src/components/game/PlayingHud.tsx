@@ -17,6 +17,14 @@ import { PlayerDisplaySettings } from './PlayerDisplaySettings';
 import { ScoreRow } from './PlayerPanel';
 import { TileInfoCard } from './TileInfoCard';
 import { PlayerHUD } from './PlayerHUD';
+import { AbilityCard } from './AbilityCard';
+import { BeaconCard } from './abilities/BeaconCard';
+import { CommandoRaidCard } from './abilities/CommandoRaidCard';
+import { DemolishCard } from './abilities/DemolishCard';
+import { FortConstructionCard } from './abilities/FortConstructionCard';
+import { RallyPointCard } from './abilities/RallyPointCard';
+import { SabotageCard } from './abilities/SabotageCard';
+import { TacticalStrikeCard } from './abilities/TacticalStrikeCard';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
@@ -34,13 +42,17 @@ interface Props {
   currentHexActions?: TileAction[];
   onCurrentHexAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
-  onActivateBeacon?: () => void;
-  onDeactivateBeacon?: () => void;
-  onActivateTacticalStrike?: () => void;
-  onActivateReinforce?: () => void;
-  onActivateEmergencyRepair?: () => void;
-  onStartDemolish?: () => void;
-  onStartFortConstruction?: () => void;
+  onActivateBeacon?: () => Promise<boolean> | void;
+  onDeactivateBeacon?: () => Promise<boolean> | void;
+  onActivateTacticalStrike?: () => Promise<boolean> | void;
+  onActivateCommandoRaid?: (targetQ: number, targetR: number) => Promise<boolean> | void;
+  onActivateReinforce?: () => Promise<boolean> | void;
+  onActivateSabotage?: () => Promise<boolean> | void;
+  onCancelFortConstruction?: () => Promise<boolean> | void;
+  onCancelSabotage?: () => Promise<boolean> | void;
+  onCancelDemolish?: () => Promise<boolean> | void;
+  onStartDemolish?: () => Promise<boolean> | void;
+  onStartFortConstruction?: () => Promise<boolean> | void;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -76,8 +88,12 @@ export function PlayingHud({
   onActivateBeacon,
   onDeactivateBeacon,
   onActivateTacticalStrike,
+  onActivateCommandoRaid,
   onActivateReinforce,
-  onActivateEmergencyRepair,
+  onActivateSabotage,
+  onCancelFortConstruction,
+  onCancelSabotage,
+  onCancelDemolish,
   onStartDemolish,
   onStartFortConstruction,
   playerDisplayPrefs,
@@ -103,6 +119,9 @@ export function PlayingHud({
   const setPickupCount = useGameplayStore((store) => store.setPickupCount);
   const setReinforcePrompt = useGameplayStore((store) => store.setReinforcePrompt);
   const setReinforceCount = useGameplayStore((store) => store.setReinforceCount);
+  const abilityUi = useGameplayStore((store) => store.abilityUi);
+  const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
+  const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
   const error = useUiStore((store) => store.error);
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
   const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
@@ -141,8 +160,8 @@ export function PlayingHud({
     const layout = layoutRef.current;
     if (!layout) return;
 
-    const hud = layout.querySelector('.player-hud') as HTMLElement | null;
-    if (!hud) {
+    const surface = layout.querySelector('.ability-card, .player-hud') as HTMLElement | null;
+    if (!surface) {
       layout.style.removeProperty('--player-hud-h');
       layout.style.removeProperty('--player-hud-safe-inset');
       return;
@@ -150,9 +169,9 @@ export function PlayingHud({
 
     const syncHudMetrics = () => {
       const layoutRect = layout.getBoundingClientRect();
-      const hudRect = hud.getBoundingClientRect();
-      layout.style.setProperty('--player-hud-h', `${Math.ceil(hudRect.height)}px`);
-      layout.style.setProperty('--player-hud-safe-inset', `${Math.max(0, Math.ceil(layoutRect.bottom - hudRect.top))}px`);
+      const surfaceRect = surface.getBoundingClientRect();
+      layout.style.setProperty('--player-hud-h', `${Math.ceil(surfaceRect.height)}px`);
+      layout.style.setProperty('--player-hud-safe-inset', `${Math.max(0, Math.ceil(layoutRect.bottom - surfaceRect.top))}px`);
     };
 
     syncHudMetrics();
@@ -161,7 +180,7 @@ export function PlayingHud({
       syncHudMetrics();
     });
 
-    observer.observe(hud);
+    observer.observe(surface);
     observer.observe(layout);
     window.addEventListener('resize', syncHudMetrics);
 
@@ -792,35 +811,101 @@ export function PlayingHud({
 
       {!activeModal && shouldShowDevSection && debugPanel}
 
-      <PlayerHUD
-        actions={currentHexActions ?? []}
-        onAction={onCurrentHexAction ?? (() => { })}
-        currentHex={currentHex}
-        targetCell={currentHexCell}
-        carriedTroops={carriedTroops}
-        playerColor={playerColor}
-        hasLocation={hasLocation}
-        myUserId={myUserId}
-        myAllianceId={me?.allianceId ?? undefined}
-        myAllianceName={myAlliance?.name}
-        player={me}
-        dynamics={state.dynamics}
-        onActivateBeacon={onActivateBeacon ?? (() => { })}
-        onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
-        onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
-        onActivateReinforce={onActivateReinforce ?? (() => { })}
-        onActivateEmergencyRepair={onActivateEmergencyRepair ?? (() => { })}
-        onStartDemolish={onStartDemolish ?? (() => { })}
-        onStartFortConstruction={onStartFortConstruction ?? (() => { })}
-        guidanceHint={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.hint : null}
-        guidanceVisible={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.isVisible : false}
-        interactionPrompt={canShowIntegratedIdleContext && !hasCurrentHexActions && interactionStatus && interactionStatus.action !== 'none'
-          ? {
-            tone: interactionStatus.tone,
-            message: interactionStatus.message,
-          }
-          : null}
-      />
+      {abilityUi.activeAbility !== null && abilityUi.cardVisible ? (
+        abilityUi.activeAbility === 'beacon' ? (
+          <BeaconCard
+            myUserId={myUserId}
+            onActivateBeacon={onActivateBeacon ?? (() => { })}
+            onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'tacticalStrike' ? (
+          <TacticalStrikeCard
+            myUserId={myUserId}
+            onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'rallyPoint' ? (
+          <RallyPointCard
+            myUserId={myUserId}
+            currentHex={currentHex}
+            onActivateReinforce={onActivateReinforce ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'commandoRaid' ? (
+          <CommandoRaidCard
+            myUserId={myUserId}
+            onActivateCommandoRaid={onActivateCommandoRaid ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'fortConstruction' ? (
+          <FortConstructionCard
+            myUserId={myUserId}
+            currentHex={currentHex}
+            onStartFortConstruction={onStartFortConstruction ?? (() => { })}
+            onCancelFortConstruction={onCancelFortConstruction ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'sabotage' ? (
+          <SabotageCard
+            myUserId={myUserId}
+            currentHex={currentHex}
+            onActivateSabotage={onActivateSabotage ?? (() => { })}
+            onCancelSabotage={onCancelSabotage ?? (() => { })}
+          />
+        ) : abilityUi.activeAbility === 'demolish' ? (
+          <DemolishCard
+            myUserId={myUserId}
+            currentHex={currentHex}
+            onStartDemolish={onStartDemolish ?? (() => { })}
+            onCancelDemolish={onCancelDemolish ?? (() => { })}
+          />
+        ) : (
+          <AbilityCard
+            title={t(`abilities.${abilityUi.activeAbility}.title` as never, { defaultValue: abilityUi.activeAbility })}
+            icon={<GameIcon name="gearHammer" size="sm" />}
+            onBackToHud={() => {
+              if (abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming') {
+                exitAbilityMode();
+              } else {
+                hideAbilityCard();
+              }
+            }}
+            showAbort={abilityUi.mode === 'inProgress'}
+            onAbort={() => exitAbilityMode()}
+          >
+            <div className="placeholder-ability-content">
+              <p>Ability card for {abilityUi.activeAbility}</p>
+              <p>Mode: {abilityUi.mode}</p>
+            </div>
+          </AbilityCard>
+        )
+      ) : (
+        <PlayerHUD
+          actions={currentHexActions ?? []}
+          onAction={onCurrentHexAction ?? (() => { })}
+          currentHex={currentHex}
+          targetCell={currentHexCell}
+          carriedTroops={carriedTroops}
+          playerColor={playerColor}
+          hasLocation={hasLocation}
+          myUserId={myUserId}
+          myAllianceId={me?.allianceId ?? undefined}
+          myAllianceName={myAlliance?.name}
+          player={me}
+          dynamics={state.dynamics}
+          onActivateBeacon={onActivateBeacon ?? (() => { })}
+          onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
+          onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
+          onActivateReinforce={onActivateReinforce ?? (() => { })}
+          onActivateSabotage={onActivateSabotage ?? (() => { })}
+          onStartDemolish={onStartDemolish ?? (() => { })}
+          onStartFortConstruction={onStartFortConstruction ?? (() => { })}
+          guidanceHint={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.hint : null}
+          guidanceVisible={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.isVisible : false}
+          interactionPrompt={canShowIntegratedIdleContext && !hasCurrentHexActions && interactionStatus && interactionStatus.action !== 'none'
+            ? {
+              tone: interactionStatus.tone,
+              message: interactionStatus.message,
+            }
+            : null}
+        />
+      )}
 
       {mainMapBounds !== undefined && state.mapLat != null && state.mapLng != null && (
         <MiniMap

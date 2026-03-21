@@ -7,13 +7,13 @@ tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vsco
 mcp-servers:
   landgrab:
     type: local
-    command: "npm"
-    args: ["--prefix", "tools/landgrab-agent-mcp", "run", "dev"]
+    command: "./tools/landgrab-agent-mcp/node_modules/.bin/tsx"
+    args: ["./tools/landgrab-agent-mcp/src/server.ts"]
     tools: ["*"]
   playwright:
     type: local
     command: "npx"
-    args: ["@playwright/mcp@latest", "--headless"]
+    args: ["@playwright/mcp@latest"]
     tools: ["*"]
 ---
 

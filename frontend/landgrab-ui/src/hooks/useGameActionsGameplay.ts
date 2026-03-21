@@ -30,12 +30,10 @@ function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: numb
 
 type ClaimTileActionType = 'claim' | 'reinforce' | 'claimAlliance' | 'claimSelf';
 
-interface UseGameActionsGameplayOptions extends Pick<
+type UseGameActionsGameplayOptions = Pick<
   UseGameActionsOptions,
   'invoke' | 'auth' | 'connected' | 'gameState' | 'currentLocation' | 'currentHex' | 'myPlayer' | 'isHostBypass' | 't' | 'playSound'
-> {
-  handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
-}
+>;
 
 interface UseGameActionsGameplayResult {
   handleHexClick: (q: number, r: number, cell: HexCell | undefined) => void;
@@ -64,10 +62,9 @@ export function useGameActionsGameplay({
   isHostBypass,
   t,
   playSound,
-  handleActivateCommandoRaid,
 }: UseGameActionsGameplayOptions): UseGameActionsGameplayResult {
   const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
-  const commandoTargetingMode = useGameplayStore(state => state.commandoTargetingMode);
+  const abilityUi = useGameplayStore(state => state.abilityUi);
   const combatResult = useGameplayStore(state => state.combatResult);
   const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
   const setMapFeedback = useGameplayStore(state => state.setMapFeedback);
@@ -79,7 +76,9 @@ export function useGameActionsGameplay({
   const setCombatPreview = useGameplayStore(state => state.setCombatPreview);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
   const setNeutralClaimResult = useGameplayStore(state => state.setNeutralClaimResult);
-  const setCommandoTargetingMode = useGameplayStore(state => state.setCommandoTargetingMode);
+  const setSelectedHexKey = useGameplayStore(state => state.setSelectedHexKey);
+  const setAbilityTarget = useGameplayStore(state => state.setAbilityTarget);
+  const confirmAbilityTarget = useGameplayStore(state => state.confirmAbilityTarget);
   const setError = useUiStore(state => state.setError);
   const clearError = useUiStore(state => state.clearError);
   const lastSentPositionRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -294,9 +293,15 @@ export function useGameActionsGameplay({
   }, [currentHex, gameState]);
 
   const handleHexClick = useCallback((q: number, r: number, cell: HexCell | undefined): void => {
-    if (commandoTargetingMode) {
-      void handleActivateCommandoRaid(q, r);
-      setCommandoTargetingMode(false);
+    const nextSelectedHexKey = `${q},${r}`;
+
+    if (abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming') {
+      if (abilityUi.activeAbility === 'commandoRaid' && abilityUi.mode === 'targeting') {
+        setSelectedHexKey(nextSelectedHexKey);
+        setAbilityTarget(nextSelectedHexKey);
+        confirmAbilityTarget();
+      }
+
       return;
     }
 
@@ -310,7 +315,7 @@ export function useGameActionsGameplay({
     const isCurrentTile = currentHex?.[0] === q && currentHex[1] === r;
 
     if (!isCurrentTile) {
-      useGameplayStore.getState().setSelectedHexKey(null);
+      setSelectedHexKey(nextSelectedHexKey);
       setPickupPrompt(null);
       setReinforcePrompt(null);
       setAttackPrompt(null);
@@ -333,7 +338,7 @@ export function useGameActionsGameplay({
       return;
     }
 
-    useGameplayStore.getState().setSelectedHexKey(null);
+    setSelectedHexKey(null);
     setPickupPrompt(null);
     setReinforcePrompt(null);
     setAttackPrompt(null);
@@ -341,14 +346,16 @@ export function useGameActionsGameplay({
     setMapFeedback(null);
   }, [
     auth,
+    abilityUi.activeAbility,
+    abilityUi.mode,
     clearError,
-    commandoTargetingMode,
+    confirmAbilityTarget,
     currentHex,
     gameState,
-    handleActivateCommandoRaid,
     isHostBypass,
     myPlayer,
-    setCommandoTargetingMode,
+    setSelectedHexKey,
+    setAbilityTarget,
     setMapFeedback,
     setPickupPrompt,
     setReinforcePrompt,

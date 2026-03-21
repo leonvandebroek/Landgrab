@@ -25,7 +25,7 @@ const roleAbilityIconNames: Record<string, GameIconName> = {
   firstStrike: 'archeryTarget',
   commandoRaid: 'crossbow',
   fortConstruction: 'gearHammer',
-  emergencyRepair: 'wrench',
+  sabotage: 'wrench',
   demolish: 'fist',
 };
 

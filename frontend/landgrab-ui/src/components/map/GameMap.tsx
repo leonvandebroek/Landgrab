@@ -9,7 +9,7 @@ import { useEffectsStore } from '../../stores/effectsStore';
 import { usePlayerLayerStore } from '../../stores/playerLayerStore';
 import { useGameStore, useGameplayStore, useUiStore } from '../../stores';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
-import { GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
+import { AbilityOverlayLayer, GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
 import { HexTooltipOverlay } from './HexTooltipOverlay';
 import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
 import { getTimePeriod } from '../../utils/timeOfDay';
@@ -562,6 +562,12 @@ export const GameMap = memo(function GameMap({
             mapLng={state.mapLng ?? 0}
             tileSizeMeters={state.tileSizeMeters ?? 50}
             layerPreferences={layerPrefs}
+          />
+          <AbilityOverlayLayer
+            map={mapInstance}
+            mapLat={state.mapLat ?? 0}
+            mapLng={state.mapLng ?? 0}
+            tileSizeMeters={state.tileSizeMeters ?? 50}
           />
           <PlayerLayer map={mapInstance} layerPreferences={layerPrefs} />
           <HexTooltipOverlay map={mapInstance} />

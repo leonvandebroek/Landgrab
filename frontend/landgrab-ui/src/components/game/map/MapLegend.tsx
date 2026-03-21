@@ -18,6 +18,7 @@ export function MapLegend() {
 
   useEffect(() => {
     const host = rootRef.current?.closest('.game-map-container');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPanelHost(host instanceof HTMLElement ? host : null);
   }, []);
 

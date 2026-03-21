@@ -320,6 +320,7 @@ public class GameplayService(
             if (combatResolution.AttackerWon)
             {
                 SetCellOwner(cell, player);
+                InvalidateEngineerMissionsForHex(room.State, cell);
 
                 // The winner carries all surviving troops and chooses later how many to drop.
                 cell.Troops = 0;
@@ -663,6 +664,7 @@ public class GameplayService(
             cell.OwnerAllianceId = raid.InitiatorAllianceId;
             cell.OwnerColor = newOwner.AllianceColor ?? newOwner.Color;
             cell.Troops = spoils;
+            InvalidateEngineerMissionsForHex(state, cell);
 
             if (raid.IsHQRaid)
             {
@@ -991,17 +993,17 @@ public class GameplayService(
         var targetKey = HexService.Key(player.FortTargetQ.Value, player.FortTargetR.Value);
         if (!state.Grid.TryGetValue(targetKey, out var targetCell) || targetCell.OwnerId != player.Id)
         {
-            var cancelledQ = player.FortTargetQ;
-            var cancelledR = player.FortTargetR;
+            var invalidatedQ = player.FortTargetQ;
+            var invalidatedR = player.FortTargetR;
             ClearFortConstructionTracking(player);
             AppendEventLog(state, new GameEventLogEntry
             {
-                Type = "FortConstructionCancelled",
-                Message = $"{player.Name}'s fort construction was cancelled.",
+                Type = "FortConstructionInvalidated",
+                Message = $"{player.Name}'s fort construction was invalidated.",
                 PlayerId = player.Id,
                 PlayerName = player.Name,
-                Q = cancelledQ,
-                R = cancelledR
+                Q = invalidatedQ,
+                R = invalidatedR
             });
             return true;
         }
@@ -1055,17 +1057,17 @@ public class GameplayService(
             || targetCell.OwnerId == null
             || IsFriendlyCell(player, targetCell))
         {
-            var cancelledQ = player.SabotageTargetQ;
-            var cancelledR = player.SabotageTargetR;
+            var invalidatedQ = player.SabotageTargetQ;
+            var invalidatedR = player.SabotageTargetR;
             ClearSabotageTracking(player);
             AppendEventLog(state, new GameEventLogEntry
             {
-                Type = "SabotageCancelled",
-                Message = $"{player.Name}'s sabotage was cancelled.",
+                Type = "SabotageInvalidated",
+                Message = $"{player.Name}'s sabotage was invalidated.",
                 PlayerId = player.Id,
                 PlayerName = player.Name,
-                Q = cancelledQ,
-                R = cancelledR
+                Q = invalidatedQ,
+                R = invalidatedR
             });
             return true;
         }
@@ -1113,7 +1115,17 @@ public class GameplayService(
             || targetCell.OwnerId == null
             || IsFriendlyCell(player, targetCell))
         {
+            var (invalidatedQ, invalidatedR) = GetHexCoordinatesFromKey(state, player.DemolishTargetKey);
             ClearDemolishTracking(player);
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "DemolishInvalidated",
+                Message = $"{player.Name}'s demolish mission was invalidated.",
+                PlayerId = player.Id,
+                PlayerName = player.Name,
+                Q = invalidatedQ,
+                R = invalidatedR
+            });
             return true;
         }
 
@@ -1159,7 +1171,83 @@ public class GameplayService(
             Q = targetCell.Q,
             R = targetCell.R
         });
+        InvalidateEngineerMissionsForHex(state, targetCell);
         return true;
+    }
+
+    private static void InvalidateEngineerMissionsForHex(GameState state, HexCell cell)
+    {
+        foreach (var player in state.Players.Where(candidate => candidate.Role == PlayerRole.Engineer))
+        {
+            if (player.FortTargetQ == cell.Q && player.FortTargetR == cell.R && cell.OwnerId != player.Id)
+            {
+                var fortInvalidatedQ = player.FortTargetQ;
+                var fortInvalidatedR = player.FortTargetR;
+                ClearFortConstructionTracking(player);
+                AppendEventLog(state, new GameEventLogEntry
+                {
+                    Type = "FortConstructionInvalidated",
+                    Message = $"{player.Name}'s fort construction was invalidated.",
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    Q = fortInvalidatedQ,
+                    R = fortInvalidatedR
+                });
+            }
+
+            if (player.SabotageTargetQ == cell.Q && player.SabotageTargetR == cell.R
+                && (cell.OwnerId == null || IsFriendlyCell(player, cell)))
+            {
+                var sabotageInvalidatedQ = player.SabotageTargetQ;
+                var sabotageInvalidatedR = player.SabotageTargetR;
+                ClearSabotageTracking(player);
+                AppendEventLog(state, new GameEventLogEntry
+                {
+                    Type = "SabotageInvalidated",
+                    Message = $"{player.Name}'s sabotage was invalidated.",
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    Q = sabotageInvalidatedQ,
+                    R = sabotageInvalidatedR
+                });
+            }
+
+            if (!string.Equals(player.DemolishTargetKey, HexService.Key(cell.Q, cell.R), StringComparison.Ordinal))
+                continue;
+            if (cell.IsFort && cell.OwnerId != null && !IsFriendlyCell(player, cell))
+                continue;
+
+            var (demolishInvalidatedQ, demolishInvalidatedR) = GetHexCoordinatesFromKey(state, player.DemolishTargetKey);
+            ClearDemolishTracking(player);
+            AppendEventLog(state, new GameEventLogEntry
+            {
+                Type = "DemolishInvalidated",
+                Message = $"{player.Name}'s demolish mission was invalidated.",
+                PlayerId = player.Id,
+                PlayerName = player.Name,
+                Q = demolishInvalidatedQ,
+                R = demolishInvalidatedR
+            });
+        }
+    }
+
+    private static (int? q, int? r) GetHexCoordinatesFromKey(GameState state, string? key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return (null, null);
+
+        if (state.Grid.TryGetValue(key, out var cell))
+            return (cell.Q, cell.R);
+
+        var parts = key.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 2
+            && int.TryParse(parts[0], out var q)
+            && int.TryParse(parts[1], out var r))
+        {
+            return (q, r);
+        }
+
+        return (null, null);
     }
 
     private static void ClearFortConstructionTracking(PlayerDto player)

@@ -170,12 +170,23 @@ export default function App() {
     return { lat: location.lat, lng: location.lng };
   }, [location.lat, location.lng]);
 
+  const serverLocation = useMemo<LocationPoint | null>(() => {
+    if (myPlayer?.currentLat == null || myPlayer.currentLng == null) {
+      return null;
+    }
+
+    return {
+      lat: myPlayer.currentLat,
+      lng: myPlayer.currentLng,
+    };
+  }, [myPlayer?.currentLat, myPlayer?.currentLng]);
+
   const usingDebugLocation = DEBUG_GPS_AVAILABLE && debugLocationEnabled && debugLocation !== null;
 
   const currentLocation = useMemo<LocationPoint | null>(() => {
     if (usingDebugLocation) return debugLocation;
-    return liveLocation;
-  }, [debugLocation, liveLocation, usingDebugLocation]);
+    return liveLocation ?? serverLocation;
+  }, [debugLocation, liveLocation, serverLocation, usingDebugLocation]);
 
   const mapCenterLocation = useMemo<LocationPoint | null>(() => {
     if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
@@ -229,7 +240,19 @@ export default function App() {
   const effectiveLocationError = usingDebugLocation || isHostBypass ? null : location.error;
   const effectiveLocationLoading = usingDebugLocation || isHostBypass ? false : location.loading;
 
+  const serverCurrentHex = useMemo<[number, number] | null>(() => {
+    if (myPlayer?.currentHexQ == null || myPlayer.currentHexR == null) {
+      return null;
+    }
+
+    return [myPlayer.currentHexQ, myPlayer.currentHexR];
+  }, [myPlayer?.currentHexQ, myPlayer?.currentHexR]);
+
   const currentHex = useMemo(() => {
+    if (serverCurrentHex) {
+      return serverCurrentHex;
+    }
+
     if (!gameState || !currentLocation || gameState.mapLat == null || gameState.mapLng == null) {
       return null;
     }
@@ -240,7 +263,7 @@ export default function App() {
       gameState.mapLng,
       gameState.tileSizeMeters,
     );
-  }, [currentLocation, gameState]);
+  }, [currentLocation, gameState, serverCurrentHex]);
 
   const currentPlayerName = myPlayer?.name ?? auth?.username ?? '';
 
@@ -266,9 +289,13 @@ export default function App() {
     handleSetAllianceHQ,
     handleActivateBeacon,
     handleDeactivateBeacon,
+    handleActivateCommandoRaid,
     handleActivateTacticalStrike,
     handleActivateReinforce,
-    handleActivateEmergencyRepair,
+    handleActivateSabotage,
+    handleCancelFortConstruction,
+    handleCancelSabotage,
+    handleCancelDemolish,
     handleStartDemolish,
     handleStartFortConstruction,
     handleSetMasterTile,
@@ -484,7 +511,7 @@ export default function App() {
       type="button"
       className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
       onClick={() => setShowDebugTools(!showDebugTools)}
-      aria-pressed={showDebugTools}
+      aria-pressed={showDebugTools ? 'true' : 'false'}
     >
       {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
     </button>
@@ -502,9 +529,13 @@ export default function App() {
     onConfirmAttack: handleConfirmAttack,
     onActivateBeacon: handleActivateBeacon,
     onDeactivateBeacon: handleDeactivateBeacon,
+    onActivateCommandoRaid: handleActivateCommandoRaid,
     onActivateTacticalStrike: handleActivateTacticalStrike,
     onActivateReinforce: handleActivateReinforce,
-    onActivateEmergencyRepair: handleActivateEmergencyRepair,
+    onActivateSabotage: handleActivateSabotage,
+    onCancelFortConstruction: handleCancelFortConstruction,
+    onCancelSabotage: handleCancelSabotage,
+    onCancelDemolish: handleCancelDemolish,
     onStartDemolish: handleStartDemolish,
     onStartFortConstruction: handleStartFortConstruction,
     onSetObserverMode: handleSetObserverMode,
@@ -516,8 +547,9 @@ export default function App() {
   }), [
     handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
-    handleActivateBeacon, handleDeactivateBeacon, handleActivateTacticalStrike,
-    handleActivateReinforce, handleActivateEmergencyRepair,
+    handleActivateBeacon, handleDeactivateBeacon, handleActivateCommandoRaid, handleActivateTacticalStrike,
+    handleActivateReinforce, handleActivateSabotage, handleCancelFortConstruction,
+    handleCancelSabotage, handleCancelDemolish,
     handleStartDemolish, handleStartFortConstruction, handleSetObserverMode,
     handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleDeployCombatTroops,
     handleDeployNeutralClaimTroops,

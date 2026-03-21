@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
+import type { AbilityKey, AbilityButtonState, AbilityMode } from '../../types/abilities';
 import {
   getTileActionAttackRequirement,
   getTileActionDisabledReasonDetailText,
@@ -36,13 +37,13 @@ interface PlayerHUDProps {
   myAllianceName?: string;
   player?: Player;
   dynamics?: GameDynamics;
-  onActivateBeacon: () => void;
-  onDeactivateBeacon: () => void;
-  onActivateTacticalStrike: () => void;
-  onActivateReinforce: () => void;
-  onActivateEmergencyRepair: () => void;
-  onStartDemolish: () => void;
-  onStartFortConstruction: () => void;
+  onActivateBeacon: () => Promise<boolean> | void;
+  onDeactivateBeacon: () => Promise<boolean> | void;
+  onActivateTacticalStrike: () => Promise<boolean> | void;
+  onActivateReinforce: () => Promise<boolean> | void;
+  onActivateSabotage: () => Promise<boolean> | void;
+  onStartDemolish: () => Promise<boolean> | void;
+  onStartFortConstruction: () => Promise<boolean> | void;
   guidanceHint?: string | null;
   guidanceVisible?: boolean;
   interactionPrompt?: {
@@ -59,7 +60,7 @@ interface AbilityButtonConfig {
   status: string;
   badgeText?: string | null;
   className: string;
-  stateTone?: 'standby' | 'active' | 'cooldown' | 'targeting' | 'inProgress';
+  buttonState?: AbilityButtonState;
   accentClassName?: string;
   disabled?: boolean;
   onClick?: () => void;
@@ -142,7 +143,7 @@ function getHexRelation(
   return 'enemy';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 const STRATEGIC_ZOOM_THRESHOLD = 14;
 const STRATEGIC_ZOOM_DEBOUNCE_MS = 160;
 
@@ -157,7 +158,7 @@ function formatTimeRemaining(until: string | undefined): string | null {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 
 export function PlayerHUD({
   actions,
@@ -172,10 +173,9 @@ export function PlayerHUD({
   player,
   dynamics,
   onActivateBeacon,
-  onDeactivateBeacon,
   onActivateTacticalStrike,
   onActivateReinforce,
-  onActivateEmergencyRepair,
+  onActivateSabotage,
   onStartDemolish,
   onStartFortConstruction,
   guidanceHint,
@@ -183,8 +183,9 @@ export function PlayerHUD({
   interactionPrompt,
 }: PlayerHUDProps) {
   const { t, i18n } = useTranslation();
-  const commandoTargetingMode = useGameplayStore((state) => state.commandoTargetingMode);
-  const setCommandoTargetingMode = useGameplayStore((state) => state.setCommandoTargetingMode);
+  const abilityUi = useGameplayStore((state) => state.abilityUi);
+  const enterAbilityMode = useGameplayStore((state) => state.enterAbilityMode);
+  const showAbilityCard = useGameplayStore((state) => state.showAbilityCard);
   const zoomLevel = useUiStore((state) => state.zoomLevel);
   const [, setTick] = useState(0);
   const [infoSheet, setInfoSheet] = useState<{ role: AbilityRole; abilityKey: string } | null>(null);
@@ -255,17 +256,6 @@ export function PlayerHUD({
     : !currentHex
       ? 'outsideGrid'
       : 'noActions';
-  const selectedIsAllied = Boolean(
-    selectedCell
-    && currentPlayer
-    && (
-      selectedCell.ownerId === currentPlayer.id
-      || (
-        selectedCell.ownerAllianceId != null
-        && selectedCell.ownerAllianceId === currentPlayer.allianceId
-      )
-    )
-  );
   const selectedIsEnemy = Boolean(
     selectedCell?.ownerId != null
     && currentPlayer
@@ -321,114 +311,169 @@ export function PlayerHUD({
     ability.onClick();
   };
 
+  const getAbilityButtonState = (
+    abilityKey: AbilityKey,
+    isServerActive: boolean,
+    isServerInProgress: boolean,
+    isServerCooldown: boolean,
+    isBlocked: boolean = false
+  ): AbilityButtonState => {
+    if (abilityUi.activeAbility === abilityKey) {
+      if (abilityUi.mode === 'inProgress') return 'inProgress';
+      if (abilityUi.mode === 'active') return 'active';
+      if (abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming') return 'targeting';
+    }
+
+    if (isServerInProgress) return 'inProgress';
+    if (isServerActive) return 'active';
+    if (isServerCooldown) return 'cooldown';
+    if (isBlocked) return 'blocked';
+
+    return 'ready';
+  };
+
+  const getAbilityAction = (
+    abilityKey: AbilityKey,
+    state: AbilityButtonState,
+    fallbackAction: () => void,
+    initialMode: AbilityMode,
+    isToggle: boolean = false,
+    focusPreset: 'none' | 'player' | 'strategicTargeting' | 'localTracking' = 'none'
+  ) => {
+    if (state === 'cooldown' || state === 'blocked') {
+      return undefined;
+    }
+
+    if (state === 'active' || state === 'inProgress' || state === 'targeting') {
+      return () => {
+        if (abilityUi.activeAbility === abilityKey) {
+          showAbilityCard();
+          return;
+        }
+
+        const reopenMode: AbilityMode = state === 'inProgress'
+          ? 'inProgress'
+          : state === 'active'
+            ? 'active'
+            : 'targeting';
+
+        enterAbilityMode(abilityKey, reopenMode, focusPreset, { cardVisible: true });
+      };
+    }
+
+    return () => {
+      if (isToggle) {
+        enterAbilityMode(abilityKey, initialMode, focusPreset);
+        fallbackAction();
+      } else {
+        enterAbilityMode(abilityKey, initialMode, focusPreset);
+      }
+    };
+  };
+
   const abilityButtons: AbilityButtonConfig[] = [];
 
   if (rolesEnabled && player?.role === 'Commander') {
     const tacticalStrikeActive = Boolean(player.tacticalStrikeActive && tacticalStrikeTime);
     const tacticalStrikeOnCooldown = !tacticalStrikeActive && tacticalStrikeCooldownTime !== null;
+    const tacticalStrikeState = getAbilityButtonState('tacticalStrike', tacticalStrikeActive, false, tacticalStrikeOnCooldown);
 
     abilityButtons.push({
       key: 'tactical-strike',
       icon: 'lightning',
       title: t('roles.Commander.abilities.tacticalStrike.title' as never),
       description: t('roles.Commander.abilities.tacticalStrike.description' as never),
-      status: tacticalStrikeActive
+      status: tacticalStrikeState === 'active'
         ? formatStatus('active', tacticalStrikeTime)
-        : tacticalStrikeOnCooldown
+        : tacticalStrikeState === 'cooldown'
           ? formatStatus('cooldown', tacticalStrikeCooldownTime)
           : formatStatus('activate'),
-      badgeText: tacticalStrikeActive ? tacticalStrikeTime : tacticalStrikeCooldownTime,
-      className: `player-hud__ability ${tacticalStrikeActive ? 'player-hud__ability--active' : ''} ${tacticalStrikeOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      stateTone: tacticalStrikeActive ? 'active' : tacticalStrikeOnCooldown ? 'cooldown' : 'standby',
+      badgeText: tacticalStrikeState === 'active' ? tacticalStrikeTime : tacticalStrikeCooldownTime,
+      className: `player-hud__ability ${tacticalStrikeState === 'active' ? 'player-hud__ability--active' : ''} ${tacticalStrikeState === 'cooldown' ? 'player-hud__ability--cooldown' : ''} ${tacticalStrikeState === 'targeting' ? 'player-hud__ability--targeting' : ''}`,
+      buttonState: tacticalStrikeState,
       accentClassName: ROLE_ACCENT_CLASSES.Commander,
-      disabled: tacticalStrikeActive || tacticalStrikeOnCooldown,
-      onClick: tacticalStrikeActive || tacticalStrikeOnCooldown ? undefined : onActivateTacticalStrike,
+      disabled: tacticalStrikeState === 'cooldown' || tacticalStrikeState === 'blocked',
+      onClick: getAbilityAction('tacticalStrike', tacticalStrikeState, onActivateTacticalStrike, 'confirming'),
       role: 'Commander',
       abilityKey: 'tacticalStrike',
     });
 
     const rallyActive = Boolean(player.rallyPointActive);
     const rallyOnCooldown = !rallyActive && rallyPointCooldownTime !== null;
+    const rallyState = getAbilityButtonState('rallyPoint', rallyActive, false, rallyOnCooldown);
 
     abilityButtons.push({
       key: 'rally-point',
       icon: 'rallyTroops',
       title: t('roles.Commander.abilities.reinforce.title' as never),
       description: t('roles.Commander.abilities.reinforce.description' as never),
-      status: rallyActive
+      status: rallyState === 'active'
         ? formatStatus('active', formatTimeRemaining(player.rallyPointDeadline))
-        : rallyOnCooldown
+        : rallyState === 'cooldown'
           ? formatStatus('cooldown', rallyPointCooldownTime)
           : formatStatus('activate'),
-      badgeText: rallyActive ? formatTimeRemaining(player.rallyPointDeadline) : rallyPointCooldownTime,
-      className: `player-hud__ability ${rallyActive ? 'player-hud__ability--active' : ''} ${rallyOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      stateTone: rallyActive ? 'active' : rallyOnCooldown ? 'cooldown' : 'standby',
+      badgeText: rallyState === 'active' ? formatTimeRemaining(player.rallyPointDeadline) : rallyPointCooldownTime,
+      className: `player-hud__ability ${rallyState === 'active' ? 'player-hud__ability--active' : ''} ${rallyState === 'cooldown' ? 'player-hud__ability--cooldown' : ''} ${rallyState === 'targeting' ? 'player-hud__ability--targeting' : ''}`,
+      buttonState: rallyState,
       accentClassName: ROLE_ACCENT_CLASSES.Commander,
-      disabled: rallyActive || rallyOnCooldown,
-      onClick: rallyActive || rallyOnCooldown ? undefined : onActivateReinforce,
+      disabled: rallyState === 'cooldown' || rallyState === 'blocked',
+      onClick: getAbilityAction('rallyPoint', rallyState, onActivateReinforce, 'confirming'),
       role: 'Commander',
-      abilityKey: 'reinforce',
+      abilityKey: 'rallyPoint',
     });
 
     const commandoOnCooldown = commandoCooldownTime !== null;
+    // We remove the old commandoTargetingMode override in favor of unified state
+    const commandoState = getAbilityButtonState('commandoRaid', false, false, commandoOnCooldown);
 
-    if (commandoTargetingMode) {
-      abilityButtons.push({
-        key: 'commando-targeting',
-        icon: 'archeryTarget',
-        title: t('roles.Commander.abilities.commandoRaid.title' as never),
-        description: t('roles.Commander.abilities.commandoRaid.description' as never),
-        status: t('phase6.commandoSelectTarget' as never),
-        className: 'player-hud__ability player-hud__ability--targeting',
-        stateTone: 'targeting',
-        accentClassName: ROLE_ACCENT_CLASSES.Commander,
-        onClick: () => setCommandoTargetingMode(false),
-        role: 'Commander',
-        abilityKey: 'commandoRaid',
-      });
-    } else {
-      abilityButtons.push({
-        key: 'commando-raid',
-        icon: 'archeryTarget',
-        title: t('roles.Commander.abilities.commandoRaid.title' as never),
-        description: t('roles.Commander.abilities.commandoRaid.description' as never),
-        status: commandoOnCooldown
+    abilityButtons.push({
+      key: 'commando-raid',
+      icon: 'archeryTarget',
+      title: t('roles.Commander.abilities.commandoRaid.title' as never),
+      description: t('roles.Commander.abilities.commandoRaid.description' as never),
+      status: commandoState === 'targeting'
+        ? t('phase6.commandoSelectTarget' as never)
+        : commandoState === 'cooldown'
           ? formatStatus('cooldown', commandoCooldownTime)
           : formatStatus('activate'),
-        badgeText: commandoCooldownTime,
-        className: `player-hud__ability ${commandoOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-        stateTone: commandoOnCooldown ? 'cooldown' : 'standby',
-        accentClassName: ROLE_ACCENT_CLASSES.Commander,
-        disabled: commandoOnCooldown,
-        onClick: commandoOnCooldown ? undefined : () => setCommandoTargetingMode(true),
-        role: 'Commander',
-        abilityKey: 'commandoRaid',
-      });
-    }
+      badgeText: commandoCooldownTime,
+      className: `player-hud__ability ${commandoState === 'cooldown' ? 'player-hud__ability--cooldown' : ''} ${commandoState === 'targeting' ? 'player-hud__ability--targeting' : ''}`,
+      buttonState: commandoState,
+      accentClassName: ROLE_ACCENT_CLASSES.Commander,
+      disabled: commandoState === 'cooldown' || commandoState === 'blocked',
+      onClick: getAbilityAction('commandoRaid', commandoState, () => undefined, 'targeting', false, 'strategicTargeting'),
+      role: 'Commander',
+      abilityKey: 'commandoRaid',
+    });
   }
 
   if (rolesEnabled && player?.role === 'Engineer') {
-    const demolishInProgress = Boolean(player.demolishTargetKey !== undefined && player.demolishApproachDirectionsMade && player.demolishApproachDirectionsMade.length > 0);
+    const demolishInProgress = player.demolishTargetKey != null;
     const demolishOnCooldown = !demolishInProgress && demolishCooldownTime !== null;
     const demolishProgressText = demolishInProgress ? `${player.demolishApproachDirectionsMade?.length ?? 0}/3` : null;
-    const sabotageActive = Boolean(player.sabotageTargetQ !== undefined && player.sabotagePerimeterVisited && player.sabotagePerimeterVisited.length > 0);
-    const sabotageOnCooldown = !sabotageActive && sabotageCooldownTime !== null;
-    const sabotageProgressText = sabotageActive ? `${player.sabotagePerimeterVisited?.length ?? 0}/3` : null;
-    const fortInProgress = Boolean(player.fortTargetQ !== undefined && player.fortPerimeterVisited && player.fortPerimeterVisited.length > 0);
+    const demolishState = getAbilityButtonState('demolish', false, demolishInProgress, demolishOnCooldown);
+
+    const sabotageInProgress = player.sabotageTargetQ != null && player.sabotageTargetR != null;
+    const sabotageOnCooldown = !sabotageInProgress && sabotageCooldownTime !== null;
+    const sabotageProgressText = sabotageInProgress ? `${player.sabotagePerimeterVisited?.length ?? 0}/3` : null;
+    const sabotageState = getAbilityButtonState('sabotage', false, sabotageInProgress, sabotageOnCooldown);
+
+    const fortInProgress = player.fortTargetQ != null && player.fortTargetR != null;
     const fortProgressText = fortInProgress ? `${player.fortPerimeterVisited?.length ?? 0}/6` : null;
+    const fortState = getAbilityButtonState('fortConstruction', false, fortInProgress, false);
 
     abilityButtons.push({
       key: 'fortConstruction',
       icon: 'fort',
       title: t('roles.Engineer.abilities.fortConstruction.title' as never),
       description: t('roles.Engineer.abilities.fortConstruction.description' as never),
-      status: fortInProgress ? formatStatus('inProgress', fortProgressText) : formatStatus('activate'),
+      status: fortState === 'inProgress' ? formatStatus('inProgress', fortProgressText) : formatStatus('activate'),
       badgeText: fortProgressText,
-      className: `player-hud__ability ${fortInProgress ? 'player-hud__ability--active' : ''}`,
-      stateTone: fortInProgress ? 'inProgress' : 'standby',
+      className: `player-hud__ability ${fortState === 'inProgress' ? 'player-hud__ability--active' : ''} ${fortState === 'targeting' ? 'player-hud__ability--targeting' : ''}`,
+      buttonState: fortState,
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
-      disabled: fortInProgress,
-      onClick: fortInProgress ? undefined : onStartFortConstruction,
+      disabled: fortState === 'blocked',
+      onClick: getAbilityAction('fortConstruction', fortState, onStartFortConstruction, 'targeting', false, 'localTracking'),
       role: 'Engineer',
       abilityKey: 'fortConstruction',
     });
@@ -436,21 +481,21 @@ export function PlayerHUD({
     abilityButtons.push({
       key: 'sabotage',
       icon: 'wrench',
-      title: t('roles.Engineer.abilities.emergencyRepair.title' as never),
-      description: t('roles.Engineer.abilities.emergencyRepair.description' as never),
-      status: sabotageActive
+      title: t('roles.Engineer.abilities.sabotage.title' as never),
+      description: t('roles.Engineer.abilities.sabotage.description' as never),
+      status: sabotageState === 'inProgress'
         ? formatStatus('inProgress', sabotageProgressText)
-        : sabotageOnCooldown
+        : sabotageState === 'cooldown'
           ? formatStatus('cooldown', sabotageCooldownTime)
           : formatStatus('activate'),
-      badgeText: sabotageActive ? sabotageProgressText : sabotageCooldownTime,
-      className: `player-hud__ability ${sabotageActive ? 'player-hud__ability--active' : ''} ${sabotageOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      stateTone: sabotageActive ? 'inProgress' : sabotageOnCooldown ? 'cooldown' : 'standby',
+      badgeText: sabotageInProgress ? sabotageProgressText : sabotageCooldownTime,
+      className: `player-hud__ability ${sabotageState === 'inProgress' ? 'player-hud__ability--active' : ''} ${sabotageState === 'cooldown' ? 'player-hud__ability--cooldown' : ''} ${sabotageState === 'targeting' ? 'player-hud__ability--targeting' : ''}`,
+      buttonState: sabotageState,
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
-      disabled: sabotageActive || sabotageOnCooldown || selectedIsAllied,
-      onClick: sabotageActive || sabotageOnCooldown || selectedIsAllied ? undefined : onActivateEmergencyRepair,
+      disabled: sabotageState === 'cooldown' || sabotageState === 'blocked',
+      onClick: getAbilityAction('sabotage', sabotageState, onActivateSabotage, 'targeting', false, 'localTracking'),
       role: 'Engineer',
-      abilityKey: 'emergencyRepair',
+      abilityKey: 'sabotage',
     });
 
     abilityButtons.push({
@@ -458,39 +503,43 @@ export function PlayerHUD({
       icon: 'hammerDrop',
       title: t('roles.Engineer.abilities.demolish.title' as never),
       description: t('roles.Engineer.abilities.demolish.description' as never),
-      status: demolishInProgress
+      status: demolishState === 'inProgress'
         ? formatStatus('inProgress', demolishProgressText)
-        : demolishOnCooldown
+        : demolishState === 'cooldown'
           ? formatStatus('cooldown', demolishCooldownTime)
           : formatStatus('activate'),
       badgeText: demolishInProgress ? demolishProgressText : demolishCooldownTime,
-      className: `player-hud__ability ${demolishInProgress ? 'player-hud__ability--active' : ''} ${demolishOnCooldown ? 'player-hud__ability--cooldown' : ''}`,
-      stateTone: demolishInProgress ? 'inProgress' : demolishOnCooldown ? 'cooldown' : 'standby',
+      className: `player-hud__ability ${demolishState === 'inProgress' ? 'player-hud__ability--active' : ''} ${demolishState === 'cooldown' ? 'player-hud__ability--cooldown' : ''} ${demolishState === 'targeting' ? 'player-hud__ability--targeting' : ''}`,
+      buttonState: demolishState,
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
-      disabled: demolishInProgress || demolishOnCooldown,
-      onClick: demolishInProgress || demolishOnCooldown ? undefined : onStartDemolish,
+      disabled: demolishState === 'cooldown' || demolishState === 'blocked',
+      onClick: getAbilityAction('demolish', demolishState, onStartDemolish, 'targeting', false, 'localTracking'),
       role: 'Engineer',
       abilityKey: 'demolish',
     });
   }
 
   if (showBeacon && player) {
+    const beaconState = getAbilityButtonState('beacon', player.isBeacon ?? false, false, false);
+    
     abilityButtons.push({
       key: 'beacon',
       icon: 'radioTower',
       title: t('phase5.beacon' as never),
       description: t('phase5.beaconDesc' as never),
-      status: player.isBeacon ? formatStatus('active') : formatStatus('activate'),
-      className: `player-hud__ability player-hud__ability--beacon ${player.isBeacon ? 'player-hud__ability--active player-hud__ability--beacon-active' : ''}`,
-      stateTone: player.isBeacon ? 'active' : 'standby',
+      status: beaconState === 'active' ? formatStatus('active') : formatStatus('activate'),
+      className: `player-hud__ability player-hud__ability--beacon ${beaconState === 'active' ? 'player-hud__ability--active player-hud__ability--beacon-active' : ''}`,
+      buttonState: beaconState,
       accentClassName: 'player-hud__ability--beacon',
-      onClick: player.isBeacon ? onDeactivateBeacon : onActivateBeacon,
-      isPressed: player.isBeacon,
+      onClick: getAbilityAction('beacon', beaconState, onActivateBeacon, 'confirming'),
+      isPressed: beaconState === 'active',
+      role: undefined, // default
+      abilityKey: 'beacon',
     });
   }
 
   const isCollapsedForZoom = isStrategicZoom && !isStrategicExpanded;
-  const persistentAbilityButtons = abilityButtons.filter((ability) => (ability.stateTone ?? 'standby') !== 'standby');
+  const persistentAbilityButtons = abilityButtons.filter((ability) => (ability.buttonState ?? 'ready') !== 'ready');
   const visibleAbilityButtons = isCollapsedForZoom ? persistentAbilityButtons : abilityButtons;
   const hasAbilities = abilityButtons.length > 0;
   const hasVisibleAbilities = visibleAbilityButtons.length > 0;
@@ -498,6 +547,7 @@ export function PlayerHUD({
   const showIdlePrompt = !isCollapsedForZoom && !hasActions && Boolean(interactionPrompt?.message);
   const showIdleGuidance = !isCollapsedForZoom && !hasActions && !showIdlePrompt && Boolean(guidanceHint);
   const showIdleContext = showIdlePrompt || showIdleGuidance;
+  const suppressTileActions = abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming';
   const strategicToggleLabel = isCollapsedForZoom
     ? t('game.hudTapToExpand' as never)
     : t('game.hudTapToCollapse' as never);
@@ -584,11 +634,11 @@ export function PlayerHUD({
                     <GameIcon name={ability.icon} />
                   </span>
                   {ability.badgeText && (
-                    <span className={`player-hud__ability-badge player-hud__ability-badge--${ability.stateTone ?? 'standby'}`}>
+                    <span className={`player-hud__ability-badge player-hud__ability-badge--${ability.buttonState ?? 'ready'}`}>
                       {ability.badgeText}
                     </span>
                   )}
-                  {ability.stateTone === 'targeting' && <span className="player-hud__ability-targeting-indicator" />}
+                  {ability.buttonState === 'targeting' && <span className="player-hud__ability-targeting-indicator" />}
                 </span>
                 <span className="player-hud__ability-label">{ability.title}</span>
               </button>
@@ -596,7 +646,7 @@ export function PlayerHUD({
           </div>
         )}
 
-        {!isCollapsedForZoom && (hasActions || selectedCell) && (
+        {!isCollapsedForZoom && !suppressTileActions && (hasActions || selectedCell) && (
           <div className="player-hud__primary-row player-hud__tile-actions">
             {actions.map((action) => (
               (() => {
@@ -641,7 +691,7 @@ export function PlayerHUD({
           </div>
         )}
 
-        {!isCollapsedForZoom && hasActions && disabledReasonText && (
+        {!isCollapsedForZoom && !suppressTileActions && hasActions && disabledReasonText && (
           attackRequirement ? (
             <div
               className={[
@@ -707,7 +757,7 @@ export function PlayerHUD({
                 role={infoSheet.role}
                 abilityKey={infoSheet.abilityKey}
                 onClose={() => setInfoSheet(null)}
-                stateTone={matchedAbility?.stateTone ?? 'standby'}
+                stateTone={(matchedAbility?.buttonState === 'ready' || matchedAbility?.buttonState === 'blocked') ? 'standby' : (matchedAbility?.buttonState ?? 'standby') as 'standby' | 'active' | 'cooldown' | 'targeting' | 'inProgress'}
                 badgeText={matchedAbility?.badgeText}
                 disabled={matchedAbility?.disabled ?? false}
                 onActivate={matchedAbility?.onClick}

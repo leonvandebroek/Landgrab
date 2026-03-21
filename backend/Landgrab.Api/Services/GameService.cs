@@ -76,8 +76,11 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error) ActivateReinforce(string roomCode, string userId) => abilityService.ActivateReinforce(roomCode, userId);
     public (GameState? state, string? error) ActivateShieldWall(string roomCode, string userId) => abilityService.ActivateShieldWall(roomCode, userId);
     public (GameState? state, string? error) StartFortConstruction(string roomCode, string userId) => abilityService.StartFortConstruction(roomCode, userId);
-    public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId) => abilityService.ActivateEmergencyRepair(roomCode, userId);
+    public (GameState? state, string? error) CancelFortConstruction(string roomCode, string userId) => abilityService.CancelFortConstruction(roomCode, userId);
+    public (GameState? state, string? error) ActivateSabotage(string roomCode, string userId) => abilityService.ActivateSabotage(roomCode, userId);
+    public (GameState? state, string? error) CancelSabotage(string roomCode, string userId) => abilityService.CancelSabotage(roomCode, userId);
     public (GameState? state, string? error) StartDemolish(string roomCode, string userId) => abilityService.StartDemolish(roomCode, userId);
+    public (GameState? state, string? error) CancelDemolish(string roomCode, string userId) => abilityService.CancelDemolish(roomCode, userId);
     public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng)
     {
         return gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng);

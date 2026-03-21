@@ -3,14 +3,17 @@ import { useUiStore } from '../stores/uiStore';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 
 interface UseGameActionsAbilitiesResult {
-  handleActivateBeacon: () => Promise<void>;
-  handleDeactivateBeacon: () => Promise<void>;
-  handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<void>;
-  handleActivateTacticalStrike: () => Promise<void>;
-  handleActivateReinforce: () => Promise<void>;
-  handleActivateEmergencyRepair: () => Promise<void>;
-  handleStartDemolish: () => Promise<void>;
-  handleStartFortConstruction: () => Promise<void>;
+  handleActivateBeacon: () => Promise<boolean>;
+  handleDeactivateBeacon: () => Promise<boolean>;
+  handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
+  handleActivateTacticalStrike: () => Promise<boolean>;
+  handleActivateReinforce: () => Promise<boolean>;
+  handleActivateSabotage: () => Promise<boolean>;
+  handleCancelFortConstruction: () => Promise<boolean>;
+  handleCancelSabotage: () => Promise<boolean>;
+  handleCancelDemolish: () => Promise<boolean>;
+  handleStartDemolish: () => Promise<boolean>;
+  handleStartFortConstruction: () => Promise<boolean>;
 }
 
 export function useGameActionsAbilities({
@@ -18,99 +21,157 @@ export function useGameActionsAbilities({
 }: Pick<UseGameActionsOptions, 'invoke'>): UseGameActionsAbilitiesResult {
   const setError = useUiStore(state => state.setError);
 
-  const handleActivateBeacon = useCallback(async (): Promise<void> => {
+  const handleActivateBeacon = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
       await invoke('ActivateBeacon');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleDeactivateBeacon = useCallback(async (): Promise<void> => {
+  const handleDeactivateBeacon = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
       await invoke('DeactivateBeacon');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number): Promise<void> => {
+  const handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
       await invoke('ActivateCommandoRaid', targetQ, targetR);
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleActivateTacticalStrike = useCallback(async (): Promise<void> => {
+  const handleActivateTacticalStrike = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
       await invoke('ActivateTacticalStrike');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleActivateReinforce = useCallback(async (): Promise<void> => {
+  const handleActivateReinforce = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
       await invoke('ActivateReinforce');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleActivateEmergencyRepair = useCallback(async (): Promise<void> => {
+  const handleActivateSabotage = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
-      await invoke('ActivateEmergencyRepair');
+      await invoke('ActivateSabotage');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleStartDemolish = useCallback(async (): Promise<void> => {
+  const handleCancelFortConstruction = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
+    }
+
+    try {
+      await invoke('CancelFortConstruction');
+      return true;
+    } catch (error) {
+      setError(String(error));
+      return false;
+    }
+  }, [invoke, setError]);
+
+  const handleCancelSabotage = useCallback(async (): Promise<boolean> => {
+    if (!invoke) {
+      return false;
+    }
+
+    try {
+      await invoke('CancelSabotage');
+      return true;
+    } catch (error) {
+      setError(String(error));
+      return false;
+    }
+  }, [invoke, setError]);
+
+  const handleCancelDemolish = useCallback(async (): Promise<boolean> => {
+    if (!invoke) {
+      return false;
+    }
+
+    try {
+      await invoke('CancelDemolish');
+      return true;
+    } catch (error) {
+      setError(String(error));
+      return false;
+    }
+  }, [invoke, setError]);
+
+  const handleStartDemolish = useCallback(async (): Promise<boolean> => {
+    if (!invoke) {
+      return false;
     }
 
     try {
       await invoke('StartDemolish');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
-  const handleStartFortConstruction = useCallback(async (): Promise<void> => {
+  const handleStartFortConstruction = useCallback(async (): Promise<boolean> => {
     if (!invoke) {
-      return;
+      return false;
     }
 
     try {
       await invoke('StartFortConstruction');
+      return true;
     } catch (error) {
       setError(String(error));
+      return false;
     }
   }, [invoke, setError]);
 
@@ -120,7 +181,10 @@ export function useGameActionsAbilities({
     handleActivateCommandoRaid,
     handleActivateTacticalStrike,
     handleActivateReinforce,
-    handleActivateEmergencyRepair,
+    handleActivateSabotage,
+    handleCancelFortConstruction,
+    handleCancelSabotage,
+    handleCancelDemolish,
     handleStartDemolish,
     handleStartFortConstruction,
   };

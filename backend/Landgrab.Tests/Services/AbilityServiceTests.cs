@@ -352,7 +352,7 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateEmergencyRepair_OnEnemyHex_StartsSabotage()
+    public void ActivateSabotage_OnEnemyHex_StartsSabotage()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
@@ -367,7 +367,7 @@ public sealed class AbilityServiceTests
         state.Players.First(p => p.Id == "p1").CurrentLng = lng;
         var context = new ServiceTestContext(state);
 
-        var result = context.AbilityService.ActivateEmergencyRepair(ServiceTestContext.RoomCode, "p1");
+        var result = context.AbilityService.ActivateSabotage(ServiceTestContext.RoomCode, "p1");
 
         result.error.Should().BeNull();
         var engineer = result.state!.Players.First(p => p.Id == "p1");

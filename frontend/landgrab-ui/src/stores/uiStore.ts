@@ -19,6 +19,12 @@ export interface ScreenPosition {
   y: number;
 }
 
+export interface MapCameraController {
+  setView: (lat: number, lng: number, zoom?: number) => void;
+  fitBounds: (bounds: [number, number][], paddingPx?: number) => void;
+  getZoom: () => number;
+}
+
 interface UiStore {
   view: AppView;
   error: string;
@@ -29,6 +35,7 @@ interface UiStore {
   debugLocation: DebugLocationPoint | null;
   mainMapBounds: MainMapBounds | null;
   selectedHexScreenPos: ScreenPosition | null;
+  mapCameraController: MapCameraController | null;
   setView: (view: AppView) => void;
   setError: (error: string) => void;
   clearError: () => void;
@@ -39,6 +46,7 @@ interface UiStore {
   setDebugLocation: (loc: DebugLocationPoint | null) => void;
   setMainMapBounds: (bounds: MainMapBounds | null) => void;
   setSelectedHexScreenPos: (pos: ScreenPosition | null) => void;
+  setMapCameraController: (controller: MapCameraController | null) => void;
 }
 
 export const useUiStore = create<UiStore>()((set) => ({
@@ -51,6 +59,7 @@ export const useUiStore = create<UiStore>()((set) => ({
   debugLocation: null,
   mainMapBounds: null,
   selectedHexScreenPos: null,
+  mapCameraController: null,
   setView: (view) => set({ view }),
   setError: (error) => set({ error }),
   clearError: () => set({ error: '' }),
@@ -61,4 +70,5 @@ export const useUiStore = create<UiStore>()((set) => ({
   setDebugLocation: (debugLocation) => set({ debugLocation }),
   setMainMapBounds: (mainMapBounds) => set({ mainMapBounds }),
   setSelectedHexScreenPos: (selectedHexScreenPos) => set({ selectedHexScreenPos }),
+  setMapCameraController: (mapCameraController) => set({ mapCameraController }),
 }));
