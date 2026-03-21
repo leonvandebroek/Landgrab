@@ -13,7 +13,7 @@ import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
-import { DebugSensorPanel } from './components/game/debug/DebugSensorPanel';
+import { DebugSensorPanel } from './components/game/DebugSensorPanel';
 import { GameOver } from './components/game/GameOver';
 import { GameView } from './components/GameView';
 import type { GameViewActions } from './components/GameView';
