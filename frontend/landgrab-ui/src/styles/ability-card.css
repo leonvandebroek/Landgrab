@@ -1,0 +1,329 @@
+.ability-card {
+  position: absolute;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  right: var(--space-md);
+  z-index: var(--z-hud-active);
+  
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: var(--blur-standard);
+  backdrop-filter: var(--blur-standard);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: var(--radius-clip);
+  
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  
+  animation: abilityCardSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+  max-height: min(32rem, calc(100dvh - 6rem));
+}
+
+@media (max-width: 480px) {
+  .ability-card {
+    bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    left: 0;
+    right: 0;
+    border-radius: var(--radius-clip) var(--radius-clip) 0 0;
+    border-bottom: none;
+    max-height: min(32rem, calc(100dvh - 4.5rem));
+    margin-inline: 0;
+  }
+}
+
+@keyframes abilityCardSlideUp {
+  from {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.ability-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.ability-card__title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.ability-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--scanner-blue);
+}
+
+.ability-card__title {
+  font-family: var(--font-tactical);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.ability-card__back-btn {
+  background: rgba(8, 14, 22, 0.78);
+  border: 1px solid rgba(120, 190, 255, 0.22);
+  color: var(--text-secondary);
+  padding: 0.45rem;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sharp);
+  clip-path: var(--clip-chamfer);
+  transition: all 0.2s ease;
+}
+
+.ability-card__back-btn:hover,
+.ability-card__back-btn:active {
+  background: rgba(120, 190, 255, 0.12);
+  border-color: rgba(120, 190, 255, 0.4);
+  color: var(--text-primary);
+}
+
+.ability-card__body {
+  padding: var(--space-md) var(--space-lg);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ability-card__status-region {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  flex-shrink: 0;
+}
+
+.ability-card__status-copy {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.ability-card__footer {
+  padding: var(--space-md) var(--space-lg) max(var(--space-md), var(--safe-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.ability-card__footer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ability-card__abort-btn {
+  width: 100%;
+  padding: var(--space-md);
+  border-radius: var(--radius-sharp);
+  background: rgba(231, 76, 60, 0.15); /* Derived from --scanner-red */
+  border: 1px solid rgba(231, 76, 60, 0.5);
+  color: var(--scanner-red);
+  font-family: var(--font-tactical);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.ability-card__abort-btn:active {
+  background: rgba(231, 76, 60, 0.3);
+  transform: scale(0.98);
+}
+
+.ability-card__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.ability-card__status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  align-self: flex-start;
+  padding: 0.5rem 0.85rem 0.5rem 0.75rem;
+  border-radius: var(--radius-sharp);
+  clip-path: var(--clip-chamfer);
+  border: 1px solid rgba(120, 190, 255, 0.35);
+  background:
+    linear-gradient(90deg, rgba(120, 190, 255, 0.2) 0%, rgba(120, 190, 255, 0.08) 100%),
+    rgba(8, 14, 22, 0.88);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 14px rgba(120, 190, 255, 0.12);
+  color: var(--text-primary);
+  font-family: var(--font-tactical);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ability-card__status-pill--live {
+  border-color: rgba(46, 204, 113, 0.45);
+  background: rgba(46, 204, 113, 0.14);
+  color: #d8ffe8;
+}
+
+.ability-card__status-pill--armed {
+  border-color: rgba(246, 196, 83, 0.45);
+  background: rgba(246, 196, 83, 0.16);
+  color: #ffe7ad;
+}
+
+.ability-card__status-pill--hostile {
+  border-color: rgba(231, 76, 60, 0.45);
+  background: rgba(231, 76, 60, 0.16);
+  color: #ffd2cb;
+}
+
+.ability-card__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.ability-card__summary {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.ability-card__detail-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--text-secondary);
+  display: grid;
+  gap: 0.4rem;
+  line-height: 1.45;
+}
+
+.ability-card__warning {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-clip);
+  clip-path: var(--clip-chamfer);
+  border: 1px solid rgba(246, 196, 83, 0.32);
+  background:
+    linear-gradient(90deg, rgba(246, 196, 83, 0.14) 0%, rgba(246, 196, 83, 0.06) 100%),
+    rgba(16, 12, 6, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  color: #ffe7ad;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.ability-card__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius-clip);
+  clip-path: var(--clip-chamfer);
+  border: 1px solid rgba(120, 190, 255, 0.16);
+  background:
+    linear-gradient(90deg, rgba(120, 190, 255, 0.08) 0%, rgba(8, 14, 22, 0.92) 100%),
+    rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.ability-card__meta-label {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ability-card__meta-value {
+  color: var(--text-primary);
+  font-family: var(--font-tactical);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.ability-card__primary-btn,
+.ability-card__secondary-btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-sharp);
+  font-family: var(--font-tactical);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.ability-card__primary-btn {
+  border: 1px solid rgba(120, 190, 255, 0.45);
+  background: rgba(120, 190, 255, 0.18);
+  color: var(--text-primary);
+}
+
+.ability-card__secondary-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.ability-card__secondary-btn--danger {
+  border-color: rgba(231, 76, 60, 0.4);
+  background: rgba(231, 76, 60, 0.14);
+  color: #ffb0a6;
+}
+
+.ability-card__primary-btn--hostile {
+  border-color: rgba(231, 76, 60, 0.45);
+  background: rgba(231, 76, 60, 0.18);
+  color: #ffe0db;
+}
+
+.ability-card__primary-btn:disabled,
+.ability-card__secondary-btn:disabled,
+.ability-card__abort-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ability-card__primary-btn:active,
+.ability-card__secondary-btn:active {
+  transform: scale(0.985);
+}

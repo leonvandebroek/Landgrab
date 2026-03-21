@@ -400,6 +400,141 @@ Use this instead of scenario_create_*_game when you want to evaluate a specific 
       ),
     },
     async ({ hostSessionId, mapLat, mapLng, tileSizeMeters, gridRadius, hostBypassGps, dynamics, players, hexOverrides }) => {
+      interface StageRecord {
+        name: 'backend_injection' | 'frontend_navigation' | 'bridge_ready' | 'resume_poll';
+        startedAt: string;
+        completedAt: string | null;
+        succeeded: boolean;
+        error: string | null;
+        detail?: unknown;
+      }
+
+      interface SessionResult {
+        status: 'ready' | 'recovered' | 'failed';
+        lastSnapshot: unknown;
+      }
+
+      interface SessionStageOutcome {
+        sessionId: string;
+        succeeded: boolean;
+        error: string | null;
+        detail?: unknown;
+      }
+
+      interface BridgeSnapshot extends Record<string, unknown> {
+        roomCode?: unknown;
+        view?: unknown;
+        gameState?: unknown;
+        ui?: unknown;
+      }
+
+      const allSessionIds = [...new Set([hostSessionId, ...players.map((player) => player.sessionId)])];
+      const stages: StageRecord[] = [];
+      const sessionResults: Record<string, SessionResult> = Object.fromEntries(
+        allSessionIds.map((sessionId) => [sessionId, { status: 'failed' as const, lastSnapshot: null }]),
+      );
+
+      const isRecord = (value: unknown): value is Record<string, unknown> =>
+        typeof value === 'object' && value !== null;
+
+      const readString = (value: unknown): string | null =>
+        typeof value === 'string' && value.length > 0 ? value : null;
+
+      const errorMessage = (error: unknown): string =>
+        error instanceof Error ? error.message : String(error);
+
+      const startStage = (name: StageRecord['name']): StageRecord => {
+        const stage: StageRecord = {
+          name,
+          startedAt: new Date().toISOString(),
+          completedAt: null,
+          succeeded: false,
+          error: null,
+        };
+        stages.push(stage);
+        return stage;
+      };
+
+      const finishStage = (
+        stage: StageRecord,
+        outcome: { succeeded: boolean; error?: string | null; detail?: unknown },
+      ) => {
+        stage.completedAt = new Date().toISOString();
+        stage.succeeded = outcome.succeeded;
+        stage.error = outcome.error ?? null;
+        if (outcome.detail !== undefined) {
+          stage.detail = outcome.detail;
+        }
+      };
+
+      const getSnapshotPhase = (snapshot: unknown): string | null => {
+        if (!isRecord(snapshot) || !isRecord(snapshot.gameState)) {
+          return null;
+        }
+
+        return readString(snapshot.gameState.phase);
+      };
+
+      const getSnapshotRoomCode = (snapshot: unknown): string | null => {
+        if (!isRecord(snapshot)) {
+          return null;
+        }
+
+        const gameStateRoomCode = isRecord(snapshot.gameState) ? readString(snapshot.gameState.roomCode) : null;
+        return gameStateRoomCode ?? readString(snapshot.roomCode);
+      };
+
+      const getSnapshotView = (snapshot: unknown): string | null => {
+        if (!isRecord(snapshot)) {
+          return null;
+        }
+
+        return readString(snapshot.view) ?? (isRecord(snapshot.ui) ? readString(snapshot.ui.view) : null);
+      };
+
+      const getSnapshotForSession = async (sessionId: string): Promise<unknown> => {
+        try {
+          return await getAgentSnapshot<BridgeSnapshot>(getSession(sessionId).page);
+        } catch {
+          return null;
+        }
+      };
+
+      const pollForInjectedRoom = async (
+        sessionId: string,
+        expectedRoomCode: string,
+        timeoutMs: number,
+      ): Promise<{ succeeded: boolean; lastSnapshot: unknown; error: string | null }> => {
+        const { page } = getSession(sessionId);
+        const deadline = Date.now() + timeoutMs;
+        let lastSnapshot: unknown = null;
+        let lastError: string | null = null;
+
+        while (Date.now() <= deadline) {
+          try {
+            lastSnapshot = await getAgentSnapshot<BridgeSnapshot>(page);
+            lastError = null;
+
+            if (
+              getSnapshotPhase(lastSnapshot) === 'Playing' &&
+              getSnapshotRoomCode(lastSnapshot) === expectedRoomCode
+            ) {
+              return { succeeded: true, lastSnapshot, error: null };
+            }
+          } catch (error: unknown) {
+            lastError = errorMessage(error);
+          }
+
+          await page.waitForTimeout(300);
+        }
+
+        return {
+          succeeded: false,
+          lastSnapshot,
+          error: lastError ?? `Timed out after ${timeoutMs}ms waiting for Playing phase in room ${expectedRoomCode}.`,
+        };
+      };
+
       const hostSession = getSession(hostSessionId);
       if (!hostSession.token || !hostSession.userId) {
         throw new Error(`Host session "${hostSessionId}" is not authenticated. Call auth_register or auth_login first.`);
@@ -431,55 +566,216 @@ Use this instead of scenario_create_*_game when you want to evaluate a specific 
         isMasterTile: h.isMasterTile,
       }));
 
-      // Call the dev-only backend endpoint to build the room in memory
-      const res = await fetch(`${API_BASE}/api/playtest/inject-scenario`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${hostSession.token}`,
-        },
-        body: JSON.stringify({
-          mapLat,
-          mapLng,
-          tileSizeMeters,
-          gridRadius,
-          hostBypassGps,
-          dynamics: dynamics ?? {},
-          players: playerSpecs,
-          hexOverrides: hexOverrideSpecs,
+      let roomCode: string | null = null;
+
+      const backendStage = startStage('backend_injection');
+      try {
+        const res = await fetch(`${API_BASE}/api/playtest/inject-scenario`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${hostSession.token}`,
+          },
+          body: JSON.stringify({
+            mapLat,
+            mapLng,
+            tileSizeMeters,
+            gridRadius,
+            hostBypassGps,
+            dynamics: dynamics ?? {},
+            players: playerSpecs,
+            hexOverrides: hexOverrideSpecs,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(`inject-scenario failed (${res.status}): ${err}`);
+        }
+
+        const payload = await res.json() as { roomCode?: unknown };
+        roomCode = readString(payload.roomCode);
+        if (!roomCode) {
+          throw new Error('inject-scenario response did not include a valid roomCode.');
+        }
+
+        finishStage(backendStage, { succeeded: true, detail: { roomCode } });
+      } catch (error: unknown) {
+        finishStage(backendStage, { succeeded: false, error: errorMessage(error) });
+        return jsonResult({
+          status: 'failed',
+          roomCode: null,
+          sessionIds: allSessionIds,
+          failedSessionIds: allSessionIds,
+          stages,
+          sessionResults,
+        });
+      }
+
+      const navigationStage = startStage('frontend_navigation');
+      const navigationOutcomes = await Promise.all(
+        allSessionIds.map(async (sessionId): Promise<SessionStageOutcome> => {
+          const { page } = getSession(sessionId);
+          try {
+            await page.goto(getFrontendUrl());
+            return {
+              sessionId,
+              succeeded: true,
+              error: null,
+              detail: { url: page.url() },
+            };
+          } catch (error: unknown) {
+            return {
+              sessionId,
+              succeeded: false,
+              error: errorMessage(error),
+              detail: { url: page.url() },
+            };
+          }
         }),
+      );
+      finishStage(navigationStage, {
+        succeeded: navigationOutcomes.every((outcome) => outcome.succeeded),
+        error: navigationOutcomes.every((outcome) => outcome.succeeded)
+          ? null
+          : 'One or more sessions failed to navigate to the frontend.',
+        detail: navigationOutcomes,
       });
 
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(`inject-scenario failed (${res.status}): ${err}`);
-      }
-
-      const { roomCode } = await res.json() as { roomCode: string };
-
-      // Navigate all sessions to the frontend — useAutoResume finds the injected room
-      const allSessionIds = [...new Set([hostSessionId, ...players.map((p) => p.sessionId)])];
-      for (const sessionId of allSessionIds) {
-        const { page } = getSession(sessionId);
-        await page.goto(getFrontendUrl());
-        await waitForAgentBridge(page);
-      }
-
-      // Wait for every session to reach the Playing phase in this specific room
-      await Promise.all(
-        allSessionIds.map((sessionId) =>
-          pollAgentBridge(
-            getSession(sessionId).page,
-            () => getAgentSnapshot<any>(getSession(sessionId).page),
-            (snapshot) =>
-              snapshot?.gameState?.phase === 'Playing' &&
-              snapshot?.gameState?.roomCode === roomCode,
-            { timeoutMs: 20_000, intervalMs: 300 },
-          ),
-        ),
+      const bridgeStage = startStage('bridge_ready');
+      const bridgeOutcomes = await Promise.all(
+        allSessionIds.map(async (sessionId): Promise<SessionStageOutcome> => {
+          const { page } = getSession(sessionId);
+          try {
+            await waitForAgentBridge(page);
+            const snapshot = await getAgentSnapshot<BridgeSnapshot>(page);
+            sessionResults[sessionId].lastSnapshot = snapshot;
+            return {
+              sessionId,
+              succeeded: true,
+              error: null,
+              detail: { snapshot },
+            };
+          } catch (error: unknown) {
+            const snapshot = await getSnapshotForSession(sessionId);
+            sessionResults[sessionId].lastSnapshot = snapshot;
+            return {
+              sessionId,
+              succeeded: false,
+              error: errorMessage(error),
+              detail: { snapshot },
+            };
+          }
+        }),
       );
+      finishStage(bridgeStage, {
+        succeeded: bridgeOutcomes.every((outcome) => outcome.succeeded),
+        error: bridgeOutcomes.every((outcome) => outcome.succeeded)
+          ? null
+          : 'One or more sessions failed to expose the agent bridge after navigation.',
+        detail: bridgeOutcomes,
+      });
 
-      return jsonResult({ status: 'ready', roomCode, sessionIds: allSessionIds });
+      const resumeStage = startStage('resume_poll');
+      const resumeOutcomes = await Promise.all(
+        allSessionIds.map(async (sessionId): Promise<SessionStageOutcome> => {
+          const firstAttempt = await pollForInjectedRoom(sessionId, roomCode, 20_000);
+          sessionResults[sessionId].lastSnapshot = firstAttempt.lastSnapshot;
+
+          if (firstAttempt.succeeded) {
+            sessionResults[sessionId] = { status: 'ready', lastSnapshot: firstAttempt.lastSnapshot };
+            return {
+              sessionId,
+              succeeded: true,
+              error: null,
+              detail: {
+                recovered: false,
+                lastSnapshot: firstAttempt.lastSnapshot,
+              },
+            };
+          }
+
+          const stuckInLobby = getSnapshotView(firstAttempt.lastSnapshot) === 'lobby';
+          if (stuckInLobby) {
+            const { page } = getSession(sessionId);
+            try {
+              await page.reload();
+              await waitForAgentBridge(page);
+              const secondAttempt = await pollForInjectedRoom(sessionId, roomCode, 15_000);
+              sessionResults[sessionId].lastSnapshot = secondAttempt.lastSnapshot;
+
+              if (secondAttempt.succeeded) {
+                sessionResults[sessionId] = { status: 'recovered', lastSnapshot: secondAttempt.lastSnapshot };
+                return {
+                  sessionId,
+                  succeeded: true,
+                  error: null,
+                  detail: {
+                    recovered: true,
+                    lastSnapshot: secondAttempt.lastSnapshot,
+                  },
+                };
+              }
+
+              sessionResults[sessionId] = { status: 'failed', lastSnapshot: secondAttempt.lastSnapshot };
+              return {
+                sessionId,
+                succeeded: false,
+                error: secondAttempt.error,
+                detail: {
+                  recovered: false,
+                  recoveryAttempted: true,
+                  lastSnapshot: secondAttempt.lastSnapshot,
+                },
+              };
+            } catch (error: unknown) {
+              const snapshot = await getSnapshotForSession(sessionId);
+              sessionResults[sessionId] = { status: 'failed', lastSnapshot: snapshot };
+              return {
+                sessionId,
+                succeeded: false,
+                error: errorMessage(error),
+                detail: {
+                  recovered: false,
+                  recoveryAttempted: true,
+                  lastSnapshot: snapshot,
+                },
+              };
+            }
+          }
+
+          sessionResults[sessionId] = { status: 'failed', lastSnapshot: firstAttempt.lastSnapshot };
+          return {
+            sessionId,
+            succeeded: false,
+            error: firstAttempt.error,
+            detail: {
+              recovered: false,
+              recoveryAttempted: false,
+              lastSnapshot: firstAttempt.lastSnapshot,
+            },
+          };
+        }),
+      );
+      finishStage(resumeStage, {
+        succeeded: resumeOutcomes.every((outcome) => outcome.succeeded),
+        error: resumeOutcomes.every((outcome) => outcome.succeeded)
+          ? null
+          : 'One or more sessions did not resume into the injected Playing room.',
+        detail: resumeOutcomes,
+      });
+
+      const failedSessionIds = allSessionIds.filter((sessionId) => sessionResults[sessionId].status === 'failed');
+      const status = failedSessionIds.length === 0 ? 'ready' : 'partial';
+
+      return jsonResult({
+        status,
+        roomCode,
+        sessionIds: allSessionIds,
+        failedSessionIds,
+        stages,
+        sessionResults,
+      });
     },
   );
 
@@ -533,6 +829,108 @@ Use this instead of scenario_create_*_game when you want to evaluate a specific 
         wizardStep,
       });
       return jsonResult({ status: 'ready', ...scenario });
+    },
+  );
+
+  server.tool(
+    'room_reopen_last_room',
+    "Attempt to re-enter the most recent room this session was part of, using the bridge's recent-room state. Useful when a session got stuck in lobby after a failed scenario_inject_state.",
+    {
+      sessionId: z.string(),
+      timeoutMs: z.number().int().min(250).max(60_000).optional().default(10_000),
+    },
+    async ({ sessionId, timeoutMs }) => {
+      const { page } = getSession(sessionId);
+
+      const isRecord = (value: unknown): value is Record<string, unknown> =>
+        typeof value === 'object' && value !== null;
+
+      const readString = (value: unknown): string | null =>
+        typeof value === 'string' && value.length > 0 ? value : null;
+
+      const getArrayRoomCode = (value: unknown): string | null => {
+        if (!Array.isArray(value) || value.length === 0) {
+          return null;
+        }
+
+        const [firstEntry] = value;
+        if (!isRecord(firstEntry)) {
+          return null;
+        }
+
+        return readString(firstEntry.roomCode) ?? readString(firstEntry.code);
+      };
+
+      const getRecentRoomCode = (snapshot: unknown): string | null => {
+        if (!isRecord(snapshot)) {
+          return null;
+        }
+
+        return readString(snapshot.recentRoomCode)
+          ?? readString(snapshot.lastRoomCode)
+          ?? (isRecord(snapshot.recentRoom)
+            ? readString(snapshot.recentRoom.roomCode) ?? readString(snapshot.recentRoom.code)
+            : null)
+          ?? (isRecord(snapshot.lastRoom)
+            ? readString(snapshot.lastRoom.roomCode) ?? readString(snapshot.lastRoom.code)
+            : null)
+          ?? getArrayRoomCode(snapshot.recentRooms)
+          ?? getArrayRoomCode(snapshot.lastRooms)
+          ?? getArrayRoomCode(snapshot.myRooms);
+      };
+
+      const initialSnapshot = await getAgentSnapshot<Record<string, unknown>>(page);
+      const recentRoomCode = getRecentRoomCode(initialSnapshot);
+
+      if (!recentRoomCode) {
+        return jsonResult({
+          sessionId,
+          recentRoomCode: null,
+          status: 'no_recent_room',
+          snapshot: initialSnapshot,
+        });
+      }
+
+      try {
+        const joinInput = page.locator('[data-testid="lobby-join-code-input"]');
+        await joinInput.click();
+        await joinInput.fill(recentRoomCode);
+        await page.locator('[data-testid="lobby-join-btn"]').click();
+
+        const snapshot = await pollAgentBridge(
+          page,
+          () => getAgentSnapshot<Record<string, unknown>>(page),
+          (candidate) => {
+            if (typeof candidate !== 'object' || candidate === null) {
+              return false;
+            }
+
+            const record = candidate as Record<string, unknown>;
+            const gameState = typeof record.gameState === 'object' && record.gameState !== null
+              ? record.gameState as Record<string, unknown>
+              : null;
+            const phase = gameState && typeof gameState.phase === 'string' ? gameState.phase : null;
+            return phase === 'Playing' || phase === 'Lobby';
+          },
+          { timeoutMs, intervalMs: 300 },
+        );
+
+        return jsonResult({
+          sessionId,
+          recentRoomCode,
+          status: 'joined',
+          snapshot,
+        });
+      } catch (error: unknown) {
+        const snapshot = await getAgentSnapshot<Record<string, unknown>>(page).catch(() => initialSnapshot);
+        return jsonResult({
+          sessionId,
+          recentRoomCode,
+          status: 'failed',
+          snapshot,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     },
   );
 }

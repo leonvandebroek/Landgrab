@@ -285,7 +285,43 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
         }
     }
 
-    public (GameState? state, string? error) ActivateEmergencyRepair(string roomCode, string userId)
+    public (GameState? state, string? error) CancelFortConstruction(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+            if (!player.FortTargetQ.HasValue || !player.FortTargetR.HasValue)
+                return (null, "You do not have a fort construction mission in progress.");
+
+            var targetQ = player.FortTargetQ;
+            var targetR = player.FortTargetR;
+            player.FortTargetQ = null;
+            player.FortTargetR = null;
+            player.FortPerimeterVisited.Clear();
+
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "FortConstructionCancelled",
+                Message = $"{player.Name} cancelled fort construction.",
+                PlayerId = userId,
+                PlayerName = player.Name,
+                Q = targetQ,
+                R = targetR
+            });
+
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) ActivateSabotage(string roomCode, string userId)
     {
         var room = GetRoom(roomCode);
         if (room == null) return (null, "Room not found.");
@@ -318,6 +354,42 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
                 Message = $"{player.Name} is sabotaging ({currentCell.Q}, {currentCell.R})! Defend it!",
                 PlayerId = userId, PlayerName = player.Name,
                 Q = currentCell.Q, R = currentCell.R
+            });
+
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) CancelSabotage(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+            if (!player.SabotageTargetQ.HasValue || !player.SabotageTargetR.HasValue)
+                return (null, "You do not have a sabotage mission in progress.");
+
+            var targetQ = player.SabotageTargetQ;
+            var targetR = player.SabotageTargetR;
+            player.SabotageTargetQ = null;
+            player.SabotageTargetR = null;
+            player.SabotagePerimeterVisited.Clear();
+
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "SabotageCancelled",
+                Message = $"{player.Name} cancelled sabotage.",
+                PlayerId = userId,
+                PlayerName = player.Name,
+                Q = targetQ,
+                R = targetR
             });
 
             var snapshot = SnapshotState(room.State);
@@ -364,6 +436,47 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
                 PlayerName = player.Name,
                 Q = currentCell.Q,
                 R = currentCell.R
+            });
+
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    public (GameState? state, string? error) CancelDemolish(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+            if (string.IsNullOrEmpty(player.DemolishTargetKey))
+                return (null, "You do not have a demolish mission in progress.");
+
+            int? targetQ = null;
+            int? targetR = null;
+            if (room.State.Grid.TryGetValue(player.DemolishTargetKey, out var targetCell))
+            {
+                targetQ = targetCell.Q;
+                targetR = targetCell.R;
+            }
+
+            player.DemolishTargetKey = null;
+            player.DemolishApproachDirectionsMade.Clear();
+
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "DemolishCancelled",
+                Message = $"{player.Name} cancelled demolish.",
+                PlayerId = userId,
+                PlayerName = player.Name,
+                Q = targetQ,
+                R = targetR
             });
 
             var snapshot = SnapshotState(room.State);

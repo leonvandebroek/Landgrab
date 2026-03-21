@@ -8,10 +8,7 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
   const lobbyActions = useGameActionsLobby(options);
   const abilityActions = useGameActionsAbilities(options);
   const hostActions = useGameActionsHost(options);
-  const gameplayActions = useGameActionsGameplay({
-    ...options,
-    handleActivateCommandoRaid: abilityActions.handleActivateCommandoRaid,
-  });
+  const gameplayActions = useGameActionsGameplay(options);
 
   return {
     refreshMyRooms: lobbyActions.refreshMyRooms,
@@ -38,7 +35,10 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleActivateCommandoRaid: abilityActions.handleActivateCommandoRaid,
     handleActivateTacticalStrike: abilityActions.handleActivateTacticalStrike,
     handleActivateReinforce: abilityActions.handleActivateReinforce,
-    handleActivateEmergencyRepair: abilityActions.handleActivateEmergencyRepair,
+    handleActivateSabotage: abilityActions.handleActivateSabotage,
+    handleCancelFortConstruction: abilityActions.handleCancelFortConstruction,
+    handleCancelSabotage: abilityActions.handleCancelSabotage,
+    handleCancelDemolish: abilityActions.handleCancelDemolish,
     handleStartDemolish: abilityActions.handleStartDemolish,
     handleStartFortConstruction: abilityActions.handleStartFortConstruction,
     handleSetMasterTile: lobbyActions.handleSetMasterTile,

@@ -117,6 +117,20 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
 
             Enum.TryParse<PlayerRole>(spec.Role, out var role);
 
+            int? currentHexQ = null;
+            int? currentHexR = null;
+            if (spec.Lat.HasValue && spec.Lng.HasValue)
+            {
+                var currentHex = HexService.LatLngToHexForRoom(
+                    spec.Lat.Value,
+                    spec.Lng.Value,
+                    req.MapLat,
+                    req.MapLng,
+                    req.TileSizeMeters);
+                currentHexQ = currentHex.q;
+                currentHexR = currentHex.r;
+            }
+
             room.State.Players.Add(new PlayerDto
             {
                 Id = spec.UserId,
@@ -130,6 +144,8 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
                 CarriedTroops = spec.CarriedTroops,
                 CurrentLat = spec.Lat,
                 CurrentLng = spec.Lng,
+                CurrentHexQ = currentHexQ,
+                CurrentHexR = currentHexR,
                 IsConnected = false,
                 Role = role
             });

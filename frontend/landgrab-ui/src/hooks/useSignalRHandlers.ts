@@ -11,6 +11,7 @@ import type { SoundName } from './useSound';
 import type { GameEvents } from './useSignalR';
 import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
+import { deriveAbilityUiFromPlayer } from '../utils/abilityUi';
 import { getErrorMessage, localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
 import { useMapOrchestrator } from './useMapOrchestrator';
@@ -143,6 +144,57 @@ function restorePersistedDebugLocation(roomCode: string | null | undefined): voi
   uiState.setDebugLocationEnabled(true);
 }
 
+function syncAbilityUiFromServerState(
+  state: GameState,
+  currentUserId: string | null | undefined,
+): void {
+  if (state.phase !== 'Playing' || !currentUserId) {
+    return;
+  }
+
+  const player = state.players.find((candidate) => candidate.id === currentUserId);
+  if (!player) {
+    return;
+  }
+
+  const gameplayState = useGameplayStore.getState();
+  const currentAbilityUi = gameplayState.abilityUi;
+  const derivedAbilityUi = deriveAbilityUiFromPlayer(player, state);
+
+  if (!derivedAbilityUi) {
+    if (
+      currentAbilityUi.activeAbility !== null
+      || currentAbilityUi.mode !== 'idle'
+    ) {
+      gameplayState.exitAbilityMode();
+    }
+
+    return;
+  }
+
+  const shouldPreserveVisibleCard = currentAbilityUi.cardVisible
+    && currentAbilityUi.activeAbility === derivedAbilityUi.ability;
+  const syncedFocusPreset = currentAbilityUi.activeAbility === derivedAbilityUi.ability
+    ? currentAbilityUi.mapFocusPreset
+    : derivedAbilityUi.focusPreset;
+
+  const alreadySynced = currentAbilityUi.activeAbility === derivedAbilityUi.ability
+    && currentAbilityUi.mode === derivedAbilityUi.mode
+    && currentAbilityUi.cardVisible === shouldPreserveVisibleCard
+    && currentAbilityUi.mapFocusPreset === syncedFocusPreset;
+
+  if (alreadySynced) {
+    return;
+  }
+
+  gameplayState.enterAbilityMode(
+    derivedAbilityUi.ability,
+    derivedAbilityUi.mode,
+    syncedFocusPreset,
+    { cardVisible: shouldPreserveVisibleCard },
+  );
+}
+
 export function useSignalRHandlers({
   getInvoke,
   saveSession,
@@ -196,6 +248,10 @@ export function useSignalRHandlers({
         useGameplayStore.getState().setSelectedHexKey(null);
       } else if (normalizedState.phase === 'Playing') {
         restorePersistedDebugLocation(normalizedState.roomCode);
+        syncAbilityUiFromServerState(
+          normalizedState,
+          savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId,
+        );
         useUiStore.getState().setView('game');
       } else if (normalizedState.phase === 'GameOver') {
         useUiStore.getState().setView('gameover');
@@ -217,6 +273,10 @@ export function useSignalRHandlers({
       useGameplayStore.getState().setPickupPrompt(null);
       useGameplayStore.getState().setReinforcePrompt(null);
       restorePersistedDebugLocation(normalizedState.roomCode);
+      syncAbilityUiFromServerState(
+        normalizedState,
+        savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId,
+      );
       useUiStore.getState().setView('game');
       useUiStore.getState().clearError();
     },
@@ -251,7 +311,7 @@ export function useSignalRHandlers({
         normalizedState
       );
 
-      resolveResumeFromState(normalizedState);
+      const resolvedResume = resolveResumeFromState(normalizedState);
       if (normalizedState.roomCode) {
         saveSession(normalizedState.roomCode);
       }
@@ -274,6 +334,44 @@ export function useSignalRHandlers({
           restorePersistedDebugLocation(normalizedState.roomCode);
         }
         useUiStore.getState().setView('game');
+
+        const currentUserId = savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId;
+
+        if (resolvedResume || useGameStore.getState().autoResuming) {
+          syncAbilityUiFromServerState(normalizedState, currentUserId);
+        }
+
+        const updatedGameplayState = useGameplayStore.getState();
+        const updatedAbilityUi = updatedGameplayState.abilityUi;
+        const updatedPlayer = currentUserId
+          ? normalizedState.players.find((player) => player.id === currentUserId) ?? null
+          : null;
+        const hasActiveCommandoRaid = updatedPlayer != null && (normalizedState.activeRaids?.some((raid) => (
+          raid.initiatorPlayerId === updatedPlayer.id
+          || (updatedPlayer.allianceId ? raid.initiatorAllianceId === updatedPlayer.allianceId : false)
+        )) ?? false);
+
+        const shouldExitAbilityMode = (
+          updatedAbilityUi.activeAbility === 'fortConstruction'
+          && updatedAbilityUi.mode === 'inProgress'
+          && updatedPlayer?.fortTargetQ == null
+        ) || (
+          updatedAbilityUi.activeAbility === 'sabotage'
+          && updatedAbilityUi.mode === 'inProgress'
+          && updatedPlayer?.sabotageTargetQ == null
+        ) || (
+          updatedAbilityUi.activeAbility === 'demolish'
+          && updatedAbilityUi.mode === 'inProgress'
+          && !updatedPlayer?.demolishTargetKey
+        ) || (
+          updatedAbilityUi.activeAbility === 'commandoRaid'
+          && updatedPlayer?.role !== 'Commander'
+          && !hasActiveCommandoRaid
+        );
+
+        if (shouldExitAbilityMode) {
+          updatedGameplayState.exitAbilityMode();
+        }
       } else if (normalizedState.phase === 'GameOver') {
         useUiStore.getState().setView('gameover');
         useGameplayStore.getState().clearGameplayUi();

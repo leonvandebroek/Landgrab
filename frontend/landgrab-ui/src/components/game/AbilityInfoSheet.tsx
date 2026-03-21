@@ -29,11 +29,10 @@ const ROLE_ABILITY_META: Record<AbilityRole, Record<string, AbilityMeta>> = {
     Scout: {
         extendedVision: { icon: 'compass', type: 'passive' },
         firstStrike: { icon: 'archeryTarget', type: 'passive' },
-        commandoRaid: { icon: 'crossbow', type: 'active' },
     },
     Engineer: {
         fortConstruction: { icon: 'gearHammer', type: 'passive' },
-        emergencyRepair: { icon: 'wrench', type: 'active' },
+        sabotage: { icon: 'wrench', type: 'active' },
         demolish: { icon: 'fist', type: 'active' },
     },
 };

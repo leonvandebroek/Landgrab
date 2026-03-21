@@ -178,7 +178,7 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateEmergencyRepair()
+    public async Task CancelFortConstruction()
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
@@ -187,7 +187,45 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateEmergencyRepair(room.Code, UserId);
+        var (state, error) = gameService.CancelFortConstruction(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task ActivateSabotage()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ActivateSabotage(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task CancelSabotage()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.CancelSabotage(room.Code, UserId);
         if (error != null)
         {
             await SendError(error);
@@ -207,6 +245,25 @@ public partial class GameHub
         }
 
         var (state, error) = gameService.StartDemolish(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task CancelDemolish()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.CancelDemolish(room.Code, UserId);
         if (error != null)
         {
             await SendError(error);
