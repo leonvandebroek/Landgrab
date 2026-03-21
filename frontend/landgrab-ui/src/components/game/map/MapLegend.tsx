@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../../common/GameIcon';
 
 export function MapLegend() {
   const { t } = useTranslation();
-  const rootRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(() => {
     try {
       return localStorage.getItem('landgrab_legend_seen') !== 'true';
@@ -16,10 +15,10 @@ export function MapLegend() {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelHost, setPanelHost] = useState<HTMLElement | null>(null);
 
-  useEffect(() => {
-    const host = rootRef.current?.closest('.game-map-container');
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPanelHost(host instanceof HTMLElement ? host : null);
+  const rootRef = useCallback((node: HTMLDivElement | null) => {
+    const host = node?.closest('.game-map-container');
+    const nextPanelHost = host instanceof HTMLElement ? host : null;
+    setPanelHost(nextPanelHost);
   }, []);
 
   useEffect(() => {
