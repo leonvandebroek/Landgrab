@@ -1090,7 +1090,6 @@
   gap: 0.5rem;
   flex-wrap: nowrap;
   overflow-x: auto;
-  scrollbar-width: none;
   font-size: 0.88rem;
   color: rgba(255, 255, 255, 0.9);
   min-height: 2.2rem;
@@ -4058,9 +4057,11 @@ button, [role="button"] {
 }
 
 .map-control-fab--compass .compass-needle {
-  transform: rotate(var(--compass-needle-deg, 0deg));
   transform-origin: center;
-  transition: transform 0.15s ease-out;
+}
+
+.player-marker-reticle--stale {
+  filter: saturate(0.3);
 }
 
 .map-control-fab--compass:disabled,

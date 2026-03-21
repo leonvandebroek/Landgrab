@@ -83,9 +83,9 @@ export const TroopBadge = memo(function TroopBadge({
         />
       ) : null}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-        <span 
-          className="troop-count" 
-          style={{ 
+        <span
+          className="troop-count"
+          style={{
             lineHeight: 1,
             display: 'flex',
             alignItems: 'center',

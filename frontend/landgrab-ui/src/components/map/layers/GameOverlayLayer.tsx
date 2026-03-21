@@ -174,7 +174,7 @@ function GameOverlayLayerComponent({
           );
         })}
       </g>
-      <g className="hex-highlights" style={{ pointerEvents: 'none' }}>
+      <g className="hex-highlights" pointerEvents="none">
         {selectedHexKey && hexGeometries[selectedHexKey] && selectedHexKey !== currentHexKey ? (
           <polygon
             className={[

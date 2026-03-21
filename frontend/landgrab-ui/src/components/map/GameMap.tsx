@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet-rotate';
@@ -12,7 +12,7 @@ import { useGameStore, useGameplayStore, useUiStore } from '../../stores';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
 import { AbilityOverlayLayer, GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
 import { HexTooltipOverlay } from './HexTooltipOverlay';
-import { createPdokBaseLayers, MAP_MAX_ZOOM } from './pdokLayers';
+import { createGameBaseLayers, MAP_LOOK_TO_BASEMAP, MAP_MAX_ZOOM, type BasemapLayer, type GameBasemapDefinition, type GameBasemapId, type MapLookPreset } from './pdokLayers';
 import { getTimePeriod } from '../../utils/timeOfDay';
 import { TroopSplashLayer } from './TroopSplashLayer';
 import { MapLayerToggle, MapLegend, TimeOverlay } from '../game/map';
@@ -22,6 +22,10 @@ interface LocationPoint {
   lat: number;
   lng: number;
 }
+
+type RotatingLeafletMap = L.Map & {
+  _rotatePane?: HTMLElement;
+};
 
 interface Props {
   state: GameState;
@@ -44,7 +48,8 @@ const DEFAULT_MAP_ZOOM = 16;
 const ZOOM_LEVEL_SYNC_DEBOUNCE_MS = 140;
 const HEX_LAYER_PANE = 'game-map-hex-pane';
 const PLAYER_LAYER_PANE = 'game-map-player-pane';
-type BasemapLayer = L.TileLayer | L.TileLayer.WMS;
+const MAP_BOUNDARY_PADDING_METERS = 500;
+const MAP_LOOK_PRESETS: MapLookPreset[] = ['nightVision', 'military', 'blackWhite', 'normal'];
 
 function formatDebugCoordinate(value: number | null | undefined): string {
   return Number.isFinite(value ?? Number.NaN) ? Number(value).toFixed(6) : '—';
@@ -79,6 +84,21 @@ function parseHexKey(hexKey: string | null): [number, number] | null {
   return [q, r];
 }
 
+function isTouchLikeDevice(): boolean {
+  return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+}
+
+function padBoundsByMeters(bounds: L.LatLngBounds, meters: number): L.LatLngBounds {
+  const centerLatRadians = bounds.getCenter().lat * (Math.PI / 180);
+  const latPadding = meters / 111_320;
+  const lngPadding = meters / Math.max(111_320 * Math.cos(centerLatRadians), 1e-6);
+
+  return L.latLngBounds(
+    [bounds.getSouth() - latPadding, bounds.getWest() - lngPadding],
+    [bounds.getNorth() + latPadding, bounds.getEast() + lngPadding],
+  );
+}
+
 export const GameMap = memo(function GameMap({
   state,
   myUserId,
@@ -109,12 +129,16 @@ export const GameMap = memo(function GameMap({
   const [basemapError, setBasemapError] = useState(false);
   const [basemapDismissed, setBasemapDismissed] = useState(false);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const [mapLookPreset, setMapLookPreset] = useState<MapLookPreset>('military');
   const basemapErrorRef = useRef(false);
   const basemapDismissedRef = useRef(false);
   const followedLocationKeyRef = useRef('');
   const currentLocationRef = useRef<LocationPoint | null>(null);
   const baseLayerControlRef = useRef<L.Control.Layers | null>(null);
   const activeBaseLayerRef = useRef<BasemapLayer | null>(null);
+  const activeBasemapIdRef = useRef<GameBasemapId | null>(null);
+  const basemapDefinitionsRef = useRef<GameBasemapDefinition[]>([]);
+  const syncingBasemapFromPresetRef = useRef(false);
   const basemapLayersRef = useRef<BasemapLayer[]>([]);
   const geometryKeyRef = useRef('');
   const initialCenterRef = useRef<[number, number]>(
@@ -123,6 +147,7 @@ export const GameMap = memo(function GameMap({
   const savedCameraStateRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
   const invalidateDebounceRef = useRef<number | null>(null);
   const repanDebounceRef = useRef<number | null>(null);
+  const panToOffsetLocationRef = useRef<(lat: number, lng: number, zoom?: number, animate?: boolean) => void>(() => {});
   const [isCompassRotationEnabled, setIsCompassRotationEnabled] = useState(false);
   const [debugCompassHeading, setDebugCompassHeading] = useState<number | null>(null);
 
@@ -154,6 +179,11 @@ export const GameMap = memo(function GameMap({
   const layerPanelDisclosureProps = isLayerPanelOpen
     ? { 'aria-expanded': 'true' as const }
     : { 'aria-expanded': 'false' as const };
+  const currentMapLookIndex = MAP_LOOK_PRESETS.indexOf(mapLookPreset);
+  const nextMapLookPreset = MAP_LOOK_PRESETS[(currentMapLookIndex + 1) % MAP_LOOK_PRESETS.length];
+  const currentMapLookLabel = t(`mapLooks.${mapLookPreset}` as never);
+  const nextMapLookLabel = t(`mapLooks.${nextMapLookPreset}` as never);
+  const currentMapLookShortLabel = t(`mapLooks.short.${mapLookPreset}` as never);
   const renderedGrid = gridOverride ?? state.grid;
   const selectedHexFromStore = useMemo(() => parseHexKey(selectedHexKey), [selectedHexKey]);
 
@@ -199,6 +229,10 @@ export const GameMap = memo(function GameMap({
       map.setView(offsetLatLng, targetZoom, { animate: false });
     }
   }, []);
+
+  useEffect(() => {
+    panToOffsetLocationRef.current = panToOffsetLocation;
+  }, [panToOffsetLocation]);
 
   const handleHexClick = useCallback((q: number, r: number) => {
     onHexClick?.(q, r, renderedGrid[`${q},${r}`]);
@@ -301,10 +335,12 @@ export const GameMap = memo(function GameMap({
     playerLayerStore.setCurrentLocation(currentLocation);
   }, [currentLocation, myUserId, state.players]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!containerRef.current || mapRef.current) {
       return;
     }
+
+    const touchLikeDevice = isTouchLikeDevice();
 
     const map = L.map(containerRef.current, {
       center: initialCenterRef.current,
@@ -314,11 +350,13 @@ export const GameMap = memo(function GameMap({
       zoomControl: false,
       rotate: true,
       bearing: 0,
+      dragging: true,
+      touchZoom: touchLikeDevice ? 'center' : true,
     });
 
     const hexPane = map.createPane(HEX_LAYER_PANE);
     hexPane.style.zIndex = '450';
-    const rotatePane = (map as any)._rotatePane as HTMLElement | undefined;
+    const rotatePane = (map as RotatingLeafletMap)._rotatePane;
     if (rotatePane) {
       rotatePane.appendChild(hexPane);
     }
@@ -329,11 +367,13 @@ export const GameMap = memo(function GameMap({
       rotatePane.appendChild(playerPane);
     }
 
-    const { brtStandard, brtGray, top25 } = createPdokBaseLayers();
-    const basemapLayers: BasemapLayer[] = [top25, brtStandard, brtGray];
-    basemapLayersRef.current = basemapLayers;
-    top25.addTo(map);
-    activeBaseLayerRef.current = top25;
+    const basemapDefinitions = createGameBaseLayers();
+    const defaultBasemap = basemapDefinitions.find(({ id }) => id === 'top25') ?? basemapDefinitions[0];
+    basemapDefinitionsRef.current = basemapDefinitions;
+    basemapLayersRef.current = basemapDefinitions.map(({ layer }) => layer);
+    defaultBasemap.layer.addTo(map);
+    activeBaseLayerRef.current = defaultBasemap.layer;
+    activeBasemapIdRef.current = defaultBasemap.id;
 
     const basemapResetTimeoutId = basemapErrorRef.current || basemapDismissedRef.current
       ? window.setTimeout(() => {
@@ -342,13 +382,7 @@ export const GameMap = memo(function GameMap({
       }, 0)
       : null;
 
-    const basemapEntries = [
-      { key: t('map.layerTopo'), label: 'topo', layer: top25 },
-      { key: t('map.layerStandard'), label: 'standard', layer: brtStandard },
-      { key: t('map.layerGray'), label: 'gray', layer: brtGray },
-    ] as const;
-
-    const tileErrorHandlers = basemapEntries.map(({ label, layer }) => {
+    const tileErrorHandlers = basemapDefinitions.map(({ id, layer }) => {
       const handleTileError = (event: L.TileErrorEvent) => {
         if (!map.hasLayer(layer)) {
           return;
@@ -356,7 +390,7 @@ export const GameMap = memo(function GameMap({
 
         console.warn('[GameMap] basemap tile failed to load', {
           coords: event.coords,
-          layer: label,
+          layer: id,
           src: event.tile.getAttribute('src'),
         });
         applyBasemapError(true);
@@ -367,13 +401,13 @@ export const GameMap = memo(function GameMap({
       return { handleTileError, layer };
     });
 
-    const loadHandlers = basemapEntries.map(({ label, layer }) => {
+    const loadHandlers = basemapDefinitions.map(({ id, layer }) => {
       const handleLoad = () => {
         if (!map.hasLayer(layer)) {
           return;
         }
 
-        console.info('[GameMap] basemap tiles loaded', { layer: label });
+        console.info('[GameMap] basemap tiles loaded', { layer: id });
         applyBasemapError(false);
       };
 
@@ -383,22 +417,29 @@ export const GameMap = memo(function GameMap({
 
     const handleBaseLayerChange = (event: L.LayersControlEvent) => {
       activeBaseLayerRef.current = event.layer as BasemapLayer;
+      const nextBasemap = basemapDefinitions.find(({ layer }) => layer === event.layer);
+      if (nextBasemap) {
+        activeBasemapIdRef.current = nextBasemap.id;
+        if (syncingBasemapFromPresetRef.current) {
+          syncingBasemapFromPresetRef.current = false;
+        } else {
+          setMapLookPreset(nextBasemap.recommendedLook);
+        }
+      }
       applyBasemapError(false);
       applyBasemapDismissed(false);
     };
     map.on('baselayerchange', handleBaseLayerChange);
 
-    baseLayerControlRef.current = L.control.layers({
-      [t('map.layerTopo')]: top25,
-      [t('map.layerStandard')]: brtStandard,
-      [t('map.layerGray')]: brtGray,
-    }).addTo(map);
+    baseLayerControlRef.current = L.control.layers(
+      Object.fromEntries(basemapDefinitions.map(({ labelKey, layer }) => [t(labelKey as never), layer]))
+    ).addTo(map);
 
     mapRef.current = map;
     setMapInstance(map);
 
     useUiStore.getState().setMapCameraController({
-      setView: (lat, lng, zoom) => panToOffsetLocation(lat, lng, zoom, true),
+      setView: (lat, lng, zoom) => panToOffsetLocationRef.current(lat, lng, zoom, true),
         fitBounds: (bounds, _paddingPx) => map.fitBounds(bounds, {
           paddingTopLeft: L.point(GRID_FIT_PADDING.x, 48),
           paddingBottomRight: GRID_FIT_PADDING,
@@ -407,7 +448,7 @@ export const GameMap = memo(function GameMap({
     });
 
     if (navigateRef) {
-        navigateRef.current = (lat: number, lng: number) => panToOffsetLocation(lat, lng);
+        navigateRef.current = (lat: number, lng: number) => panToOffsetLocationRef.current(lat, lng);
     }
 
     return () => {
@@ -424,6 +465,9 @@ export const GameMap = memo(function GameMap({
       baseLayerControlRef.current?.remove();
       baseLayerControlRef.current = null;
       activeBaseLayerRef.current = null;
+      activeBasemapIdRef.current = null;
+      basemapDefinitionsRef.current = [];
+      syncingBasemapFromPresetRef.current = false;
       basemapLayersRef.current = [];
       map.stop();
       map.off();
@@ -436,10 +480,10 @@ export const GameMap = memo(function GameMap({
         navigateRef.current = null;
       }
     };
-  }, [applyBasemapDismissed, applyBasemapError, constrainViewportToGrid, navigateRef, panToOffsetLocation, t]);
+  }, [applyBasemapDismissed, applyBasemapError, constrainViewportToGrid, navigateRef, t]);
 
   useEffect(() => {
-    const map = mapInstance;
+    const map = mapRef.current;
     const container = containerRef.current;
     if (!map || !container || typeof ResizeObserver === 'undefined') {
       return;
@@ -454,7 +498,7 @@ export const GameMap = memo(function GameMap({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [mapInstance]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -484,33 +528,34 @@ export const GameMap = memo(function GameMap({
   }, []);
 
   useEffect(() => {
-    if (invalidateDebounceRef.current !== null) {
-      window.clearTimeout(invalidateDebounceRef.current);
-    }
-    
-    // 150ms invalidation debounce
-    invalidateDebounceRef.current = window.setTimeout(() => {
-      invalidateDebounceRef.current = null;
-      const map = mapRef.current;
-      if (map) {
-        map.invalidateSize({ pan: false });
+    const frameId = window.requestAnimationFrame(() => {
+      if (invalidateDebounceRef.current !== null) {
+        window.clearTimeout(invalidateDebounceRef.current);
       }
 
-      if (repanDebounceRef.current !== null) {
-        window.clearTimeout(repanDebounceRef.current);
-      }
-      
-      // Separate 350ms follow-me re-pan delay
-      repanDebounceRef.current = window.setTimeout(() => {
-        repanDebounceRef.current = null;
-        if (isFollowingMe && currentLocation) {
-          followedLocationKeyRef.current = ''; // force update
-          panToOffsetLocation(currentLocation.lat, currentLocation.lng);
+      invalidateDebounceRef.current = window.setTimeout(() => {
+        invalidateDebounceRef.current = null;
+        const map = mapRef.current;
+        if (map) {
+          map.invalidateSize({ pan: false });
         }
-      }, 350);
-    }, 150);
+
+        if (repanDebounceRef.current !== null) {
+          window.clearTimeout(repanDebounceRef.current);
+        }
+
+        repanDebounceRef.current = window.setTimeout(() => {
+          repanDebounceRef.current = null;
+          if (isFollowingMe && currentLocation) {
+            followedLocationKeyRef.current = '';
+            panToOffsetLocation(currentLocation.lat, currentLocation.lng);
+          }
+        }, 350);
+      }, 150);
+    });
 
     return () => {
+      window.cancelAnimationFrame(frameId);
       if (invalidateDebounceRef.current !== null) {
         window.clearTimeout(invalidateDebounceRef.current);
       }
@@ -519,6 +564,38 @@ export const GameMap = memo(function GameMap({
       }
     };
   }, [hudBottomPx, isFollowingMe, currentLocation, panToOffsetLocation]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const targetBasemapId = MAP_LOOK_TO_BASEMAP[mapLookPreset];
+    if (activeBasemapIdRef.current === targetBasemapId) {
+      return;
+    }
+
+    const targetBasemap = basemapDefinitionsRef.current.find(({ id }) => id === targetBasemapId);
+    if (!targetBasemap) {
+      return;
+    }
+
+    syncingBasemapFromPresetRef.current = true;
+
+    if (activeBaseLayerRef.current && map.hasLayer(activeBaseLayerRef.current)) {
+      map.removeLayer(activeBaseLayerRef.current);
+    }
+
+    targetBasemap.layer.addTo(map);
+    activeBaseLayerRef.current = targetBasemap.layer;
+    activeBasemapIdRef.current = targetBasemap.id;
+
+    window.requestAnimationFrame(() => {
+      applyBasemapError(false);
+      applyBasemapDismissed(false);
+    });
+  }, [applyBasemapDismissed, applyBasemapError, mapLookPreset]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -572,16 +649,16 @@ export const GameMap = memo(function GameMap({
       setFollowingMeDeferred(true);
       const loc = currentLocationRef.current;
       if (loc) {
-        panToOffsetLocation(loc.lat, loc.lng, 17, false);
+        panToOffsetLocation(loc.lat, loc.lng, 16.25, false);
       } else {
-        map.setZoom(17, { animate: true });
+        map.setZoom(16.25, { animate: true });
       }
     } else if (mapFocusPreset === 'strategicTargeting') {
       if (!savedCameraStateRef.current) {
         savedCameraStateRef.current = { center: map.getCenter(), zoom: map.getZoom() };
       }
       setFollowingMeDeferred(false);
-      map.setZoom(14, { animate: true });
+      map.setZoom(13.5, { animate: true });
     } else if (!mapFocusPreset || mapFocusPreset === 'none' || mapFocusPreset === 'idle') {
       if (savedCameraStateRef.current) {
         const { center, zoom } = savedCameraStateRef.current;
@@ -691,7 +768,7 @@ export const GameMap = memo(function GameMap({
     }
 
     map.setMinZoom(map.getZoom());
-    map.setMaxBounds(bounds.pad(0.05));
+    map.setMaxBounds(padBoundsByMeters(bounds, MAP_BOUNDARY_PADDING_METERS));
   }, [constrainViewportToGrid, renderedGrid, state.mapLat, state.mapLng, state.tileSizeMeters]);
 
   function handleBasemapRetry() {
@@ -731,7 +808,7 @@ export const GameMap = memo(function GameMap({
   }, [effectiveHeading, isCompassRotationEnabled]);
 
   return (
-    <div className={`game-map-container time-${timePeriod}`}>
+    <div className={`game-map-container time-${timePeriod} map-look--${mapLookPreset}`}>
       <div ref={containerRef} className="leaflet-map" />
       {mapInstance ? (
         <>
@@ -916,6 +993,18 @@ export const GameMap = memo(function GameMap({
             <path d="M16 9v6" />
             <path d="M10 15v6" />
           </svg>
+        </button>
+        <button
+          type="button"
+          className={`map-control-fab map-control-fab--map-look map-control-fab--map-look-${mapLookPreset}`}
+          onClick={() => setMapLookPreset(nextMapLookPreset)}
+          title={t('mapLooks.cycleButton', { current: currentMapLookLabel, next: nextMapLookLabel })}
+          aria-label={t('mapLooks.cycleButton', { current: currentMapLookLabel, next: nextMapLookLabel })}
+        >
+          <span className="map-control-fab__stack" aria-hidden="true">
+            <span className="map-control-fab__kicker">MAP</span>
+            <span className="map-control-fab__value">{currentMapLookShortLabel}</span>
+          </span>
         </button>
         <MapLegend />
       </div>

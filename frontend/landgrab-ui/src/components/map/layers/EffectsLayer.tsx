@@ -132,13 +132,13 @@ function EffectsLayerComponent({
         stroke: '#FF00AA',
         opacity: 0.35,
         strokeWidth: 7.5 + edge.intensity * 6,
+        style: {
+          '--intensity': edge.intensity,
+        } as React.CSSProperties,
         x1: startPoint.x,
         y1: startPoint.y,
         x2: endPoint.x,
         y2: endPoint.y,
-        style: {
-          '--intensity': edge.intensity,
-        } as React.CSSProperties,
       }, {
         key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:march`,
         className: 'contested-edge-march',
@@ -146,13 +146,13 @@ function EffectsLayerComponent({
         opacity: 0.85,
         strokeWidth: 5,
         strokeDasharray: '6 6',
+        style: {
+          animationDuration: `${Math.max(0.5, 1.5 - edge.intensity)}s`,
+        } as React.CSSProperties,
         x1: startPoint.x,
         y1: startPoint.y,
         x2: endPoint.x,
         y2: endPoint.y,
-        style: {
-          animationDuration: `${Math.max(0.5, 1.5 - edge.intensity)}s`,
-        } as React.CSSProperties,
       }, {
         key: `${edge.hexKeyA}:${edge.hexKeyB}:${edge.neighborIndex}:spark`,
         className: 'contested-edge-spark',

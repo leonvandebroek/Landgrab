@@ -165,28 +165,22 @@ export default function App() {
   });
 
   // ── Location ─────────────────────────────────────────────────────────────
-  const liveLocation = useMemo<LocationPoint | null>(() => {
-    if (location.lat == null || location.lng == null) return null;
-    return { lat: location.lat, lng: location.lng };
-  }, [location.lat, location.lng]);
-
-  const serverLocation = useMemo<LocationPoint | null>(() => {
-    if (myPlayer?.currentLat == null || myPlayer.currentLng == null) {
-      return null;
-    }
-
-    return {
-      lat: myPlayer.currentLat,
-      lng: myPlayer.currentLng,
-    };
-  }, [myPlayer?.currentLat, myPlayer?.currentLng]);
+  const liveLocation: LocationPoint | null = location.lat == null || location.lng == null
+    ? null
+    : { lat: location.lat, lng: location.lng };
 
   const usingDebugLocation = DEBUG_GPS_AVAILABLE && debugLocationEnabled && debugLocation !== null;
 
-  const currentLocation = useMemo<LocationPoint | null>(() => {
-    if (usingDebugLocation) return debugLocation;
-    return liveLocation ?? serverLocation;
-  }, [debugLocation, liveLocation, serverLocation, usingDebugLocation]);
+  const currentLocation: LocationPoint | null = usingDebugLocation
+    ? debugLocation
+    : liveLocation ?? (
+      myPlayer?.currentLat == null || myPlayer.currentLng == null
+        ? null
+        : {
+          lat: myPlayer.currentLat,
+          lng: myPlayer.currentLng,
+        }
+    );
 
   const mapCenterLocation = useMemo<LocationPoint | null>(() => {
     if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
@@ -240,13 +234,9 @@ export default function App() {
   const effectiveLocationError = usingDebugLocation || isHostBypass ? null : location.error;
   const effectiveLocationLoading = usingDebugLocation || isHostBypass ? false : location.loading;
 
-  const serverCurrentHex = useMemo<[number, number] | null>(() => {
-    if (myPlayer?.currentHexQ == null || myPlayer.currentHexR == null) {
-      return null;
-    }
-
-    return [myPlayer.currentHexQ, myPlayer.currentHexR];
-  }, [myPlayer?.currentHexQ, myPlayer?.currentHexR]);
+  const serverCurrentHex: [number, number] | null = myPlayer?.currentHexQ == null || myPlayer.currentHexR == null
+    ? null
+    : [myPlayer.currentHexQ, myPlayer.currentHexR];
 
   const currentHex = useMemo(() => {
     if (serverCurrentHex) {
@@ -511,7 +501,6 @@ export default function App() {
       type="button"
       className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
       onClick={() => setShowDebugTools(!showDebugTools)}
-      aria-pressed={showDebugTools ? 'true' : 'false'}
     >
       {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
     </button>

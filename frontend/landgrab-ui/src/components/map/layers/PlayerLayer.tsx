@@ -13,6 +13,10 @@ interface PlayerLayerProps {
   layerPreferences?: MapLayerPreferences;
 }
 
+type RotatingLeafletMap = L.Map & {
+  _rotatePane?: HTMLElement;
+};
+
 interface ProjectedPlayer {
   player: Player;
   point: L.Point;
@@ -106,7 +110,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
       const beaconRadiusPane = map.createPane(BEACON_RADIUS_PANE);
       beaconRadiusPane.style.zIndex = '625';
       beaconRadiusPane.style.pointerEvents = 'none';
-      const rotatePane = (map as any)._rotatePane as HTMLElement | undefined;
+      const rotatePane = (map as RotatingLeafletMap)._rotatePane;
       if (rotatePane) {
         rotatePane.appendChild(beaconRadiusPane);
       }

@@ -65,7 +65,6 @@ export function AbilityInfoSheet({ role, abilityKey, onClose, stateTone = 'stand
     const { t } = useTranslation();
     const abilityMeta = ROLE_ABILITY_META[role][abilityKey] ?? { icon: 'master', type: 'active' as const };
     const abilityPrefix = `roles.${role}.abilities.${abilityKey}`;
-
     return (
         <div className="ability-info-sheet-overlay" onClick={onClose}>
             <div

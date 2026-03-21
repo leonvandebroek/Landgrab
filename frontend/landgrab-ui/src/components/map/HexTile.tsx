@@ -588,7 +588,7 @@ function renderForeignObject({
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'visible',
-          fontSize: `${height}px`, // Ensure 1em SVGs fill the container
+          fontSize: `${height}px`,
           fontFamily: '"Rajdhani", system-ui, sans-serif',
         }}
       >

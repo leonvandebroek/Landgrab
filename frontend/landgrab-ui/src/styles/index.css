@@ -40,16 +40,31 @@ body,
 
 body {
   background: var(--bg);
-  overscroll-behavior: none;
   font-family: 'Fredoka', sans-serif;
 }
 
-/* Dark Map Hack - Force Leaflet tiles to look dark/cool */
-.leaflet-tile-pane {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-}
 .leaflet-container {
   background: #0f172a !important; /* Dark Slate */
+}
+
+.game-map-container .leaflet-tile-pane {
+  transition: filter 0.24s ease;
+}
+
+.game-map-container.map-look--nightVision .leaflet-tile-pane {
+  filter: grayscale(1) brightness(0.34) contrast(1.72) sepia(1) hue-rotate(34deg) saturate(8.5);
+}
+
+.game-map-container.map-look--military .leaflet-tile-pane {
+  filter: brightness(0.58) contrast(1.28) sepia(0.42) hue-rotate(32deg) saturate(1.35);
+}
+
+.game-map-container.map-look--blackWhite .leaflet-tile-pane {
+  filter: grayscale(1) brightness(1.02) contrast(1.18);
+}
+
+.game-map-container.map-look--normal .leaflet-tile-pane {
+  filter: brightness(0.95);
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
@@ -227,6 +242,7 @@ input:focus {
     radial-gradient(circle at top left, rgba(122, 215, 255, 0.14), transparent 30%),
     linear-gradient(180deg, rgba(20, 30, 44, 0.96), rgba(10, 16, 26, 0.98));
   border: 1px solid rgba(143, 214, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
 }
 
@@ -417,6 +433,7 @@ input:focus {
     radial-gradient(circle at top left, rgba(122, 215, 255, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(20, 30, 44, 0.96), rgba(10, 16, 26, 0.98));
   border: 1px solid rgba(143, 214, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
 }
 
@@ -2719,8 +2736,8 @@ input:focus {
 /* Content - Dark Arcade Glass */
 .wizard-content {
   background: rgba(30, 41, 59, 0.7); /* Dark Glass */
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-radius: 24px; /* Playful */
   padding: 1.5rem;
   border: 2px solid rgba(255, 255, 255, 0.08); /* Subtle highlight */
@@ -2832,6 +2849,7 @@ input:focus {
   justify-content: center;
   padding: 1.25rem;
   background: rgba(7, 10, 18, 0.72);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -3041,6 +3059,7 @@ input:focus {
   inset: 0;
   z-index: 9999;
   background: rgba(0, 10, 20, 0.8);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   display: flex;
   flex-direction: column;
@@ -3062,6 +3081,8 @@ input:focus {
     linear-gradient(90deg, rgba(0,255,255,0.05) 1px, transparent 1px);
   background-size: 20px 20px;
   background-color: #0a0a14;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   animation: ability-sheet-enter 0.22s ease;
 }
 
@@ -3375,6 +3396,21 @@ input:focus {
   color: #00FFFF;
   font-size: 1.5rem;
   flex-shrink: 0;
+}
+
+.ability-info-sheet__icon--commander {
+  color: #f6c453;
+  border-color: rgba(246, 196, 83, 0.3);
+}
+
+.ability-info-sheet__icon--scout {
+  color: #6bc5ff;
+  border-color: rgba(107, 197, 255, 0.3);
+}
+
+.ability-info-sheet__icon--engineer {
+  color: #ffb366;
+  border-color: rgba(255, 179, 102, 0.3);
 }
 
 @media (max-width: 640px) {
@@ -5067,13 +5103,6 @@ input:checked+.display-settings-slider:before {
 
 /* ── UI Game Enhancements ──────────────────────────────────────────────────────── */
 
-/* 1. Map desaturation — tactical overlay feel */
-/* Dark Map Override - Force consistent dark theme even in game layout */
-.game-layout .leaflet-tile-pane {
-  filter: invert(100%) hue-rotate(180deg) brightness(70%) contrast(120%) saturate(0.5);
-  will-change: transform;
-}
-
 /* 3. Hex Claim Pulse Animation */
 @keyframes hex-claim-pulse {
   0% {
@@ -5188,6 +5217,18 @@ input:checked+.display-settings-slider:before {
   text-shadow: var(--crt-glow-text-amber);
 }
 
+.hex-troop-badge--standard {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+}
+
+.hex-troop-badge--hq {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
+}
+
 .hq-badge-inner {
   transform: rotate(-45deg);
   display: flex;
@@ -5215,6 +5256,26 @@ input:checked+.display-settings-slider:before {
   transform: translateX(-50%);
   z-index: 2;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+.troop-badge-prefix--markup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.troop-badge-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.troop-count--centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Badge variants — visual hierarchy: master > HQ > fort */
@@ -6662,8 +6723,6 @@ input:checked+.display-settings-slider:before {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
   padding: 0.85rem 0.9rem 0.95rem;
 }
 
@@ -6863,8 +6922,58 @@ input:checked+.display-settings-slider:before {
 /* Prevent any CSS transform on the SVG itself — Safari mispositions
    foreignObject HTML when CSS transforms exist on the SVG element. */
 .hex-overlay-svg {
-  transform: none !important;
   -webkit-transform: none !important;
+  transform: none !important;
+}
+
+.hex-fo-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+}
+
+.hex-fo-html,
+.hex-fo-content {
+  position: relative;
+}
+
+.hex-fo-html,
+.hex-fo-content--fill {
+  width: 100%;
+  height: 100%;
+}
+
+.hex-fo-content--center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hex-fo-content--nowrap {
+  white-space: nowrap;
+}
+
+.hex-fo-badge-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hex-progress-ring {
+  width: 100%;
+  height: 100%;
+  opacity: 0.72;
+}
+
+.hex-progress-ring__value {
+  transition: stroke-dasharray 160ms ease;
 }
 
 /* Contested edge lines */
@@ -7225,7 +7334,6 @@ input:checked+.display-settings-slider:before {
     inset 0 1px 0 rgba(196, 230, 255, 0.08);
   animation: legend-slide-in 0.2s ease-out;
   box-sizing: border-box;
-  overscroll-behavior: contain;
 }
 
 @keyframes legend-slide-in {
@@ -7279,8 +7387,6 @@ input:checked+.display-settings-slider:before {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
 }
 
 .legend-row {
@@ -7606,6 +7712,46 @@ input:checked+.display-settings-slider:before {
 .game-map-controls .map-control-fab svg {
   width: 22px;
   height: 22px;
+}
+
+.game-map-controls .map-control-fab--map-look {
+  font-family: 'JetBrains Mono', 'Share Tech Mono', ui-monospace, monospace;
+  letter-spacing: 0.04em;
+}
+
+.map-control-fab__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+.map-control-fab__kicker {
+  font-size: 0.45rem;
+  opacity: 0.72;
+}
+
+.map-control-fab__value {
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.game-map-controls .map-control-fab--map-look-nightVision {
+  color: #b7ff94;
+}
+
+.game-map-controls .map-control-fab--map-look-military {
+  color: #b9d18b;
+}
+
+.game-map-controls .map-control-fab--map-look-blackWhite {
+  color: #f1f5f9;
+}
+
+.game-map-controls .map-control-fab--map-look-normal {
+  color: #9fe7ff;
 }
 
 .map-legend {
