@@ -101,6 +101,8 @@ export function useDeviceMotion(enabled: boolean): DeviceMotionState {
         if (now - lastSyncRef.current >= PITCH_SYNC_INTERVAL_MS) {
           lastSyncRef.current = now;
           setPitch(pitchRef.current);
+        } else {
+          scheduleStateSync();
         }
       });
     };

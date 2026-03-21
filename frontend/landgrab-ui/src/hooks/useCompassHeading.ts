@@ -102,6 +102,8 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         if (now - lastSyncRef.current >= HEADING_SYNC_INTERVAL_MS) {
           lastSyncRef.current = now;
           setHeading(headingRef.current);
+        } else {
+          scheduleStateSync();
         }
       });
     };

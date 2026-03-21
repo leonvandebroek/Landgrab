@@ -5,6 +5,7 @@ import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type { CombatPreviewDto, HexCell } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
+import { haversineDistanceM } from '../utils/geo';
 import { getErrorMessage, getPlaceSuccessMessage } from '../utils/gameHelpers';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 import { resolveActionCoordinates } from './useGameActions.shared';
@@ -12,21 +13,6 @@ import { resolveActionCoordinates } from './useGameActions.shared';
 const LOCATION_BROADCAST_THROTTLE_MS = 3000;
 const MIN_MOVEMENT_METRES = 5;
 const HEARTBEAT_INTERVAL_MS = 30_000;
-
-function haversineDistanceM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const earthRadiusM = 6_371_000;
-  const toRadians = (degrees: number): number => degrees * (Math.PI / 180);
-  const deltaLat = toRadians(lat2 - lat1);
-  const deltaLng = toRadians(lng2 - lng1);
-  const startLat = toRadians(lat1);
-  const endLat = toRadians(lat2);
-
-  const a = Math.sin(deltaLat / 2) ** 2
-    + Math.cos(startLat) * Math.cos(endLat) * Math.sin(deltaLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusM * c;
-}
 
 type ClaimTileActionType = 'claim' | 'reinforce' | 'claimAlliance' | 'claimSelf';
 
@@ -142,7 +128,7 @@ export function useGameActionsGameplay({
 
     lastSendTimeRef.current = Date.now();
 
-    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng, currentHeadingRef?.current ?? null)
+    invoke('UpdatePlayerLocation', pendingLocation.lat, pendingLocation.lng, currentHeadingRef.current)
       .then(() => {
         lastSentPositionRef.current = { lat: pendingLocation.lat, lng: pendingLocation.lng };
         clearLocationThrottle();
