@@ -30,3 +30,5 @@ Key patterns:
 - **2026-03-22 (vermeer-p1-fixes — Production playtest fixes):**
   - **Orchestration:** Merged Q/E heading + Dutch event log fixes. Written orchestration log and decision. All frontend/ changes linted + built clean.
 
+
+- **2026-07-xx (vermeer-p2-dialog):** Fixed P2 dialog stacking/overlap. Root cause: `combatResult` and `neutralClaimResult` are independent nullable state fields in `gameplayStore`. When both arrive simultaneously (e.g., a combat outcome while a claim result is shown), both `CombatModal` and `TroopDeployModal` rendered at once. Fix: implemented Option A (queue) entirely inside `gameplayStore.ts`. Added `QueuedOutcomeDialog` discriminated union type and `outcomeDialogQueue: QueuedOutcomeDialog[]` state field. Changed `setCombatResult` and `setNeutralClaimResult` to enqueue new arrivals if another dialog is currently visible, and to promote the next queued item on dismissal (null call). Also added `outcomeDialogQueue: []` to `clearGameplayUi`. No changes needed in GameView, SignalRHandlers, or agentBridge — full backward compatibility preserved. Build: `npm run lint && npm run build` passes (0 errors).
