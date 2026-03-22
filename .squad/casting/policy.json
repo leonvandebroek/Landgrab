@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "universe_allowlist": ["dutch-golden-age"],
+  "selected_universe": "dutch-golden-age",
+  "max_agents": 20,
+  "overflow_strategy": "diegetic-expansion",
+  "scribe_exempt": true,
+  "ralph_exempt": true,
+  "copilot_exempt": true
+}
