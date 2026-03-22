@@ -140,6 +140,14 @@
 **Pattern:** For stale-closure-safe reads in async callbacks, use `useGameStore.getState()` rather than closure-captured props.  
 **SignalR Impact:** None — frontend-only feedback enhancement.
 
+### 20. Q/E Heading Always-On + Dutch Event Log Localisation (2026-03-22, P1 Major)
+**Status:** Implemented  
+**Agent:** vermeer-p1-fixes  
+**Change:** (a) Removed `isCompassRotationEnabled` guard from Q/E keydown effect in `GameMap.tsx`; heading adjustment now always active in Playing phase. Used `debugCompassHeadingRef` (ref-tracked state) to avoid stale closures. Q/E writes to both `debugCompassHeading` (visual) and `uiStore.debugHeading` (backend via `currentHeadingRef → UpdatePlayerLocation`). (b) Added 28 case blocks to `gameLogFormat.ts` with NL i18n keys for structured event types (CombatRepelled, HQCaptured, CommandoRaidSuccess, CommandoRaidFailed, RallyPointResolved, FortConstructionInvalidated, FortBuilt, SabotageInvalidated, SabotageComplete, DemolishInvalidated, DemolishCompleted, GameAreaUpdated, AlliancesConfigured, PlayersDistributed, AllianceStartingTileAssigned, AllianceHQAssigned, AllianceHQAutoAssigned, BeaconActivated, CommandoRaidStarted, TacticalStrikeActivated, RallyPointActivated, FortConstructionStarted, FortConstructionCancelled, SabotageStarted, SabotageCancelled, DemolishStarted, DemolishCancelled).  
+**Rationale:** (a) Heading adjustment should always respond to keyboard input; compass rotation display is opt-in, but heading control is baseline. (b) All structured event types now localize properly; HostAction, RandomEvent, HostMessage intentionally fallthrough to raw message (server-generated content).  
+**Verification:** lint + build clean.  
+**SignalR Impact:** None — frontend consumption only.
+
 ## Governance
 
 - All meaningful changes require team consensus
