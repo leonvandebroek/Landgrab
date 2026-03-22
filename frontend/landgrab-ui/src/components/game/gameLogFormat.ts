@@ -54,7 +54,131 @@ export function formatGameLogEntry(
         q: event.q ?? '?',
         r: event.r ?? '?'
       });
-    case 'GameStarted':
+    case 'CombatRepelled':
+      return t('gameLog.events.CombatRepelled', {
+        playerName,
+        targetPlayerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'HQCaptured':
+      return t('gameLog.events.HQCaptured', {
+        playerName,
+        allianceName: event.allianceName ?? t('gameLog.unknownAlliance'),
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'CommandoRaidSuccess':
+      return t('gameLog.events.CommandoRaidSuccess', {
+        allianceName: event.allianceName ?? t('gameLog.unknownAlliance'),
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'CommandoRaidFailed':
+      return t('gameLog.events.CommandoRaidFailed', {
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'RallyPointResolved':
+      return t('gameLog.events.RallyPointResolved', {
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'FortConstructionInvalidated':
+      return t('gameLog.events.FortConstructionInvalidated', { playerName });
+    case 'FortBuilt':
+      return t('gameLog.events.FortBuilt', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'SabotageInvalidated':
+      return t('gameLog.events.SabotageInvalidated', { playerName });
+    case 'SabotageComplete':
+      return t('gameLog.events.SabotageComplete', {
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'DemolishInvalidated':
+      return t('gameLog.events.DemolishInvalidated', { playerName });
+    case 'DemolishCompleted':
+      return t('gameLog.events.DemolishCompleted', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'GameAreaUpdated':
+      return t('gameLog.events.GameAreaUpdated');
+    case 'AlliancesConfigured':
+      return t('gameLog.events.AlliancesConfigured');
+    case 'PlayersDistributed':
+      return t('gameLog.events.PlayersDistributed');
+    case 'AllianceStartingTileAssigned':
+      return t('gameLog.events.AllianceStartingTileAssigned', {
+        allianceName: event.allianceName ?? t('gameLog.unknownAlliance'),
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'AllianceHQAssigned':
+      return t('gameLog.events.AllianceHQAssigned', {
+        allianceName: event.allianceName ?? t('gameLog.unknownAlliance'),
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'AllianceHQAutoAssigned':
+      return t('gameLog.events.AllianceHQAutoAssigned', {
+        allianceName: event.allianceName ?? t('gameLog.unknownAlliance'),
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'BeaconActivated':
+      return t('gameLog.events.BeaconActivated', { playerName });
+    case 'CommandoRaidStarted':
+      return t('gameLog.events.CommandoRaidStarted', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'TacticalStrikeActivated':
+      return t('gameLog.events.TacticalStrikeActivated', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'RallyPointActivated':
+      return t('gameLog.events.RallyPointActivated', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'FortConstructionStarted':
+      return t('gameLog.events.FortConstructionStarted', {
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'FortConstructionCancelled':
+      return t('gameLog.events.FortConstructionCancelled', { playerName });
+    case 'SabotageStarted':
+      return t('gameLog.events.SabotageStarted', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'SabotageCancelled':
+      return t('gameLog.events.SabotageCancelled', { playerName });
+    case 'DemolishStarted':
+      return t('gameLog.events.DemolishStarted', {
+        playerName,
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'DemolishCancelled':
+      return t('gameLog.events.DemolishCancelled', { playerName });
+    case 'HostAction':
+    case 'RandomEvent':
+    case 'HostMessage':
+      return event.message || t('gameLog.events.Unknown');
+    
       return t('gameLog.events.GameStarted');
     case 'GameOver':
       if (winnerName) {

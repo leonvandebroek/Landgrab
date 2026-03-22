@@ -150,6 +150,7 @@ export const GameMap = memo(function GameMap({
   const panToOffsetLocationRef = useRef<(lat: number, lng: number, zoom?: number, animate?: boolean) => void>(() => {});
   const [isCompassRotationEnabled, setIsCompassRotationEnabled] = useState(false);
   const [debugCompassHeading, setDebugCompassHeading] = useState<number | null>(null);
+  const debugCompassHeadingRef = useRef<number | null>(null);
 
   const {
     heading: compassHeading,
@@ -282,17 +283,22 @@ export const GameMap = memo(function GameMap({
   }, [currentLocation, handleZoomToLocation, setIsFollowingMe]);
 
   useEffect(() => {
-    if (!isCompassRotationEnabled) {
-      return;
-    }
+    debugCompassHeadingRef.current = debugCompassHeading;
+  }, [debugCompassHeading]);
 
+  useEffect(() => {
     const wrapHeading = (value: number) => ((value % 360) + 360) % 360;
 
     function handleCompassDebugKeyDown(event: KeyboardEvent) {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
       if (event.key === 'e' || event.key === 'E') {
-        setDebugCompassHeading((currentHeading) => wrapHeading((currentHeading ?? compassHeading ?? 0) + 5));
+        const newHeading = wrapHeading((debugCompassHeadingRef.current ?? compassHeading ?? 0) + 5);
+        setDebugCompassHeading(newHeading);
+        useUiStore.getState().setDebugHeading(newHeading);
       } else if (event.key === 'q' || event.key === 'Q') {
-        setDebugCompassHeading((currentHeading) => wrapHeading((currentHeading ?? compassHeading ?? 0) - 5));
+        const newHeading = wrapHeading((debugCompassHeadingRef.current ?? compassHeading ?? 0) - 5);
+        setDebugCompassHeading(newHeading);
+        useUiStore.getState().setDebugHeading(newHeading);
       }
     }
 
@@ -300,7 +306,7 @@ export const GameMap = memo(function GameMap({
     return () => {
       window.removeEventListener('keydown', handleCompassDebugKeyDown);
     };
-  }, [isCompassRotationEnabled, compassHeading]);
+  }, [compassHeading]);
 
   useEffect(() => {
     useGameplayStore.getState().setSelectedHexKey(toHexKey(selectedHex));
