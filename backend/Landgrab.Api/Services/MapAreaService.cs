@@ -30,6 +30,11 @@ public class MapAreaService(IGameRoomProvider roomProvider, GameStateService gam
 
             room.State.MapLat = lat;
             room.State.MapLng = lng;
+            if (room.State.CurrentWizardStep == 0)
+            {
+                room.State.CurrentWizardStep = 1;
+            }
+
             GameStateCommon.EnsureGrid(room.State);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);

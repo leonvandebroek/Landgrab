@@ -742,6 +742,7 @@ const nl = {
     gpsDeniedTitle: 'Toegang tot locatie geweigerd.',
     gpsDeniedEnterManually: 'Voer coördinaten handmatig in',
     gpsDeniedTryAgain: 'Opnieuw proberen',
+    locationRequired: 'Locatie vereist — gebruik GPS of voer coördinaten handmatig in',
     teamsTitle: 'Nodig spelers uit & kies teams',
     teamsDesc: 'Deel de spelcode en kies je alliantie. Het spel heeft minstens 2 spelers nodig.',
     teamsRoomCode: 'spelcode',

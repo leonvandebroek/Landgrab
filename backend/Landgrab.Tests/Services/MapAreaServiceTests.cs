@@ -26,6 +26,34 @@ public sealed class MapAreaServiceTests
     }
 
     [Fact]
+    public void SetMapLocation_WhenWizardStepIsLocation_AdvancesWizardStep()
+    {
+        var (context, sut, hostId, _) = CreateSut();
+        context.State.CurrentWizardStep = 0;
+
+        var result = sut.SetMapLocation(ServiceTestContext.RoomCode, hostId, 51.924419, 4.477733);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.State.CurrentWizardStep.Should().Be(1);
+        result.state!.CurrentWizardStep.Should().Be(1);
+    }
+
+    [Fact]
+    public void SetMapLocation_WhenWizardStepAlreadyAhead_KeepsWizardStep()
+    {
+        var (context, sut, hostId, _) = CreateSut();
+        context.State.CurrentWizardStep = 3;
+
+        var result = sut.SetMapLocation(ServiceTestContext.RoomCode, hostId, 51.924419, 4.477733);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.State.CurrentWizardStep.Should().Be(3);
+        result.state!.CurrentWizardStep.Should().Be(3);
+    }
+
+    [Fact]
     public void SetMapLocation_WhenUserIsNotHost_Fails()
     {
         var (context, sut, _, guestId) = CreateSut();

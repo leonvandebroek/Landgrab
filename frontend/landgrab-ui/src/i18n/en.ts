@@ -742,6 +742,7 @@ const en = {
     gpsDeniedTitle: 'Location access was denied.',
     gpsDeniedEnterManually: 'Enter coordinates manually',
     gpsDeniedTryAgain: 'Try again',
+    locationRequired: 'Location required — use GPS or enter coordinates manually',
     teamsTitle: 'Invite players & pick teams',
     teamsDesc: 'Share the room code and choose your alliance. The game needs at least 2 players.',
     teamsRoomCode: 'Room code',
