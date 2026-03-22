@@ -1,5 +1,58 @@
 # Project Decisions Log
 
+## Strip Server-Side Masking & Explicit Beacon Intel Share
+
+**Date:** 2026-03-22  
+**Agents:** De Ruyter (backend), Vermeer (frontend)  
+**Scope:** Beacon architecture refactor  
+**Status:** Implemented
+
+### Problem
+
+Architecture evolved to: backend always sends full tile data; frontend controls visibility rendering. Previous beacon implementation redundantly:
+
+1. Stored explicit `PlayerDto.BeaconScanHexes` populated server-side
+2. Recomputed cone on every player movement/heading change
+3. Forced full `StateUpdated` broadcasts even for non-game-state changes
+4. Automatically shared beacon intel without explicit player action
+
+### Decision
+
+1. **Remove server-side masking:** `VisibilityService.BuildStateForViewer` now only sets `VisibilityTier` enum; never nulls/zeros hidden tile fields
+2. **Remove implicit beacon re-scan:** `GameplayService.UpdatePlayerLocation` no longer recomputes cone or forces `gridChanged` on beacon movement
+3. **Remove BeaconScanHexes field:** Deleted from `PlayerDto` and all projection paths
+4. **Add explicit Share Intel action:** New hub method `ShareBeaconIntel(roomCode, hexKeys[])` that updates alliance member remembered hexes and broadcasts `StateUpdated`
+5. **Client-side cone geometry:** Frontend now computes beacon cone locally from `currentHexQ/R` + `beaconHeading` via new `beaconCone.ts` utility
+
+### Why
+
+- **Aligns with architecture:** Backend sends authoritative full state; frontend controls display
+- **Eliminates redundancy:** Server no longer duplicates geometry that frontend can compute
+- **Clarifies UX:** Beacon intel sharing is now explicit action, not automatic side effect
+- **Reduces overhead:** Cone recomputation removed from every player movement tick
+- **Maintains consistency:** Backend still authoritative; client just displays locally computed geometry
+- **Preserves teamwork:** Scout sharing still works through updated `SeenAt` timestamps in alliance history
+
+### Implementation
+
+**Backend:**
+- `VisibilityService.BuildStateForViewer`: removed masking, only set `VisibilityTier`
+- `GameplayService.UpdatePlayerLocation`: removed cone recomputation and `gridChanged` flag marking
+- `AbilityService`: removed beacon cone payload
+- `GameHub`: added `ShareBeaconIntel(roomCode, hexKeys[])` with validation and broadcast
+
+**Frontend:**
+- New `src/utils/beaconCone.ts`: pure `computeBeaconCone(playerHexKey, headingDegrees, grid)` function
+- `AbilityOverlayLayer`: local cone computation, reactive to heading changes
+- `useGameActionsAbilities`: wired `handleShareBeaconIntel` to invoke hub method with locally computed cone
+
+### Validation
+
+- Backend: `dotnet build` ✅, `dotnet test` ✅ (292/293 passed, 1 skipped)
+- Frontend: `npm run lint` ✅ (0 errors), `npm run build` ✅ (tsc + vite clean)
+
+---
+
 ## Backend decision: unify beacon sector computation for visibility + sharing
 
 **Date:** 2026-03-22  

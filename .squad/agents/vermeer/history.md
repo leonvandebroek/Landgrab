@@ -49,6 +49,18 @@ Added new i18n keys: `shareIntel`, `shareIntelDone` (interpolated `{{count}}`), 
 
 **Timestamp field:** `lastSeenAt: string | undefined` in frontend `HexCell` type (maps from backend `HexCell.LastSeenAt: DateTime?`). Confirmed in `types/game.ts:95`.
 
+### 24. Client-Side Beacon Cone & Explicit Share Intel (2026-03-22)
+**Status:** Implemented  
+**Cross-agent:** de-ruyter-strip-masking architectural refactor  
+**Changes:**
+- **New utility:** `src/utils/beaconCone.ts` with pure `computeBeaconCone(playerHexKey, headingDegrees, grid)` function. Maps 360° heading to 6 axial directions (60° sectors), returns 3-hex cone filtered to grid bounds. No server dependency.
+- **`types/game.ts`:** Removed `beaconScanHexes?: string[]` from `Player` interface (now computed locally).
+- **`AbilityOverlayLayer.tsx`:** Replaced `myPlayer.beaconScanHexes` useMemo with local `computeBeaconCone` call. Reactive to heading changes, updates immediately without server round-trip.
+- **`useGameActionsAbilities.ts`:** Expanded Pick to include `'invoke' | 'gameState' | 'myPlayer'`. `handleShareBeaconIntel` now (1) guards on game state + player + heading, (2) computes cone locally, (3) invokes `ShareBeaconIntel(roomCode, hexKeys[])`.
+**Rationale:** Frontend now owns cone geometry computation, eliminating redundant server-side projection. Explicit Share Intel provides clear UX signal for scout teamwork. Immediate client reactivity improves heading rotation responsiveness.  
+**Build:** `npm run lint` ✅ (0 errors), `npm run build` ✅ (tsc + vite clean, 293 modules).
+
+
 **Files changed:**
 - `tricorderTileState.ts` — Added `computeStalenessTier()` function. Was called but not defined (build error). Uses `lastSeenAt` with 120s threshold. Binary fallback (→ stale) when timestamp absent.
 - `tricorder-map.css` — Replaced `.hex-remembered` block (flat desaturate) with `.hex-fading` + `.hex-stale` amber-shift tiers. Kept `.hex-remembered` as a `hex-stale` alias. Updated `.stale-badge` to amber glass (rgba(180,140,60,0.85), amber glow).
@@ -65,3 +77,21 @@ Added new i18n keys: `shareIntel`, `shareIntelDone` (interpolated `{{count}}`), 
 **Build:** lint (0 errors) + tsc -b + vite build clean.
 
 **Decision:** Documented in `.squad/decisions.md` item 22. Cross-referenced design (Hals) and requirements (Vondel) agents.
+
+- **2026-07-xx (vermeer-beacon-amber-fixes):**
+  - **Bug 1 — Beacon scan hex overlay:**
+    - Added `beaconScanHexes?: string[]` to `Player` type in `types/game.ts` (maps from backend `BeaconScanHexes: string[]` that will be added to the player's game state).
+    - In `AbilityOverlayLayer.tsx`: Added `beaconScanHexes` useMemo deriving from `myPlayer.isBeacon && myPlayer.beaconScanHexes`. Extended `allTileKeys` to include beacon scan hexes via a `useMemo` union. Updated the early-return guard to also skip-null-check when `beaconScanHexes.length > 0`. Added `renderBeaconScanHexes()` function that renders each scan hex as a polygon with class `ability-overlay__beacon-scan-hex`. Wired render call after `renderBeaconSector()`.
+    - Fixed pre-existing issue: `renderBeaconSector` was using `yellow` fill — changed to `#00f3ff` (phosphor cyan) to match tricorder aesthetic.
+    - In `overrides.css`: Added `.ability-overlay__beacon-scan-hex` CSS with `rgba(0, 243, 255, 0.15)` fill, `#00f3ff` stroke, and `beacon-scan-hex-pulse` keyframe animation (1.6s ease-in-out). Added to `prefers-reduced-motion` guard.
+  - **Bug 2 — Amber Archive strengthening:**
+    - In `HexTile.tsx`: Added an amber fill overlay `<polygon>` for fading (`rgba(255, 176, 0, 0.20)`) and stale (`rgba(255, 176, 0, 0.40)`) tiles, rendered on top of the base hex polygon. This is color-source independent — works on any base tile color.
+    - In `tricorder-map.css`: Strengthened CSS filter values: fading → `sepia(0.6) saturate(0.6) hue-rotate(-20deg) brightness(0.9); opacity: 0.85`. Stale → `sepia(0.9) saturate(0.5) hue-rotate(-25deg) brightness(0.8); opacity: 0.7`. Updated `.hex-remembered` alias to match stale values.
+  - **Build:** `npm run lint && npm run build` — 0 errors, 1 pre-existing unrelated warning in `DemolishCard.tsx`.
+
+- **2026-07-xx (vermeer-client-beacon):** Migrated beacon cone from server-computed to client-computed.
+  - Created `src/utils/beaconCone.ts` — pure utility `computeBeaconCone(playerHexKey, headingDegrees, grid)` returning up to 3 hex keys in the primary axial direction for the player's heading. Flat-top 6-sector logic (NE/E/SE/S/W/NW), filters to existing grid keys.
+  - Removed `beaconScanHexes?: string[]` from `Player` type in `types/game.ts`.
+  - Updated `AbilityOverlayLayer.tsx`: replaced `myPlayer.beaconScanHexes` read with `computeBeaconCone(playerHexKey, myPlayer.beaconHeading, grid)` in the `beaconScanHexes` useMemo. Added `grid` dependency.
+  - Updated `useGameActionsAbilities.ts`: expanded Pick to include `gameState` + `myPlayer`. `handleShareBeaconIntel` now computes cone locally and invokes `ShareBeaconIntel(roomCode, hexKeys[])` instead of `ShareBeaconIntel()`.
+  - Build: lint (0 errors, 1 pre-existing DemolishCard warning) + tsc -b + vite build clean.
