@@ -238,7 +238,7 @@ function AbilityOverlayLayerComponent({
 
   // Player GPS position projected to SVG layer-point coordinates
   const playerPixelPos = useMemo(() => {
-    if (!myPlayer?.currentLat || !myPlayer?.currentLng) return null;
+    if (myPlayer?.currentLat == null || myPlayer?.currentLng == null) return null;
     const pt = map.latLngToLayerPoint([myPlayer.currentLat, myPlayer.currentLng]);
     return [pt.x, pt.y] as [number, number];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,7 +249,8 @@ function AbilityOverlayLayerComponent({
 
   // Active directional ability beam
   const activeAbilityBeam = useMemo(() => {
-    if (!abilityUi.activeAbility || !myPlayer || !gameState || !playerPixelPos) return null;
+    if (!abilityUi.activeAbility || !myPlayer || !gameState) return null;
+    if (myPlayer.currentLat == null || myPlayer.currentLng == null) return null;
 
     const directionalAbilities = ['tacticalStrike', 'commandoRaid', 'intercept', 'demolish'];
     if (!directionalAbilities.includes(abilityUi.activeAbility)) return null;
@@ -266,26 +267,19 @@ function AbilityOverlayLayerComponent({
       angle: gameState.dynamics?.beaconSectorAngle ?? 45,
       role,
     };
-  }, [abilityUi, myPlayer, gameState, compassHeading, playerPixelPos]);
+  }, [abilityUi, myPlayer, gameState, compassHeading]);
 
   const beaconState = useMemo(() => {
-    if (!gameState || !myPlayer || myPlayer.beaconHeading == null || myPlayer.currentHexQ == null || myPlayer.currentHexR == null) {
+    if (!gameState || !myPlayer || myPlayer.beaconHeading == null) {
       return null;
     }
     return {
-      hexKey: toHexKey(myPlayer.currentHexQ, myPlayer.currentHexR),
       heading: myPlayer.beaconHeading,
       angle: gameState.dynamics?.beaconSectorAngle ?? 45,
     };
   }, [gameState, myPlayer]);
 
-  const allTileKeys = useMemo(() => {
-    const keys = new Set(overlayState.tileKeys);
-    if (beaconState) {
-      keys.add(beaconState.hexKey);
-    }
-    return Array.from(keys);
-  }, [overlayState.tileKeys, beaconState]);
+  const allTileKeys = overlayState.tileKeys;
 
   const hexGeometries = useHexGeometries(
     map,
