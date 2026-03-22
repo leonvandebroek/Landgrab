@@ -20,7 +20,7 @@ public class VisibilityService
     ];
 
     /// <summary>
-    /// Computes the currently visible hex keys for a viewer based on allied positions, beacons, and owned territory.
+    /// Computes the currently visible hex keys for a viewer based on allied positions, personal beacons, and owned territory.
     /// </summary>
     public HashSet<string> ComputeVisibleHexKeys(GameState state, string viewerUserId)
     {
@@ -38,28 +38,22 @@ public class VisibilityService
 
         foreach (var alliedPlayer in alliedPlayers)
         {
-            if (!alliedPlayer.CurrentHexQ.HasValue || !alliedPlayer.CurrentHexR.HasValue)
+            if (!HasValidCurrentHexForVisibility(alliedPlayer))
             {
                 continue;
             }
 
-            AddRadiusKeys(state, visibleHexKeys, alliedPlayer.CurrentHexQ.Value, alliedPlayer.CurrentHexR.Value, VisibilityRadius);
+            var currentHexQ = alliedPlayer.CurrentHexQ.GetValueOrDefault();
+            var currentHexR = alliedPlayer.CurrentHexR.GetValueOrDefault();
+            AddRadiusKeys(state, visibleHexKeys, currentHexQ, currentHexR, VisibilityRadius);
         }
 
-        if (state.HasMapLocation)
+        if (state.HasMapLocation && viewer.IsBeacon && viewer.BeaconLat.HasValue && viewer.BeaconLng.HasValue)
         {
-            foreach (var alliedPlayer in alliedPlayers)
+            var beaconSectorKeys = ComputeBeaconSectorKeys(state, viewer);
+            foreach (var beaconKey in beaconSectorKeys)
             {
-                if (!alliedPlayer.IsBeacon || !alliedPlayer.BeaconLat.HasValue || !alliedPlayer.BeaconLng.HasValue)
-                {
-                    continue;
-                }
-
-                var beaconSectorKeys = ComputeBeaconSectorKeys(state, alliedPlayer);
-                foreach (var beaconKey in beaconSectorKeys)
-                {
-                    visibleHexKeys.Add(beaconKey);
-                }
+                visibleHexKeys.Add(beaconKey);
             }
         }
 
@@ -72,6 +66,8 @@ public class VisibilityService
                     visibleHexKeys.Add(key);
                 }
             }
+
+            AddAllianceBorderHostileKeys(state, visibleHexKeys, viewerAllianceId);
         }
 
         return visibleHexKeys;
@@ -87,10 +83,20 @@ public class VisibilityService
         string viewerAllianceId,
         HashSet<string> visibleHexKeys)
     {
+        var viewer = state.Players.FirstOrDefault(player => player.Id == viewerUserId);
+        if (viewer is null)
+        {
+            return;
+        }
+
         var alliedUserIds = GetSharedMemoryRecipients(state, viewerUserId, viewerAllianceId);
-        var memories = alliedUserIds
+        var sharedMemories = alliedUserIds
+            .Distinct(StringComparer.Ordinal)
+            .Where(userId => userId != viewerUserId)
             .Select(userId => room.VisibilityMemory.GetOrAdd(userId, _ => new PlayerVisibilityMemory()))
             .ToList();
+        var viewerMemory = room.VisibilityMemory.GetOrAdd(viewerUserId, _ => new PlayerVisibilityMemory());
+        var beaconSectorKeys = ComputeBeaconSectorKeys(state, viewer);
 
         var now = DateTime.UtcNow;
 
@@ -111,11 +117,24 @@ public class VisibilityService
                 cell.IsMasterTile,
                 now);
 
-            foreach (var memory in memories)
+            viewerMemory.RememberedHexes[key] = rememberedHex;
+
+            if (beaconSectorKeys.Contains(key))
+            {
+                continue;
+            }
+
+            foreach (var memory in sharedMemories)
             {
                 memory.RememberedHexes[key] = rememberedHex;
             }
         }
+
+        var alliedSightingMemories = new List<PlayerVisibilityMemory>(sharedMemories.Count + 1)
+        {
+            viewerMemory
+        };
+        alliedSightingMemories.AddRange(sharedMemories);
 
         foreach (var player in state.Players)
         {
@@ -141,7 +160,7 @@ public class VisibilityService
                 player.CurrentHexR!.Value,
                 now);
 
-            foreach (var memory in memories)
+            foreach (var memory in alliedSightingMemories)
             {
                 memory.PlayerSightings[player.Id] = sighting;
             }
@@ -463,6 +482,38 @@ public class VisibilityService
         return !string.IsNullOrWhiteSpace(viewerAllianceId)
             && grid.TryGetValue(hexKey, out var cell)
             && cell.OwnerAllianceId == viewerAllianceId;
+    }
+
+    private static bool HasValidCurrentHexForVisibility(PlayerDto player)
+    {
+        return player.CurrentHexQ.HasValue
+            && player.CurrentHexR.HasValue
+            && !(player.CurrentHexQ.Value == 0 && player.CurrentHexR.Value == 0);
+    }
+
+    private static void AddAllianceBorderHostileKeys(
+        GameState state,
+        HashSet<string> visibleHexKeys,
+        string viewerAllianceId)
+    {
+        foreach (var cell in state.Grid.Values)
+        {
+            if (cell.OwnerAllianceId != viewerAllianceId)
+            {
+                continue;
+            }
+
+            foreach (var (neighborQ, neighborR) in HexService.Neighbors(cell.Q, cell.R))
+            {
+                var neighborKey = HexService.Key(neighborQ, neighborR);
+                if (!state.Grid.TryGetValue(neighborKey, out var neighborCell) || !IsHostileCell(neighborCell, viewerAllianceId))
+                {
+                    continue;
+                }
+
+                visibleHexKeys.Add(neighborKey);
+            }
+        }
     }
 
     private static void SanitizeHostilePlayer(PlayerDto player, bool keepPosition)

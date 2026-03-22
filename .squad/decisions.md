@@ -148,6 +148,19 @@
 **Verification:** lint + build clean.  
 **SignalR Impact:** None — frontend consumption only.
 
+### 21. Scout-Gated Alliance Intel Model (2026-03-22, Design Phase)
+**Status:** Implemented  
+**Agent:** vondel-intel-design (design), de-ruyter-visibility (implementation)  
+**Design Decision:** Five options evaluated: Open Skies, Dark Map, Proximity Radio, Fading Memory, Eyes of the Scout. Selected **Eyes of the Scout** with always-fresh alliance borders.  
+**Implementation:** Updated `VisibilityService` in backend:
+- **Personal-Only Beacon Sector:** `ComputeVisibleHexKeys` adds beacon sector keys only when viewing player has `IsBeacon == true`. Teammates no longer see allied beacon sectors automatically.
+- **Always-Fresh Alliance-Border Visibility:** Added border-intel source that scans all alliance-owned tiles and marks enemy-owned neighbors as visible. These border hostiles refresh with every fog-of-war update.
+- **Auto-Share Filter:** `UpdateMemory` computes `beaconSectorKeys` for the viewer and excludes them from auto-share gate (`hostilesSharedToAlliance = visibleHostileKeys - beaconSectorKeys`). Border and proximity hostiles still auto-share.
+- **Edge Case Guard:** Proximity-hostile skips when player current hex is null or `(0,0)`.
+**Test Updates:** `VisibilityServiceTests` updated to reflect new model; 289 total tests, 288 passed, 1 skipped.  
+**Rationale:** Preserves scout gameplay autonomy (beacon intel is scout-controlled) while maintaining minimum alliance coordination (border intel always visible/fresh). Beacon intel requires explicit Share action.  
+**SignalR Impact:** None — visibility layer only; no message format changes.
+
 ## Governance
 
 - All meaningful changes require team consensus
