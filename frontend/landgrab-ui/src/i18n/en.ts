@@ -344,8 +344,8 @@ const en = {
       claimed: 'Claimed {{q}}, {{r}}.',
       reinforced: 'Reinforced {{q}}, {{r}}.',
       captured: 'Captured {{q}}, {{r}}.',
-      pickedUp_one: 'Picked up {{count}} troop from {{q}}, {{r}}.',
-      pickedUp_other: 'Picked up {{count}} troops from {{q}}, {{r}}.',
+      pickedUp_one: '+{{count}} troop picked up from {{q}},{{r}} · Carrying: {{carrying}}',
+      pickedUp_other: '+{{count}} troops picked up from {{q}},{{r}} · Carrying: {{carrying}}',
     },
 
     // Mini-map (F4)
@@ -403,9 +403,10 @@ const en = {
 
     // Toast notifications (F8)
     toast: {
-      tileLost: '😤 {{attacker}} just took one of your tiles! Strike back!',
+      tileLost: '⚔️ {{attacker}} captured your hex at {{q}},{{r}}!',
       combatWon: 'You won the battle!',
       combatLost: 'You lost the battle.',
+      attackRepelledYou: '🛡️ You held off {{attackerName}}\'s attack on {{q}},{{r}}!',
       drainTick: 'Enemy drain: -{{troops}} troops from a tile',
       achievementUnlocked: '🏹 Achievement unlocked: {{name}}',
       territoryMilestone_one: '{{count}} territory held!',

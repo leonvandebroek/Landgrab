@@ -109,6 +109,37 @@
 **Implementation:** Centralized pattern in `useGameActionsGameplay.ts` with `playSound('error')` and `t('errors.noPositionForAction')` i18n key (EN/NL).  
 **Related:** Vermeer's GuidanceBanner.tsx + frontend build passed.
 
+### 16. HQ event/state mismatch consistency (2026-03-22, P0 Critical)
+**Status:** Implemented  
+**Agent:** de-ruyter-p0-fixes  
+**Change:** `AllianceConfigService.SetAllianceHQ` now validates that the HQ tile is owned by the selected alliance, then appends an `AllianceHQAssigned` event after state mutation using identical `(q,r)` values written to `alliance.HQHexQ/HQHexR`.  
+**Rationale:** Event log and game state must be consistent; prevents misleading event history when invalid tiles are selected. Manual HQ assignment was already accepted by backend; the fix ensures atomic state + event transition.  
+**Verification:** Tests confirm success-path event payload and rejection of non-owned tile assignments.  
+**SignalR Impact:** None — no message format changes.
+
+### 17. Defender combat feedback parity (2026-03-22, P0 Critical)
+**Status:** Implemented  
+**Agent:** vermeer-p0-fixes  
+**Change:** `useSignalRHandlers.ts` `onStateUpdated` event log loop now checks for `CombatRepelled` entries where `targetPlayerId === myUserId` and pushes info-ledge toast `game.toast.attackRepelledYou`. Also updated `game.toast.tileLost` to include hex coordinates.  
+**Rationale:** Defender should receive equivalent combat outcome feedback as attacker. Previously: attacker got full dialog, defender got nothing when repelling attack. Backend already emits `CombatRepelled` event; frontend just needed to consume it.  
+**i18n keys added:** `game.toast.attackRepelledYou` (EN/NL), `game.toast.tileLost` (updated to include `{{q}},{{r}}`).  
+**SignalR Impact:** None — consumes existing event types.
+
+### 18. Show all alliances in player HUD (2026-03-22, P0 Critical)
+**Status:** Implemented  
+**Agent:** vermeer-p0-fixes  
+**Change:** Removed `if (alliancePlayers.length === 0) return null;` guard in `PlayingHud.tsx` players modal. All alliances from `state.alliances` now always render (name, color, territory count). Added fallback for orphan `allianceId` references.  
+**Rationale:** Transient state mismatches (ID mismatch, stale snapshot) were causing alliances to disappear entirely. Showing empty alliance sections is safe UI and prevents hidden strategic information in multi-alliance matches.  
+**SignalR Impact:** None — state consumption pattern only.
+
+### 19. Troop pickup carrying total accuracy (2026-03-22, P1 Major)
+**Status:** Implemented  
+**Agent:** vermeer-p0-fixes  
+**Change:** `useGameActionsGameplay.ts` `handleConfirmPickup` now reads `previousCarried` via `useGameStore.getState()` inside `.then()` callback, computes optimistic `newCarried`, passes `carrying: newCarried` to toast. Updated i18n keys: `game.mapFeedback.pickedUp_one/other` → `'+{{count}} troop(s) picked up · Carrying: {{carrying}}'` (EN + NL).  
+**Rationale:** Success feedback was incomplete (showed pickup count but not final total). Store read at callback-execution time is authoritative (avoids stale closure). Optimistic feedback is corrected by next `StateUpdated`.  
+**Pattern:** For stale-closure-safe reads in async callbacks, use `useGameStore.getState()` rather than closure-captured props.  
+**SignalR Impact:** None — frontend-only feedback enhancement.
+
 ## Governance
 
 - All meaningful changes require team consensus

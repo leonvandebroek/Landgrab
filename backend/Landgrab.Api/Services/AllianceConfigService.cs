@@ -260,11 +260,27 @@ public class AllianceConfigService(IGameRoomProvider roomProvider, GameStateServ
                 return (null, "Alliance not found.");
 
             var key = HexService.Key(q, r);
-            if (!room.State.Grid.ContainsKey(key))
+            if (!room.State.Grid.TryGetValue(key, out var cell))
                 return (null, "Invalid hex coordinates.");
+            if (!string.Equals(cell.OwnerAllianceId, alliance.Id, StringComparison.Ordinal))
+                return (null, "HQ must be placed on a tile owned by the selected alliance.");
 
             alliance.HQHexQ = q;
             alliance.HQHexR = r;
+
+            var host = room.State.Players.FirstOrDefault(player => player.Id == userId);
+            AppendEventLog(room.State, new GameEventLogEntry
+            {
+                Type = "AllianceHQAssigned",
+                Message = $"Alliance {alliance.Name} HQ was assigned at ({q}, {r}).",
+                PlayerId = userId,
+                PlayerName = host?.Name,
+                AllianceId = alliance.Id,
+                AllianceName = alliance.Name,
+                Q = q,
+                R = r
+            });
+
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);

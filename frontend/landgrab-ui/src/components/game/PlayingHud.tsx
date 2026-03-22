@@ -584,7 +584,6 @@ export function PlayingHud({
         <div className="player-list">
           {state.alliances.map((alliance) => {
             const alliancePlayers = sortedPlayers.filter(p => p.allianceId === alliance.id);
-            if (alliancePlayers.length === 0) return null;
             return (
               <div key={alliance.id} className="player-list-section">
                 <div className="player-list-header alliance-header">
@@ -603,7 +602,8 @@ export function PlayingHud({
             );
           })}
           {(() => {
-            const unallied = sortedPlayers.filter(p => !p.allianceId);
+            const knownAllianceIds = new Set(state.alliances.map(a => a.id));
+            const unallied = sortedPlayers.filter(p => !p.allianceId || !knownAllianceIds.has(p.allianceId));
             if (unallied.length === 0) return null;
             return (
               <div className="player-list-section">

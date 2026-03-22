@@ -384,6 +384,7 @@ export function useSignalRHandlers({
       const newLog = normalizedState.eventLog ?? [];
       if (newLog.length > prevLog.length) {
         const newEntries = newLog.slice(prevLog.length);
+        const myUserId = savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId;
         for (const entry of newEntries) {
           if (entry.type === 'CommandoRaidStarted' || entry.type === 'CommandoRaidSuccess' || entry.type === 'CommandoRaidFailed' || entry.type === 'RallyPointActivated' || entry.type === 'RallyPointResolved' || entry.type === 'SabotageStarted' || entry.type === 'SabotageComplete' || entry.type === 'FortConstructionStarted' || entry.type === 'FortBuilt' || entry.type === 'DemolishStarted' || entry.type === 'DemolishCompleted') {
             useInfoLedgeStore.getState().push({
@@ -392,6 +393,19 @@ export function useSignalRHandlers({
               persistent: false,
               icon: 'archeryTarget',
               message: entry.message,
+            });
+          }
+          if (entry.type === 'CombatRepelled' && myUserId && entry.targetPlayerId === myUserId) {
+            useInfoLedgeStore.getState().push({
+              severity: 'gameEvent',
+              source: 'gameToast',
+              persistent: false,
+              icon: 'contested',
+              message: t('game.toast.attackRepelledYou', {
+                attackerName: entry.playerName ?? '?',
+                q: entry.q ?? 0,
+                r: entry.r ?? 0,
+              }),
             });
           }
         }

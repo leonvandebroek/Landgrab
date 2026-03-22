@@ -344,8 +344,8 @@ const nl = {
       claimed: '{{q}}, {{r}} is geclaimd.',
       reinforced: '{{q}}, {{r}} is versterkt.',
       captured: '{{q}}, {{r}} is veroverd.',
-      pickedUp_one: '{{count}} troep opgehaald van {{q}}, {{r}}.',
-      pickedUp_other: '{{count}} troepen opgehaald van {{q}}, {{r}}.',
+      pickedUp_one: '+{{count}} troep opgehaald van {{q}},{{r}} · Draagt: {{carrying}}',
+      pickedUp_other: '+{{count}} troepen opgehaald van {{q}},{{r}} · Draagt: {{carrying}}',
     },
 
     // Mini-kaart (F4)
@@ -403,9 +403,10 @@ const nl = {
 
     // Meldingen (F8)
     toast: {
-      tileLost: '😤 {{attacker}} heeft zojuist een van jouw velden ingenomen! Sla terug!',
+      tileLost: '⚔️ {{attacker}} heeft jouw hex {{q}},{{r}} veroverd!',
       combatWon: 'Je hebt het gevecht gewonnen!',
       combatLost: 'Je hebt het gevecht verloren.',
+      attackRepelledYou: '🛡️ Jij hebt de aanval van {{attackerName}} op {{q}},{{r}} afgeslagen!',
       drainTick: 'Vijandelijke drain: -{{troops}} troepen van een tegel',
       achievementUnlocked: '🏹 Prestatie behaald: {{name}}',
       territoryMilestone_one: '{{count}} territorium bezet!',

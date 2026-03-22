@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { getTileActions, getTileInteractionStatus } from '../components/game/tileInteraction';
 import type { TileAction, TileActionType } from '../components/game/tileInteraction';
 import { useGameplayStore } from '../stores';
+import { useGameStore } from '../stores/gameStore';
 import { useUiStore } from '../stores/uiStore';
 import { useInfoLedgeStore } from '../stores/infoLedgeStore';
 import type { CombatPreviewDto, HexCell } from '../types/game';
@@ -511,12 +512,19 @@ export function useGameActionsGameplay({
     useGameplayStore.getState().setSelectedHexKey(`${targetHex[0]},${targetHex[1]}`);
     invoke('PickUpTroops', currentPickupPrompt.q, currentPickupPrompt.r, currentPickupCount, coordinates.lat, coordinates.lng)
       .then(() => {
+        const { gameState: currentGameState, savedSession } = useGameStore.getState();
+        const myId = savedSession?.userId;
+        const previousCarried = myId
+          ? (currentGameState?.players.find(p => p.id === myId)?.carriedTroops ?? 0)
+          : 0;
+        const newCarried = previousCarried + currentPickupCount;
         setPickupPrompt(null);
         playSound('pickup');
         setMapFeedback({
           tone: 'success',
           message: t('game.mapFeedback.pickedUp', {
             count: currentPickupCount,
+            carrying: newCarried,
             q: currentPickupPrompt.q,
             r: currentPickupPrompt.r,
           }),
