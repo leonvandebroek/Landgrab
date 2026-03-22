@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
@@ -9,12 +10,14 @@ interface BeaconCardProps {
   myUserId: string;
   onActivateBeacon: (heading: number) => Promise<boolean> | void;
   onDeactivateBeacon: () => Promise<boolean> | void;
+  onShareBeaconIntel: () => Promise<number>;
 }
 
 export function BeaconCard({
   myUserId,
   onActivateBeacon,
   onDeactivateBeacon,
+  onShareBeaconIntel,
 }: BeaconCardProps) {
   const { t } = useTranslation();
   const player = useGameStore((store) =>
@@ -26,6 +29,9 @@ export function BeaconCard({
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
 
   const { heading } = useDeviceOrientation(abilityUi.mode === 'targeting' || abilityUi.mode === 'active');
+
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareCount, setShareCount] = useState<number | null>(null);
 
   const isBeaconLive = Boolean(player?.isBeacon) || abilityUi.mode === 'active';
 
@@ -59,6 +65,14 @@ export function BeaconCard({
     exitAbilityMode();
   };
 
+  const handleShareIntel = async () => {
+    setIsSharing(true);
+    const count = await onShareBeaconIntel();
+    setShareCount(count);
+    setIsSharing(false);
+    setTimeout(() => setShareCount(null), 3000);
+  };
+
   return (
     <AbilityCard
       title={t('abilities.beacon.title' as never)}
@@ -82,15 +96,27 @@ export function BeaconCard({
         </>
       )}
       footerContent={isBeaconLive ? (
-        <button
-          type="button"
-          className="ability-card__secondary-btn ability-card__secondary-btn--danger"
-          onClick={() => {
-            void handleDeactivate();
-          }}
-        >
-          {t('abilities.beacon.deactivate' as never)}
-        </button>
+        <div className="ability-card__footer-row">
+          <button
+            type="button"
+            className="ability-card__secondary-btn ability-card__secondary-btn--danger"
+            onClick={() => {
+              void handleDeactivate();
+            }}
+          >
+            {t('abilities.beacon.deactivate' as never)}
+          </button>
+          <button
+            type="button"
+            className="ability-card__primary-btn"
+            disabled={isSharing}
+            onClick={() => {
+              void handleShareIntel();
+            }}
+          >
+            {t('abilities.beacon.shareIntel' as never)}
+          </button>
+        </div>
       ) : (
         <button
           type="button"
@@ -119,9 +145,16 @@ export function BeaconCard({
           <ul className="ability-card__detail-list">
             <li>{t('abilities.beacon.effect' as never)}</li>
             <li>{t('abilities.beacon.rangeInfo' as never)}</li>
-            <li>Reveals a directional sector based on your compass heading. Reactivate to change direction.</li>
+            <li>{t('abilities.beacon.sectorExplanation' as never)}</li>
           </ul>
         </div>
+        {isBeaconLive && shareCount !== null && (
+          <p className="ability-card__feedback">
+            {shareCount > 0
+              ? t('abilities.beacon.shareIntelDone' as never, { count: shareCount })
+              : t('abilities.beacon.shareIntelNone' as never)}
+          </p>
+        )}
       </div>
     </AbilityCard>
   );

@@ -45,6 +45,7 @@ interface Props {
   onDismissTileActions?: () => void;
   onActivateBeacon?: (heading: number) => Promise<boolean> | void;
   onDeactivateBeacon?: () => Promise<boolean> | void;
+  onShareBeaconIntel?: () => Promise<number>;
   onActivateTacticalStrike?: (targetQ: number, targetR: number) => Promise<boolean> | void;
   onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
   onActivateCommandoRaid?: (targetQ: number, targetR: number) => Promise<boolean> | void;
@@ -91,6 +92,7 @@ export function PlayingHud({
   onDismissTileActions,
   onActivateBeacon,
   onDeactivateBeacon,
+  onShareBeaconIntel,
   onActivateTacticalStrike,
   onResolveTacticalStrikeTarget,
   onActivateCommandoRaid,
@@ -859,6 +861,7 @@ export function PlayingHud({
             myUserId={myUserId}
             onActivateBeacon={onActivateBeacon ?? (() => { })}
             onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
+            onShareBeaconIntel={onShareBeaconIntel ?? (async () => 0)}
           />
         ) : abilityUi.activeAbility === 'tacticalStrike' ? (
           <TacticalStrikeCard

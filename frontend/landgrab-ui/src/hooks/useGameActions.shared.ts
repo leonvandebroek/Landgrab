@@ -61,6 +61,7 @@ export interface UseGameActionsResult {
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
   handleActivateBeacon: (heading: number) => Promise<boolean>;
   handleDeactivateBeacon: () => Promise<boolean>;
+  handleShareBeaconIntel: () => Promise<number>;
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
   handleActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
   handleActivateRallyPoint: () => Promise<boolean>;

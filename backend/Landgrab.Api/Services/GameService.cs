@@ -71,6 +71,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
 
     public (GameState? state, string? error) ActivateBeacon(string roomCode, string userId, double heading) => abilityService.ActivateBeacon(roomCode, userId, heading);
     public (GameState? state, string? error) DeactivateBeacon(string roomCode, string userId) => abilityService.DeactivateBeacon(roomCode, userId);
+    public int ShareBeaconIntel(string roomCode, string userId) => abilityService.ShareBeaconIntel(roomCode, userId);
     public ((int targetQ, int targetR)? target, string? error) ResolveRaidTarget(string roomCode, string userId, double heading) => abilityService.ResolveRaidTarget(roomCode, userId, heading);
     public (GameState? state, string? error) ActivateCommandoRaid(string roomCode, string userId, int targetQ, int targetR) => abilityService.ActivateCommandoRaid(roomCode, userId, targetQ, targetR);
     public ((int targetQ, int targetR)? target, string? error) ResolveTacticalStrikeTarget(string roomCode, string userId, double heading) => abilityService.ResolveTacticalStrikeTarget(roomCode, userId, heading);

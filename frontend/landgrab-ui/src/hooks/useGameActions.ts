@@ -32,6 +32,7 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleSetAllianceHQ: lobbyActions.handleSetAllianceHQ,
     handleActivateBeacon: abilityActions.handleActivateBeacon,
     handleDeactivateBeacon: abilityActions.handleDeactivateBeacon,
+    handleShareBeaconIntel: abilityActions.handleShareBeaconIntel,
     handleActivateCommandoRaid: abilityActions.handleActivateCommandoRaid,
     handleActivateTacticalStrike: abilityActions.handleActivateTacticalStrike,
     handleActivateRallyPoint: abilityActions.handleActivateRallyPoint,

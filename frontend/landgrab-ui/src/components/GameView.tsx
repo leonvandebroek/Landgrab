@@ -38,6 +38,7 @@ export interface GameViewActions {
   onConfirmAttack: () => Promise<void>;
   onActivateBeacon: (heading: number) => Promise<boolean>;
   onDeactivateBeacon: () => Promise<boolean>;
+  onShareBeaconIntel: () => Promise<number>;
   onActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
   onResolveTacticalStrikeTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
   onActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
@@ -212,6 +213,7 @@ export function GameView({
           onDismissTileActions={actions.onDismissTileActions}
           onActivateBeacon={actions.onActivateBeacon}
           onDeactivateBeacon={actions.onDeactivateBeacon}
+          onShareBeaconIntel={actions.onShareBeaconIntel}
           onActivateTacticalStrike={actions.onActivateTacticalStrike}
           onResolveTacticalStrikeTarget={actions.onResolveTacticalStrikeTarget}
           onActivateCommandoRaid={actions.onActivateCommandoRaid}

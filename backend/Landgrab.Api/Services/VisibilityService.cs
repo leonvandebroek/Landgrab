@@ -8,7 +8,7 @@ namespace Landgrab.Api.Services;
 public class VisibilityService
 {
     private const int VisibilityRadius = 1;
-    private const int BeaconRevealRadius = 4;
+    private const int BeaconRange = 3;
 
     private static readonly HashSet<string> GameWideEventTypes =
     [
@@ -55,29 +55,10 @@ public class VisibilityService
                     continue;
                 }
 
-                var beaconHex = HexService.LatLngToHexForRoom(
-                    alliedPlayer.BeaconLat.Value,
-                    alliedPlayer.BeaconLng.Value,
-                    state.MapLat!.Value,
-                    state.MapLng!.Value,
-                    state.TileSizeMeters);
-
-                if (alliedPlayer.BeaconHeading.HasValue)
+                var beaconSectorKeys = ComputeBeaconSectorKeys(state, alliedPlayer);
+                foreach (var beaconKey in beaconSectorKeys)
                 {
-                    AddSectorKeys(
-                        state,
-                        visibleHexKeys,
-                        beaconHex.q,
-                        beaconHex.r,
-                        alliedPlayer.BeaconLat.Value,
-                        alliedPlayer.BeaconLng.Value,
-                        alliedPlayer.BeaconHeading.Value,
-                        BeaconRevealRadius,
-                        state.Dynamics.BeaconSectorAngle);
-                }
-                else if (state.Grid.ContainsKey(HexService.Key(beaconHex.q, beaconHex.r)))
-                {
-                    visibleHexKeys.Add(HexService.Key(beaconHex.q, beaconHex.r));
+                    visibleHexKeys.Add(beaconKey);
                 }
             }
         }
@@ -287,6 +268,45 @@ public class VisibilityService
         }
 
         return snapshotState;
+    }
+
+    /// <summary>
+    /// Computes the visible sector hex keys contributed by a beacon player.
+    /// </summary>
+    public HashSet<string> ComputeBeaconSectorKeys(GameState state, PlayerDto player)
+    {
+        var visibleHexKeys = new HashSet<string>(StringComparer.Ordinal);
+        if (!state.HasMapLocation || !player.IsBeacon || !player.BeaconLat.HasValue || !player.BeaconLng.HasValue)
+        {
+            return visibleHexKeys;
+        }
+
+        var beaconHex = HexService.LatLngToHexForRoom(
+            player.BeaconLat.Value,
+            player.BeaconLng.Value,
+            state.MapLat!.Value,
+            state.MapLng!.Value,
+            state.TileSizeMeters);
+
+        if (player.BeaconHeading.HasValue)
+        {
+            AddSectorKeys(
+                state,
+                visibleHexKeys,
+                beaconHex.q,
+                beaconHex.r,
+                player.BeaconLat.Value,
+                player.BeaconLng.Value,
+                player.BeaconHeading.Value,
+                BeaconRange,
+                state.Dynamics.BeaconSectorAngle);
+        }
+        else if (state.Grid.ContainsKey(HexService.Key(beaconHex.q, beaconHex.r)))
+        {
+            visibleHexKeys.Add(HexService.Key(beaconHex.q, beaconHex.r));
+        }
+
+        return visibleHexKeys;
     }
 
     private static void AddRadiusKeys(

@@ -5,6 +5,7 @@ import type { UseGameActionsOptions } from './useGameActions.shared';
 interface UseGameActionsAbilitiesResult {
   handleActivateBeacon: (heading: number) => Promise<boolean>;
   handleDeactivateBeacon: () => Promise<boolean>;
+  handleShareBeaconIntel: () => Promise<number>;
   handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
   resolveRaidTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
   handleActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
@@ -49,6 +50,20 @@ export function useGameActionsAbilities({
     } catch (error) {
       setError(String(error));
       return false;
+    }
+  }, [invoke, setError]);
+
+  const handleShareBeaconIntel = useCallback(async (): Promise<number> => {
+    if (!invoke) {
+      return 0;
+    }
+
+    try {
+      const count = await invoke<number>('ShareBeaconIntel');
+      return count ?? 0;
+    } catch (error) {
+      setError(String(error));
+      return 0;
     }
   }, [invoke, setError]);
 
@@ -220,6 +235,7 @@ export function useGameActionsAbilities({
   return {
     handleActivateBeacon,
     handleDeactivateBeacon,
+    handleShareBeaconIntel,
     handleActivateCommandoRaid,
     resolveRaidTarget,
     handleActivateTacticalStrike,

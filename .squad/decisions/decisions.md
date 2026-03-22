@@ -1,5 +1,57 @@
 # Project Decisions Log
 
+## Backend decision: unify beacon sector computation for visibility + sharing
+
+**Date:** 2026-03-22  
+**Agent:** De Ruyter  
+**Scope:** `backend/Landgrab.Api`  
+**Status:** Implemented
+
+### Decision
+Extract and reuse beacon-sector computation in `VisibilityService` via:
+
+```csharp
+public HashSet<string> ComputeBeaconSectorKeys(GameState state, PlayerDto player)
+```
+
+Both fog-of-war visibility (`ComputeVisibleHexKeys`) and explicit alliance intel sharing (`AbilityService.ShareBeaconIntel`) now use this shared method.
+
+### Why
+Beacon sector rules (heading normalization, range, sector angle, map-bound key filtering) are gameplay-critical and must remain identical across two call sites:
+1. what scouts can reveal live,
+2. what is persisted into alliance visibility memory on Share Intel.
+
+Centralizing removes behavior drift risk and keeps future beacon tuning (range/angle logic) single-source.
+
+### Notes
+- Beacon range constant renamed and reduced to `BeaconRange = 3`.
+- `ShareBeaconIntel` only snapshots enemy-owned hexes and writes them into each alliance member's `PlayerVisibilityMemory.RememberedHexes`.
+
+---
+
+## Beacon "Share Intel" UX pattern
+
+**Date:** 2026-03-22  
+**Agent:** Vermeer  
+**Status:** Implemented
+
+### Decision
+Active-beacon footer now holds two buttons side-by-side: "Turn Off" (danger/secondary) and "Share Intel" (primary). The Share Intel button calls the `ShareBeaconIntel` hub method and shows 3-second inline feedback directly on the card rather than routing through the info-ledge or a modal.
+
+### Rationale
+The ability card already owns focus during beacon interaction. Inline feedback on the card is immediately adjacent to the action that triggered it, reducing cognitive load. The info-ledge is reserved for passive/asynchronous events; an explicit player action deserves synchronous, co-located confirmation.
+
+### Feedback display
+- `shareIntelDone` with interpolated `{{count}}` for success with tiles found  
+- `shareIntelNone` for the zero-result case  
+- Feedback auto-clears after 3 000 ms via `setTimeout`  
+- Button disabled (`isSharing: true`) during the async call to prevent double-tap
+
+### i18n pattern
+Added `shareIntelDescription` key even though it is not currently rendered, to document intent for future tooltip/help integrations.
+
+---
+
 ## Dialog Stacking: Option A — Queue
 
 **Date:** 2026-03-22  

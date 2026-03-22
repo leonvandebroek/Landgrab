@@ -57,7 +57,7 @@ internal sealed class TestServiceFactory
     public WinConditionService CreateWinConditionService() => new();
 
     public AbilityService CreateAbilityService()
-        => new(RoomProvider, CreateGameStateService());
+        => new(RoomProvider, CreateGameStateService(), new VisibilityService());
 
     public GameplayService CreateGameplayService()
     {

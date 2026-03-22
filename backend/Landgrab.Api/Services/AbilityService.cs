@@ -2,7 +2,10 @@ using Landgrab.Api.Models;
 
 namespace Landgrab.Api.Services;
 
-public class AbilityService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+public class AbilityService(
+    IGameRoomProvider roomProvider,
+    GameStateService gameStateService,
+    VisibilityService visibilityService)
 {
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
@@ -231,6 +234,64 @@ public class AbilityService(IGameRoomProvider roomProvider, GameStateService gam
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
+        }
+    }
+
+    public int ShareBeaconIntel(string roomCode, string userId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return 0;
+
+        lock (room.SyncRoot)
+        {
+            if (room.State.Phase != GamePhase.Playing)
+                return 0;
+
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null || !player.IsBeacon || !player.BeaconHeading.HasValue || !double.IsFinite(player.BeaconHeading.Value))
+                return 0;
+
+            var alliance = room.State.Alliances.FirstOrDefault(candidate =>
+                               candidate.MemberIds.Contains(player.Id, StringComparer.Ordinal))
+                           ?? room.State.Alliances.FirstOrDefault(candidate => candidate.Id == player.AllianceId);
+            if (alliance == null || alliance.MemberIds.Count == 0)
+                return 0;
+
+            var now = DateTime.UtcNow;
+            var rememberedHexes = new Dictionary<string, RememberedHex>(StringComparer.Ordinal);
+            foreach (var hexKey in visibilityService.ComputeBeaconSectorKeys(room.State, player))
+            {
+                if (!room.State.Grid.TryGetValue(hexKey, out var cell))
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(cell.OwnerId) || cell.OwnerAllianceId == player.AllianceId)
+                    continue;
+
+                rememberedHexes[hexKey] = new RememberedHex(
+                    cell.OwnerId,
+                    cell.OwnerName,
+                    cell.OwnerColor,
+                    cell.OwnerAllianceId,
+                    cell.Troops,
+                    cell.IsFort,
+                    cell.IsMasterTile,
+                    now);
+            }
+
+            if (rememberedHexes.Count == 0)
+                return 0;
+
+            foreach (var memberId in alliance.MemberIds.Distinct(StringComparer.Ordinal))
+            {
+                var memory = room.VisibilityMemory.GetOrAdd(memberId, _ => new PlayerVisibilityMemory());
+                foreach (var (hexKey, rememberedHex) in rememberedHexes)
+                {
+                    memory.RememberedHexes[hexKey] = rememberedHex;
+                }
+            }
+
+            return rememberedHexes.Count;
         }
     }
 

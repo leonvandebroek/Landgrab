@@ -111,6 +111,31 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
+    public async Task<int> ShareBeaconIntel()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return 0;
+        }
+
+        if (room.State.Phase != GamePhase.Playing)
+        {
+            await SendError("Beacons only work during gameplay.");
+            return 0;
+        }
+
+        var sharedCount = gameService.ShareBeaconIntel(room.Code, UserId);
+        var state = gameService.GetStateSnapshot(room.Code);
+        if (state is not null)
+        {
+            await BroadcastState(room.Code, state);
+        }
+
+        return sharedCount;
+    }
+
     public async Task ActivateCommandoRaid(int targetQ, int targetR)
     {
         if (!ValidateCoordRange(targetQ, targetR))
