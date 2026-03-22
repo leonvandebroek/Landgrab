@@ -25,4 +25,4 @@ Security engineer for Landgrab. Owns authentication, authorization, secrets mana
 - `[Authorize]` on hub — enforced
 
 ## Model
-Preferred: claude-sonnet-4.5
+Preferred: auto (claude-opus-4.6 for security audits, claude-sonnet-4.6 for code reviews)

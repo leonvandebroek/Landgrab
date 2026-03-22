@@ -25,4 +25,4 @@ DevOps and infrastructure engineer for Landgrab. Owns CI/CD pipelines, Azure inf
 | `AzureCommunicationServices:ConnectionString` | Optional; omit to skip email |
 
 ## Model
-Preferred: claude-haiku-4.5 (mechanical ops)
+Preferred: claude-sonnet-4.6

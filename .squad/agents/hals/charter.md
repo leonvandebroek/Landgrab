@@ -21,4 +21,4 @@ Designer and UX engineer for Landgrab. Owns visual design systems, UI/UX pattern
 - Ability cards, PlayerHUD, TileInfoCard, MapLegend components
 
 ## Model
-Preferred: claude-opus-4.5 (vision-capable for design review)
+Preferred: claude-sonnet-4.6

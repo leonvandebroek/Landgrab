@@ -41,4 +41,4 @@ dotnet test
 ```
 
 ## Model
-Preferred: claude-sonnet-4.5
+Preferred: gpt-5.3-codex

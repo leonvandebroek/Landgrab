@@ -26,4 +26,4 @@ dotnet test
 ```
 
 ## Model
-Preferred: claude-sonnet-4.5
+Preferred: claude-sonnet-4.6

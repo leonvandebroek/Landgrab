@@ -38,4 +38,4 @@ npm run lint && npm run build
 ```
 
 ## Model
-Preferred: claude-sonnet-4.5
+Preferred: claude-sonnet-4.6

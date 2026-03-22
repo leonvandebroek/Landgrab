@@ -22,4 +22,4 @@ Database and data engineer for Landgrab. Owns EF Core schema design, migrations,
 - ConnectionStrings:DefaultConnection = PostgreSQL connection string
 
 ## Model
-Preferred: claude-haiku-4.5
+Preferred: claude-sonnet-4.6

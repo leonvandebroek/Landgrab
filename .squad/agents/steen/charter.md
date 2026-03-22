@@ -38,4 +38,4 @@ Browser-based game testing via Playwright MCP
 - Must use debug GPS for location simulation (not real GPS)
 
 ## Model
-Preferred: claude-sonnet-4.5
+Preferred: gpt-5.3-codex

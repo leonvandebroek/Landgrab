@@ -29,4 +29,4 @@ May approve or reject work from any agent. On rejection, may reassign to a diffe
 - `CLAUDE.md` — project conventions
 
 ## Model
-Preferred: auto (sonnet for code review, haiku for triage/planning)
+Preferred: auto (claude-sonnet-4.6 for code review, claude-haiku-4.5 for triage/planning)
