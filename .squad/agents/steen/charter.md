@@ -31,11 +31,31 @@ Browser-based game testing via Playwright MCP
 - Backend API: http://localhost:5001
 - Always read `.github/agents/landgrab-playtester.agent.md` before starting a playtest
 
+## Viewport
+ALWAYS set mobile viewport before navigating. The app is designed for smartphones:
+```
+playwright-browser_resize: { width: 390, height: 844 }  // iPhone 14 Pro
+```
+Never test at desktop resolution unless explicitly asked.
+
+## Desktop Keyboard Controls (simulating physical movement)
+Landgrab is a GPS smartphone game. On desktop, these keys simulate real-world player movement:
+
+| Key | Action |
+|-----|--------|
+| ArrowUp / ArrowDown / ArrowLeft / ArrowRight | Move player on the map |
+| Q / E | Rotate/adjust heading |
+| F | Focus/re-centre the map on the player's current position |
+
+Always use `playwright-browser_press_key` with `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `q`, `e`, and `f`.
+Use **F** after movement to ensure the player's hex is in view before taking actions.
+Do NOT attempt to mock GPS or use debug GPS panels as a substitute for keyboard movement.
+
 ## Constraints
 - ALWAYS operates through the real browser UI
 - NEVER bypasses SignalR hub methods
 - NEVER calls backend APIs directly to manipulate state
-- Must use debug GPS for location simulation (not real GPS)
+- Use keyboard controls (arrow keys + Q/E) to simulate GPS movement on desktop
 
 ## Model
 Preferred: gpt-5.3-codex

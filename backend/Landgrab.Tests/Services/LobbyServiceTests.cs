@@ -533,6 +533,64 @@ public sealed class LobbyServiceTests
     }
 
     [Fact]
+    public void StartGame_HostWithValidSetup_InitializesPlayerCurrentHexFromOwnedStartingTiles()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .WithMasterTile(0, 0)
+            .AddPlayer(hostId, "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddAlliance("a1", "Alpha", hostId)
+            .AddAlliance("a2", "Beta", "p2")
+            .OwnHex(1, 0, hostId, "a1", troops: 3)
+            .OwnHex(-1, 0, "p2", "a2", troops: 3)
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        context.Player(hostId).CurrentHexQ.Should().Be(1);
+        context.Player(hostId).CurrentHexR.Should().Be(0);
+        context.Player("p2").CurrentHexQ.Should().Be(-1);
+        context.Player("p2").CurrentHexR.Should().Be(0);
+    }
+
+    [Fact]
+    public void StartGame_HostWithValidSetup_InitializesPlayerCurrentHexFromAllianceTerritory()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .WithMasterTile(0, 0)
+            .AddPlayer(hostId, "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddAlliance("a1", "Alpha", hostId, "p2")
+            .OwnHex(1, 0, hostId, "a1", troops: 3)
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        context.Player(hostId).CurrentHexQ.Should().Be(1);
+        context.Player(hostId).CurrentHexR.Should().Be(0);
+        context.Player("p2").CurrentHexQ.Should().Be(1);
+        context.Player("p2").CurrentHexR.Should().Be(0);
+    }
+
+    [Fact]
     public void StartGame_HostWithValidSetup_SetsGameStartedAt()
     {
         var hostGuid = Guid.NewGuid();

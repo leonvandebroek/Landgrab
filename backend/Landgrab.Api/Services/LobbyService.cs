@@ -242,6 +242,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             if (startingAccessError != null)
                 return (null, startingAccessError);
 
+            InitializePlayerStartingPositions(room.State);
             room.State.Phase = GamePhase.Playing;
             room.State.GameStartedAt = DateTime.UtcNow;
 
@@ -456,6 +457,86 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             if (player.TerritoryCount > 0 || allianceTerritoryCount > 0)
                 player.CarriedTroops = StartingTroopCount;
         }
+    }
+
+    private static void InitializePlayerStartingPositions(GameState state)
+    {
+        if (state.MapLat is null || state.MapLng is null)
+            return;
+
+        var mapLat = state.MapLat.Value;
+        var mapLng = state.MapLng.Value;
+
+        foreach (var player in state.Players)
+        {
+            var spawnCell = ResolveSpawnCell(state, player);
+            if (spawnCell == null)
+            {
+                player.CurrentLat = null;
+                player.CurrentLng = null;
+                player.CurrentHexQ = null;
+                player.CurrentHexR = null;
+                player.PreviousHexKey = null;
+                continue;
+            }
+
+            var (spawnLat, spawnLng) = HexService.HexToLatLng(
+                spawnCell.Q,
+                spawnCell.R,
+                mapLat,
+                mapLng,
+                state.TileSizeMeters);
+            player.CurrentLat = spawnLat;
+            player.CurrentLng = spawnLng;
+            player.CurrentHexQ = spawnCell.Q;
+            player.CurrentHexR = spawnCell.R;
+            player.PreviousHexKey = null;
+        }
+    }
+
+    private static HexCell? ResolveSpawnCell(GameState state, PlayerDto player)
+    {
+        var ownCell = state.Grid.Values
+            .Where(cell => cell.OwnerId == player.Id)
+            .OrderBy(cell => DistanceToMaster(state, cell))
+            .ThenBy(cell => cell.Q)
+            .ThenBy(cell => cell.R)
+            .FirstOrDefault();
+        if (ownCell != null)
+            return ownCell;
+
+        if (!string.IsNullOrWhiteSpace(player.AllianceId))
+        {
+            var allianceCell = state.Grid.Values
+                .Where(cell => cell.OwnerAllianceId == player.AllianceId)
+                .OrderBy(cell => DistanceToMaster(state, cell))
+                .ThenBy(cell => cell.Q)
+                .ThenBy(cell => cell.R)
+                .FirstOrDefault();
+            if (allianceCell != null)
+                return allianceCell;
+        }
+
+        if (state.MasterTileQ is int masterQ &&
+            state.MasterTileR is int masterR &&
+            state.Grid.TryGetValue(HexService.Key(masterQ, masterR), out var masterCell))
+        {
+            return masterCell;
+        }
+
+        return state.Grid.Values
+            .OrderBy(cell => DistanceToMaster(state, cell))
+            .ThenBy(cell => cell.Q)
+            .ThenBy(cell => cell.R)
+            .FirstOrDefault();
+    }
+
+    private static int DistanceToMaster(GameState state, HexCell cell)
+    {
+        if (state.MasterTileQ is int masterQ && state.MasterTileR is int masterR)
+            return HexService.HexDistance(cell.Q - masterQ, cell.R - masterR);
+
+        return HexService.HexDistance(cell.Q, cell.R);
     }
 
     private static string? ValidateStartingAccess(GameState state)
