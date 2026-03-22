@@ -5,7 +5,7 @@ import { useHexGeometries } from '../../../hooks/useHexGeometries';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { usePlayerLayerStore } from '../../../stores/playerLayerStore';
-import { HEX_DIRS, hexKey as toHexKey } from '../HexMath';
+import { HEX_DIRS, hexKey as toHexKey, roomHexToLatLng } from '../HexMath';
 import { ReactSvgOverlay } from '../ReactSvgOverlay';
 import { computeBeaconCone } from '../../../utils/beaconCone';
 
@@ -245,33 +245,43 @@ function AbilityOverlayLayerComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, myPlayer?.currentLat, myPlayer?.currentLng, zoomLevel]);
 
-  // Beacon range in pixels: one hex step = √3 × tileSizeMeters; beaconRange steps total.
-  // Uses Leaflet's own projection so the length stays accurate at every zoom level.
+  // Beacon range in pixels: project one hex step via roomHexToLatLng, measure pixel distance, scale by range.
   const beaconPixelRadius = useMemo(() => {
-    if (myPlayer?.currentLat == null || myPlayer?.currentLng == null) return 400;
+    const q = myPlayer?.currentHexQ;
+    const r = myPlayer?.currentHexR;
+    if (q == null || r == null) return 400;
     const beaconRange = 3;
-    const rangeMeters = beaconRange * Math.sqrt(3) * tileSizeMeters;
-    const ptPlayer = map.latLngToLayerPoint([myPlayer.currentLat, myPlayer.currentLng]);
-    // Offset one rangeMeters north (≈ 111 320 m per degree latitude)
-    const ptRef = map.latLngToLayerPoint([myPlayer.currentLat + rangeMeters / 111320, myPlayer.currentLng]);
-    return Math.max(60, Math.abs(ptRef.y - ptPlayer.y));
+    const [lat0, lng0] = roomHexToLatLng(q, r, mapLat, mapLng, tileSizeMeters);
+    const [lat1, lng1] = roomHexToLatLng(q, r + 1, mapLat, mapLng, tileSizeMeters);
+    const pt0 = map.latLngToLayerPoint([lat0, lng0]);
+    const pt1 = map.latLngToLayerPoint([lat1, lng1]);
+    const dx = pt1.x - pt0.x;
+    const dy = pt1.y - pt0.y;
+    const oneStepPx = Math.sqrt(dx * dx + dy * dy);
+    return Math.max(40, oneStepPx * beaconRange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, myPlayer?.currentLat, myPlayer?.currentLng, tileSizeMeters, zoomLevel]);
+  }, [map, mapLat, mapLng, myPlayer?.currentHexQ, myPlayer?.currentHexR, tileSizeMeters, zoomLevel]);
 
   // Compass beam: shown when compass rotation is active
   const showCompassBeam = isCompassRotationEnabled && compassHeading !== null && playerPixelPos !== null;
 
   // Compass beam length in pixels: beacon players use beacon range (3 hexes), others use 1 hex.
   const compassBeamPixelRadius = useMemo(() => {
-    if (myPlayer?.currentLat == null || myPlayer?.currentLng == null) return 120;
+    const q = myPlayer?.currentHexQ;
+    const r = myPlayer?.currentHexR;
+    if (q == null || r == null) return 120;
     const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
     const range = isBeaconActive ? 3 : 1;
-    const rangeMeters = range * Math.sqrt(3) * tileSizeMeters;
-    const ptPlayer = map.latLngToLayerPoint([myPlayer.currentLat, myPlayer.currentLng]);
-    const ptRef = map.latLngToLayerPoint([myPlayer.currentLat + rangeMeters / 111320, myPlayer.currentLng]);
-    return Math.max(40, Math.abs(ptRef.y - ptPlayer.y));
+    const [lat0, lng0] = roomHexToLatLng(q, r, mapLat, mapLng, tileSizeMeters);
+    const [lat1, lng1] = roomHexToLatLng(q, r + 1, mapLat, mapLng, tileSizeMeters);
+    const pt0 = map.latLngToLayerPoint([lat0, lng0]);
+    const pt1 = map.latLngToLayerPoint([lat1, lng1]);
+    const dx = pt1.x - pt0.x;
+    const dy = pt1.y - pt0.y;
+    const oneStepPx = Math.sqrt(dx * dx + dy * dy);
+    return Math.max(40, oneStepPx * range);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, myPlayer?.currentLat, myPlayer?.currentLng, myPlayer?.isBeacon, abilityUi.activeAbility, abilityUi.mode, tileSizeMeters, zoomLevel]);
+  }, [map, mapLat, mapLng, myPlayer?.currentHexQ, myPlayer?.currentHexR, myPlayer?.isBeacon, abilityUi.activeAbility, abilityUi.mode, tileSizeMeters, zoomLevel]);
 
   // Active directional ability beam
   const activeAbilityBeam = useMemo(() => {
