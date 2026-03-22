@@ -617,6 +617,8 @@ const nl = {
   },
   guidance: {
     enableLocation: 'Schakel locatie in om te spelen',
+    noPositionYet: '📍 Beweeg naar een locatie om te beginnen',
+    noPositionYetDesktop: '📍 Beweeg naar een locatie om te beginnen (gebruik pijltjestoetsen)',
     tapHex: 'Tik op een hex om te zien wat je kunt doen',
     walkToClaim: 'Loop naar een hex om te claimen',
     claimMode: {
@@ -873,6 +875,7 @@ const nl = {
     standoffBlocked: 'Standoff! Een vijandige speler blokkeert deze gebied.',
     waterBlocked: 'Water terrein is onbegaanbaar.',
     insufficientStrength: 'Je hebt meer troepen nodig om de verdedigers te verslaan.',
+    noPositionForAction: 'Beweeg eerst naar een hex',
   },
   dynamics: {
     presetsLabel: 'Presets',

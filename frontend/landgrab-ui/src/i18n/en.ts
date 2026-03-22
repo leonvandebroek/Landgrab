@@ -617,6 +617,8 @@ const en = {
   },
   guidance: {
     enableLocation: 'Enable location to play',
+    noPositionYet: '📍 Move to a location to start',
+    noPositionYetDesktop: '📍 Move to a location to start (use arrow keys)',
     tapHex: 'Tap a hex to see what you can do',
     walkToClaim: 'Walk to a hex to claim it',
     claimMode: {
@@ -873,6 +875,7 @@ const en = {
     standoffBlocked: 'Standoff! A hostile player is blocking this tile.',
     waterBlocked: 'Water terrain is impassable.',
     insufficientStrength: 'You need more troops to beat the defenders.',
+    noPositionForAction: 'Move to a hex first',
   },
   dynamics: {
     presetsLabel: 'Presets',

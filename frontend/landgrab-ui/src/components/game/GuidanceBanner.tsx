@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../stores/gameStore';
 import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 
+const isDesktop = typeof navigator !== 'undefined' && navigator.maxTouchPoints === 0;
+
 interface GuidanceBannerStateProps {
   carriedTroops: number;
   isInOwnHex: boolean;
@@ -65,7 +67,9 @@ export function useGuidanceBannerState({
     }
 
     if (!currentHex) {
-      return t('game.dock.outsideGrid');
+      return isDesktop
+        ? t('guidance.noPositionYetDesktop')
+        : t('guidance.noPositionYet');
     }
 
     if (claimModeHint) {
@@ -92,6 +96,8 @@ export function useGuidanceBannerState({
     let showTimeout: number | undefined;
     let hideTimeout: number | undefined;
 
+    const shouldPersist = isCarryingTroops || currentHex === null;
+
     if (computedHint !== hint) {
       showTimeout = window.setTimeout(() => {
         setIsVisible(false);
@@ -102,7 +108,7 @@ export function useGuidanceBannerState({
         setIsVisible(true);
       }, 300);
 
-      if (!isCarryingTroops) {
+      if (!shouldPersist) {
         hideTimeout = window.setTimeout(() => {
           setIsVisible(false);
         }, 12300);
@@ -112,7 +118,7 @@ export function useGuidanceBannerState({
         setIsVisible(true);
       }, 0);
 
-      if (!isCarryingTroops) {
+      if (!shouldPersist) {
         hideTimeout = window.setTimeout(() => {
           setIsVisible(false);
         }, 12000);
@@ -132,7 +138,7 @@ export function useGuidanceBannerState({
         window.clearTimeout(hideTimeout);
       }
     };
-  }, [computedHint, hint, isCarryingTroops]);
+  }, [computedHint, currentHex, hint, isCarryingTroops]);
 
   return { hint, isVisible };
 }

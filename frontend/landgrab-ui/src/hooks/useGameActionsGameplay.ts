@@ -3,6 +3,7 @@ import { getTileActions, getTileInteractionStatus } from '../components/game/til
 import type { TileAction, TileActionType } from '../components/game/tileInteraction';
 import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
+import { useInfoLedgeStore } from '../stores/infoLedgeStore';
 import type { CombatPreviewDto, HexCell } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { haversineDistanceM } from '../utils/geo';
@@ -71,6 +72,17 @@ export function useGameActionsGameplay({
   const pendingLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastSendTimeRef = useRef<number>(0);
   const previousCurrentHexRef = useRef<string | null>(null);
+
+  const pushNoPositionError = useCallback((): void => {
+    playSound('error');
+    useInfoLedgeStore.getState().push({
+      severity: 'error',
+      source: 'interaction',
+      persistent: false,
+      icon: 'pin',
+      message: t('errors.noPositionForAction'),
+    });
+  }, [playSound, t]);
 
   const selectedHex = useMemo<[number, number] | null>(() => {
     if (!selectedHexKey) {
@@ -199,6 +211,7 @@ export function useGameActionsGameplay({
 
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
+      pushNoPositionError();
       return;
     }
 
@@ -230,6 +243,7 @@ export function useGameActionsGameplay({
     invoke,
     isHostBypass,
     playSound,
+    pushNoPositionError,
     setAttackPrompt,
     setCombatPreview,
     setMapFeedback,
@@ -489,6 +503,7 @@ export function useGameActionsGameplay({
     const targetHex: [number, number] = [currentPickupPrompt.q, currentPickupPrompt.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
+      pushNoPositionError();
       return;
     }
 
@@ -522,6 +537,7 @@ export function useGameActionsGameplay({
     invoke,
     isHostBypass,
     playSound,
+    pushNoPositionError,
     setMapFeedback,
     setPickupPrompt,
     t,
@@ -538,6 +554,7 @@ export function useGameActionsGameplay({
     const targetHex: [number, number] = [currentReinforcePrompt.q, currentReinforcePrompt.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
+      pushNoPositionError();
       return;
     }
 
@@ -576,6 +593,7 @@ export function useGameActionsGameplay({
     invoke,
     isHostBypass,
     playSound,
+    pushNoPositionError,
     setMapFeedback,
     setReinforcePrompt,
     t,
@@ -591,6 +609,7 @@ export function useGameActionsGameplay({
     const targetHex: [number, number] = [currentCombatPreview.q, currentCombatPreview.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
+      pushNoPositionError();
       return;
     }
 
@@ -603,7 +622,7 @@ export function useGameActionsGameplay({
       playSound('error');
       setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex });
     }
-  }, [currentLocation, gameState, invoke, isHostBypass, myPlayer?.carriedTroops, playSound, setCombatPreview, setMapFeedback]);
+  }, [currentLocation, gameState, invoke, isHostBypass, myPlayer?.carriedTroops, playSound, pushNoPositionError, setCombatPreview, setMapFeedback]);
 
   const handleDeployCombatTroops = useCallback(async (count: number): Promise<void> => {
     if (!combatResult) {
@@ -622,6 +641,7 @@ export function useGameActionsGameplay({
     const targetHex: [number, number] = [combatResult.q, combatResult.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
+      pushNoPositionError();
       return;
     }
 
@@ -633,7 +653,7 @@ export function useGameActionsGameplay({
       playSound('error');
       setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex });
     }
-  }, [combatResult, currentLocation, gameState, invoke, isHostBypass, playSound, setCombatResult, setMapFeedback]);
+  }, [combatResult, currentLocation, gameState, invoke, isHostBypass, playSound, pushNoPositionError, setCombatResult, setMapFeedback]);
 
   const handleDeployNeutralClaimTroops = useCallback(async (count: number): Promise<void> => {
     if (!neutralClaimResult) {
@@ -652,6 +672,7 @@ export function useGameActionsGameplay({
     const targetHex: [number, number] = [neutralClaimResult.q, neutralClaimResult.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
+      pushNoPositionError();
       return;
     }
 
@@ -663,7 +684,7 @@ export function useGameActionsGameplay({
       playSound('error');
       setMapFeedback({ tone: 'error', message: getErrorMessage(error), targetHex });
     }
-  }, [currentLocation, gameState, invoke, isHostBypass, neutralClaimResult, playSound, setMapFeedback, setNeutralClaimResult]);
+  }, [currentLocation, gameState, invoke, isHostBypass, neutralClaimResult, playSound, pushNoPositionError, setMapFeedback, setNeutralClaimResult]);
 
   const handleCancelAttack = useCallback((): void => {
     setAttackPrompt(null);
