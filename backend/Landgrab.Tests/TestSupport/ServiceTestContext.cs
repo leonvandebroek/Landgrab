@@ -45,7 +45,7 @@ internal sealed class ServiceTestContext
         var roomPersistenceService = new RoomPersistenceService(new DisabledPersistenceScopeFactory(), RoomPersistenceLogger.Object);
         GameStateService = new GameStateService(RoomProvider.Object, roomPersistenceService, GameStateLogger.Object);
         GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService);
-        AbilityService = new AbilityService(RoomProvider.Object, GameStateService, VisibilityService);
+        AbilityService = new AbilityService(RoomProvider.Object, GameStateService);
         HostControlService = new HostControlService(RoomProvider.Object, GameStateService);
     }
 

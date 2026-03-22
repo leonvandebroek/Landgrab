@@ -384,6 +384,8 @@ const en = {
       unknownTerritory: 'Unknown territory',
       lastKnown: '(last known)',
       staleTroops: '~{{count}}',
+      archived: 'ARCHIVED',
+      lastSeen: 'Last seen: {{time}}',
       unclaimed: 'Unclaimed territory',
       presenceBoost: 'You\'re here — troops recover 3× faster!',
       copresence: '{{count}} allies present',

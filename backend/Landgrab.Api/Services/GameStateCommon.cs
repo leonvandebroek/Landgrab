@@ -138,6 +138,7 @@ internal static class GameStateCommon
                     LastKnownOwnerAllianceId = entry.Value.LastKnownOwnerAllianceId,
                     LastKnownIsFort = entry.Value.LastKnownIsFort,
                     LastKnownIsMasterTile = entry.Value.LastKnownIsMasterTile,
+                    LastSeenAt = entry.Value.LastSeenAt,
                     IsMasterTile = entry.Value.IsMasterTile,
                     IsFortified = entry.Value.IsFortified,
                     LastVisitedAt = entry.Value.LastVisitedAt,

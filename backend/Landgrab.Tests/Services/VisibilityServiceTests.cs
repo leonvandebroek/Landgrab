@@ -124,4 +124,68 @@ public sealed class VisibilityServiceTests
         room.VisibilityMemory["p1"].RememberedHexes.Should().ContainKey(HexService.Key(1, 0));
         room.VisibilityMemory["p2"].RememberedHexes.Should().NotContainKey(HexService.Key(1, 0));
     }
+
+    [Fact]
+    public void BuildStateForViewer_WhenBeaconSectorSeesHostile_SetsLastSeenAndKnownFields()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithBeaconEnabled()
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Eve", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Bravo", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .OwnHex(1, 0, "p2", "a2", troops: 6)
+            .Build();
+        state.Dynamics.BeaconSectorAngle = 45;
+        var viewer = state.Players.Single(player => player.Id == "p1");
+        var (beaconLat, beaconLng) = ServiceTestContext.HexCenter(0, 0);
+        var (eastLat, eastLng) = ServiceTestContext.HexCenter(1, 0);
+        viewer.IsBeacon = true;
+        viewer.BeaconLat = beaconLat;
+        viewer.BeaconLng = beaconLng;
+        viewer.BeaconHeading = HexService.BearingDegrees(beaconLat, beaconLng, eastLat, eastLng);
+
+        var service = new VisibilityService();
+        var room = new GameRoom { Code = state.RoomCode, State = state };
+        var visibleHexKeys = service.ComputeVisibleHexKeys(state, "p1");
+        service.UpdateMemory(room, state, "p1", "a1", visibleHexKeys);
+
+        var visibleState = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(state),
+            "p1",
+            room.VisibilityMemory["p1"],
+            visibleHexKeys,
+            isHostObserver: false,
+            enemySightingMemorySeconds: state.Dynamics.EnemySightingMemorySeconds);
+
+        var seenCell = visibleState.Grid[HexService.Key(1, 0)];
+        seenCell.VisibilityTier.Should().Be(VisibilityTier.Visible);
+        seenCell.OwnerId.Should().Be("p2");
+        seenCell.OwnerAllianceId.Should().Be("a2");
+        seenCell.Troops.Should().Be(6);
+
+        var hiddenSource = state;
+        hiddenSource.Players.Single(player => player.Id == "p1").IsBeacon = false;
+        hiddenSource.Players.Single(player => player.Id == "p1").BeaconLat = null;
+        hiddenSource.Players.Single(player => player.Id == "p1").BeaconLng = null;
+        hiddenSource.Players.Single(player => player.Id == "p1").BeaconHeading = null;
+        var hiddenVisibleKeys = service.ComputeVisibleHexKeys(hiddenSource, "p1");
+        var rememberedState = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(hiddenSource),
+            "p1",
+            room.VisibilityMemory["p1"],
+            hiddenVisibleKeys,
+            isHostObserver: false,
+            enemySightingMemorySeconds: hiddenSource.Dynamics.EnemySightingMemorySeconds);
+        var rememberedCell = rememberedState.Grid[HexService.Key(1, 0)];
+        rememberedCell.VisibilityTier.Should().Be(VisibilityTier.Remembered);
+        rememberedCell.LastKnownTroops.Should().Be(6);
+        rememberedCell.LastKnownOwnerId.Should().Be("p2");
+        rememberedCell.LastKnownOwnerAllianceId.Should().Be("a2");
+        rememberedCell.LastKnownIsFort.Should().BeFalse();
+        rememberedCell.LastSeenAt.Should().NotBeNull();
+    }
 }

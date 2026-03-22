@@ -131,10 +131,25 @@
 }
 
 /* Fog of War Visibility Tiers */
-/* Remembered tile — muted, stale intel */
+
+/* Amber Archive — staleness tiers */
+.hex-polygon.hex-fading {
+  filter: sepia(0.6) saturate(0.6) hue-rotate(-20deg) brightness(0.9);
+  opacity: 0.85;
+  transition: filter 500ms ease-out, opacity 500ms ease-out;
+}
+
+.hex-polygon.hex-stale {
+  filter: sepia(0.9) saturate(0.5) hue-rotate(-25deg) brightness(0.8);
+  opacity: 0.7;
+  transition: filter 500ms ease-out, opacity 500ms ease-out;
+}
+
+/* Alias: hex-remembered maps to stale for any legacy references */
 .hex-polygon.hex-remembered {
-  opacity: 0.55;
-  filter: saturate(0.4);
+  filter: sepia(0.9) saturate(0.5) hue-rotate(-25deg) brightness(0.8);
+  opacity: 0.7;
+  transition: filter 500ms ease-out, opacity 500ms ease-out;
 }
 
 /* Hidden hostile tile — fogged out */
@@ -143,11 +158,11 @@
   filter: saturate(0) brightness(0.5);
 }
 
-/* Stale troop badge — desaturated, italic feel */
+/* Stale troop badge — amber glass, ~ prefix, amber glow */
 .stale-badge {
-  opacity: 0.6;
-  filter: saturate(0.3);
-  font-style: italic;
+  background: rgba(180, 140, 60, 0.85);
+  box-shadow: 0 0 4px rgba(255, 176, 0, 0.4);
+  color: #fff;
 }
 
 .tooltip-player-name--remembered {

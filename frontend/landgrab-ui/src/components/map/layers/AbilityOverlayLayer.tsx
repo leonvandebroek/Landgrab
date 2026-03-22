@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import { useHexGeometries } from '../../../hooks/useHexGeometries';
@@ -7,6 +7,7 @@ import { useGameplayStore } from '../../../stores/gameplayStore';
 import { usePlayerLayerStore } from '../../../stores/playerLayerStore';
 import { HEX_DIRS, hexKey as toHexKey } from '../HexMath';
 import { ReactSvgOverlay } from '../ReactSvgOverlay';
+import { computeBeaconCone } from '../../../utils/beaconCone';
 
 interface AbilityOverlayLayerProps {
   map: L.Map;
@@ -244,8 +245,33 @@ function AbilityOverlayLayerComponent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, myPlayer?.currentLat, myPlayer?.currentLng, zoomLevel]);
 
+  // Beacon range in pixels: one hex step = √3 × tileSizeMeters; beaconRange steps total.
+  // Uses Leaflet's own projection so the length stays accurate at every zoom level.
+  const beaconPixelRadius = useMemo(() => {
+    if (myPlayer?.currentLat == null || myPlayer?.currentLng == null) return 400;
+    const beaconRange = 3;
+    const rangeMeters = beaconRange * Math.sqrt(3) * tileSizeMeters;
+    const ptPlayer = map.latLngToLayerPoint([myPlayer.currentLat, myPlayer.currentLng]);
+    // Offset one rangeMeters north (≈ 111 320 m per degree latitude)
+    const ptRef = map.latLngToLayerPoint([myPlayer.currentLat + rangeMeters / 111320, myPlayer.currentLng]);
+    return Math.max(60, Math.abs(ptRef.y - ptPlayer.y));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, myPlayer?.currentLat, myPlayer?.currentLng, tileSizeMeters, zoomLevel]);
+
   // Compass beam: shown when compass rotation is active
   const showCompassBeam = isCompassRotationEnabled && compassHeading !== null && playerPixelPos !== null;
+
+  // Compass beam length in pixels: beacon players use beacon range (3 hexes), others use 1 hex.
+  const compassBeamPixelRadius = useMemo(() => {
+    if (myPlayer?.currentLat == null || myPlayer?.currentLng == null) return 120;
+    const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
+    const range = isBeaconActive ? 3 : 1;
+    const rangeMeters = range * Math.sqrt(3) * tileSizeMeters;
+    const ptPlayer = map.latLngToLayerPoint([myPlayer.currentLat, myPlayer.currentLng]);
+    const ptRef = map.latLngToLayerPoint([myPlayer.currentLat + rangeMeters / 111320, myPlayer.currentLng]);
+    return Math.max(40, Math.abs(ptRef.y - ptPlayer.y));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, myPlayer?.currentLat, myPlayer?.currentLng, myPlayer?.isBeacon, abilityUi.activeAbility, abilityUi.mode, tileSizeMeters, zoomLevel]);
 
   // Active directional ability beam
   const activeAbilityBeam = useMemo(() => {
@@ -270,16 +296,50 @@ function AbilityOverlayLayerComponent({
   }, [abilityUi, myPlayer, gameState, compassHeading]);
 
   const beaconState = useMemo(() => {
-    if (!gameState || !myPlayer || myPlayer.beaconHeading == null) {
+    const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
+    if (!gameState || !isBeaconActive) {
+      return null;
+    }
+    const heading = compassHeading ?? myPlayer?.beaconHeading;
+    if (heading == null) {
       return null;
     }
     return {
-      heading: myPlayer.beaconHeading,
+      heading,
       angle: gameState.dynamics?.beaconSectorAngle ?? 45,
     };
-  }, [gameState, myPlayer]);
+  }, [gameState, myPlayer, compassHeading, abilityUi]);
 
-  const allTileKeys = overlayState.tileKeys;
+  const beaconScanHexes = useMemo(() => {
+    const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
+    if (
+      !isBeaconActive ||
+      myPlayer?.currentHexQ == null ||
+      myPlayer?.currentHexR == null
+    ) {
+      return [] as string[];
+    }
+    const heading = compassHeading ?? myPlayer.beaconHeading;
+    if (heading == null) {
+      return [] as string[];
+    }
+    const playerHexKey = `${myPlayer.currentHexQ},${myPlayer.currentHexR}`;
+    const sectorAngle = gameState?.dynamics?.beaconSectorAngle ?? 45;
+    return computeBeaconCone(playerHexKey, heading, grid ?? {}, sectorAngle);
+  }, [myPlayer, grid, compassHeading, abilityUi, gameState]);
+
+  const allTileKeys = useMemo(
+    () => (beaconScanHexes.length > 0
+      ? [...new Set([...overlayState.tileKeys, ...beaconScanHexes])]
+      : overlayState.tileKeys),
+    [overlayState.tileKeys, beaconScanHexes],
+  );
+
+  const setBeaconConeHexKeys = useGameplayStore((state) => state.setBeaconConeHexKeys);
+
+  useLayoutEffect(() => {
+    setBeaconConeHexKeys(beaconScanHexes);
+  }, [beaconScanHexes, setBeaconConeHexKeys]);
 
   const hexGeometries = useHexGeometries(
     map,
@@ -296,7 +356,7 @@ function AbilityOverlayLayerComponent({
     ? hexGeometries[overlayState.selectedTargetHexKey]
     : undefined;
 
-  if (!svgRoot || (overlayState.mode === 'none' && !beaconState && !showCompassBeam && !activeAbilityBeam)) {
+  if (!svgRoot || (overlayState.mode === 'none' && !beaconState && !beaconScanHexes.length && !showCompassBeam && !activeAbilityBeam)) {
     return null;
   }
 
@@ -305,7 +365,7 @@ function AbilityOverlayLayerComponent({
 
     const [cx, cy] = playerPixelPos;
     const beamAngle = 30;
-    const length = 600;
+    const length = compassBeamPixelRadius;
     const radCenter = (compassHeading - 90) * Math.PI / 180;
     const radLeft = (compassHeading - beamAngle / 2 - 90) * Math.PI / 180;
     const radRight = (compassHeading + beamAngle / 2 - 90) * Math.PI / 180;
@@ -391,7 +451,7 @@ function AbilityOverlayLayerComponent({
     const { heading, angle } = beaconState;
     const [cx, cy] = playerPixelPos;
 
-    const length = 2000;
+    const length = beaconPixelRadius;
     const radCenter = (heading - 90) * Math.PI / 180;
     const radLeft = (heading - angle / 2 - 90) * Math.PI / 180;
     const radRight = (heading + angle / 2 - 90) * Math.PI / 180;
@@ -417,12 +477,33 @@ function AbilityOverlayLayerComponent({
             x2={gradEndX}
             y2={gradEndY}
           >
-            <stop offset="0%" stopColor="yellow" stopOpacity={0.8} />
-            <stop offset="60%" stopColor="yellow" stopOpacity={0.2} />
-            <stop offset="100%" stopColor="yellow" stopOpacity={0} />
+            <stop offset="0%" stopColor="#00f3ff" stopOpacity={0.8} />
+            <stop offset="60%" stopColor="#00f3ff" stopOpacity={0.2} />
+            <stop offset="100%" stopColor="#00f3ff" stopOpacity={0} />
           </linearGradient>
         </defs>
         <path d={pathData} fill="url(#beaconGradient)" />
+      </g>
+    );
+  };
+
+  const renderBeaconScanHexes = () => {
+    if (!beaconScanHexes.length) return null;
+
+    return (
+      <g className="ability-overlay__beacon-scan-hexes" pointerEvents="none">
+        {beaconScanHexes.map((hexKey) => {
+          const geometry = hexGeometries[hexKey];
+          if (!geometry) return null;
+
+          return (
+            <polygon
+              key={`beacon-scan:${hexKey}`}
+              className="ability-overlay__polygon ability-overlay__beacon-scan-hex"
+              points={geometry.points}
+            />
+          );
+        })}
       </g>
     );
   };
@@ -582,6 +663,7 @@ function AbilityOverlayLayerComponent({
       {renderCompassBeam()}
       {renderAbilityBeam()}
       {renderBeaconSector()}
+      {renderBeaconScanHexes()}
     </g>,
     svgRoot,
   );

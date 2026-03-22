@@ -384,6 +384,8 @@ const nl = {
       unknownTerritory: 'Onbekend territorium',
       lastKnown: '(laatst bekend)',
       staleTroops: '~{{count}}',
+      archived: 'ARCHIEF',
+      lastSeen: 'Laatst gezien: {{time}}',
       unclaimed: 'Onbezet gebied',
       presenceBoost: 'Je bent hier — soldaten herstellen 3× sneller!',
       copresence: '{{count}} bondgenoten aanwezig',

@@ -24,6 +24,7 @@ public class HexCell
     public string? LastKnownOwnerAllianceId { get; set; }
     public bool? LastKnownIsFort { get; set; }
     public bool? LastKnownIsMasterTile { get; set; }
+    public DateTime? LastSeenAt { get; set; }
     public bool IsMasterTile { get; set; }
 
     // Phase 3: Rally — fortified when ≥2 allied players present

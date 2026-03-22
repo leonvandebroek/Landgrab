@@ -204,7 +204,7 @@ public class VisibilityService
                 continue;
             }
 
-            ApplyHiddenCell(cell);
+            cell.VisibilityTier = VisibilityTier.Hidden;
         }
 
         var now = DateTime.UtcNow;
@@ -404,38 +404,7 @@ public class VisibilityService
         cell.LastKnownOwnerAllianceId = rememberedHex.OwnerAllianceId;
         cell.LastKnownIsFort = rememberedHex.IsFort;
         cell.LastKnownIsMasterTile = rememberedHex.IsMasterTile;
-        cell.OwnerId = rememberedHex.OwnerId;
-        cell.OwnerAllianceId = rememberedHex.OwnerAllianceId;
-        cell.OwnerName = rememberedHex.OwnerName;
-        cell.OwnerColor = rememberedHex.OwnerColor;
-        cell.Troops = 0;
-        cell.IsFort = rememberedHex.IsFort;
-        cell.IsMasterTile = rememberedHex.IsMasterTile;
-        cell.IsFortified = false;
-        cell.LastVisitedAt = null;
-        cell.SabotagedUntil = null;
-    }
-
-    private static void ApplyHiddenCell(HexCell cell)
-    {
-        cell.VisibilityTier = VisibilityTier.Hidden;
-        cell.LastKnownTroops = null;
-        cell.LastKnownOwnerId = null;
-        cell.LastKnownOwnerName = null;
-        cell.LastKnownOwnerColor = null;
-        cell.LastKnownOwnerAllianceId = null;
-        cell.LastKnownIsFort = null;
-        cell.LastKnownIsMasterTile = null;
-        cell.OwnerId = null;
-        cell.OwnerAllianceId = null;
-        cell.OwnerName = null;
-        cell.OwnerColor = null;
-        cell.Troops = 0;
-        cell.IsMasterTile = false;
-        cell.IsFortified = false;
-        cell.LastVisitedAt = null;
-        cell.IsFort = false;
-        cell.SabotagedUntil = null;
+        cell.LastSeenAt = rememberedHex.SeenAt;
     }
 
     private static List<string> GetSharedMemoryRecipients(GameState state, string viewerUserId, string viewerAllianceId)

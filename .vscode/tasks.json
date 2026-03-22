@@ -75,7 +75,7 @@
         {
             "label": "frontend: install",
             "type": "shell",
-            "command": "npm install",
+            "command": ". ~/.nvm/nvm.sh && npm install",
             "options": {
                 "cwd": "${workspaceFolder}/frontend/landgrab-ui"
             },
@@ -84,7 +84,7 @@
         {
             "label": "frontend: dev",
             "type": "shell",
-            "command": "npm run dev",
+            "command": ". ~/.nvm/nvm.sh && npm run dev",
             "options": {
                 "cwd": "${workspaceFolder}/frontend/landgrab-ui"
             },
@@ -108,7 +108,7 @@
         {
             "label": "frontend: lint",
             "type": "shell",
-            "command": "npm run lint",
+            "command": ". ~/.nvm/nvm.sh && npm run lint",
             "options": {
                 "cwd": "${workspaceFolder}/frontend/landgrab-ui"
             },

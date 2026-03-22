@@ -58,9 +58,11 @@ public sealed class VisibilityBroadcastHelperTests
         var hostState = hostProxy.SingleStateUpdated();
         var enemyState = enemyProxy.SingleStateUpdated();
 
-        hostState.Grid[HexService.Key(4, 0)].OwnerId.Should().BeNull();
+        hostState.Grid[HexService.Key(4, 0)].OwnerId.Should().Be(enemyUserId);
+        hostState.Grid[HexService.Key(4, 0)].Troops.Should().Be(7);
         hostState.Grid[HexService.Key(4, 0)].VisibilityTier.Should().Be(VisibilityTier.Hidden);
-        enemyState.Grid[HexService.Key(0, 0)].OwnerId.Should().BeNull();
+        enemyState.Grid[HexService.Key(0, 0)].OwnerId.Should().Be(hostUserId.ToString());
+        enemyState.Grid[HexService.Key(0, 0)].Troops.Should().Be(5);
         enemyState.Grid[HexService.Key(0, 0)].VisibilityTier.Should().Be(VisibilityTier.Hidden);
     }
 

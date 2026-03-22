@@ -893,7 +893,7 @@ export const GameMap = memo(function GameMap({
             mapLat={state.mapLat ?? 0}
             mapLng={state.mapLng ?? 0}
             tileSizeMeters={state.tileSizeMeters ?? 50}
-            compassHeading={compassHeading}
+            compassHeading={debugCompassHeading ?? compassHeading}
             isCompassRotationEnabled={isCompassRotationEnabled}
           />
           <PlayerLayer map={mapInstance} layerPreferences={layerPrefs} />

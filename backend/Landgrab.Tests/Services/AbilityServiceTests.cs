@@ -232,6 +232,55 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
+    public void ShareBeaconIntel_WhenBeaconInactive_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithBeaconEnabled()
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1", [HexService.Key(1, 0)]);
+
+        result.sharedCount.Should().Be(0);
+        result.error.Should().Be("Beacon must be active to share intel.");
+    }
+
+    [Fact]
+    public void ShareBeaconIntel_WhenBeaconActive_UpdatesAllianceMemoryWithLastSeen()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithBeaconEnabled()
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .OwnHex(1, 0, "p2", "a1", troops: 4)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        context.Room.VisibilityMemory.TryAdd("p1", new PlayerVisibilityMemory());
+        context.Room.VisibilityMemory.TryAdd("p2", new PlayerVisibilityMemory());
+        context.Player("p1").IsBeacon = true;
+
+        var before = DateTime.UtcNow;
+        var targetHex = HexService.Key(1, 0);
+        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1", [targetHex]);
+        var after = DateTime.UtcNow;
+
+        result.error.Should().BeNull();
+        result.sharedCount.Should().Be(1);
+        var sharedRemembered = context.Room.VisibilityMemory["p2"].RememberedHexes[targetHex];
+        sharedRemembered.OwnerId.Should().Be("p2");
+        sharedRemembered.OwnerAllianceId.Should().Be("a1");
+        sharedRemembered.Troops.Should().Be(4);
+        sharedRemembered.SeenAt.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+    }
+
+    [Fact]
     public void ActivateRallyPoint_ByNonCommander_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()

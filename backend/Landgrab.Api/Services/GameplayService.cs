@@ -129,6 +129,11 @@ public class GameplayService(
             {
                 player.BeaconLat = lat;
                 player.BeaconLng = lng;
+                if (player.CurrentHeading.HasValue)
+                {
+                    player.BeaconHeading = HexService.NormalizeHeading(player.CurrentHeading.Value);
+                }
+                // Preserve existing BeaconHeading when no heading is provided
             }
 
             winConditionService.ApplyWinConditionAndLog(room.State, now);

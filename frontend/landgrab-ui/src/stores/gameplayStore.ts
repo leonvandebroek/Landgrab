@@ -53,6 +53,8 @@ interface GameplayStore {
   outcomeDialogQueue: QueuedOutcomeDialog[];
   abilityUi: AbilityUiState;
   commandoTargetingMode: boolean;
+  beaconConeHexKeys: ReadonlySet<string>;
+  setBeaconConeHexKeys: (keys: string[]) => void;
   setSelectedHexKey: (key: string | null) => void;
   setCurrentHexKey: (key: string | null) => void;
   setMapFeedback: (feedback: MapInteractionFeedback | null) => void;
@@ -110,6 +112,8 @@ export const useGameplayStore = create<GameplayStore>()((set) => ({
   outcomeDialogQueue: [],
   abilityUi: initialAbilityUiState,
   commandoTargetingMode: false,
+  beaconConeHexKeys: new Set<string>(),
+  setBeaconConeHexKeys: (keys) => set({ beaconConeHexKeys: new Set(keys) }),
   setSelectedHexKey: (selectedHexKey) => set({ selectedHexKey }),
   setCurrentHexKey: (currentHexKey) => set({ currentHexKey }),
   setMapFeedback: (mapFeedback) => {
@@ -270,6 +274,7 @@ export const useGameplayStore = create<GameplayStore>()((set) => ({
       outcomeDialogQueue: [],
       abilityUi: initialAbilityUiState,
       commandoTargetingMode: false,
+      beaconConeHexKeys: new Set<string>(),
     });
   },
 }));

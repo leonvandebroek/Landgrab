@@ -45,15 +45,13 @@ export function BeaconCard({
   };
 
   const handleActivate = async () => {
-    // If heading is null, we pass 0 or maybe we can't activate?
-    // Using 0 as fallback if sensor is completely unavailable.
     const activeHeading = heading ?? 0;
+    activateAbility();
     const succeeded = await Promise.resolve(onActivateBeacon(activeHeading));
     if (succeeded === false) {
+      exitAbilityMode();
       return;
     }
-
-    activateAbility();
   };
 
   const handleDeactivate = async () => {

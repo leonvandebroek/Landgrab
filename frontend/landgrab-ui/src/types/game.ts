@@ -92,6 +92,7 @@ export interface HexCell {
   lastKnownOwnerAllianceId?: string | null;
   lastKnownIsFort?: boolean;
   lastKnownIsMasterTile?: boolean;
+  lastSeenAt?: string;
   // Phase 3: Rally
   isFortified?: boolean;
   // Phase 3: Shepherd

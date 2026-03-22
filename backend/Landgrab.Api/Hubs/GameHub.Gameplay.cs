@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Landgrab.Api.Models;
 using Landgrab.Api.Services;
@@ -111,12 +112,30 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task<int> ShareBeaconIntel()
+    public async Task<int> ShareBeaconIntel(string roomCode, string[] hexKeys)
     {
+        if (!ValidateRoomCode(roomCode))
+        {
+            await SendError(InvalidRequestCode, "Invalid room code.");
+            return 0;
+        }
+
+        if (!ValidateHexKeyPayload(hexKeys, out var normalizedHexKeys, out var validationError))
+        {
+            await SendError(InvalidRequestCode, validationError ?? "Invalid hex key payload.");
+            return 0;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
             await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return 0;
+        }
+
+        if (!string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
+        {
+            await SendError(InvalidRequestCode, "Room code does not match active room.");
             return 0;
         }
 
@@ -126,7 +145,13 @@ public partial class GameHub
             return 0;
         }
 
-        var sharedCount = gameService.ShareBeaconIntel(room.Code, UserId);
+        var (sharedCount, error) = gameService.ShareBeaconIntel(room.Code, UserId, normalizedHexKeys);
+        if (error != null)
+        {
+            await SendError(error);
+            return 0;
+        }
+
         var state = gameService.GetStateSnapshot(room.Code);
         if (state is not null)
         {

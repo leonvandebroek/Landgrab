@@ -4,8 +4,7 @@ namespace Landgrab.Api.Services;
 
 public class AbilityService(
     IGameRoomProvider roomProvider,
-    GameStateService gameStateService,
-    VisibilityService visibilityService)
+    GameStateService gameStateService)
 {
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
@@ -237,35 +236,34 @@ public class AbilityService(
         }
     }
 
-    public int ShareBeaconIntel(string roomCode, string userId)
+    public (int sharedCount, string? error) ShareBeaconIntel(string roomCode, string userId, IEnumerable<string> hexKeys)
     {
         var room = GetRoom(roomCode);
         if (room == null)
-            return 0;
+            return (0, "Room not found.");
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
-                return 0;
+                return (0, "Beacons only work during gameplay.");
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null || !player.IsBeacon || !player.BeaconHeading.HasValue || !double.IsFinite(player.BeaconHeading.Value))
-                return 0;
+            if (player == null)
+                return (0, "Player not in room.");
+            if (!player.IsBeacon)
+                return (0, "Beacon must be active to share intel.");
 
             var alliance = room.State.Alliances.FirstOrDefault(candidate =>
                                candidate.MemberIds.Contains(player.Id, StringComparer.Ordinal))
                            ?? room.State.Alliances.FirstOrDefault(candidate => candidate.Id == player.AllianceId);
             if (alliance == null || alliance.MemberIds.Count == 0)
-                return 0;
+                return (0, null);
 
             var now = DateTime.UtcNow;
             var rememberedHexes = new Dictionary<string, RememberedHex>(StringComparer.Ordinal);
-            foreach (var hexKey in visibilityService.ComputeBeaconSectorKeys(room.State, player))
+            foreach (var hexKey in hexKeys.Distinct(StringComparer.Ordinal))
             {
                 if (!room.State.Grid.TryGetValue(hexKey, out var cell))
-                    continue;
-
-                if (string.IsNullOrWhiteSpace(cell.OwnerId) || cell.OwnerAllianceId == player.AllianceId)
                     continue;
 
                 rememberedHexes[hexKey] = new RememberedHex(
@@ -280,7 +278,7 @@ public class AbilityService(
             }
 
             if (rememberedHexes.Count == 0)
-                return 0;
+                return (0, null);
 
             foreach (var memberId in alliance.MemberIds.Distinct(StringComparer.Ordinal))
             {
@@ -291,7 +289,7 @@ public class AbilityService(
                 }
             }
 
-            return rememberedHexes.Count;
+            return (rememberedHexes.Count, null);
         }
     }
 

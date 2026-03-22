@@ -547,6 +547,43 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
+    public void UpdatePlayerLocation_WhenBeaconIsActive_RefreshesBeaconHeadingWithoutForcingGridChange()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithBeaconEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Eve", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Bravo", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .Build();
+        state.Dynamics.BeaconSectorAngle = 45;
+        var context = new ServiceTestContext(state);
+
+        var activateResult = context.AbilityService.ActivateBeacon(ServiceTestContext.RoomCode, "p1", 90d);
+        activateResult.error.Should().BeNull();
+
+        var (movedLat, movedLng) = ServiceTestContext.HexCenter(0, 1);
+        var (scanTargetLat, scanTargetLng) = ServiceTestContext.HexCenter(1, 0);
+        var updatedHeading = HexService.BearingDegrees(movedLat, movedLng, scanTargetLat, scanTargetLng);
+
+        var result = context.GameplayService.UpdatePlayerLocation(
+            ServiceTestContext.RoomCode,
+            "p1",
+            movedLat,
+            movedLng,
+            updatedHeading);
+
+        result.error.Should().BeNull();
+        result.gridChanged.Should().BeFalse();
+        context.Player("p1").BeaconLat.Should().Be(movedLat);
+        context.Player("p1").BeaconLng.Should().Be(movedLng);
+        context.Player("p1").BeaconHeading.Should().BeApproximately(HexService.NormalizeHeading(updatedHeading), 0.0001d);
+    }
+
+    [Fact]
     public void PlaceTroops_WhenAttackerHasTacticalStrike_IgnoresFortBonusesAndConsumesAbility()
     {
         var state = ServiceTestContext.CreateBuilder()

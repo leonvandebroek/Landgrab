@@ -275,10 +275,35 @@
   letter-spacing: 0.08em;
 }
 
+/* Beacon scan hex overlay — cyan pulse on the 3-hex scan zone */
+.ability-overlay__beacon-scan-hex {
+  fill: rgba(0, 243, 255, 0.15);
+  stroke: #00f3ff;
+  stroke-width: 1.8;
+  animation: beacon-scan-hex-pulse 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.4));
+}
+
+@keyframes beacon-scan-hex-pulse {
+  0%,
+  100% {
+    fill-opacity: 0.12;
+    stroke-opacity: 0.7;
+    filter: drop-shadow(0 0 5px rgba(0, 243, 255, 0.35));
+  }
+
+  50% {
+    fill-opacity: 0.25;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(0, 243, 255, 0.75));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ability-overlay__commando-valid,
   .ability-overlay__target-ring,
-  .ability-overlay__rally-ring {
+  .ability-overlay__rally-ring,
+  .ability-overlay__beacon-scan-hex {
     animation: none !important;
   }
 }

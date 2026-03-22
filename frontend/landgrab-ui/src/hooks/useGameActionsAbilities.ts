@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useUiStore } from '../stores/uiStore';
+import { computeBeaconCone } from '../utils/beaconCone';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 
 interface UseGameActionsAbilitiesResult {
@@ -22,7 +23,9 @@ interface UseGameActionsAbilitiesResult {
 
 export function useGameActionsAbilities({
   invoke,
-}: Pick<UseGameActionsOptions, 'invoke'>): UseGameActionsAbilitiesResult {
+  gameState,
+  myPlayer,
+}: Pick<UseGameActionsOptions, 'invoke' | 'gameState' | 'myPlayer'>): UseGameActionsAbilitiesResult {
   const setError = useUiStore(state => state.setError);
 
   const handleActivateBeacon = useCallback(async (heading: number): Promise<boolean> => {
@@ -54,18 +57,26 @@ export function useGameActionsAbilities({
   }, [invoke, setError]);
 
   const handleShareBeaconIntel = useCallback(async (): Promise<number> => {
-    if (!invoke) {
+    if (!invoke || !gameState || !myPlayer) {
       return 0;
     }
 
+    const { currentHexQ, currentHexR, beaconHeading } = myPlayer;
+    if (currentHexQ == null || currentHexR == null || beaconHeading == null) {
+      return 0;
+    }
+
+    const playerHexKey = `${currentHexQ},${currentHexR}`;
+    const hexKeys = computeBeaconCone(playerHexKey, beaconHeading, gameState.grid);
+
     try {
-      const count = await invoke<number>('ShareBeaconIntel');
+      const count = await invoke<number>('ShareBeaconIntel', gameState.roomCode, hexKeys);
       return count ?? 0;
     } catch (error) {
       setError(String(error));
       return 0;
     }
-  }, [invoke, setError]);
+  }, [invoke, gameState, myPlayer, setError]);
 
   const handleActivateCommandoRaid = useCallback(async (targetQ: number, targetR: number): Promise<boolean> => {
     if (!invoke) {

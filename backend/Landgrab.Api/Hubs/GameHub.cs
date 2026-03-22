@@ -37,6 +37,7 @@ public partial class GameHub : Hub
     private const int MaxDescriptionLength = 500;
     private const int MaxCustomAreaCoordinates = 500;
     private const int MaxTargetAllianceIdsCount = 20;
+    private const int MaxBeaconIntelHexKeys = 500;
     private static readonly ConcurrentDictionary<string, DateTime> _lastLocationUpdate = new();
     private static readonly TimeSpan UpdatePlayerLocationInterval = TimeSpan.FromMilliseconds(500);
     private static readonly HashSet<string> RemovedPlayerRoles = new(StringComparer.OrdinalIgnoreCase)
@@ -180,6 +181,70 @@ public partial class GameHub : Hub
         Enum.TryParse<TEnum>(value, true, out _);
 
     private static bool ValidateGameDynamics(GameDynamics? dynamics) => dynamics != null;
+
+    private static bool ValidateHexKeyPayload(
+        string[]? hexKeys,
+        out List<string> normalizedHexKeys,
+        out string? error)
+    {
+        normalizedHexKeys = [];
+        error = null;
+
+        if (hexKeys is null)
+        {
+            error = "Hex keys are required.";
+            return false;
+        }
+
+        if (hexKeys.Length > MaxBeaconIntelHexKeys)
+        {
+            error = $"You can share at most {MaxBeaconIntelHexKeys} hexes at once.";
+            return false;
+        }
+
+        foreach (var rawHexKey in hexKeys)
+        {
+            var hexKey = rawHexKey?.Trim();
+            if (string.IsNullOrWhiteSpace(hexKey))
+            {
+                continue;
+            }
+
+            if (!TryParseHexKey(hexKey, out var q, out var r))
+            {
+                error = $"Invalid hex key '{hexKey}'.";
+                return false;
+            }
+
+            if (!ValidateCoordRange(q, r))
+            {
+                error = $"Hex key '{hexKey}' is out of range.";
+                return false;
+            }
+
+            normalizedHexKeys.Add(HexService.Key(q, r));
+        }
+
+        normalizedHexKeys = normalizedHexKeys
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return true;
+    }
+
+    private static bool TryParseHexKey(string hexKey, out int q, out int r)
+    {
+        q = 0;
+        r = 0;
+
+        var parts = hexKey.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        return int.TryParse(parts[0], out q) && int.TryParse(parts[1], out r);
+    }
 
     private static bool IsSupportedPlayerRole(string? role) =>
         ValidateEnumString<PlayerRole>(role) && !RemovedPlayerRoles.Contains(role!);
