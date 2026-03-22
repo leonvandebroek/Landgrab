@@ -137,3 +137,38 @@ A `QueuedOutcomeDialog` discriminated union (`{ type: 'combat'; result: CombatRe
 - `gameplayStore.ts`: new `QueuedOutcomeDialog` type, `outcomeDialogQueue` state, updated `setCombatResult` / `setNeutralClaimResult`, updated `clearGameplayUi`.
 - No changes to `GameView.tsx`, `useSignalRHandlers.ts`, or `agentBridge.ts` — full backward compatibility.
 - Build: `npm run lint && npm run build` passes (0 errors).
+
+---
+
+## Beacon Cone — Three Bug Fix
+
+**Date:** 2026-03-22  
+**Agent:** vermeer-beacon-debug  
+**Scope:** Frontend heading responsiveness + backend heading preservation + cone tile visibility  
+**Status:** Implemented
+
+### Three interconnected bugs
+
+**A — Q/E debug heading not forwarded to overlay:** `GameMap.tsx` passed raw `compassHeading` (sensor) to `AbilityOverlayLayer`, but debug heading edits (Q/E) only existed in local state. Overlay read stale `myPlayer.beaconHeading` from server.
+
+**B — Backend wiping BeaconHeading on every heartbeat:** `GameplayService.UpdatePlayerLocation` unconditionally set `BeaconHeading = null` when no compass sensor present. This destroyed the heading set by `ActivateBeacon` on any movement without new sensor data.
+
+**C — Beacon cone tiles render as Hidden:** `tricorderTileState.deriveTileState` returned hidden state for all `visibilityTier === 'Hidden'` tiles before checking beacon cone membership. Server sent full tile data for scanned hexes but frontend discarded it.
+
+### Fixes
+
+**Frontend:**
+- `GameMap.tsx`: Forward `debugCompassHeading ?? compassHeading` to overlay
+- `AbilityOverlayLayer.tsx`: Compute cone with effective heading; add isBeacon check; sync cone hexes to store
+- `gameplayStore.ts`: Add `beaconConeHexKeys: ReadonlySet<string>` + `setBeaconConeHexKeys` action
+- `tricorderTileState.ts`: Override visibility when hex in cone; let full Visible rendering pass through
+- `HexTile.tsx`, `TileInfoCard.tsx`: Pass `beaconConeHexKeys` to derivation
+
+**Backend:**
+- `GameplayService.cs`: Only update `BeaconHeading` when `CurrentHeading.HasValue` — preserve existing value otherwise
+
+### Validation
+
+- Build: ✅ `npm run lint && npm run build` — 0 errors, 293 modules
+- Backward compatible; no breaking changes
+- Surgical changes isolated to cone rendering paths

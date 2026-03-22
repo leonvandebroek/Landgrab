@@ -18,6 +18,11 @@ Agent Scribe initialized and ready for work. Team has successfully resolved 9 ma
    - Simultaneous dialogs stacking (P2 dialog queue)
    - And 4 other UX fixes
    - **Agent:** vermeer implemented dialog stacking fix via Option A (queue). Single-file change to gameplayStore.ts.
+📌 **Beacon Cone Debug Session (2026-03-22):** Fixed three critical bugs preventing beacon cone from rendering visible tiles and responding to heading changes.
+   - **Bug A:** Debug heading (Q/E) not forwarded to overlay layer → forward `debugCompassHeading ?? compassHeading`
+   - **Bug B:** `BeaconHeading` unconditionally nulled on every heartbeat → preserve when `CurrentHeading.HasValue` false
+   - **Bug C:** Cone hexes rendered as Hidden (no troop reveal) → added `beaconConeHexKeys` to store, override visibility tier
+   - **Agent:** vermeer-beacon-debug. Multi-file changes (frontend + backend). Build: ✅ 293 modules, 0 errors.
 
 ## Learnings
 
