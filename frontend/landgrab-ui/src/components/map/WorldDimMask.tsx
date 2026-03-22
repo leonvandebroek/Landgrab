@@ -4,20 +4,23 @@ import type { HexPixelGeometry } from '../../hooks/useHexGeometries';
 interface WorldDimMaskProps {
   tileKeys: string[];
   hexGeometries: Record<string, HexPixelGeometry>;
-  mapBounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
+
+// Fixed large extent that covers any viewport at any zoom/pan/rotation.
+// Since the parent SVG has overflow:visible, this always works regardless
+// of coordinate-space mismatches with getPixelBounds during rotation.
+const E = 100000;
 
 export const WorldDimMask = memo(function WorldDimMask({
   tileKeys,
   hexGeometries,
-  mapBounds,
 }: WorldDimMaskProps) {
   const path = useMemo(() => {
     const segments = [
-      `M ${mapBounds.minX} ${mapBounds.minY}`,
-      `L ${mapBounds.maxX} ${mapBounds.minY}`,
-      `L ${mapBounds.maxX} ${mapBounds.maxY}`,
-      `L ${mapBounds.minX} ${mapBounds.maxY}`,
+      `M ${-E} ${-E}`,
+      `L ${E} ${-E}`,
+      `L ${E} ${E}`,
+      `L ${-E} ${E}`,
       'Z',
     ];
 
@@ -41,13 +44,13 @@ export const WorldDimMask = memo(function WorldDimMask({
     }
 
     return segments.join(' ');
-  }, [hexGeometries, mapBounds.maxX, mapBounds.maxY, mapBounds.minX, mapBounds.minY, tileKeys]);
+  }, [hexGeometries, tileKeys]);
 
   return (
     <path
       className="grid-dim-mask"
       d={path}
-      fill="#ffffff" 
+      fill="#ffffff"
       fillOpacity={0.7}
       fillRule="evenodd"
       pointerEvents="none"

@@ -236,17 +236,21 @@ function AbilityOverlayLayerComponent({
     return EMPTY_OVERLAY_STATE;
   }, [abilityUi, gameState, grid, myPlayer]);
 
+  // Player GPS position projected to SVG layer-point coordinates
+  const playerPixelPos = useMemo(() => {
+    if (myPlayer?.currentLat == null || myPlayer?.currentLng == null) return null;
+    const pt = map.latLngToLayerPoint([myPlayer.currentLat, myPlayer.currentLng]);
+    return [pt.x, pt.y] as [number, number];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, myPlayer?.currentLat, myPlayer?.currentLng, zoomLevel]);
+
   // Compass beam: shown when compass rotation is active
-  const compassBeamHexKey = useMemo(() => {
-    if (!isCompassRotationEnabled || compassHeading === null || !myPlayer) return null;
-    if (myPlayer.currentHexQ == null || myPlayer.currentHexR == null) return null;
-    return toHexKey(myPlayer.currentHexQ, myPlayer.currentHexR);
-  }, [isCompassRotationEnabled, compassHeading, myPlayer]);
+  const showCompassBeam = isCompassRotationEnabled && compassHeading !== null && playerPixelPos !== null;
 
   // Active directional ability beam
   const activeAbilityBeam = useMemo(() => {
     if (!abilityUi.activeAbility || !myPlayer || !gameState) return null;
-    if (myPlayer.currentHexQ == null || myPlayer.currentHexR == null) return null;
+    if (myPlayer.currentLat == null || myPlayer.currentLng == null) return null;
 
     const directionalAbilities = ['tacticalStrike', 'commandoRaid', 'intercept', 'demolish'];
     if (!directionalAbilities.includes(abilityUi.activeAbility)) return null;
@@ -259,7 +263,6 @@ function AbilityOverlayLayerComponent({
         : 'engineer';
 
     return {
-      hexKey: toHexKey(myPlayer.currentHexQ, myPlayer.currentHexR),
       heading: compassHeading,
       angle: gameState.dynamics?.beaconSectorAngle ?? 45,
       role,
@@ -267,29 +270,16 @@ function AbilityOverlayLayerComponent({
   }, [abilityUi, myPlayer, gameState, compassHeading]);
 
   const beaconState = useMemo(() => {
-    if (!gameState || !myPlayer || myPlayer.beaconHeading == null || myPlayer.currentHexQ == null || myPlayer.currentHexR == null) {
+    if (!gameState || !myPlayer || myPlayer.beaconHeading == null) {
       return null;
     }
     return {
-      hexKey: toHexKey(myPlayer.currentHexQ, myPlayer.currentHexR),
       heading: myPlayer.beaconHeading,
       angle: gameState.dynamics?.beaconSectorAngle ?? 45,
     };
   }, [gameState, myPlayer]);
 
-  const allTileKeys = useMemo(() => {
-    const keys = new Set(overlayState.tileKeys);
-    if (beaconState) {
-      keys.add(beaconState.hexKey);
-    }
-    if (compassBeamHexKey) {
-      keys.add(compassBeamHexKey);
-    }
-    if (activeAbilityBeam) {
-      keys.add(activeAbilityBeam.hexKey);
-    }
-    return Array.from(keys);
-  }, [overlayState.tileKeys, beaconState, compassBeamHexKey, activeAbilityBeam]);
+  const allTileKeys = overlayState.tileKeys;
 
   const hexGeometries = useHexGeometries(
     map,
@@ -306,56 +296,56 @@ function AbilityOverlayLayerComponent({
     ? hexGeometries[overlayState.selectedTargetHexKey]
     : undefined;
 
-  if (!svgRoot || (overlayState.mode === 'none' && !beaconState && !compassBeamHexKey && !activeAbilityBeam)) {
+  if (!svgRoot || (overlayState.mode === 'none' && !beaconState && !showCompassBeam && !activeAbilityBeam)) {
     return null;
   }
 
   const renderCompassBeam = () => {
-    if (!compassBeamHexKey || compassHeading === null) return null;
-    const geometry = hexGeometries[compassBeamHexKey];
-    if (!geometry) return null;
+    if (!showCompassBeam || compassHeading === null || !playerPixelPos) return null;
 
-    const [cx, cy] = geometry.center;
-    const beamAngle = 8;
-    const length = 800;
+    const [cx, cy] = playerPixelPos;
+    const beamAngle = 30;
+    const length = 600;
+    const radCenter = (compassHeading - 90) * Math.PI / 180;
     const radLeft = (compassHeading - beamAngle / 2 - 90) * Math.PI / 180;
     const radRight = (compassHeading + beamAngle / 2 - 90) * Math.PI / 180;
     const x1 = cx + length * Math.cos(radLeft);
     const y1 = cy + length * Math.sin(radLeft);
     const x2 = cx + length * Math.cos(radRight);
     const y2 = cy + length * Math.sin(radRight);
+    const gradEndX = cx + length * Math.cos(radCenter);
+    const gradEndY = cy + length * Math.sin(radCenter);
     const pathData = `M ${cx},${cy} L ${x1},${y1} A ${length},${length} 0 0,1 ${x2},${y2} Z`;
 
     return (
       <g className="compass-beam" pointerEvents="none">
         <defs>
-          <radialGradient id="compassBeamGradient" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#00f3ff" stopOpacity={0.6} />
-            <stop offset="60%" stopColor="#00f3ff" stopOpacity={0.15} />
+          <linearGradient
+            id="compassBeamGradient"
+            gradientUnits="userSpaceOnUse"
+            x1={cx}
+            y1={cy}
+            x2={gradEndX}
+            y2={gradEndY}
+          >
+            <stop offset="0%" stopColor="#00f3ff" stopOpacity={0.5} />
+            <stop offset="70%" stopColor="#00f3ff" stopOpacity={0.08} />
             <stop offset="100%" stopColor="#00f3ff" stopOpacity={0} />
-          </radialGradient>
+          </linearGradient>
         </defs>
         <path d={pathData} fill="url(#compassBeamGradient)" />
-        <line
-          className="compass-beam__center-line"
-          x1={cx}
-          y1={cy}
-          x2={cx + length * Math.cos((compassHeading - 90) * Math.PI / 180)}
-          y2={cy + length * Math.sin((compassHeading - 90) * Math.PI / 180)}
-        />
       </g>
     );
   };
 
   const renderAbilityBeam = () => {
-    if (!activeAbilityBeam || activeAbilityBeam.heading === null) return null;
-    const geometry = hexGeometries[activeAbilityBeam.hexKey];
-    if (!geometry) return null;
+    if (!activeAbilityBeam || activeAbilityBeam.heading === null || !playerPixelPos) return null;
 
     const { heading, angle, role } = activeAbilityBeam;
     if (heading === null) return null;
-    const [cx, cy] = geometry.center;
+    const [cx, cy] = playerPixelPos;
     const length = 1200;
+    const radCenter = (heading - 90) * Math.PI / 180;
     const radLeft = (heading - angle / 2 - 90) * Math.PI / 180;
     const radRight = (heading + angle / 2 - 90) * Math.PI / 180;
     const x1 = cx + length * Math.cos(radLeft);
@@ -364,6 +354,8 @@ function AbilityOverlayLayerComponent({
     const y2 = cy + length * Math.sin(radRight);
     const largeArcFlag = angle > 180 ? 1 : 0;
     const pathData = `M ${cx},${cy} L ${x1},${y1} A ${length},${length} 0 ${largeArcFlag},1 ${x2},${y2} Z`;
+    const gradEndX = cx + length * Math.cos(radCenter);
+    const gradEndY = cy + length * Math.sin(radCenter);
 
     const colorMap: Record<string, string> = {
       commander: '#ffb000',
@@ -375,11 +367,18 @@ function AbilityOverlayLayerComponent({
     return (
       <g className={`ability-beam ability-beam--${role}`} pointerEvents="none">
         <defs>
-          <radialGradient id={`abilityBeamGradient-${role}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={beamColor} stopOpacity={0.5} />
-            <stop offset="50%" stopColor={beamColor} stopOpacity={0.12} />
+          <linearGradient
+            id={`abilityBeamGradient-${role}`}
+            gradientUnits="userSpaceOnUse"
+            x1={cx}
+            y1={cy}
+            x2={gradEndX}
+            y2={gradEndY}
+          >
+            <stop offset="0%" stopColor={beamColor} stopOpacity={0.45} />
+            <stop offset="60%" stopColor={beamColor} stopOpacity={0.1} />
             <stop offset="100%" stopColor={beamColor} stopOpacity={0} />
-          </radialGradient>
+          </linearGradient>
         </defs>
         <path d={pathData} fill={`url(#abilityBeamGradient-${role})`} />
       </g>
@@ -387,35 +386,43 @@ function AbilityOverlayLayerComponent({
   };
 
   const renderBeaconSector = () => {
-    if (!beaconState) return null;
-    const geometry = hexGeometries[beaconState.hexKey];
-    if (!geometry) return null;
+    if (!beaconState || !playerPixelPos) return null;
 
     const { heading, angle } = beaconState;
-    const [cx, cy] = geometry.center;
-    
+    const [cx, cy] = playerPixelPos;
+
     const length = 2000;
+    const radCenter = (heading - 90) * Math.PI / 180;
     const radLeft = (heading - angle / 2 - 90) * Math.PI / 180;
     const radRight = (heading + angle / 2 - 90) * Math.PI / 180;
-    
+
     const x1 = cx + length * Math.cos(radLeft);
     const y1 = cy + length * Math.sin(radLeft);
     const x2 = cx + length * Math.cos(radRight);
     const y2 = cy + length * Math.sin(radRight);
-    
-    // SVG path for a circular sector
+    const gradEndX = cx + length * Math.cos(radCenter);
+    const gradEndY = cy + length * Math.sin(radCenter);
+
     const largeArcFlag = angle > 180 ? 1 : 0;
     const pathData = `M ${cx},${cy} L ${x1},${y1} A ${length},${length} 0 ${largeArcFlag},1 ${x2},${y2} Z`;
 
     return (
       <g className="ability-overlay__beacon-sector" pointerEvents="none" opacity={0.3}>
-        <path d={pathData} fill="url(#beaconGradient)" />
         <defs>
-          <radialGradient id="beaconGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+          <linearGradient
+            id="beaconGradient"
+            gradientUnits="userSpaceOnUse"
+            x1={cx}
+            y1={cy}
+            x2={gradEndX}
+            y2={gradEndY}
+          >
             <stop offset="0%" stopColor="yellow" stopOpacity={0.8} />
+            <stop offset="60%" stopColor="yellow" stopOpacity={0.2} />
             <stop offset="100%" stopColor="yellow" stopOpacity={0} />
-          </radialGradient>
+          </linearGradient>
         </defs>
+        <path d={pathData} fill="url(#beaconGradient)" />
       </g>
     );
   };

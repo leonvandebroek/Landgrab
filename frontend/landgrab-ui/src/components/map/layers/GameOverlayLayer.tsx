@@ -167,7 +167,7 @@ function GameOverlayLayerComponent({
     });
   }, [tileKeys, hexGeometries, mapBounds]);
 
-  if (!svgRoot || !mapBounds) {
+  if (!svgRoot) {
     return null;
   }
 
@@ -175,7 +175,7 @@ function GameOverlayLayerComponent({
     <>
       <g data-zoom-level={zoomCategory}>
         {showWorldDimMask ? (
-          <WorldDimMask tileKeys={tileKeys} hexGeometries={hexGeometries} mapBounds={mapBounds} />
+          <WorldDimMask tileKeys={tileKeys} hexGeometries={hexGeometries} />
         ) : null}
         {visibleTileKeys.map((hexId) => {
           const geometry = hexGeometries[hexId];

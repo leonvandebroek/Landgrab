@@ -158,19 +158,13 @@
 /* ── Compass & Ability Scanner Beams ── */
 
 @keyframes compass-beam-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.55; }
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.9; }
 }
 
 .compass-beam {
   animation: compass-beam-pulse 2.5s ease-in-out infinite;
-}
-
-.compass-beam__center-line {
-  stroke: #00f3ff;
-  stroke-width: 1.2;
-  stroke-opacity: 0.5;
-  stroke-dasharray: 6 4;
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.4));
 }
 
 @keyframes ability-beam-sweep {
