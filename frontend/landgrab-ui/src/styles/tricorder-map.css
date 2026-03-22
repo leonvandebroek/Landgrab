@@ -154,3 +154,42 @@
   opacity: 0.7;
   font-style: italic;
 }
+
+/* ── Compass & Ability Scanner Beams ── */
+
+@keyframes compass-beam-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.55; }
+}
+
+.compass-beam {
+  animation: compass-beam-pulse 2.5s ease-in-out infinite;
+}
+
+.compass-beam__center-line {
+  stroke: #00f3ff;
+  stroke-width: 1.2;
+  stroke-opacity: 0.5;
+  stroke-dasharray: 6 4;
+}
+
+@keyframes ability-beam-sweep {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.5; }
+}
+
+.ability-beam {
+  animation: ability-beam-sweep 2s ease-in-out infinite;
+}
+
+.ability-beam--commander {
+  filter: drop-shadow(0 0 6px rgba(255, 176, 0, 0.4));
+}
+
+.ability-beam--scout {
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.4));
+}
+
+.ability-beam--engineer {
+  filter: drop-shadow(0 0 6px rgba(255, 179, 102, 0.4));
+}
