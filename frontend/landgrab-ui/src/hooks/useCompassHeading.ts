@@ -20,6 +20,14 @@ export interface CompassHeadingState {
 
 const HEADING_SYNC_INTERVAL_MS = 60;
 
+/** Angular-aware EMA that handles 0/360° wraparound correctly. */
+function smoothAngle(prev: number, raw: number, alpha: number): number {
+  let diff = raw - prev;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return ((prev + alpha * diff) % 360 + 360) % 360;
+}
+
 function getInitialCompassState(): {
   supported: boolean;
   permissionState: CompassPermissionState;
@@ -116,7 +124,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
       }
       const rawHeading = (360 - event.alpha) % 360;
       const prev = headingRef.current;
-      headingRef.current = prev === null ? rawHeading : 0.85 * prev + 0.15 * rawHeading;
+      headingRef.current = prev === null ? rawHeading : smoothAngle(prev, rawHeading, 0.15);
       scheduleStateSync();
     };
 
@@ -131,7 +139,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         return;
       }
       const prev = headingRef.current;
-      headingRef.current = prev === null ? webkitCompassHeading : 0.85 * prev + 0.15 * webkitCompassHeading;
+      headingRef.current = prev === null ? webkitCompassHeading : smoothAngle(prev, webkitCompassHeading, 0.15);
       scheduleStateSync();
     };
 

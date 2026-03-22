@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameDynamics, HexCell, Player } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
@@ -13,7 +12,6 @@ import type { TileAction, TileActionType } from './tileInteraction';
 import { useGameplayStore } from '../../stores/gameplayStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useSecondTick } from '../../hooks/useSecondTick';
-import { AbilityInfoSheet } from './AbilityInfoSheet';
 import { GameIcon } from '../common/GameIcon';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -185,11 +183,8 @@ export function PlayerHUD({
   const showAbilityCard = useGameplayStore((state) => state.showAbilityCard);
   const zoomLevel = useUiStore((state) => state.zoomLevel);
   const [, setTick] = useState(0);
-  const [infoSheet, setInfoSheet] = useState<{ role: AbilityRole; abilityKey: string } | null>(null);
   const [isStrategicZoom, setIsStrategicZoom] = useState(() => zoomLevel < STRATEGIC_ZOOM_THRESHOLD);
   const [isStrategicExpanded, setIsStrategicExpanded] = useState(false);
-  const longPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
 
   const showBeacon = Boolean(dynamics?.beaconEnabled);
   const rolesEnabled = Boolean(dynamics?.playerRolesEnabled);
@@ -235,9 +230,8 @@ export function PlayerHUD({
     };
   }, [zoomLevel]);
 
-  const visibleActions = actions.filter((action) => !(action.type === 'attack' && !action.enabled));
-  const hasActions = visibleActions.length > 0;
-  const firstDisabledAction = visibleActions.find((action) => !action.enabled && action.disabledReason);
+  const hasActions = actions.length > 0;
+  const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);
   const disabledReasonText = getTileActionDisabledReasonText(
     t,
     firstDisabledAction?.disabledReason,
@@ -268,40 +262,7 @@ export function PlayerHUD({
     return time ? `${label} (${time})` : label;
   };
 
-  const clearLongPressTimer = () => {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  };
-
-  useEffect(() => clearLongPressTimer, []);
-
-  const handleAbilityPointerDown = (ability: AbilityButtonConfig) => {
-    if (!ability.role || !ability.abilityKey) {
-      return;
-    }
-
-    const { role, abilityKey } = ability;
-
-    longPressTriggeredRef.current = false;
-    clearLongPressTimer();
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      setInfoSheet({ role, abilityKey });
-    }, 500);
-  };
-
-  const handleAbilityPointerEnd = () => {
-    clearLongPressTimer();
-  };
-
   const handleAbilityClick = (ability: AbilityButtonConfig) => {
-    if (longPressTriggeredRef.current) {
-      longPressTriggeredRef.current = false;
-      return;
-    }
-
     if (ability.disabled || !ability.onClick) {
       return;
     }
@@ -640,11 +601,6 @@ export function PlayerHUD({
                 className={`${ability.className} ${ability.accentClassName ?? ''}`.trim()}
                 disabled={ability.disabled}
                 onClick={() => handleAbilityClick(ability)}
-                onPointerDown={() => handleAbilityPointerDown(ability)}
-                onPointerUp={handleAbilityPointerEnd}
-                onPointerCancel={handleAbilityPointerEnd}
-                onPointerLeave={handleAbilityPointerEnd}
-                onContextMenu={(e) => e.preventDefault()}
                 aria-label={`${ability.role ? `${ability.role}: ` : ''}${ability.title}. ${ability.status}`}
                 {...(ability.isPressed !== undefined ? { 'aria-pressed': ability.isPressed } : {})}
                 title={`${ability.title} — ${ability.status}`}
@@ -668,7 +624,7 @@ export function PlayerHUD({
 
         {!isCollapsedForZoom && !suppressTileActions && (hasActions || selectedCell) && (
           <div className="player-hud__primary-row player-hud__tile-actions">
-            {visibleActions.map((action) => (
+            {actions.filter((a) => !(a.type === 'attack' && !a.enabled)).map((action) => (
               (() => {
                 const actionTitle = !action.enabled
                   ? getTileActionDisabledReasonDetailText(t, action.disabledReason, action.disabledReasonParams)
@@ -767,24 +723,6 @@ export function PlayerHUD({
               {showIdlePrompt ? interactionPrompt?.message : guidanceHint}
             </span>
           </div>
-        )}
-
-        {infoSheet && createPortal(
-          (() => {
-            const matchedAbility = abilityButtons.find(a => a.abilityKey === infoSheet.abilityKey);
-            return (
-              <AbilityInfoSheet
-                role={infoSheet.role}
-                abilityKey={infoSheet.abilityKey}
-                onClose={() => setInfoSheet(null)}
-                stateTone={(matchedAbility?.buttonState === 'ready' || matchedAbility?.buttonState === 'blocked') ? 'standby' : (matchedAbility?.buttonState ?? 'standby') as 'standby' | 'active' | 'cooldown' | 'targeting' | 'inProgress'}
-                badgeText={matchedAbility?.badgeText}
-                disabled={matchedAbility?.disabled ?? false}
-                onActivate={matchedAbility?.onClick}
-              />
-            );
-          })(),
-          document.body
         )}
 
         {!isCollapsedForZoom && !hasActions && !hasAbilities && !showIdleContext && (

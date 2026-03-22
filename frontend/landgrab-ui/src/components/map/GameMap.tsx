@@ -349,6 +349,7 @@ export const GameMap = memo(function GameMap({
       zoom: DEFAULT_MAP_ZOOM,
       zoomControl: false,
       rotate: true,
+      rotateControl: false,
       bearing: 0,
       dragging: true,
       touchZoom: touchLikeDevice ? 'center' : true,
@@ -798,7 +799,7 @@ export const GameMap = memo(function GameMap({
   // Sync target bearing from heading state into ref (must be in an effect, not render)
   useEffect(() => {
     if (effectiveHeading !== null && isCompassRotationEnabled) {
-      targetBearingRef.current = effectiveHeading;
+      targetBearingRef.current = (360 - effectiveHeading) % 360;
     }
   }, [effectiveHeading, isCompassRotationEnabled]);
 
@@ -886,6 +887,8 @@ export const GameMap = memo(function GameMap({
             mapLat={state.mapLat ?? 0}
             mapLng={state.mapLng ?? 0}
             tileSizeMeters={state.tileSizeMeters ?? 50}
+            compassHeading={compassHeading}
+            isCompassRotationEnabled={isCompassRotationEnabled}
           />
           <PlayerLayer map={mapInstance} layerPreferences={layerPrefs} />
           <HexTooltipOverlay map={mapInstance} />

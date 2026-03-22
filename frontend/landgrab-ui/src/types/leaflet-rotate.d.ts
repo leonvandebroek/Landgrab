@@ -3,6 +3,7 @@ import 'leaflet';
 declare module 'leaflet' {
   interface MapOptions {
     rotate?: boolean;
+    rotateControl?: boolean | object;
     bearing?: number;
   }
 
