@@ -247,10 +247,20 @@ function getMapBounds(map: L.Map): { minX: number; minY: number; maxX: number; m
   const min = minPoint.subtract(pixelOrigin);
   const max = maxPoint.subtract(pixelOrigin);
 
+  // Expand bounds to cover the full viewport at any rotation angle.
+  // When the map rotates, the axis-aligned pixel bounds don't cover the
+  // corners of the rotated view. Expanding by (diagonal - side) / 2
+  // ensures the mask outer rectangle covers everything at any bearing.
+  const width = max.x - min.x;
+  const height = max.y - min.y;
+  const diagonal = Math.sqrt(width * width + height * height);
+  const expandX = (diagonal - width) / 2;
+  const expandY = (diagonal - height) / 2;
+
   return {
-    minX: min.x,
-    minY: min.y,
-    maxX: max.x,
-    maxY: max.y,
+    minX: min.x - expandX,
+    minY: min.y - expandY,
+    maxX: max.x + expandX,
+    maxY: max.y + expandY,
   };
 }

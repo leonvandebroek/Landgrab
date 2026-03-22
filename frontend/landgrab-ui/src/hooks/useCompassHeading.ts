@@ -18,7 +18,7 @@ export interface CompassHeadingState {
   requestPermission: () => Promise<void>;
 }
 
-const HEADING_SYNC_INTERVAL_MS = 150;
+const HEADING_SYNC_INTERVAL_MS = 60;
 
 function getInitialCompassState(): {
   supported: boolean;
@@ -116,7 +116,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
       }
       const rawHeading = (360 - event.alpha) % 360;
       const prev = headingRef.current;
-      headingRef.current = prev === null ? rawHeading : 0.7 * prev + 0.3 * rawHeading;
+      headingRef.current = prev === null ? rawHeading : 0.85 * prev + 0.15 * rawHeading;
       scheduleStateSync();
     };
 
@@ -131,7 +131,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         return;
       }
       const prev = headingRef.current;
-      headingRef.current = prev === null ? webkitCompassHeading : 0.7 * prev + 0.3 * webkitCompassHeading;
+      headingRef.current = prev === null ? webkitCompassHeading : 0.85 * prev + 0.15 * webkitCompassHeading;
       scheduleStateSync();
     };
 

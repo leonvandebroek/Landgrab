@@ -791,21 +791,74 @@ export const GameMap = memo(function GameMap({
   }
 
   const effectiveHeading = debugCompassHeading ?? compassHeading;
+  const targetBearingRef = useRef<number>(0);
+  const currentBearingRef = useRef<number>(0);
+  const bearingRafRef = useRef<number>(0);
 
+  // Sync target bearing from heading state into ref (must be in an effect, not render)
   useEffect(() => {
-    const container = mapRef.current?.getContainer();
-
-    if (isCompassRotationEnabled && effectiveHeading !== null) {
-      mapRef.current?.setBearing(effectiveHeading);
-    } else if (!isCompassRotationEnabled) {
-      mapRef.current?.setBearing(0);
-    }
-
-    if (container) {
-      const bearing = isCompassRotationEnabled ? (effectiveHeading ?? 0) : 0;
-      container.style.setProperty('--map-bearing', `${bearing}deg`);
+    if (effectiveHeading !== null && isCompassRotationEnabled) {
+      targetBearingRef.current = effectiveHeading;
     }
   }, [effectiveHeading, isCompassRotationEnabled]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const container = map?.getContainer();
+
+    if (!isCompassRotationEnabled) {
+      // Reset to north immediately when disabled
+      if (bearingRafRef.current) {
+        cancelAnimationFrame(bearingRafRef.current);
+        bearingRafRef.current = 0;
+      }
+      targetBearingRef.current = 0;
+      currentBearingRef.current = 0;
+      map?.setBearing(0);
+      if (container) {
+        container.style.setProperty('--map-bearing', '0deg');
+      }
+      return;
+    }
+
+    // Start lerp loop
+    const lerpBearing = () => {
+      const target = targetBearingRef.current;
+      let current = currentBearingRef.current;
+
+      // Compute shortest-path angular difference
+      let diff = target - current;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+
+      // Lerp toward target (0.25 factor per frame ≈ smooth convergence)
+      if (Math.abs(diff) < 0.3) {
+        current = target;
+      } else {
+        current = current + diff * 0.25;
+      }
+
+      // Normalize to 0-360
+      current = ((current % 360) + 360) % 360;
+      currentBearingRef.current = current;
+
+      map?.setBearing(current);
+      if (container) {
+        container.style.setProperty('--map-bearing', `${current}deg`);
+      }
+
+      bearingRafRef.current = requestAnimationFrame(lerpBearing);
+    };
+
+    bearingRafRef.current = requestAnimationFrame(lerpBearing);
+
+    return () => {
+      if (bearingRafRef.current) {
+        cancelAnimationFrame(bearingRafRef.current);
+        bearingRafRef.current = 0;
+      }
+    };
+  }, [isCompassRotationEnabled]);
 
   return (
     <div className={`game-map-container time-${timePeriod} map-look--${mapLookPreset}`}>
