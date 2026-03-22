@@ -42,3 +42,26 @@ Key patterns:
 Updated description copy: replaced hardcoded string with `sectorExplanation` i18n key; updated all five beacon summary/effect/range/sector keys in EN + NL to reflect 3-hex directional reveal and the new Share Intel action.  
 Added new i18n keys: `shareIntel`, `shareIntelDone` (interpolated `{{count}}`), `shareIntelNone`, `shareIntelDescription` in both EN + NL.  
 **Build:** lint + tsc -b + vite build all clean.
+
+### 23. Amber Archive — staleness visual for enemy hex tiles (2026-07-xx)
+**Status:** Implemented  
+**Design:** Hals spec "Amber Archive" — remembered/stale enemy tiles shift from cool cyan → warm amber. Three tiers: live (no treatment), fading (0–120s), stale (120s+).
+
+**Timestamp field:** `lastSeenAt: string | undefined` in frontend `HexCell` type (maps from backend `HexCell.LastSeenAt: DateTime?`). Confirmed in `types/game.ts:95`.
+
+**Files changed:**
+- `tricorderTileState.ts` — Added `computeStalenessTier()` function. Was called but not defined (build error). Uses `lastSeenAt` with 120s threshold. Binary fallback (→ stale) when timestamp absent.
+- `tricorder-map.css` — Replaced `.hex-remembered` block (flat desaturate) with `.hex-fading` + `.hex-stale` amber-shift tiers. Kept `.hex-remembered` as a `hex-stale` alias. Updated `.stale-badge` to amber glass (rgba(180,140,60,0.85), amber glow).
+- `HexTile.tsx` — Replaced `visibilityTier === 'Remembered' ? 'hex-remembered'` with `stalenessTier`-driven `hex-fading`/`hex-stale` classes. Added `amberStroke` computed color/opacity (0.25 fading, 0.5 stale) for SVG polygon stroke.
+- `TileInfoCard.tsx` — Added `formatRelativeTime()` helper; amber header color (`var(--color-phosphor-amber)`) on stale/fading cards; `ARCHIVED` pill (amber inline badge); `📡 Last seen: Xm ago` row using `lastSeenAt`. Pill styled via `TILE_INFO_CARD_TOKEN_STYLES` injected `<style>` tag.
+- `i18n/en.ts` + `i18n/nl.ts` — Added `archived: 'ARCHIVED'/'ARCHIEF'` and `lastSeen: 'Last seen: {{time}}'/'Laatst gezien: {{time}}'`.
+
+**Pattern notes:**
+- `TileInfoCard` already had `isRemembered` handling (`lastKnownOwnerName`, `staleTroops` i18n, `TroopBadge isStale`). Amber Archive built on top.
+- `stalenessTier` was pre-wired in the `TricorderTileState` interface but the compute function was missing (confirmed build error before fix).
+- `--color-phosphor-amber: #ffb000` CSS variable was already in `:root` of `tricorder-map.css`.
+- Pre-existing lint warning in `DemolishCard.tsx` (unused disable directive) is unrelated and predates this change.
+
+**Build:** lint (0 errors) + tsc -b + vite build clean.
+
+**Decision:** Documented in `.squad/decisions.md` item 22. Cross-referenced design (Hals) and requirements (Vondel) agents.

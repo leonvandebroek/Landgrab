@@ -161,6 +161,20 @@
 **Rationale:** Preserves scout gameplay autonomy (beacon intel is scout-controlled) while maintaining minimum alliance coordination (border intel always visible/fresh). Beacon intel requires explicit Share action.  
 **SignalR Impact:** None — visibility layer only; no message format changes.
 
+### 22. Amber Archive — Staleness Visual for Enemy Hex Tiles (2026-03-22, Implementation)
+**Status:** Implemented  
+**Agent:** vermeer-amber-archive (implementation), hals-staleness-design (design), vondel-staleness-reqs (requirements)  
+**Design Proposal:** Hals proposed 5 options for staleness differentiation; team selected Amber Archive (cool cyan → warm amber shift).  
+**Requirements:** Vondel specified 3-tier model: **live** (no treatment), **fading** (0–120s), **stale** (120s+). Threshold: 120s hardcoded in `tricorderTileState.ts`.  
+**Implementation:**  
+- **Frontend field mapping:** Backend `HexCell.LastSeenAt: DateTime?` → frontend `HexCell.lastSeenAt: string | undefined`  
+- **Files changed:** (1) `tricorderTileState.ts` — added missing `computeStalenessTier()` function; (2) `tricorder-map.css` — replaced `.hex-remembered` flat desaturate with `.hex-fading`/`.hex-stale` amber tiers; (3) `HexTile.tsx` — stalenessTier-driven CSS classes + amberStroke SVG stroke color (opacity 0.25 fading, 0.5 stale); (4) `TileInfoCard.tsx` — amber header on stale/fading cards, ARCHIVED pill (amber badge), `📡 Last seen: Xm ago` row using formatRelativeTime(); (5) `i18n/{en,nl}.ts` — added `archived` and `lastSeen` keys  
+- **Gating:** Amber treatment only applies to remembered enemy tiles (`visibilityTier === 'Remembered'`); own/ally tiles always remain Visible.  
+- **Missing timestamp fallback:** When `lastSeenAt` absent, returns `'stale'` (no fading tier) — matches spec.  
+**Build:** lint (0 errors) + tsc -b + vite build clean.  
+**Rationale:** Visually distinguishes fresh intel from memory. Amber glow matches tricorder aesthetic. 3-tier model provides clear temporal feedback without clutter.  
+**SignalR Impact:** None — data field already present, frontend renders optionally.
+
 ## Governance
 
 - All meaningful changes require team consensus
