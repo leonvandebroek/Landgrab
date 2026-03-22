@@ -235,8 +235,9 @@ export function PlayerHUD({
     };
   }, [zoomLevel]);
 
-  const hasActions = actions.length > 0;
-  const firstDisabledAction = actions.find((action) => !action.enabled && action.disabledReason);
+  const visibleActions = actions.filter((action) => !(action.type === 'attack' && !action.enabled));
+  const hasActions = visibleActions.length > 0;
+  const firstDisabledAction = visibleActions.find((action) => !action.enabled && action.disabledReason);
   const disabledReasonText = getTileActionDisabledReasonText(
     t,
     firstDisabledAction?.disabledReason,
@@ -667,7 +668,7 @@ export function PlayerHUD({
 
         {!isCollapsedForZoom && !suppressTileActions && (hasActions || selectedCell) && (
           <div className="player-hud__primary-row player-hud__tile-actions">
-            {actions.map((action) => (
+            {visibleActions.map((action) => (
               (() => {
                 const actionTitle = !action.enabled
                   ? getTileActionDisabledReasonDetailText(t, action.disabledReason, action.disabledReasonParams)

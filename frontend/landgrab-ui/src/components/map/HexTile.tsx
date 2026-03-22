@@ -356,20 +356,24 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
       }) : null}
 
       {isCurrent && !isInactive && (
-        <text
-          x={slots.center.x}
-          y={slots.center.y}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={Math.floor(radius * 0.7)}
-          fill="#00ffaa"
-          opacity={0.7}
-          pointerEvents="none"
+        <g
           className="hex-gps-crosshair"
-          aria-hidden="true"
+          style={{ transformOrigin: `${slots.center.x}px ${slots.center.y}px` }}
         >
-          [·]
-        </text>
+          <text
+            x={slots.center.x}
+            y={slots.center.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={Math.floor(radius * 0.7)}
+            fill="#00ffaa"
+            opacity={0.7}
+            pointerEvents="none"
+            aria-hidden="true"
+          >
+            [·]
+          </text>
+        </g>
       )}
 
       {/* Raid Marker: Top Left */}
