@@ -46,6 +46,20 @@ const TILE_INFO_CARD_TOKEN_STYLES = `
   .tile-info-card__value--warning {
     color: ${TILE_VALUE_WARNING_COLOR};
   }
+
+  .tile-info-card__archived-pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(180, 140, 60, 0.25);
+    border: 1px solid rgba(255, 176, 0, 0.5);
+    color: #ffb000;
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
 `;
 
 interface TileInfoCardProps {
@@ -67,6 +81,7 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
   const currentHexKey = useGameplayStore((state) => state.currentHexKey);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
+  const beaconConeHexKeys = useGameplayStore((state) => state.beaconConeHexKeys);
   const [, setNow] = useState(() => Date.now());
 
   useSecondTick(() => {
@@ -101,9 +116,11 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     claimMode,
     dynamics,
     playerPositions,
+    beaconConeHexKeys,
   }), [
     activeRaids,
     alliances,
+    beaconConeHexKeys,
     claimMode,
     contestedHexKeys,
     currentHexKey,
@@ -118,8 +135,13 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     targetCell,
   ]);
 
-  const isRemembered = tileState.visibilityTier === 'Remembered';
-  const isHidden = tileState.visibilityTier === 'Hidden';
+  const isInBeaconCone = beaconConeHexKeys.has(hexKey);
+  const isRemembered = tileState.visibilityTier === 'Remembered' && !isInBeaconCone;
+  const isHidden = tileState.visibilityTier === 'Hidden' && !isInBeaconCone;
+  const stalenessTier = tileState.stalenessTier;
+  const isStale = stalenessTier === 'stale' || stalenessTier === 'fading';
+  const amberHeaderStyle = isStale ? { color: 'var(--color-phosphor-amber)' } : undefined;
+  const lastSeenText = isRemembered ? formatRelativeTime(targetCell?.lastSeenAt) : null;
 
   const displayOwnerId = isRemembered ? targetCell?.lastKnownOwnerId : targetCell?.ownerId;
   const displayOwnerName = isRemembered 
@@ -171,10 +193,15 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     <>
       <style>{tokenStyles}</style>
       <div className="tile-info-card">
-        <div className="tile-info-card__header">
+        <div className="tile-info-card__header" style={amberHeaderStyle}>
           <span className="tile-info-card__coords">
             ⬡ {targetHex[0]}, {targetHex[1]}
           </span>
+          {isStale && (
+            <span className="tile-info-card__archived-pill">
+              {t('game.tileInfo.archived', 'ARCHIVED')}
+            </span>
+          )}
           <button
             type="button"
             className="tile-info-card__close"
@@ -207,6 +234,14 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
                 <div className="tile-info-card__row">
                   <span className="tile-info-card__label">{t('game.tileInfo.troops')}</span>
                   <span className="tile-info-card__value"><GameIcon name="contested" size="sm" /> {isRemembered ? t('game.tileInfo.staleTroops' as never, { count: displayTroops, defaultValue: '~{{count}}' }) : displayTroops}</span>
+                </div>
+              )}
+
+              {lastSeenText && (
+                <div className="tile-info-card__row">
+                  <span className="tile-info-card__value tile-info-card__last-seen" style={{ color: 'var(--color-phosphor-amber)', fontSize: '0.75em', opacity: 0.85 }}>
+                    📡 {t('game.tileInfo.lastSeen', 'Last seen: {{time}}', { time: lastSeenText })}
+                  </span>
                 </div>
               )}
 
@@ -402,6 +437,16 @@ function formatTimeRemaining(until: string | undefined): string | null {
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function formatRelativeTime(seenAt: string | number | null | undefined): string {
+  if (!seenAt) return 'unknown';
+  const ageMs = Date.now() - new Date(seenAt as string).getTime();
+  const ageSec = Math.floor(ageMs / 1000);
+  if (ageSec < 60) return `${ageSec}s ago`;
+  const ageMin = Math.floor(ageSec / 60);
+  if (ageMin < 60) return `${ageMin}m ago`;
+  return `${Math.floor(ageMin / 60)}h ago`;
 }
 
 function sanitizeCssColor(value: string | undefined): string | undefined {

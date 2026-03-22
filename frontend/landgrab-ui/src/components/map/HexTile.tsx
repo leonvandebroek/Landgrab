@@ -110,6 +110,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
   const currentHexKey = useGameplayStore((state) => state.currentHexKey);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
+  const beaconConeHexKeys = useGameplayStore((state) => state.beaconConeHexKeys);
 
   const handleClick = useCallback(() => {
     if (cell && onHexClick) {
@@ -146,9 +147,11 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     claimMode,
     dynamics,
     playerPositions,
+    beaconConeHexKeys,
   }), [
     activeRaids,
     alliances,
+    beaconConeHexKeys,
     cell,
     claimMode,
     contestedHexKeys,
@@ -264,16 +267,26 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
       shouldShowBorderEffects: true,
     }),
     borderStyle.animationClass ?? '',
-    tileState.visibilityTier === 'Hidden' ? 'hex-hidden-hostile' : '',
-    tileState.visibilityTier === 'Remembered' ? 'hex-remembered' : '',
+    // Beacon cone tiles have visibilityTier === 'Hidden' on the raw cell but must render
+    // as visible — skip the dark/desaturated overlay for them.
+    (tileState.visibilityTier === 'Hidden' && !beaconConeHexKeys.has(hexId)) ? 'hex-hidden-hostile' : '',
+    tileState.stalenessTier === 'fading' ? 'hex-fading' : tileState.stalenessTier === 'stale' ? 'hex-stale' : '',
   ].filter(Boolean).join(' ');
   const showTroopBadge = !isInactive
-    && (Boolean(cell.ownerId) || cell.isMasterTile || tileState.visibilityTier === 'Remembered')
+    && (Boolean(cell.ownerId) || cell.isMasterTile || tileState.visibilityTier === 'Remembered' || beaconConeHexKeys.has(hexId))
     && (tileState.badge.visible || cell.isFort || derivedIsHQ || cell.isMasterTile || territoryStatus.isFrontier);
   const polygonStyle: HexPolygonStyle = {
     '--hex-owner-color': ownerColor,
     '--hex-player-highlight-color': myPlayer?.allianceColor ?? myPlayer?.color ?? '#22d3ee',
   } as HexPolygonStyle;
+
+  const amberStroke = tileState.stalenessTier === 'stale'
+    ? { color: '#ffb000', opacity: 0.5 }
+    : tileState.stalenessTier === 'fading'
+      ? { color: '#ffb000', opacity: 0.25 }
+      : null;
+  const strokeColor = amberStroke?.color ?? borderStyle.borderColor;
+  const strokeOpacity = amberStroke?.opacity ?? borderStyle.borderOpacity;
 
   return (
     <g
@@ -294,9 +307,9 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
         points={geometry.points}
         fill={fillStyle.fillColor}
         fillOpacity={fillStyle.fillOpacity}
-        stroke={borderStyle.borderColor}
+        stroke={strokeColor}
         strokeWidth={borderStyle.borderWeight}
-        strokeOpacity={borderStyle.borderOpacity}
+        strokeOpacity={strokeOpacity}
         strokeDasharray={borderStyle.dashArray}
         style={polygonStyle}
       />
@@ -325,6 +338,16 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
           stroke="none"
           pointerEvents="none"
           className="hex-threat-breathe"
+          aria-hidden="true"
+        />
+      )}
+
+      {(tileState.stalenessTier === 'fading' || tileState.stalenessTier === 'stale') && (
+        <polygon
+          points={geometry.points}
+          fill={tileState.stalenessTier === 'stale' ? 'rgba(255, 176, 0, 0.40)' : 'rgba(255, 176, 0, 0.20)'}
+          stroke="none"
+          pointerEvents="none"
           aria-hidden="true"
         />
       )}

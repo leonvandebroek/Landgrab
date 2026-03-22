@@ -7,6 +7,7 @@ export interface TricorderTileState {
   baseState: 'neutral' | 'allied' | 'enemy';
   visibilityTier: 'Visible' | 'Remembered' | 'Hidden';
   isRemembered: boolean;
+  stalenessTier: 'live' | 'fading' | 'stale';
   strengthUnknown: boolean;
   presenceBoosted: boolean;
   relationState: {
@@ -72,6 +73,7 @@ export interface DeriveTileStateParams {
   claimMode?: ClaimMode;
   dynamics?: GameDynamics;
   playerPositions?: ReadonlyMap<string, string[]>;
+  beaconConeHexKeys?: ReadonlySet<string>;
 }
 
 export function deriveTileState(params: DeriveTileStateParams): TricorderTileState {
@@ -90,6 +92,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     claimMode,
     dynamics,
     playerPositions,
+    beaconConeHexKeys,
   } = params;
 
   const cell = params.cell ?? grid[hexKey];
@@ -112,7 +115,12 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
       : 'enemy';
   const isAlliedCell = isMine || isAlly;
   const presenceBoosted = isAlliedCell && hexKey === playerHexKey;
-  const strengthUnknown = getStrengthUnknownState({
+
+  // Beacon cone bypass must be resolved before strengthUnknown so that enemy
+  // Hidden tiles inside the cone show the real troop count (not '?').
+  const visibilityTierEarly = cell?.visibilityTier ?? 'Visible';
+  const isInBeaconConeEarly = Boolean(beaconConeHexKeys?.has(hexKey));
+  const strengthUnknown = !isInBeaconConeEarly && getStrengthUnknownState({
     cell,
     baseState,
   });
@@ -208,9 +216,13 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     chips.push({ type: 'regenBlocked' });
   }
 
-  const visibilityTier = cell?.visibilityTier ?? 'Visible';
-  const isHidden = visibilityTier === 'Hidden';
-  const isRemembered = visibilityTier === 'Remembered';
+  const visibilityTier = visibilityTierEarly;
+  const isInBeaconCone = isInBeaconConeEarly;
+  const isHidden = visibilityTier === 'Hidden' && !isInBeaconCone;
+  const isRemembered = visibilityTier === 'Remembered' && !isInBeaconCone;
+
+  // Amber Archive: Compute staleness tier for remembered enemy tiles
+  const stalenessTier = computeStalenessTier(cell, isRemembered, baseState);
 
   const troopCount = isRemembered ? (cell?.lastKnownTroops ?? 0) : (cell?.troops ?? 0);
 
@@ -220,6 +232,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
       baseState: 'neutral',
       visibilityTier,
       isRemembered,
+      stalenessTier: 'live',
       strengthUnknown: true,
       presenceBoosted: false,
       relationState,
@@ -243,6 +256,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
       baseState,
       visibilityTier,
       isRemembered,
+      stalenessTier,
       strengthUnknown: true, // Hide enemy strength gradients
       presenceBoosted: false,
       relationState,
@@ -267,6 +281,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     baseState,
     visibilityTier,
     isRemembered,
+    stalenessTier,
     strengthUnknown,
     presenceBoosted,
     relationState,
@@ -487,4 +502,23 @@ function parseHexKey(hexKey: string | null): [number, number] | null {
   }
 
   return [q, r];
+}
+
+const STALENESS_FADING_THRESHOLD_MS = 120_000; // 0–120s → fading
+
+function computeStalenessTier(
+  cell: HexCell | undefined,
+  isRemembered: boolean,
+  _baseState: TricorderTileState['baseState'],
+): TricorderTileState['stalenessTier'] {
+  if (!isRemembered) {
+    return 'live';
+  }
+
+  if (!cell?.lastSeenAt) {
+    return 'stale';
+  }
+
+  const ageMs = Date.now() - new Date(cell.lastSeenAt).getTime();
+  return ageMs < STALENESS_FADING_THRESHOLD_MS ? 'fading' : 'stale';
 }
