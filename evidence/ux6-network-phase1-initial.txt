@@ -1,0 +1,4 @@
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized

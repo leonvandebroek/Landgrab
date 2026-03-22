@@ -80,3 +80,4 @@ All findings documented in `.squad/log/20260322T135050Z-keyboard-playtest-sessio
 - `.squad/orchestration-log/20260322T135050Z-vermeer.md` — Frontend error feedback improvements
 - `.squad/orchestration-log/20260322T135050Z-steen.md` — 6-player playtest completion + 7 issues
 - `.squad/orchestration-log/20260322T135050Z-coordinator.md` — Charter updates + decision consolidation
+- 2026-03-22: Ran a fresh 6-player manual-coordinates playtest (room CQKB5Z) using mobile viewport 390x844. Confirmed currentHex on start, alliance/HQ sync, alliance visibility, and pickup carrying feedback; still saw a false-success pickup on a second source (`success: true` with unchanged carried count), Q/E heading remained unchanged, and combat/defender feedback/dialog stacking could not be fully exercised because attack calls stayed in preview/no-combat mode.
