@@ -986,6 +986,7 @@ const en = {
       live: 'Beacon Live',
       activate: 'Activate Beacon',
       deactivate: 'Turn Off',
+      alwaysActive: 'Always Active — Scout beacon cannot be turned off',
       inactiveSummary: 'Activate to reveal details on enemy hexes up to 3 hexes in the direction you\'re facing.',
       activeSummary: 'Revealing enemy hex details in your facing direction. Share what you see with your alliance.',
       effect: 'Shows troop counts, forts and ownership of enemy hexes in your beacon sector.',

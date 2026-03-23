@@ -34,6 +34,7 @@ export function BeaconCard({
   const [shareCount, setShareCount] = useState<number | null>(null);
 
   const isBeaconLive = Boolean(player?.isBeacon) || abilityUi.mode === 'active';
+  const isScout = player?.role === 'Scout';
 
   const handleBackToHud = () => {
     if (isBeaconLive) {
@@ -95,15 +96,24 @@ export function BeaconCard({
       )}
       footerContent={isBeaconLive ? (
         <div className="ability-card__footer-row">
-          <button
-            type="button"
-            className="ability-card__secondary-btn ability-card__secondary-btn--danger"
-            onClick={() => {
-              void handleDeactivate();
-            }}
-          >
-            {t('abilities.beacon.deactivate' as never)}
-          </button>
+          {isScout ? (
+            <span
+              className="ability-card__status-pill"
+              title={t('abilities.beacon.alwaysActive' as never)}
+            >
+              {t('abilities.beacon.alwaysActive' as never)}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="ability-card__secondary-btn ability-card__secondary-btn--danger"
+              onClick={() => {
+                void handleDeactivate();
+              }}
+            >
+              {t('abilities.beacon.deactivate' as never)}
+            </button>
+          )}
           <button
             type="button"
             className="ability-card__primary-btn"

@@ -986,6 +986,7 @@ const nl = {
       live: 'Baken actief',
       activate: 'Baken activeren',
       deactivate: 'Uitschakelen',
+      alwaysActive: 'Altijd actief — Scout-baken kan niet worden uitgeschakeld',
       inactiveSummary: 'Activeer om details over vijandelijke hexen tot 3 hexen in de richting die je op staat te onthullen.',
       activeSummary: 'Onthult vijandelijke hexdetails in de richting die je op staat. Deel wat je ziet met je alliantie.',
       effect: 'Toont troepsaantallen, forten en eigenaarschap van vijandelijke hexen in je bakensector.',
