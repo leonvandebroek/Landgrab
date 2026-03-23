@@ -100,6 +100,35 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
   const playerPositions = useMemo(() => buildPlayerPositions(players), [players]);
   const currentPlayer = playersRecord[myUserId];
 
+  // Compute allied player hex keys for local visibility
+  const alliedPlayerHexKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const allianceId = currentPlayer?.allianceId;
+    for (const player of players) {
+      const isAllied = player.id === myUserId
+        || (allianceId && player.allianceId === allianceId);
+      if (isAllied && player.currentHexQ != null && player.currentHexR != null) {
+        keys.add(`${player.currentHexQ},${player.currentHexR}`);
+      }
+    }
+    return keys;
+  }, [players, myUserId, currentPlayer]);
+
+  // Compute alliance-owned hex keys for local visibility
+  const allianceOwnedHexKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const allianceId = currentPlayer?.allianceId;
+    if (!allianceId) {
+      return keys;
+    }
+    for (const [key, cell] of Object.entries(grid)) {
+      if (cell.ownerId && cell.ownerAllianceId === allianceId) {
+        keys.add(key);
+      }
+    }
+    return keys;
+  }, [grid, currentPlayer]);
+
   const tileState = useMemo(() => deriveTileState({
     cell: targetCell,
     hexKey,
@@ -117,9 +146,13 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     dynamics,
     playerPositions,
     beaconConeHexKeys,
+    alliedPlayerHexKeys,
+    allianceOwnedHexKeys,
   }), [
     activeRaids,
     alliances,
+    alliedPlayerHexKeys,
+    allianceOwnedHexKeys,
     beaconConeHexKeys,
     claimMode,
     contestedHexKeys,

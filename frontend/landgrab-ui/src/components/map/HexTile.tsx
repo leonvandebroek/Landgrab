@@ -111,6 +111,7 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
   const currentHexKey = useGameplayStore((state) => state.currentHexKey);
   const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
   const beaconConeHexKeys = useGameplayStore((state) => state.beaconConeHexKeys);
+  const fullGrid = useGameStore((state) => state.gridOverride ?? state.gameState?.grid ?? EMPTY_GRID);
 
   const handleClick = useCallback(() => {
     if (cell && onHexClick) {
@@ -131,6 +132,35 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
 
   const myPlayer = playersById.get(myUserId);
 
+  // Compute allied player hex keys for local visibility
+  const alliedPlayerHexKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const allianceId = myPlayer?.allianceId;
+    for (const player of players) {
+      const isAllied = player.id === myUserId
+        || (allianceId && player.allianceId === allianceId);
+      if (isAllied && player.currentHexQ != null && player.currentHexR != null) {
+        keys.add(`${player.currentHexQ},${player.currentHexR}`);
+      }
+    }
+    return keys;
+  }, [players, myUserId, myPlayer]);
+
+  // Compute alliance-owned hex keys for local visibility
+  const allianceOwnedHexKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const allianceId = myPlayer?.allianceId;
+    if (!allianceId) {
+      return keys;
+    }
+    for (const [key, cell] of Object.entries(fullGrid)) {
+      if (cell.ownerId && cell.ownerAllianceId === allianceId) {
+        keys.add(key);
+      }
+    }
+    return keys;
+  }, [fullGrid, myPlayer]);
+
   const tileState = useMemo(() => deriveTileState({
     cell: cell ?? undefined,
     hexKey: hexId,
@@ -148,9 +178,13 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     dynamics,
     playerPositions,
     beaconConeHexKeys,
+    alliedPlayerHexKeys,
+    allianceOwnedHexKeys,
   }), [
     activeRaids,
     alliances,
+    alliedPlayerHexKeys,
+    allianceOwnedHexKeys,
     beaconConeHexKeys,
     cell,
     claimMode,

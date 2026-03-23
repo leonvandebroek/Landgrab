@@ -437,12 +437,15 @@ public partial class GameHub
             return;
         }
 
+        // Only broadcast full state on actual grid changes (territory claims, forts, combat, etc.)
+        // Frontend now derives visibility locally from player positions
         if (result.gridChanged)
         {
             await BroadcastState(room.Code, result.state!);
             return;
         }
 
+        // Player moved but no grid changes — send lightweight position update
         await visibilityBroadcastHelper.BroadcastPlayersPerViewer(
             room,
             result.state!,

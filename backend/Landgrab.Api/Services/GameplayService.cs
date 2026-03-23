@@ -119,7 +119,8 @@ public class GameplayService(
                         if (isTeamMember)
                         {
                             cell.LastVisitedAt = now;
-                            gridChanged = true;
+                            // Do NOT set gridChanged — LastVisitedAt is server-side metadata
+                            // used by TroopRegenerationService; clients don't need immediate broadcast
                         }
                     }
                 }

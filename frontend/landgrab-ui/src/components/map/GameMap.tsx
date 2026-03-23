@@ -286,17 +286,24 @@ export const GameMap = memo(function GameMap({
     debugCompassHeadingRef.current = debugCompassHeading;
   }, [debugCompassHeading]);
 
+  // Stable ref so the Q/E handler can read the latest sensor heading without
+  // re-registering the listener every time compassHeading updates (~16Hz).
+  const compassHeadingRef = useRef<number | null>(null);
+  useEffect(() => {
+    compassHeadingRef.current = compassHeading;
+  }, [compassHeading]);
+
   useEffect(() => {
     const wrapHeading = (value: number) => ((value % 360) + 360) % 360;
 
     function handleCompassDebugKeyDown(event: KeyboardEvent) {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
       if (event.key === 'e' || event.key === 'E') {
-        const newHeading = wrapHeading((debugCompassHeadingRef.current ?? compassHeading ?? 0) + 5);
+        const newHeading = wrapHeading((debugCompassHeadingRef.current ?? compassHeadingRef.current ?? 0) + 5);
         setDebugCompassHeading(newHeading);
         useUiStore.getState().setDebugHeading(newHeading);
       } else if (event.key === 'q' || event.key === 'Q') {
-        const newHeading = wrapHeading((debugCompassHeadingRef.current ?? compassHeading ?? 0) - 5);
+        const newHeading = wrapHeading((debugCompassHeadingRef.current ?? compassHeadingRef.current ?? 0) - 5);
         setDebugCompassHeading(newHeading);
         useUiStore.getState().setDebugHeading(newHeading);
       }
@@ -306,7 +313,7 @@ export const GameMap = memo(function GameMap({
     return () => {
       window.removeEventListener('keydown', handleCompassDebugKeyDown);
     };
-  }, [compassHeading]);
+  }, []); // stable: reads heading via refs, no closure over changing state
 
   useEffect(() => {
     useGameplayStore.getState().setSelectedHexKey(toHexKey(selectedHex));
@@ -801,11 +808,19 @@ export const GameMap = memo(function GameMap({
   const targetBearingRef = useRef<number>(0);
   const currentBearingRef = useRef<number>(0);
   const bearingRafRef = useRef<number>(0);
+  // Expose lerpBearing so the heading-sync effect can restart the loop
+  // after it exits on convergence, without creating a circular dependency.
+  const lerpBearingRef = useRef<(() => void) | null>(null);
 
-  // Sync target bearing from heading state into ref (must be in an effect, not render)
+  // Sync target bearing from heading state into ref (must be in an effect, not render).
+  // Also restarts the lerp loop if it has already exited on convergence.
   useEffect(() => {
     if (effectiveHeading !== null && isCompassRotationEnabled) {
       targetBearingRef.current = (360 - effectiveHeading) % 360;
+      // Kick off a new lerp frame when the loop is idle (exited after converging).
+      if (bearingRafRef.current === 0 && lerpBearingRef.current) {
+        bearingRafRef.current = requestAnimationFrame(lerpBearingRef.current);
+      }
     }
   }, [effectiveHeading, isCompassRotationEnabled]);
 
@@ -828,7 +843,7 @@ export const GameMap = memo(function GameMap({
       return;
     }
 
-    // Start lerp loop
+    // Start lerp loop — exits on convergence; restarted by the effectiveHeading effect
     const lerpBearing = () => {
       const target = targetBearingRef.current;
       let current = currentBearingRef.current;
@@ -840,10 +855,19 @@ export const GameMap = memo(function GameMap({
 
       // Lerp toward target (0.25 factor per frame ≈ smooth convergence)
       if (Math.abs(diff) < 0.3) {
-        current = target;
-      } else {
-        current = current + diff * 0.25;
+        // Converged — snap exactly, apply final update, then STOP the loop.
+        // The effectiveHeading effect will restart it when heading changes.
+        current = ((target % 360) + 360) % 360;
+        currentBearingRef.current = current;
+        map?.setBearing(current);
+        if (container) {
+          container.style.setProperty('--map-bearing', `${current}deg`);
+        }
+        bearingRafRef.current = 0;
+        return;
       }
+
+      current = current + diff * 0.25;
 
       // Normalize to 0-360
       current = ((current % 360) + 360) % 360;
@@ -857,6 +881,8 @@ export const GameMap = memo(function GameMap({
       bearingRafRef.current = requestAnimationFrame(lerpBearing);
     };
 
+    lerpBearingRef.current = lerpBearing;
+
     bearingRafRef.current = requestAnimationFrame(lerpBearing);
 
     return () => {
@@ -864,6 +890,7 @@ export const GameMap = memo(function GameMap({
         cancelAnimationFrame(bearingRafRef.current);
         bearingRafRef.current = 0;
       }
+      lerpBearingRef.current = null;
     };
   }, [isCompassRotationEnabled]);
 

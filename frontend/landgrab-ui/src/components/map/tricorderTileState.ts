@@ -1,5 +1,6 @@
 import { getTileActions } from '../game/tileInteraction';
 import type { ActiveCommandoRaid, AllianceDto, ClaimMode, GameDynamics, HexCell, Player } from '../../types/game';
+import { isLocallyVisible } from '../../utils/localVisibility';
 
 const COPRESENCE_TARGET_COUNT = 3;
 
@@ -74,6 +75,8 @@ export interface DeriveTileStateParams {
   dynamics?: GameDynamics;
   playerPositions?: ReadonlyMap<string, string[]>;
   beaconConeHexKeys?: ReadonlySet<string>;
+  alliedPlayerHexKeys?: ReadonlySet<string>;
+  allianceOwnedHexKeys?: ReadonlySet<string>;
 }
 
 export function deriveTileState(params: DeriveTileStateParams): TricorderTileState {
@@ -93,6 +96,8 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
     dynamics,
     playerPositions,
     beaconConeHexKeys,
+    alliedPlayerHexKeys,
+    allianceOwnedHexKeys,
   } = params;
 
   const cell = params.cell ?? grid[hexKey];
@@ -118,7 +123,11 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
 
   // Beacon cone bypass must be resolved before strengthUnknown so that enemy
   // Hidden tiles inside the cone show the real troop count (not '?').
-  const visibilityTierEarly = cell?.visibilityTier ?? 'Visible';
+  const serverTier = cell?.visibilityTier ?? 'Visible';
+  const locallyVisible = alliedPlayerHexKeys && allianceOwnedHexKeys
+    ? isLocallyVisible(hexKey, alliedPlayerHexKeys, allianceOwnedHexKeys, grid, beaconConeHexKeys)
+    : false;
+  const visibilityTierEarly = locallyVisible ? 'Visible' : serverTier;
   const isInBeaconConeEarly = Boolean(beaconConeHexKeys?.has(hexKey));
   const strengthUnknown = !isInBeaconConeEarly && getStrengthUnknownState({
     cell,

@@ -12,7 +12,7 @@ import { getErrorMessage, getPlaceSuccessMessage } from '../utils/gameHelpers';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 import { resolveActionCoordinates } from './useGameActions.shared';
 
-const LOCATION_BROADCAST_THROTTLE_MS = 3000;
+const LOCATION_BROADCAST_THROTTLE_MS = 750;
 const MIN_MOVEMENT_METRES = 5;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
