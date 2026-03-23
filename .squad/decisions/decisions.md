@@ -1,5 +1,93 @@
 # Project Decisions Log
 
+## Immediate Proximity Reveal on Movement (De Ruyter, Backend)
+
+**Date:** 2026-03-23  
+**Agent:** De Ruyter  
+**Scope:** Backend visibility broadcast on player movement  
+**Status:** Implemented
+
+### Problem
+
+Players reported delayed enemy tile intel when moving onto/adjacent to hostile hexes. Movement updates often emitted `PlayersMoved` only, which does not include tile-state projection updates.
+
+### Decision
+
+In `GameHub.UpdatePlayerLocation`, trigger full `BroadcastState` when the mover changed hex (`PreviousHexKey` differs from current hex key), in addition to existing `gridChanged` cases.
+
+### Rationale
+
+`BroadcastState` runs per-viewer projection (`VisibilityBroadcastHelper`) and recomputes visibility (`VisibilityService.ComputeVisibleHexKeys`) before `StateUpdated`, ensuring adjacency-based reveal (radius 1 for non-Scout players) is fresh immediately after movement. This is the minimum-path fix and does not alter Scout beacon sector logic.
+
+### Validation
+
+- `dotnet build --configuration Debug` in `backend/Landgrab.Api/` ✅
+- `dotnet test` in `backend/Landgrab.Tests/` ✅ (295 total; 294 passed; 1 skipped)
+
+---
+
+## Compass Crash: Perpetual rAF Loop Fix (Vermeer, Frontend)
+
+**Date:** 2026-03-23  
+**Agent:** Vermeer  
+**Scope:** Frontend compass/heading tracking  
+**Status:** Implemented
+
+### Problem
+
+App crashed and reloaded approximately 30–60 seconds after enabling compass/heading tracking.
+
+### Root Causes
+
+1. **Perpetual rAF loop (critical crash cause):** `lerpBearing` function always rescheduled itself with `requestAnimationFrame(lerpBearing)` — even after the map bearing fully converged to the target. This drove `map.setBearing()` at ~60fps indefinitely, causing Leaflet CSS-transform thrash that accumulated into OOM tab crash after 30–60 seconds.
+
+2. **Q/E handler listener churn (minor):** Q/E heading keydown handler listed `compassHeading` in dependency array. Because the sensor fires every ~60ms, the handler was removed and re-registered ~16 times per second.
+
+### Fixes Applied
+
+1. **lerpBearing exits on convergence:** Now returns early (without calling `requestAnimationFrame`) when `Math.abs(diff) < 0.3`. Added `lerpBearingRef` at component scope to hold the stable function reference. The `effectiveHeading` sync effect now checks `bearingRafRef.current === 0` and restarts the loop via `requestAnimationFrame(lerpBearingRef.current)` when a new heading target arrives. Loop only runs while there is rotation work to do.
+
+2. **Stable Q/E handler via compassHeadingRef:** Added `compassHeadingRef` (kept current by its own `useEffect([compassHeading])`). Q/E handler reads heading from refs and has an empty dependency array — registers once, never re-registers.
+
+### Validation
+
+- `npm run lint && npm run build`: 0 errors, 1 pre-existing unrelated warning in `DemolishCard.tsx`. 294 modules, build clean.
+
+---
+
+## Location Broadcast Throttle Reduction (Vermeer, Frontend)
+
+**Date:** 2026-03-23  
+**Agent:** Vermeer  
+**Scope:** Frontend proximity reveal latency  
+**Status:** Implemented
+
+### Problem
+
+Non-Scout players saw a noticeable 3-second delay when walking onto or adjacent to an enemy tile. Tile reveal did not appear instantly after movement.
+
+### Root Cause
+
+`LOCATION_BROADCAST_THROTTLE_MS = 3000` in `useGameActionsGameplay.ts` — 3-second coalescing throttle on `UpdatePlayerLocation` hub invocations. After first send, any subsequent location change within 3 seconds was queued and only dispatched when the throttle window expired.
+
+### Decision
+
+Reduced `LOCATION_BROADCAST_THROTTLE_MS` from `3000` to `750` milliseconds.
+
+### Rationale
+
+- Still coalesces rapid GPS/debug updates (prevents server spam)
+- Sends within 750ms of a position change (imperceptible to user)
+- No logic changes to heartbeat (30s), minimum movement threshold (5m), or store/render pipeline
+
+**File changed:** `frontend/landgrab-ui/src/hooks/useGameActionsGameplay.ts` line 15
+
+### Validation
+
+`npm run lint && npm run build` — 0 errors, 1 pre-existing unrelated warning in `DemolishCard.tsx`.
+
+---
+
 ## Strip Server-Side Masking & Explicit Beacon Intel Share
 
 **Date:** 2026-03-22  
