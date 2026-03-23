@@ -50,42 +50,41 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateBeacon_WithoutPlayerLocation_Fails()
+    public void ActivateBeacon_WithScoutRole_SetsScoutHeadingWithoutAddingEvent()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
             .WithBeaconEnabled()
-            .AddPlayer("p1", "Alice")
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Scout)
             .Build();
         var context = new ServiceTestContext(state);
 
         var result = context.AbilityService.ActivateBeacon(ServiceTestContext.RoomCode, "p1", EastHeading);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("Your location is required to activate a beacon.");
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.Player("p1").CurrentHeading.Should().Be(EastHeading);
+        context.State.EventLog.Should().NotContain(entry => entry.Type == "BeaconActivated");
     }
 
     [Fact]
-    public void DeactivateBeacon_RemovesBeaconState()
+    public void DeactivateBeacon_ForScoutRole_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
-            .AddPlayer("p1", "Alice")
+            .WithBeaconEnabled()
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Scout)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
-        state.Players.Single(player => player.Id == "p1").IsBeacon = true;
-        state.Players.Single(player => player.Id == "p1").BeaconLat = state.Players.Single(player => player.Id == "p1").CurrentLat;
-        state.Players.Single(player => player.Id == "p1").BeaconLng = state.Players.Single(player => player.Id == "p1").CurrentLng;
-        state.Players.Single(player => player.Id == "p1").BeaconHeading = EastHeading;
+        GameStateCommon.SyncBeaconStateForRole(state, state.Players.Single(player => player.Id == "p1"));
         var context = new ServiceTestContext(state);
 
         var result = context.AbilityService.DeactivateBeacon(ServiceTestContext.RoomCode, "p1");
 
-        result.error.Should().BeNull();
-        context.Player("p1").IsBeacon.Should().BeFalse();
-        context.Player("p1").BeaconLat.Should().BeNull();
-        context.Player("p1").BeaconLng.Should().BeNull();
-        context.Player("p1").BeaconHeading.Should().BeNull();
+        result.state.Should().BeNull();
+        result.error.Should().Be("Scout beacon is always active.");
     }
 
     [Fact]
@@ -203,7 +202,7 @@ public sealed class AbilityServiceTests
 
 
     [Fact]
-    public void ActivateBeacon_WhenAnotherPlayerAlreadyHasBeacon_BeaconsCanCoexist()
+    public void ActivateBeacon_WhenAnotherPlayerAlreadyHasBeacon_BeaconsCanCoexistWithoutRoles()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
@@ -232,52 +231,107 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ShareBeaconIntel_WhenBeaconInactive_Fails()
+    public void ActivateBeacon_WhenRolesEnabledForScout_UpdatesHeadingAndBeaconState()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
             .WithBeaconEnabled()
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Scout)
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateBeacon(ServiceTestContext.RoomCode, "p1", 210d);
+
+        result.error.Should().BeNull();
+        context.Player("p1").IsBeacon.Should().BeTrue();
+        context.Player("p1").CurrentHeading.Should().Be(210d);
+        context.Player("p1").BeaconHeading.Should().Be(210d);
+        context.State.EventLog.Should().NotContain(entry => entry.Type == "BeaconActivated");
+    }
+
+    [Fact]
+    public void ShareBeaconIntel_WhenNonScout_FailsInRoleMode()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithBeaconEnabled()
+            .WithPlayerRolesEnabled()
             .AddPlayer("p1", "Alice", "a1")
             .AddPlayer("p2", "Bob", "a1")
             .AddAlliance("a1", "Alpha", "p1", "p2")
             .Build();
         var context = new ServiceTestContext(state);
 
-        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1", [HexService.Key(1, 0)]);
+        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1");
 
         result.sharedCount.Should().Be(0);
-        result.error.Should().Be("Beacon must be active to share intel.");
+        result.error.Should().Be("Only a Scout can share intel.");
     }
 
     [Fact]
-    public void ShareBeaconIntel_WhenBeaconActive_UpdatesAllianceMemoryWithLastSeen()
+    public void ShareBeaconIntel_WhenScoutShares_UpdatesAllianceMemoryWithLastSeen()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
             .WithBeaconEnabled()
-            .AddPlayer("p1", "Alice", "a1")
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Scout)
             .AddPlayer("p2", "Bob", "a1")
             .AddAlliance("a1", "Alpha", "p1", "p2")
-            .OwnHex(1, 0, "p2", "a1", troops: 4)
             .WithPlayerPosition("p1", 0, 0)
             .Build();
         var context = new ServiceTestContext(state);
         context.Room.VisibilityMemory.TryAdd("p1", new PlayerVisibilityMemory());
         context.Room.VisibilityMemory.TryAdd("p2", new PlayerVisibilityMemory());
-        context.Player("p1").IsBeacon = true;
+        context.Player("p1").CurrentHeading = EastHeading;
+        GameStateCommon.SyncBeaconStateForRole(context.State, context.Player("p1"));
+        var candidateHex = context.VisibilityService
+            .ComputeBeaconSectorKeys(context.State, context.Player("p1"))
+            .First(hexKey => hexKey != HexService.Key(0, 0));
+        var candidateCell = context.State.Grid[candidateHex];
+        candidateCell.OwnerId = "p2";
+        candidateCell.OwnerName = "Bob";
+        candidateCell.OwnerAllianceId = "a1";
+        candidateCell.OwnerColor = "#a1";
+        candidateCell.Troops = 4;
 
         var before = DateTime.UtcNow;
-        var targetHex = HexService.Key(1, 0);
-        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1", [targetHex]);
+        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1");
         var after = DateTime.UtcNow;
 
         result.error.Should().BeNull();
-        result.sharedCount.Should().Be(1);
-        var sharedRemembered = context.Room.VisibilityMemory["p2"].RememberedHexes[targetHex];
+        result.sharedCount.Should().BeGreaterThan(0);
+        var sharedRemembered = context.Room.VisibilityMemory["p2"].RememberedHexes[candidateHex];
         sharedRemembered.OwnerId.Should().Be("p2");
         sharedRemembered.OwnerAllianceId.Should().Be("a1");
         sharedRemembered.Troops.Should().Be(4);
         sharedRemembered.SeenAt.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+        context.Player("p1").ShareIntelCooldownUntil.Should().BeOnOrAfter(before.AddSeconds(59));
+    }
+
+    [Fact]
+    public void ShareBeaconIntel_WhenOnCooldown_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithBeaconEnabled()
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        context.Player("p1").CurrentHeading = EastHeading;
+        context.Player("p1").ShareIntelCooldownUntil = DateTime.UtcNow.AddSeconds(30);
+        GameStateCommon.SyncBeaconStateForRole(context.State, context.Player("p1"));
+
+        var result = context.AbilityService.ShareBeaconIntel(ServiceTestContext.RoomCode, "p1");
+
+        result.sharedCount.Should().Be(0);
+        result.error.Should().Be("Share Intel is on cooldown.");
     }
 
     [Fact]

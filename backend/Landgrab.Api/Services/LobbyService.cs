@@ -41,6 +41,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Invalid role.");
 
             player.Role = parsedRole;
+            GameStateCommon.SyncBeaconStateForRole(room.State, player);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -70,6 +71,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Invalid role.");
 
             player.Role = parsedRole;
+            GameStateCommon.SyncBeaconStateForRole(room.State, player);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -94,6 +96,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             foreach (var player in room.State.Players)
             {
                 player.Role = PlayerRole.None;
+                GameStateCommon.SyncBeaconStateForRole(room.State, player);
             }
 
             var shuffledRoles = new List<PlayerRole>
@@ -118,6 +121,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 connectedPlayers[index].Role = index < shuffledRoles.Count
                     ? shuffledRoles[index]
                     : PlayerRole.None;
+                GameStateCommon.SyncBeaconStateForRole(room.State, connectedPlayers[index]);
             }
 
             var snapshot = SnapshotState(room.State);
@@ -491,6 +495,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             player.CurrentHexQ = spawnCell.Q;
             player.CurrentHexR = spawnCell.R;
             player.PreviousHexKey = null;
+            GameStateCommon.SyncBeaconStateForRole(state, player);
         }
     }
 

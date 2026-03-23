@@ -498,9 +498,30 @@ export function PlayerHUD({
       role: 'Scout',
       abilityKey: 'intercept',
     });
+
+    // Scout's beacon is always on — their ability is Share Intel, not a toggle
+    if (showBeacon) {
+      const shareIntelState = getAbilityButtonState('shareIntel', false, false, false);
+
+      abilityButtons.push({
+        key: 'shareIntel',
+        icon: 'radioTower',
+        title: t('abilities.shareIntel.title' as never, 'Share Intel'),
+        description: t('abilities.shareIntel.description' as never, 'Share beacon view with alliance'),
+        status: formatStatus('activate'),
+        className: `player-hud__ability player-hud__ability--scout`,
+        buttonState: shareIntelState,
+        accentClassName: ROLE_ACCENT_CLASSES.Scout,
+        disabled: false,
+        onClick: getAbilityAction('shareIntel', shareIntelState, () => {}, 'confirming', false, 'none'),
+        role: 'Scout',
+        abilityKey: 'shareIntel',
+      });
+    }
   }
 
-  if (showBeacon && player) {
+  // Beacon toggle for non-Scout players (Scouts have it always-on)
+  if (showBeacon && player && player.role !== 'Scout') {
     const beaconState = getAbilityButtonState('beacon', player.isBeacon ?? false, false, false);
     
     abilityButtons.push({

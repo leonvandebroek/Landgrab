@@ -136,6 +136,11 @@ public class GameplayService(
                 // Preserve existing BeaconHeading when no heading is provided
             }
 
+            if (room.State.Dynamics.PlayerRolesEnabled && player.Role == PlayerRole.Scout)
+            {
+                GameStateCommon.SyncBeaconStateForRole(room.State, player);
+            }
+
             winConditionService.ApplyWinConditionAndLog(room.State, now);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);

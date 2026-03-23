@@ -125,6 +125,7 @@ public class PlayerDto
     public int? RallyPointR { get; set; }
 
     // Scout abilities
+    public DateTime? ShareIntelCooldownUntil { get; set; }
     public bool SabotageAlertNearby { get; set; }
     public string? InterceptTargetId { get; set; }
     public DateTime? InterceptLockStartAt { get; set; }

@@ -239,6 +239,7 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
             BeaconLat = player.BeaconLat,
             BeaconLng = player.BeaconLng,
             BeaconHeading = player.BeaconHeading,
+            ShareIntelCooldownUntil = player.ShareIntelCooldownUntil,
             CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
             TacticalStrikeActive = player.TacticalStrikeActive,
             TacticalStrikeExpiry = player.TacticalStrikeExpiry,
@@ -290,6 +291,7 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
         player.BeaconLat = null;
         player.BeaconLng = null;
         player.BeaconHeading = null;
+        player.ShareIntelCooldownUntil = null;
         player.CommandoRaidCooldownUntil = null;
         player.TacticalStrikeActive = false;
         player.TacticalStrikeExpiry = null;

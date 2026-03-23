@@ -166,6 +166,8 @@ export interface Player {
   interceptTargetId?: string | null;
   sabotageAlertNearby?: boolean;
   sabotageBlockedTiles?: Record<string, string>;  // key: "q,r", value: ISO date string
+  // Scout Share Intel
+  shareIntelCooldownUntil?: string;           // ISO date string — null when ready
 }
 
 export interface AllianceDto {

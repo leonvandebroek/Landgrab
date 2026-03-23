@@ -29,6 +29,29 @@ internal static class GameStateCommon
         state.EventLog.RemoveRange(0, state.EventLog.Count - MaxEventLogEntries);
     }
 
+    internal static void SyncBeaconStateForRole(GameState state, PlayerDto player)
+    {
+        if (!state.Dynamics.PlayerRolesEnabled)
+            return;
+
+        if (player.Role == PlayerRole.Scout)
+        {
+            player.IsBeacon = true;
+            if (player.CurrentLat.HasValue)
+                player.BeaconLat = player.CurrentLat.Value;
+            if (player.CurrentLng.HasValue)
+                player.BeaconLng = player.CurrentLng.Value;
+            if (player.CurrentHeading.HasValue)
+                player.BeaconHeading = HexService.NormalizeHeading(player.CurrentHeading.Value);
+            return;
+        }
+
+        player.IsBeacon = false;
+        player.BeaconLat = null;
+        player.BeaconLng = null;
+        player.BeaconHeading = null;
+    }
+
     internal static GameState SnapshotState(GameState state)
     {
         return new GameState
@@ -62,6 +85,7 @@ internal static class GameStateCommon
                 BeaconLat = player.BeaconLat,
                 BeaconLng = player.BeaconLng,
                 BeaconHeading = player.BeaconHeading,
+                ShareIntelCooldownUntil = player.ShareIntelCooldownUntil,
                 CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
                 TacticalStrikeActive = player.TacticalStrikeActive,
                 TacticalStrikeExpiry = player.TacticalStrikeExpiry,

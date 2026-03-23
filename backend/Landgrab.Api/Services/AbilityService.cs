@@ -4,8 +4,10 @@ namespace Landgrab.Api.Services;
 
 public class AbilityService(
     IGameRoomProvider roomProvider,
-    GameStateService gameStateService)
+    GameStateService gameStateService,
+    VisibilityService visibilityService)
 {
+    private static readonly TimeSpan ShareIntelCooldown = TimeSpan.FromSeconds(60);
     private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
     private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
     private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
@@ -187,25 +189,37 @@ public class AbilityService(
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
                 return (null, "Player not in room.");
-            if (room.State.Dynamics.PlayerRolesEnabled && player.Role != PlayerRole.Scout)
-                return (null, "Only a Scout can activate the Beacon.");
-            if (player.CurrentLat == null || player.CurrentLng == null)
-                return (null, "Your location is required to activate a beacon.");
             if (!double.IsFinite(heading))
-                return (null, "A valid heading is required to activate a beacon.");
+                return (null, "A valid heading is required.");
 
-            player.IsBeacon = true;
-            player.BeaconLat = player.CurrentLat;
-            player.BeaconLng = player.CurrentLng;
-            player.BeaconHeading = HexService.NormalizeHeading(heading);
+            var normalizedHeading = HexService.NormalizeHeading(heading);
+            player.CurrentHeading = normalizedHeading;
 
-            AppendEventLog(room.State, new GameEventLogEntry
+            if (room.State.Dynamics.PlayerRolesEnabled)
             {
-                Type = "BeaconActivated",
-                Message = $"{player.Name} activated a beacon.",
-                PlayerId = userId,
-                PlayerName = player.Name
-            });
+                if (player.Role != PlayerRole.Scout)
+                    return (null, "Only a Scout can use Beacon heading.");
+
+                GameStateCommon.SyncBeaconStateForRole(room.State, player);
+            }
+            else
+            {
+                if (player.CurrentLat == null || player.CurrentLng == null)
+                    return (null, "Your location is required to activate a beacon.");
+
+                player.IsBeacon = true;
+                player.BeaconLat = player.CurrentLat;
+                player.BeaconLng = player.CurrentLng;
+                player.BeaconHeading = normalizedHeading;
+
+                AppendEventLog(room.State, new GameEventLogEntry
+                {
+                    Type = "BeaconActivated",
+                    Message = $"{player.Name} activated a beacon.",
+                    PlayerId = userId,
+                    PlayerName = player.Name
+                });
+            }
 
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
@@ -224,6 +238,8 @@ public class AbilityService(
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
                 return (null, "Player not in room.");
+            if (room.State.Dynamics.PlayerRolesEnabled && player.Role == PlayerRole.Scout)
+                return (null, "Scout beacon is always active.");
 
             player.IsBeacon = false;
             player.BeaconLat = null;
@@ -236,7 +252,7 @@ public class AbilityService(
         }
     }
 
-    public (int sharedCount, string? error) ShareBeaconIntel(string roomCode, string userId, IEnumerable<string> hexKeys)
+    public (int sharedCount, string? error) ShareBeaconIntel(string roomCode, string userId)
     {
         var room = GetRoom(roomCode);
         if (room == null)
@@ -250,8 +266,27 @@ public class AbilityService(
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
                 return (0, "Player not in room.");
-            if (!player.IsBeacon)
+            if (!room.State.Dynamics.BeaconEnabled)
+                return (0, "Beacon mode is not active.");
+
+            if (room.State.Dynamics.PlayerRolesEnabled)
+            {
+                if (player.Role != PlayerRole.Scout)
+                    return (0, "Only a Scout can share intel.");
+
+                GameStateCommon.SyncBeaconStateForRole(room.State, player);
+            }
+            else if (!player.IsBeacon)
+            {
                 return (0, "Beacon must be active to share intel.");
+            }
+
+            if (!player.IsBeacon || !player.BeaconHeading.HasValue)
+                return (0, "A valid heading is required to share intel.");
+
+            var now = DateTime.UtcNow;
+            if (player.ShareIntelCooldownUntil.HasValue && player.ShareIntelCooldownUntil.Value > now)
+                return (0, "Share Intel is on cooldown.");
 
             var alliance = room.State.Alliances.FirstOrDefault(candidate =>
                                candidate.MemberIds.Contains(player.Id, StringComparer.Ordinal))
@@ -259,9 +294,9 @@ public class AbilityService(
             if (alliance == null || alliance.MemberIds.Count == 0)
                 return (0, null);
 
-            var now = DateTime.UtcNow;
+            var coneHexKeys = visibilityService.ComputeBeaconSectorKeys(room.State, player);
             var rememberedHexes = new Dictionary<string, RememberedHex>(StringComparer.Ordinal);
-            foreach (var hexKey in hexKeys.Distinct(StringComparer.Ordinal))
+            foreach (var hexKey in coneHexKeys)
             {
                 if (!room.State.Grid.TryGetValue(hexKey, out var cell))
                     continue;
@@ -289,6 +324,7 @@ public class AbilityService(
                 }
             }
 
+            player.ShareIntelCooldownUntil = now.Add(ShareIntelCooldown);
             return (rememberedHexes.Count, null);
         }
     }

@@ -270,7 +270,7 @@ function AbilityOverlayLayerComponent({
     const q = myPlayer?.currentHexQ;
     const r = myPlayer?.currentHexR;
     if (q == null || r == null) return 120;
-    const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
+    const isBeaconActive = myPlayer?.role === 'Scout' || Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
     const range = isBeaconActive ? 3 : 1;
     const [lat0, lng0] = roomHexToLatLng(q, r, mapLat, mapLng, tileSizeMeters);
     const [lat1, lng1] = roomHexToLatLng(q, r + 1, mapLat, mapLng, tileSizeMeters);
@@ -281,7 +281,7 @@ function AbilityOverlayLayerComponent({
     const oneStepPx = Math.sqrt(dx * dx + dy * dy);
     return Math.max(40, oneStepPx * range);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, mapLat, mapLng, myPlayer?.currentHexQ, myPlayer?.currentHexR, myPlayer?.isBeacon, abilityUi.activeAbility, abilityUi.mode, tileSizeMeters, zoomLevel]);
+  }, [map, mapLat, mapLng, myPlayer?.currentHexQ, myPlayer?.currentHexR, myPlayer?.isBeacon, myPlayer?.role, abilityUi.activeAbility, abilityUi.mode, tileSizeMeters, zoomLevel]);
 
   // Active directional ability beam
   const activeAbilityBeam = useMemo(() => {
@@ -306,7 +306,7 @@ function AbilityOverlayLayerComponent({
   }, [abilityUi, myPlayer, gameState, compassHeading]);
 
   const beaconState = useMemo(() => {
-    const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
+    const isBeaconActive = myPlayer?.role === 'Scout' || Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
     if (!gameState || !isBeaconActive) {
       return null;
     }
@@ -321,7 +321,7 @@ function AbilityOverlayLayerComponent({
   }, [gameState, myPlayer, compassHeading, abilityUi]);
 
   const beaconScanHexes = useMemo(() => {
-    const isBeaconActive = Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
+    const isBeaconActive = myPlayer?.role === 'Scout' || Boolean(myPlayer?.isBeacon) || (abilityUi.activeAbility === 'beacon' && abilityUi.mode === 'active');
     if (
       !isBeaconActive ||
       myPlayer?.currentHexQ == null ||

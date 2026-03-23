@@ -7,8 +7,8 @@ tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vsco
 mcp-servers:
   landgrab:
     type: local
-    command: "./tools/landgrab-agent-mcp/node_modules/.bin/tsx"
-    args: ["./tools/landgrab-agent-mcp/src/server.ts"]
+    command: "node"
+    args: ["/Users/leonvandebroek/Projects/Github/Landgrab/tools/landgrab-agent-mcp/dist/server.js"]
     tools: ["*"]
   playwright:
     type: local

@@ -120,12 +120,6 @@ public partial class GameHub
             return 0;
         }
 
-        if (!ValidateHexKeyPayload(hexKeys, out var normalizedHexKeys, out var validationError))
-        {
-            await SendError(InvalidRequestCode, validationError ?? "Invalid hex key payload.");
-            return 0;
-        }
-
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -145,7 +139,8 @@ public partial class GameHub
             return 0;
         }
 
-        var (sharedCount, error) = gameService.ShareBeaconIntel(room.Code, UserId, normalizedHexKeys);
+        _ = hexKeys;
+        var (sharedCount, error) = gameService.ShareBeaconIntel(room.Code, UserId, []);
         if (error != null)
         {
             await SendError(error);

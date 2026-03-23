@@ -149,6 +149,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
                 IsConnected = false,
                 Role = role
             });
+            GameStateCommon.SyncBeaconStateForRole(room.State, room.State.Players[^1]);
         }
 
         // Apply hex overrides (ownership, troop counts, forts, master tile)
@@ -244,6 +245,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
                 Color = Colors[colorIndex],
                 Emoji = GetPlayerEmoji(playerIndex)
             });
+            GameStateCommon.SyncBeaconStateForRole(room.State, room.State.Players[^1]);
 
             room.ConnectionMap.TryAdd(connectionId, userId);
             AppendEventLog(room.State, new GameEventLogEntry

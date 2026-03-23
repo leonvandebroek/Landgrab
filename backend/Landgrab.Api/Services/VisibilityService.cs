@@ -505,6 +505,7 @@ public class VisibilityService
         player.BeaconLat = null;
         player.BeaconLng = null;
         player.BeaconHeading = null;
+        player.ShareIntelCooldownUntil = null;
         player.CommandoRaidCooldownUntil = null;
         player.TacticalStrikeActive = false;
         player.TacticalStrikeExpiry = null;

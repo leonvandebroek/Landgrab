@@ -81,3 +81,16 @@ All findings documented in `.squad/log/20260322T135050Z-keyboard-playtest-sessio
 - `.squad/orchestration-log/20260322T135050Z-steen.md` — 6-player playtest completion + 7 issues
 - `.squad/orchestration-log/20260322T135050Z-coordinator.md` — Charter updates + decision consolidation
 - 2026-03-22: Ran a fresh 6-player manual-coordinates playtest (room CQKB5Z) using mobile viewport 390x844. Confirmed currentHex on start, alliance/HQ sync, alliance visibility, and pickup carrying feedback; still saw a false-success pickup on a second source (`success: true` with unchanged carried count), Q/E heading remained unchanged, and combat/defender feedback/dialog stacking could not be fully exercised because attack calls stayed in preview/no-combat mode.
+- 2026-03-23: Beacon redesign validation session was blocked by tooling availability in this runtime: Landgrab MCP session/auth/room/scenario/evidence tools and Playwright MCP browser tools were not exposed (only `bash`/`view`). Could not execute UI-driven TC-1..TC-5 despite backend/frontend services being healthy.
+- 2026-03-23: Scout abilities E2E playtest blocked at startup because Landgrab MCP session tools were unavailable in this runtime (all calls returned `MCP server 'landgrab': Error: Not connected`). Service health checks passed for frontend (200) and backend API reachability (`/api/auth/me` returned 401 as expected pre-auth), but no browser sessions could be created, so wizard, gameplay, Scout ability activation, sync validation, and UX evidence capture could not be executed.
+
+## Session 3 — Scout Ability Validation
+
+- 2026-03-23: Attempted requested 2-player Scout ability validation (host: `steenhost1`, guest: `steenguest1`) using Landgrab MCP fast-path (`scenario_create_2p_game`) and fallback session/auth/room tools.
+- Blocked immediately: all Landgrab MCP calls returned `MCP server 'landgrab': Error: Not connected`.
+- Verification performed before abort:
+  - Frontend reachable: `http://localhost:5173` → HTTP 200
+  - Backend reachable: `http://localhost:5001/api/auth/me` → HTTP 401 (expected pre-auth)
+  - Backend health endpoint probe: `http://localhost:5001/api/health` → HTTP 404 (non-blocking for this run)
+- Impact: could not create browser sessions, authenticate players, start/join room, assign Scout role, enter Playing phase, activate abilities, or collect evidence checkpoints/screenshots/ARIA snapshots via Landgrab tools.
+- Result: Scout ability validation run marked **blocked due to tooling connectivity**, not gameplay behavior.

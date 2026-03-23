@@ -1000,6 +1000,13 @@ const en = {
       shareIntelNone: 'No enemy tiles in range to share',
       shareIntelDescription: 'Push your current beacon view to alliance members as field intelligence',
     },
+    shareIntel: {
+      title: 'Share Intel',
+      description: 'Share beacon view with alliance',
+      cta: 'Share Intel',
+      cooldown: 'Ready in {{seconds}}s',
+      shared: 'Shared intel on {{count}} tile(s) with your alliance',
+    },
     tacticalStrike: {
       title: 'Tactical Strike',
       confirming: 'Ready to Use',

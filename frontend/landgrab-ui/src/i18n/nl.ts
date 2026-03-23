@@ -1000,6 +1000,13 @@ const nl = {
       shareIntelNone: 'Geen vijandelijke tegels in bereik om te delen',
       shareIntelDescription: 'Stuur je huidige bakenoverzicht naar alliantieleden als veldinformatie',
     },
+    shareIntel: {
+      title: 'Intel Delen',
+      description: 'Deel bakenoverzicht met alliantie',
+      cta: 'Intel Delen',
+      cooldown: 'Klaar over {{seconds}}s',
+      shared: 'Intel over {{count}} tegel(s) gedeeld met je alliantie',
+    },
     tacticalStrike: {
       title: 'Tactische Aanval',
       confirming: 'Klaar om te gebruiken',

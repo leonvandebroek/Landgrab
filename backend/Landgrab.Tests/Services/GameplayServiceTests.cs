@@ -547,12 +547,13 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void UpdatePlayerLocation_WhenBeaconIsActive_RefreshesBeaconHeadingWithoutForcingGridChange()
+    public void UpdatePlayerLocation_WhenScoutRoleActive_RefreshesBeaconHeadingWithoutForcingGridChange()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(4)
             .WithBeaconEnabled()
-            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
             .AddPlayer("p2", "Eve", allianceId: "a2")
             .AddAlliance("a1", "Alpha", "p1")
             .AddAlliance("a2", "Bravo", "p2")
@@ -561,9 +562,8 @@ public sealed class GameplayServiceTests
             .Build();
         state.Dynamics.BeaconSectorAngle = 45;
         var context = new ServiceTestContext(state);
-
-        var activateResult = context.AbilityService.ActivateBeacon(ServiceTestContext.RoomCode, "p1", 90d);
-        activateResult.error.Should().BeNull();
+        context.Player("p1").CurrentHeading = 90d;
+        GameStateCommon.SyncBeaconStateForRole(state, context.Player("p1"));
 
         var (movedLat, movedLng) = ServiceTestContext.HexCenter(0, 1);
         var (scanTargetLat, scanTargetLng) = ServiceTestContext.HexCenter(1, 0);

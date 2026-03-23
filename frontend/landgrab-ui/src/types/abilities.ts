@@ -1,5 +1,6 @@
 export type AbilityKey =
   | 'beacon'
+  | 'shareIntel'
   | 'tacticalStrike'
   | 'rallyPoint'
   | 'commandoRaid'

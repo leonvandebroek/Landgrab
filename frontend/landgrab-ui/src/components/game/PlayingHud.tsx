@@ -19,6 +19,7 @@ import { TileInfoCard } from './TileInfoCard';
 import { PlayerHUD } from './PlayerHUD';
 import { AbilityCard } from './AbilityCard';
 import { BeaconCard } from './abilities/BeaconCard';
+import { ShareIntelCard } from './abilities/ShareIntelCard';
 import { CommandoRaidCard } from './abilities/CommandoRaidCard';
 import { DemolishCard } from './abilities/DemolishCard';
 import { FortConstructionCard } from './abilities/FortConstructionCard';
@@ -861,6 +862,11 @@ export function PlayingHud({
             myUserId={myUserId}
             onActivateBeacon={onActivateBeacon ?? (() => { })}
             onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
+            onShareBeaconIntel={onShareBeaconIntel ?? (async () => 0)}
+          />
+        ) : abilityUi.activeAbility === 'shareIntel' ? (
+          <ShareIntelCard
+            myUserId={myUserId}
             onShareBeaconIntel={onShareBeaconIntel ?? (async () => 0)}
           />
         ) : abilityUi.activeAbility === 'tacticalStrike' ? (
