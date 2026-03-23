@@ -94,3 +94,12 @@ All findings documented in `.squad/log/20260322T135050Z-keyboard-playtest-sessio
   - Backend health endpoint probe: `http://localhost:5001/api/health` → HTTP 404 (non-blocking for this run)
 - Impact: could not create browser sessions, authenticate players, start/join room, assign Scout role, enter Playing phase, activate abilities, or collect evidence checkpoints/screenshots/ARIA snapshots via Landgrab tools.
 - Result: Scout ability validation run marked **blocked due to tooling connectivity**, not gameplay behavior.
+
+## Session 3 — Scout Ability Validation
+
+- 2026-03-23 (requested by Léon van de Broek): Connectivity check initially succeeded (`session_list` returned `{ "sessions": [] }`), then Landgrab MCP disconnected before session bootstrap.
+- `session_create(host)` → `MCP server 'landgrab': Error: Not connected`
+- `session_create(guest1)` → `MCP server 'landgrab': Error: Not connected`
+- Retry `session_list` → `MCP server 'landgrab': Error: Not connected`
+- Frontend/backend service probes during incident: frontend `http://localhost:5173` = 200, backend `http://localhost:5001/api/auth/me` = 401 (expected pre-auth).
+- Outcome: Scout ability validation blocked by Landgrab MCP connectivity (no browser sessions, no room/game flow, no ability activation/sync/evidence execution).

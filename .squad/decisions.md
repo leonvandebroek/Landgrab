@@ -219,6 +219,48 @@
 **Build:** lint + tsc -b + vite clean.  
 **SignalR Impact:** None — frontend-only UI gating.
 
+### 25. Architecture: Client-Side Visibility Derivation with Server Fallback (2026-03-23)
+**Status:** Implemented  
+**Lead:** Rembrandt  
+**Backend:** De Ruyter  
+**Frontend:** Vermeer  
+
+**Problem:** Player movement triggered full state broadcasts with O(N×M) visibility recomputation, causing 750ms+ delay for tile reveals.
+
+**Decision:** Generalize the proven beacon cone pattern: frontend derives visibility locally from player positions it already has, with server's `VisibilityTier` as fallback for edge cases.
+
+**Backend Changes:**
+- Stop setting `gridChanged = true` for `LastVisitedAt` metadata updates in `GameplayService.cs` — this value is server-side only (used by `TroopRegenerationService` for decay)
+- In `GameHub.Gameplay.cs`, separate broadcast logic: when only `movedToDifferentHex = true` (no significant grid changes), send lightweight `PlayersMoved` instead of full `BroadcastState`
+- Full `BroadcastState` still fires for actual game mutations (combat, territory claims, etc.)
+- Validation: `dotnet build` ✅, `dotnet test` ✅ (295 total, 294 passed, 1 skipped)
+
+**Frontend Changes:**
+- Created `src/utils/localVisibility.ts` — `isLocallyVisible()` utility that replicates backend's `VisibilityService.ComputeVisibleHexKeys` logic
+- Modified `tricorderTileState.ts` to check local visibility first, falling back to server's `VisibilityTier` for Remembered/Hidden tiers
+- Updated `HexTile.tsx` and `TileInfoCard.tsx` to compute and pass `alliedPlayerHexKeys` and `allianceOwnedHexKeys` to tile state derivation
+- Validation: `npm run lint` ✅, `npm run build` ✅, TypeScript strict mode ✅
+
+**Architectural Principles Affirmed:**
+- Server remains source of truth for all game state mutations
+- Frontend derives display state locally from data it already possesses
+- Server's projection remains authoritative for edge cases (remembered intel, alliance-shared visibility)
+- No new data sent to clients — raw tile data already present; frontend just computes `VisibilityTier` locally
+- Fully backward compatible — no SignalR protocol changes
+
+**User Experience Impact:**
+- Tiles reveal instantly when player moves adjacent (no round-trip delay)
+- Seamless integration with `PlayersMoved` lightweight events
+- Server load unchanged (still computes and sends visibility for authoritative broadcasts)
+
+**Risk Mitigation:**
+- Client-server position desync acceptable: next `StateUpdated` reconciles; raw data already present, no info leak
+- Alliance-shared remembered data: server's Remembered tier used as fallback
+- Reconnection: first `StateUpdated` provides full state
+- Event log filtering: still handled server-side
+
+**SignalR Impact:** None — `PlayersMoved` event already existed; only reduced unnecessary `BroadcastState` calls.
+
 ## Governance
 
 - All meaningful changes require team consensus
