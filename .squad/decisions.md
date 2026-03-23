@@ -175,6 +175,42 @@
 **Rationale:** Visually distinguishes fresh intel from memory. Amber glow matches tricorder aesthetic. 3-tier model provides clear temporal feedback without clutter.  
 **SignalR Impact:** None — data field already present, frontend renders optionally.
 
+### 23. Scout Beacon Always-On + Share Intel Ability (2026-03-23)
+**Status:** Implemented  
+**Lead:** Rembrandt  
+**Backend:** De Ruyter  
+**Frontend:** Vermeer  
+
+**Summary:** For Scout players in role-enabled games, the Beacon is no longer a manual toggle — it activates automatically when the Scout has a valid GPS location. The Scout's explicit ability action is **Share Intel** (60s cooldown), which broadcasts the current beacon cone's hex intel to all alliance members.
+
+**Backend Changes:**
+- **`GameplayService.UpdatePlayerLocation`** — Auto-activates beacon for Scouts with roles enabled: if `PlayerRolesEnabled && player.Role == Scout && lat/lng valid` → set `player.IsBeacon = true` before updating beacon fields.
+- **`AbilityService.ActivateBeacon`** — Guard returns error for role-enabled Scouts: "Scout beacon activates automatically via location update."
+- **`AbilityService.DeactivateBeacon`** — Guard returns error for role-enabled Scouts: "Scout beacon cannot be manually deactivated."
+- **`AbilityService.ShareBeaconIntel`** — Server-computes beacon cone via `VisibilityService.ComputeBeaconSectorKeys` (ignores client-supplied hex list), enforces 60s cooldown via `PlayerDto.ShareIntelCooldownUntil`, writes remembered intel for alliance members.
+- **Model:** Added `PlayerDto.ShareIntelCooldownUntil` field. No changes to existing beacon fields.
+- **Validation:** `dotnet build --configuration Debug` ✅, `dotnet test` ✅ (295 total, 294 passed, 1 skipped).
+
+**Frontend Changes:**
+- **`AbilityBar.tsx`** — Role-aware split: non-role mode keeps toggle; Scout role mode shows "Share Intel" pill.
+- **`BeaconCard.tsx`** — For Scouts: removed activate/deactivate buttons; "Share Intel" CTA sole action (non-role unchanged).
+- **`ShareIntelCard.tsx`** — New Scout-specific ability card with cooldown timer and "Share Intel" button.
+- **`types/abilities.ts`** — Added `'shareIntel'` to `AbilityKey` union.
+- **`types/game.ts`** — Added `shareIntelCooldownUntil?: string` to Player interface.
+- **`useGameActionsAbilities.ts`** — `handleShareBeaconIntel` calls `invoke('ShareBeaconIntel')` with no args.
+- **i18n:** Added `abilities.beacon.alwaysOn`, `abilities.beacon.waitingForGps`, `abilities.shareIntel.*` keys (EN + NL).
+- **Concurrent Fixes:**
+  - **Beacon cone rendering:** Fixed invisible tiles (`hex-hidden-hostile` guard), `?` badge (`strengthUnknown` reordering), TileInfoCard "Unknown territory" (added `isInBeaconCone` checks).
+  - **Instant reveal:** Optimistic activation (local state before server call) + revert on failure. `AbilityOverlayLayer` checks both `myPlayer?.isBeacon` and `abilityUi.activeAbility === 'beacon'`.
+  - **Pixel radius:** Fixed microscopic beacon sector arc; uses `roomHexToLatLng` + `map.latLngToLayerPoint` for accurate scaling (was dividing `tileSizeMeters` by 111320).
+- **Validation:** `npm run lint` ✅ (0 errors), `npm run build` ✅ (tsc -b + vite clean).
+
+**Rationale:** Scout beacon as a passive role trait simplifies gameplay: always-on reveals are Scout's team contribution, explicit Share Intel actions create clear coordination signal. Centralizing cone computation on server eliminates client drift. Non-role games fully backward compatible.
+
+**Risks:** Scout with GPS denied stays inactive (existing issue, not worsened). Cold-start heading may be null; cone defaults to 0° (north).
+
+**SignalR Impact:** None — no message format changes.
+
 ## Governance
 
 - All meaningful changes require team consensus
