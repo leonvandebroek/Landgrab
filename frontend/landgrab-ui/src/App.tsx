@@ -503,6 +503,7 @@ export default function App() {
   const debugToggleButton = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
     <button
       type="button"
+      data-testid="dev-section-toggle"
       className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
       onClick={() => setShowDebugTools(!showDebugTools)}
     >

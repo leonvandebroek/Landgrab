@@ -112,24 +112,12 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task<int> ShareBeaconIntel(string roomCode, string[] hexKeys)
+    public async Task<int> ShareBeaconIntel()
     {
-        if (!ValidateRoomCode(roomCode))
-        {
-            await SendError(InvalidRequestCode, "Invalid room code.");
-            return 0;
-        }
-
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
             await SendError("ROOM_NOT_JOINED", "Not in a room.");
-            return 0;
-        }
-
-        if (!string.Equals(room.Code, roomCode, StringComparison.OrdinalIgnoreCase))
-        {
-            await SendError(InvalidRequestCode, "Room code does not match active room.");
             return 0;
         }
 
@@ -138,8 +126,6 @@ public partial class GameHub
             await SendError("Beacons only work during gameplay.");
             return 0;
         }
-
-        _ = hexKeys;
         var (sharedCount, error) = gameService.ShareBeaconIntel(room.Code, UserId, []);
         if (error != null)
         {

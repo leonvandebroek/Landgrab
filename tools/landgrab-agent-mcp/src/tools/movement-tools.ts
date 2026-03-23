@@ -26,10 +26,10 @@ export function registerMovementTools(server: McpServer): void {
       const panel = page.locator('[data-testid="debug-gps-panel"]');
 
       // ── Step 1: open the dev-tools panel ──────────────────────────────────
-      // Class is debug-tools-toggle in wizard/lobby, debug-toggle-ingame in game view.
+      // Prefer the stable data-testid; fall back to CSS classes for older builds.
       const panelVisible = await panel.isVisible().catch(() => false);
       if (!panelVisible) {
-        const devToggle = page.locator('.debug-tools-toggle, .debug-toggle-ingame').first();
+        const devToggle = page.locator('[data-testid="dev-section-toggle"], .debug-tools-toggle, .debug-toggle-ingame').first();
         await devToggle.waitFor({ state: 'visible', timeout: 10_000 });
         await devToggle.dispatchEvent('click');
         await panel.waitFor({ state: 'visible', timeout: 5_000 });

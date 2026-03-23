@@ -624,6 +624,7 @@ export function PlayerHUD({
                 onClick={() => handleAbilityClick(ability)}
                 aria-label={`${ability.role ? `${ability.role}: ` : ''}${ability.title}. ${ability.status}`}
                 {...(ability.isPressed !== undefined ? { 'aria-pressed': ability.isPressed } : {})}
+                {...(ability.abilityKey ? { 'data-testid': `ability-btn-${ability.abilityKey}` } : {})}
                 title={`${ability.title} — ${ability.status}`}
               >
                 <span className="player-hud__ability-circle" aria-hidden="true">
