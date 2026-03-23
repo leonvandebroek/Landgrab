@@ -478,7 +478,7 @@ export function PlayerHUD({
     });
   }
 
-  if (player?.role === 'Scout') {
+  if (rolesEnabled && player?.role === 'Scout') {
     const interceptState = getAbilityButtonState('intercept', false, false, false);
     
     // Check ambient alert for Scout
@@ -499,8 +499,24 @@ export function PlayerHUD({
       abilityKey: 'intercept',
     });
 
-    // Scout's beacon is always on — their ability is Share Intel, not a toggle
     if (showBeacon) {
+      const beaconState = getAbilityButtonState('beacon', player.isBeacon ?? false, false, false);
+
+      abilityButtons.push({
+        key: 'beacon',
+        icon: 'radioTower',
+        title: t('phase5.beacon' as never),
+        description: t('phase5.beaconDesc' as never),
+        status: beaconState === 'active' ? formatStatus('active') : formatStatus('activate'),
+        className: `player-hud__ability player-hud__ability--beacon ${beaconState === 'active' ? 'player-hud__ability--active player-hud__ability--beacon-active' : ''}`,
+        buttonState: beaconState,
+        accentClassName: 'player-hud__ability--beacon',
+        onClick: getAbilityAction('beacon', beaconState, onActivateBeacon, 'confirming'),
+        isPressed: beaconState === 'active',
+        role: 'Scout',
+        abilityKey: 'beacon',
+      });
+
       const shareIntelState = getAbilityButtonState('shareIntel', false, false, false);
 
       abilityButtons.push({
@@ -518,26 +534,6 @@ export function PlayerHUD({
         abilityKey: 'shareIntel',
       });
     }
-  }
-
-  // Beacon toggle for non-Scout players (Scouts have it always-on)
-  if (showBeacon && player && player.role !== 'Scout') {
-    const beaconState = getAbilityButtonState('beacon', player.isBeacon ?? false, false, false);
-    
-    abilityButtons.push({
-      key: 'beacon',
-      icon: 'radioTower',
-      title: t('phase5.beacon' as never),
-      description: t('phase5.beaconDesc' as never),
-      status: beaconState === 'active' ? formatStatus('active') : formatStatus('activate'),
-      className: `player-hud__ability player-hud__ability--beacon ${beaconState === 'active' ? 'player-hud__ability--active player-hud__ability--beacon-active' : ''}`,
-      buttonState: beaconState,
-      accentClassName: 'player-hud__ability--beacon',
-      onClick: getAbilityAction('beacon', beaconState, onActivateBeacon, 'confirming'),
-      isPressed: beaconState === 'active',
-      role: undefined, // default
-      abilityKey: 'beacon',
-    });
   }
 
   const isCollapsedForZoom = isStrategicZoom && !isStrategicExpanded;

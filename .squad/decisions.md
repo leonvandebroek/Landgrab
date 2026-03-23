@@ -211,6 +211,14 @@
 
 **SignalR Impact:** None — no message format changes.
 
+### 24. Gate beacon and shareIntel behind Scout role + rolesEnabled (2026-03-23)
+**Status:** Implemented  
+**Agent:** Vermeer  
+**Change:** `PlayerHUD.tsx` moved both `beacon` and `shareIntel` ability pushes inside the `rolesEnabled && player?.role === 'Scout'` guard. Removed the erroneous non-Scout beacon block that was unconditionally pushing beacon toggle for non-Scout players.  
+**Rationale:** Beacon and shareIntel are Scout-exclusive abilities. Non-Scout players (Commander, Engineer) should never see or invoke these abilities. Mirrors existing Commander/Engineer role-gate pattern.  
+**Build:** lint + tsc -b + vite clean.  
+**SignalR Impact:** None — frontend-only UI gating.
+
 ## Governance
 
 - All meaningful changes require team consensus
