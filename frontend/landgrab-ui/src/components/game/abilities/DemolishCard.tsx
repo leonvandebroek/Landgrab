@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
+import { useSecondTick } from '../../../hooks/useSecondTick';
 
 interface DemolishCardProps {
   myUserId: string;
@@ -32,7 +33,11 @@ export function DemolishCard({
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
   const { heading } = useDeviceOrientation(true);
-  const [holdProgressSec, setHoldProgressSec] = useState<number>(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  useSecondTick(() => {
+    setNow(Date.now());
+  });
 
   const isFriendlyHex = Boolean(
     currentHexCell
@@ -58,21 +63,9 @@ export function DemolishCard({
   const lockStartAt = player?.demolishFacingLockStartAt;
   const facingHexKey = player?.demolishFacingHexKey;
 
-  useEffect(() => {
-    if (!isHolding || !lockStartAt) {
-      if (holdProgressSec !== 0) {
-        setHoldProgressSec(0);
-      }
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      const ms = Date.now() - new Date(lockStartAt).getTime();
-      setHoldProgressSec(Math.min(5.0, Math.max(0, ms / 1000)));
-    }, 100);
-
-    return () => window.clearInterval(interval);
-  }, [isHolding, lockStartAt, holdProgressSec]);
+  const holdProgressSec = isHolding && lockStartAt
+    ? Math.min(5.0, Math.max(0, (now - new Date(lockStartAt).getTime()) / 1000))
+    : 0;
 
   const getStatusText = () => {
     if (!isMissionInProgress) return t('abilities.demolish.targetingSummary' as never);
