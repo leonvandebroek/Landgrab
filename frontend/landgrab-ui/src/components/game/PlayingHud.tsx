@@ -27,6 +27,10 @@ import { RallyPointCard } from './abilities/RallyPointCard';
 import { SabotageCard } from './abilities/SabotageCard';
 import { TacticalStrikeCard } from './abilities/TacticalStrikeCard';
 import { InterceptCard } from './abilities/InterceptCard';
+import { TroopTransferCard } from './abilities/TroopTransferCard';
+import { TroopTransferReceivedPanel } from './abilities/TroopTransferReceivedPanel';
+import { FieldBattleCard } from './abilities/FieldBattleCard';
+import { FieldBattleInvitePanel } from './abilities/FieldBattleInvitePanel';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
@@ -49,8 +53,7 @@ interface Props {
   onShareBeaconIntel?: () => Promise<number>;
   onActivateTacticalStrike?: (targetQ: number, targetR: number) => Promise<boolean> | void;
   onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
-  onActivateCommandoRaid?: (targetQ: number, targetR: number) => Promise<boolean> | void;
-  onResolveRaidTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  onActivateCommandoRaid?: () => Promise<boolean> | void;
   onActivateRallyPoint?: () => Promise<boolean> | void;
   onActivateSabotage?: () => Promise<boolean> | void;
   onCancelFortConstruction?: () => Promise<boolean> | void;
@@ -59,6 +62,11 @@ interface Props {
   onStartDemolish?: () => Promise<boolean> | void;
   onStartFortConstruction?: () => Promise<boolean> | void;
   onAttemptIntercept?: (heading: number) => Promise<{ status: string; seconds?: number }>;
+  onResolveTroopTransferTarget?: (heading: number) => Promise<{ recipientId: string; recipientName: string } | null>;
+  onInitiateTroopTransfer?: (amount: number, recipientId: string) => Promise<{ transferId: string } | null>;
+  onRespondToTroopTransfer?: (transferId: string, accepted: boolean) => Promise<boolean>;
+  onInitiateFieldBattle?: () => Promise<{ battleId: string } | null>;
+  onJoinFieldBattle?: (battleId: string) => Promise<boolean>;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -97,7 +105,6 @@ export function PlayingHud({
   onActivateTacticalStrike,
   onResolveTacticalStrikeTarget,
   onActivateCommandoRaid,
-  onResolveRaidTarget,
   onActivateRallyPoint,
   onActivateSabotage,
   onCancelFortConstruction,
@@ -106,6 +113,11 @@ export function PlayingHud({
   onStartDemolish,
   onStartFortConstruction,
   onAttemptIntercept,
+  onResolveTroopTransferTarget,
+  onInitiateTroopTransfer,
+  onRespondToTroopTransfer,
+  onInitiateFieldBattle,
+  onJoinFieldBattle,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   currentPlayerName,
@@ -856,6 +868,13 @@ export function PlayingHud({
 
       {!activeModal && shouldShowDevSection && debugPanel}
 
+      <TroopTransferReceivedPanel
+        onRespondToTroopTransfer={onRespondToTroopTransfer ?? (async () => false)}
+      />
+      <FieldBattleInvitePanel
+        onJoinFieldBattle={onJoinFieldBattle ?? (async () => false)}
+      />
+
       {abilityUi.activeAbility !== null && abilityUi.cardVisible ? (
         abilityUi.activeAbility === 'beacon' ? (
           <BeaconCard
@@ -874,7 +893,6 @@ export function PlayingHud({
             myUserId={myUserId}
             onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
             onResolveTacticalStrikeTarget={onResolveTacticalStrikeTarget ?? (async () => null)}
-            currentHex={currentHex}
           />
         ) : abilityUi.activeAbility === 'rallyPoint' ? (
           <RallyPointCard
@@ -886,7 +904,6 @@ export function PlayingHud({
           <CommandoRaidCard
             myUserId={myUserId}
             onActivateCommandoRaid={onActivateCommandoRaid ?? (() => { })}
-            onResolveRaidTarget={onResolveRaidTarget ?? (async () => null)}
           />
         ) : abilityUi.activeAbility === 'fortConstruction' ? (
           <FortConstructionCard
@@ -913,6 +930,17 @@ export function PlayingHud({
           <InterceptCard
             myUserId={myUserId}
             onAttemptIntercept={onAttemptIntercept ?? (async () => ({ status: 'noTarget' }))}
+          />
+        ) : abilityUi.activeAbility === 'troopTransfer' ? (
+          <TroopTransferCard
+            myUserId={myUserId}
+            onResolveTroopTransferTarget={onResolveTroopTransferTarget ?? (async () => null)}
+            onInitiateTroopTransfer={onInitiateTroopTransfer ?? (async () => null)}
+          />
+        ) : abilityUi.activeAbility === 'fieldBattle' ? (
+          <FieldBattleCard
+            myUserId={myUserId}
+            onInitiateFieldBattle={onInitiateFieldBattle ?? (async () => null)}
           />
         ) : (
           <AbilityCard

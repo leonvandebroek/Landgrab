@@ -9,7 +9,7 @@ export interface DerivedAbilityUiState {
 
 export function deriveAbilityUiFromPlayer(
   player: Player,
-  gameState?: Pick<GameState, 'activeRaids'>,
+  gameState?: Pick<GameState, 'activeRaids' | 'activeTroopTransfers' | 'activeFieldBattles'>,
 ): DerivedAbilityUiState | null {
   if (player.fortTargetQ != null) {
     return {
@@ -45,6 +45,30 @@ export function deriveAbilityUiFromPlayer(
       ability: 'commandoRaid',
       mode: 'active',
       focusPreset: 'strategicTargeting',
+    };
+  }
+
+  const hasActiveTroopTransfer = gameState?.activeTroopTransfers?.some(
+    (transfer) => transfer.initiatorId === player.id,
+  ) ?? false;
+
+  if (hasActiveTroopTransfer) {
+    return {
+      ability: 'troopTransfer',
+      mode: 'active',
+      focusPreset: 'none',
+    };
+  }
+
+  const hasActiveFieldBattle = gameState?.activeFieldBattles?.some(
+    (battle) => battle.initiatorId === player.id && !battle.resolved,
+  ) ?? false;
+
+  if (hasActiveFieldBattle) {
+    return {
+      ability: 'fieldBattle',
+      mode: 'active',
+      focusPreset: 'none',
     };
   }
 

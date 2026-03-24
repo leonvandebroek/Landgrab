@@ -41,8 +41,7 @@ export interface GameViewActions {
   onShareBeaconIntel: () => Promise<number>;
   onActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
   onResolveTacticalStrikeTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
-  onActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
-  onResolveRaidTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  onActivateCommandoRaid: () => Promise<boolean>;
   onActivateRallyPoint: () => Promise<boolean>;
   onActivateSabotage: () => Promise<boolean>;
   onCancelFortConstruction: () => Promise<boolean>;
@@ -51,6 +50,11 @@ export interface GameViewActions {
   onStartDemolish: () => Promise<boolean>;
   onStartFortConstruction: () => Promise<boolean>;
   onAttemptIntercept: (heading: number) => Promise<{ status: string; seconds?: number }>;
+  onResolveTroopTransferTarget: (heading: number) => Promise<{ recipientId: string; recipientName: string } | null>;
+  onInitiateTroopTransfer: (amount: number, recipientId: string) => Promise<{ transferId: string } | null>;
+  onRespondToTroopTransfer: (transferId: string, accepted: boolean) => Promise<boolean>;
+  onInitiateFieldBattle: () => Promise<{ battleId: string } | null>;
+  onJoinFieldBattle: (battleId: string) => Promise<boolean>;
   onSetObserverMode: (enabled: boolean) => void;
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
@@ -217,7 +221,6 @@ export function GameView({
           onActivateTacticalStrike={actions.onActivateTacticalStrike}
           onResolveTacticalStrikeTarget={actions.onResolveTacticalStrikeTarget}
           onActivateCommandoRaid={actions.onActivateCommandoRaid}
-          onResolveRaidTarget={actions.onResolveRaidTarget}
           onActivateRallyPoint={actions.onActivateRallyPoint}
           onActivateSabotage={actions.onActivateSabotage}
           onCancelFortConstruction={actions.onCancelFortConstruction}
@@ -226,6 +229,11 @@ export function GameView({
           onStartDemolish={actions.onStartDemolish}
           onStartFortConstruction={actions.onStartFortConstruction}
           onAttemptIntercept={actions.onAttemptIntercept}
+          onResolveTroopTransferTarget={actions.onResolveTroopTransferTarget}
+          onInitiateTroopTransfer={actions.onInitiateTroopTransfer}
+          onRespondToTroopTransfer={actions.onRespondToTroopTransfer}
+          onInitiateFieldBattle={actions.onInitiateFieldBattle}
+          onJoinFieldBattle={actions.onJoinFieldBattle}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}

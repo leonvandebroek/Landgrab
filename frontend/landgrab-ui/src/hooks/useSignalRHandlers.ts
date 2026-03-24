@@ -9,7 +9,7 @@ import { useNotificationStore } from '../stores/notificationStore';
 import { useUiStore } from '../stores/uiStore';
 import type { SoundName } from './useSound';
 import type { GameEvents } from './useSignalR';
-import type { AttackPrompt, CombatPreviewState, GameState, PickupPrompt, ReinforcePrompt } from '../types/game';
+import type { AttackPrompt, CombatPreviewState, FieldBattleInvite, FieldBattleResult, GameState, PickupPrompt, ReinforcePrompt, TroopTransferRequest, TroopTransferResult } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { deriveAbilityUiFromPlayer } from '../utils/abilityUi';
 import { getErrorMessage, localizeLobbyError, normalizeGameState } from '../utils/gameHelpers';
@@ -553,6 +553,40 @@ export function useSignalRHandlers({
       });
     },
     onTemplateSaved: () => {
+    },
+    onTroopTransferReceived: (data: TroopTransferRequest) => {
+      useNotificationStore.getState().setTroopTransferRequest(data);
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent', source: 'gameToast', persistent: false,
+        icon: 'helmet',
+        message: t('game.toast.troopTransferReceived' as never, { name: data.initiatorName, count: data.amount }),
+      });
+    },
+    onTroopTransferResult: (data: TroopTransferResult) => {
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent', source: 'gameToast', persistent: false,
+        icon: 'helmet',
+        message: data.accepted
+          ? t('game.toast.troopTransferAccepted' as never, { name: data.recipientName, count: data.amount })
+          : t('game.toast.troopTransferDeclined' as never, { name: data.recipientName }),
+      });
+    },
+    onFieldBattleInvite: (data: FieldBattleInvite) => {
+      useNotificationStore.getState().setFieldBattleInvite(data);
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent', source: 'gameToast', persistent: false,
+        icon: 'contested',
+        message: t('game.toast.fieldBattleInvite' as never, { name: data.initiatorName }),
+      });
+    },
+    onFieldBattleResolved: (data: FieldBattleResult) => {
+      useInfoLedgeStore.getState().push({
+        severity: 'gameEvent', source: 'gameToast', persistent: false,
+        icon: data.initiatorWon ? 'trophy' : 'flag',
+        message: data.initiatorWon
+          ? t('game.toast.fieldBattleWon' as never, { q: data.q, r: data.r })
+          : t('game.toast.fieldBattleLost' as never, { q: data.q, r: data.r }),
+      });
     },
     onReconnected: () => {
       recordAgentEvent('Reconnected');

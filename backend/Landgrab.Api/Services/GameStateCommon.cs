@@ -87,6 +87,7 @@ internal static class GameStateCommon
                 BeaconHeading = player.BeaconHeading,
                 ShareIntelCooldownUntil = player.ShareIntelCooldownUntil,
                 CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
+                TroopTransferCooldownUntil = player.TroopTransferCooldownUntil,
                 TacticalStrikeActive = player.TacticalStrikeActive,
                 TacticalStrikeExpiry = player.TacticalStrikeExpiry,
                 TacticalStrikeCooldownUntil = player.TacticalStrikeCooldownUntil,
@@ -100,6 +101,7 @@ internal static class GameStateCommon
                 SabotageAlertNearby = player.SabotageAlertNearby,
                 InterceptTargetId = player.InterceptTargetId,
                 InterceptLockStartAt = player.InterceptLockStartAt,
+                FieldBattleCooldownUntil = player.FieldBattleCooldownUntil,
                 FortTargetQ = player.FortTargetQ,
                 FortTargetR = player.FortTargetR,
                 FortPerimeterVisited = [.. player.FortPerimeterVisited],
@@ -188,6 +190,7 @@ internal static class GameStateCommon
                 HQEnabled = state.Dynamics.HQEnabled,
                 HQAutoAssign = state.Dynamics.HQAutoAssign,
                 EnemySightingMemorySeconds = state.Dynamics.EnemySightingMemorySeconds,
+                FieldBattleResolutionMode = state.Dynamics.FieldBattleResolutionMode,
             },
             GameDurationMinutes = state.GameDurationMinutes,
             MasterTileQ = state.MasterTileQ,
@@ -218,6 +221,29 @@ internal static class GameStateCommon
                 InitiatorPlayerName = r.InitiatorPlayerName,
                 Deadline = r.Deadline,
                 IsHQRaid = r.IsHQRaid
+            }).ToList(),
+            ActiveTroopTransfers = state.ActiveTroopTransfers.Select(transfer => new ActiveTroopTransfer
+            {
+                Id = transfer.Id,
+                InitiatorId = transfer.InitiatorId,
+                InitiatorName = transfer.InitiatorName,
+                RecipientId = transfer.RecipientId,
+                RecipientName = transfer.RecipientName,
+                Amount = transfer.Amount,
+                ExpiresAt = transfer.ExpiresAt
+            }).ToList(),
+            ActiveFieldBattles = state.ActiveFieldBattles.Select(battle => new ActiveFieldBattle
+            {
+                Id = battle.Id,
+                InitiatorId = battle.InitiatorId,
+                InitiatorName = battle.InitiatorName,
+                InitiatorAllianceId = battle.InitiatorAllianceId,
+                Q = battle.Q,
+                R = battle.R,
+                InitiatorTroops = battle.InitiatorTroops,
+                JoinDeadline = battle.JoinDeadline,
+                JoinedEnemyIds = [.. battle.JoinedEnemyIds],
+                Resolved = battle.Resolved
             }).ToList(),
             ContestedEdges = state.ContestedEdges?.Select(edge => new ContestedEdgeDto
             {

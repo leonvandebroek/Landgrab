@@ -22,6 +22,7 @@ public partial class GameHub : Hub
     private readonly DerivedMapStateService derivedMapStateService;
     private readonly VisibilityService visibilityService;
     private readonly VisibilityBroadcastHelper visibilityBroadcastHelper;
+    private readonly IHubContext<GameHub> hubContext;
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
 
@@ -51,6 +52,7 @@ public partial class GameHub : Hub
         DerivedMapStateService derivedMapStateService,
         VisibilityService visibilityService,
         VisibilityBroadcastHelper visibilityBroadcastHelper,
+        IHubContext<GameHub> hubContext,
         IServiceScopeFactory scopeFactory,
         ILogger<GameHub> logger)
     {
@@ -59,6 +61,7 @@ public partial class GameHub : Hub
         this.derivedMapStateService = derivedMapStateService;
         this.visibilityService = visibilityService;
         this.visibilityBroadcastHelper = visibilityBroadcastHelper;
+        this.hubContext = hubContext;
         this.scopeFactory = scopeFactory;
         this.logger = logger;
     }
@@ -261,6 +264,9 @@ public partial class GameHub : Hub
             HQEnabled = dynamics.HQEnabled,
             HQAutoAssign = dynamics.HQAutoAssign,
             EnemySightingMemorySeconds = Math.Max(0, dynamics.EnemySightingMemorySeconds),
+            FieldBattleResolutionMode = Enum.IsDefined(dynamics.FieldBattleResolutionMode)
+                ? dynamics.FieldBattleResolutionMode
+                : FieldBattleResolutionMode.InitiatorVsSumOfJoined,
         };
     }
 

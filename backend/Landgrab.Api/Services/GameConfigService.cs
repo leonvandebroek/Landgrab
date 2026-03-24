@@ -75,6 +75,26 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         }
     }
 
+    public (GameState? state, string? error) SetFieldBattleResolutionMode(string roomCode, string userId, string mode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, userId))
+                return (null, "Only the host can configure this.");
+            if (!Enum.TryParse<FieldBattleResolutionMode>(mode, out var parsed))
+                return (null, "Invalid resolution mode.");
+
+            room.State.Dynamics.FieldBattleResolutionMode = parsed;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) SetBeaconEnabled(string roomCode, string userId, bool enabled)
     {
         var room = GetRoom(roomCode);
@@ -158,6 +178,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
+            room.State.Dynamics.FieldBattleResolutionMode = dynamics.FieldBattleResolutionMode;
 
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);

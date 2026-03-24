@@ -81,6 +81,11 @@ public class GameplayService(
             var currentHexKey = player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue
                 ? HexService.Key(player.CurrentHexQ.Value, player.CurrentHexR.Value)
                 : null;
+            if (player.FieldBattleCooldownUntil.HasValue
+                && (player.PreviousHexKey != currentHexKey || player.CarriedTroops == 0))
+            {
+                player.FieldBattleCooldownUntil = null;
+            }
 
             if (room.State.Dynamics.PlayerRolesEnabled)
             {

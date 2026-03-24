@@ -72,7 +72,6 @@ export function DemolishCard({
     }, 100);
 
     return () => window.clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHolding, lockStartAt, holdProgressSec]);
 
   const getStatusText = () => {

@@ -61,6 +61,14 @@ public enum PlayerRole
     Engineer
 }
 
+public enum FieldBattleResolutionMode
+{
+    InitiatorVsSumOfJoined,
+    InitiatorVsHighestOfJoined,
+    InitiatorPlusRandomVsSumPlusRandom,
+    InitiatorPlusRandomVsHighestPlusRandom
+}
+
 public class GameDynamics
 {
     public bool BeaconEnabled { get; set; }
@@ -71,6 +79,8 @@ public class GameDynamics
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
     public int EnemySightingMemorySeconds { get; set; }
+    public FieldBattleResolutionMode FieldBattleResolutionMode { get; set; }
+        = FieldBattleResolutionMode.InitiatorVsSumOfJoined;
 }
 
 public class HexCoordinateDto
@@ -111,6 +121,7 @@ public class PlayerDto
 
     // Phase 6: CommandoRaid cooldown (raid itself is now game-level via ActiveRaids)
     public DateTime? CommandoRaidCooldownUntil { get; set; }
+    public DateTime? TroopTransferCooldownUntil { get; set; }
 
     // Commander abilities
     public bool TacticalStrikeActive { get; set; }
@@ -131,6 +142,7 @@ public class PlayerDto
     public DateTime? InterceptLockStartAt { get; set; }
 
     // Engineer abilities
+    public DateTime? FieldBattleCooldownUntil { get; set; }
     public int? FortTargetQ { get; set; }
     public int? FortTargetR { get; set; }
     public List<string> FortPerimeterVisited { get; set; } = new();
@@ -192,6 +204,53 @@ public class ActiveCommandoRaid
     public bool IsHQRaid { get; set; }
 }
 
+public class ActiveTroopTransfer
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string InitiatorId { get; set; } = "";
+    public string InitiatorName { get; set; } = "";
+    public string RecipientId { get; set; } = "";
+    public string RecipientName { get; set; } = "";
+    public int Amount { get; set; }
+    public DateTime ExpiresAt { get; set; }
+}
+
+public class TroopTransferResultDto
+{
+    public bool Accepted { get; set; }
+    public int Amount { get; set; }
+    public string RecipientName { get; set; } = "";
+    public string InitiatorName { get; set; } = "";
+}
+
+public class ActiveFieldBattle
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string InitiatorId { get; set; } = "";
+    public string InitiatorName { get; set; } = "";
+    public string InitiatorAllianceId { get; set; } = "";
+    public int Q { get; set; }
+    public int R { get; set; }
+    public int InitiatorTroops { get; set; }
+    public DateTime JoinDeadline { get; set; }
+    public List<string> JoinedEnemyIds { get; set; } = [];
+    public bool Resolved { get; set; }
+}
+
+public class FieldBattleResultDto
+{
+    public Guid BattleId { get; set; }
+    public bool InitiatorWon { get; set; }
+    public string InitiatorName { get; set; } = "";
+    public string InitiatorAllianceId { get; set; } = "";
+    public int Q { get; set; }
+    public int R { get; set; }
+    public int InitiatorTroopsLost { get; set; }
+    public int EnemyTroopsLost { get; set; }
+    public bool NoEnemiesJoined { get; set; }
+    public List<string> AllParticipantIds { get; set; } = [];
+}
+
 public class GameState
 {
     public string RoomCode { get; set; } = "";
@@ -201,6 +260,8 @@ public class GameState
     public List<PlayerDto> Players { get; set; } = [];
     public List<AllianceDto> Alliances { get; set; } = [];
     public List<ActiveCommandoRaid> ActiveRaids { get; set; } = [];
+    public List<ActiveTroopTransfer> ActiveTroopTransfers { get; set; } = [];
+    public List<ActiveFieldBattle> ActiveFieldBattles { get; set; } = [];
     public List<GameEventLogEntry> EventLog { get; set; } = [];
     public Dictionary<string, HexCell> Grid { get; set; } = [];
     public double? MapLat { get; set; }

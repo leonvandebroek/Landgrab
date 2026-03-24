@@ -1,0 +1,24 @@
+=== ShareBeaconIntel Fix — Git Diff (commit 83f77f3) ===
+
+OLD backend signature (broken):
+  public async Task<int> ShareBeaconIntel(string roomCode, string[] hexKeys)
+
+NEW backend signature (fixed):
+  public async Task<int> ShareBeaconIntel()
+
+Frontend call (was always correct):
+  const count = await invoke<number>('ShareBeaconIntel');  // 0 args
+
+Root cause: Backend required roomCode + hexKeys params that the frontend never sent.
+  - roomCode was redundant (room is already resolved from Context.ConnectionId)
+  - hexKeys was silently ignored (_ = hexKeys;)
+  - Both params were removed in commit 83f77f3
+
+Additional changes in same commit:
+  - PlayerHUD: data-testid="ability-btn-{abilityKey}" added to all ability buttons
+  - App.tsx: data-testid="dev-section-toggle" added to debug toggle
+  - MCP movement-tools.ts: prefers data-testid selector for dev-section-toggle
+
+Verification:
+  - Live SignalR test: ShareBeaconIntel() returns 4, zero server errors ✅
+  - Unit test ShareBeaconIntel_WhenScoutShares_UpdatesAllianceMemoryWithLastSeen: PASS ✅

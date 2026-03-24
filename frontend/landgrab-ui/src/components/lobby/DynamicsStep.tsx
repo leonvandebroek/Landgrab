@@ -6,6 +6,13 @@ import type { FeatureKey } from '../../utils/dynamics';
 
 const COMBAT_MODES: CombatMode[] = ['Classic', 'Balanced', 'Siege'];
 const ENEMY_SIGHTING_MEMORY_OPTIONS = [0, 15, 30, 60, 120] as const;
+const FIELD_BATTLE_RESOLUTION_MODES = [
+    'InitiatorVsSumOfJoined',
+    'InitiatorVsHighestOfJoined',
+    'InitiatorPlusRandomVsSumPlusRandom',
+    'InitiatorPlusRandomVsHighestPlusRandom',
+] as const;
+type FieldBattleResolutionMode = typeof FIELD_BATTLE_RESOLUTION_MODES[number];
 
 /* ── Component ────────────────────────────────────────────────────────── */
 
@@ -80,6 +87,11 @@ export function DynamicsStep({
         if (!isHost) return;
 
         updateDynamics({ combatMode: mode });
+    };
+
+    const handleFieldBattleResolutionModeChange = (mode: FieldBattleResolutionMode) => {
+        if (!isHost) return;
+        updateDynamics({ fieldBattleResolutionMode: mode });
     };
 
     const handleEnemySightingMemoryChange = (value: string) => {
@@ -224,6 +236,35 @@ export function DynamicsStep({
                                                 : t('dynamics.combatMode.Siege.description' as never, {
                                                     defaultValue: 'Like Balanced but defenders get +25% bonus',
                                                 })}
+                                    </span>
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="wizard-rule-card">
+                    <h3>{t('lobby.fieldBattleResolution.title' as never)}</h3>
+                    <p className="wizard-hint">{t('lobby.fieldBattleResolution.description' as never)}</p>
+                    <div className="claim-mode-grid">
+                        {FIELD_BATTLE_RESOLUTION_MODES.map(mode => (
+                            <label key={mode} className={`claim-mode-option${(dynamics.fieldBattleResolutionMode ?? 'InitiatorVsSumOfJoined') === mode ? ' active' : ''}`}>
+                                <input
+                                    type="radio"
+                                    name="wizard-field-battle-resolution"
+                                    checked={(dynamics.fieldBattleResolutionMode ?? 'InitiatorVsSumOfJoined') === mode}
+                                    onChange={() => handleFieldBattleResolutionModeChange(mode)}
+                                    disabled={!isHost}
+                                />
+                                <span className="claim-mode-copy">
+                                    <span>
+                                        {mode === 'InitiatorVsSumOfJoined'
+                                            ? t('lobby.fieldBattleResolution.initiatorVsSum' as never)
+                                            : mode === 'InitiatorVsHighestOfJoined'
+                                                ? t('lobby.fieldBattleResolution.initiatorVsHighest' as never)
+                                                : mode === 'InitiatorPlusRandomVsSumPlusRandom'
+                                                    ? t('lobby.fieldBattleResolution.initiatorPlusRandomVsSum' as never)
+                                                    : t('lobby.fieldBattleResolution.initiatorPlusRandomVsHighest' as never)}
                                     </span>
                                 </span>
                             </label>

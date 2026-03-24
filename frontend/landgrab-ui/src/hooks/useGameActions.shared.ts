@@ -62,7 +62,7 @@ export interface UseGameActionsResult {
   handleActivateBeacon: (heading: number) => Promise<boolean>;
   handleDeactivateBeacon: () => Promise<boolean>;
   handleShareBeaconIntel: () => Promise<number>;
-  handleActivateCommandoRaid: (targetQ: number, targetR: number) => Promise<boolean>;
+  handleActivateCommandoRaid: () => Promise<boolean>;
   handleActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
   handleActivateRallyPoint: () => Promise<boolean>;
   handleActivateSabotage: () => Promise<boolean>;
@@ -74,6 +74,11 @@ export interface UseGameActionsResult {
   attemptIntercept: (heading: number) => Promise<{ status: string; seconds?: number }>;
   resolveRaidTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
   resolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
+  resolveTroopTransferTarget: (heading: number) => Promise<{ recipientId: string; recipientName: string } | null>;
+  handleInitiateTroopTransfer: (amount: number, recipientId: string) => Promise<{ transferId: string } | null>;
+  handleRespondToTroopTransfer: (transferId: string, accepted: boolean) => Promise<boolean>;
+  handleInitiateFieldBattle: () => Promise<{ battleId: string } | null>;
+  handleJoinFieldBattle: (battleId: string) => Promise<boolean>;
   handleSetMasterTile: (lat: number, lng: number) => void;
   handleSetMasterTileByHex: (q: number, r: number) => void;
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;

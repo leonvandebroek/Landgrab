@@ -114,7 +114,7 @@ public sealed class AbilityServiceTests
             .Build();
         var context = new ServiceTestContext(state);
 
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 1, 0);
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1");
 
         result.error.Should().Contain("Commander");
         result.state.Should().BeNull();
@@ -135,12 +135,12 @@ public sealed class AbilityServiceTests
         var context = new ServiceTestContext(state);
         var beforeActivation = DateTime.UtcNow;
 
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 1, 0);
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1");
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
         result.state!.ActiveRaids.Should().HaveCount(1);
-        result.state.ActiveRaids[0].TargetQ.Should().Be(1);
+        result.state.ActiveRaids[0].TargetQ.Should().Be(0);
         result.state.ActiveRaids[0].InitiatorAllianceId.Should().Be("a1");
         result.state.ActiveRaids[0].Deadline.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(5));
     }
@@ -162,11 +162,11 @@ public sealed class AbilityServiceTests
         var result = context.AbilityService.ResolveRaidTarget(ServiceTestContext.RoomCode, "p1", targetHeading);
 
         result.error.Should().BeNull();
-        result.target.Should().Be((1, 0));
+        result.target.Should().Be((0, 0));
     }
 
     [Fact]
-    public void ResolveRaidTarget_WhenPointingTowardMissingAdjacentHex_ReturnsNull()
+    public void ResolveRaidTarget_WhenPointingTowardMissingAdjacentHex_ReturnsCurrentHex()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(1)
@@ -182,7 +182,7 @@ public sealed class AbilityServiceTests
         var result = context.AbilityService.ResolveRaidTarget(ServiceTestContext.RoomCode, "p1", missingHeading);
 
         result.error.Should().BeNull();
-        result.target.Should().BeNull();
+        result.target.Should().Be((1, 0));
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class AbilityServiceTests
             .Build();
         var context = new ServiceTestContext(state);
 
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1");
 
         result.state.Should().BeNull();
         result.error.Should().NotBeNull();
@@ -436,7 +436,7 @@ public sealed class AbilityServiceTests
         });
         var context = new ServiceTestContext(state);
 
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 1, 0);
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1");
 
         result.state.Should().BeNull();
         result.error.Should().Contain("active commando raid");
@@ -475,13 +475,13 @@ public sealed class AbilityServiceTests
         var context = new ServiceTestContext(state);
         var beforeActivation = DateTime.UtcNow;
 
-        var result = context.AbilityService.ActivateTacticalStrike(ServiceTestContext.RoomCode, "p1", 0, 0);
+        var result = context.AbilityService.ActivateTacticalStrike(ServiceTestContext.RoomCode, "p1", 1, 0);
 
         result.error.Should().BeNull();
         context.Player("p1").TacticalStrikeActive.Should().BeTrue();
         context.Player("p1").TacticalStrikeExpiry.Should().BeCloseTo(beforeActivation.AddMinutes(5), TimeSpan.FromSeconds(10));
         context.Player("p1").TacticalStrikeCooldownUntil.Should().BeCloseTo(beforeActivation.AddMinutes(20), TimeSpan.FromSeconds(10));
-        context.Player("p1").TacticalStrikeTargetQ.Should().Be(0);
+        context.Player("p1").TacticalStrikeTargetQ.Should().Be(1);
         context.Player("p1").TacticalStrikeTargetR.Should().Be(0);
     }
 
@@ -506,7 +506,7 @@ public sealed class AbilityServiceTests
     }
 
     [Fact]
-    public void ActivateCommandoRaid_WhenTargetIsNotAdjacent_Fails()
+    public void ActivateCommandoRaid_UsesCurrentHexAsTarget()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(4)
@@ -517,10 +517,13 @@ public sealed class AbilityServiceTests
             .Build();
         var context = new ServiceTestContext(state);
 
-        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1", 2, 0);
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1");
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("Commando raid target must be adjacent to your current hex.");
+        result.state.Should().NotBeNull();
+        result.error.Should().BeNull();
+        result.state!.ActiveRaids.Should().ContainSingle();
+        result.state.ActiveRaids[0].TargetQ.Should().Be(0);
+        result.state.ActiveRaids[0].TargetR.Should().Be(0);
     }
 
     [Fact]
@@ -537,7 +540,7 @@ public sealed class AbilityServiceTests
         var result = context.AbilityService.ActivateTacticalStrike(ServiceTestContext.RoomCode, "p1", 2, 0);
 
         result.state.Should().BeNull();
-        result.error.Should().Be("Tactical Strike target must be your current hex or an adjacent hex.");
+        result.error.Should().Be("Tactical Strike target must be an adjacent hex.");
     }
 
     [Fact]
@@ -740,6 +743,126 @@ public sealed class AbilityServiceTests
         engineer.SabotageBlockedTiles.Should().ContainKey(HexService.Key(1, 0));
         scout.InterceptTargetId.Should().BeNull();
         scout.InterceptLockStartAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void InitiateTroopTransfer_WhenValid_AddsPendingTransfer()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .WithCarriedTroops("p1", 5)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.InitiateTroopTransfer(ServiceTestContext.RoomCode, "p1", 3, "p2");
+
+        result.error.Should().BeNull();
+        result.transferId.Should().NotBeNull();
+        context.State.ActiveTroopTransfers.Should().ContainSingle();
+        context.State.ActiveTroopTransfers[0].Amount.Should().Be(3);
+    }
+
+    [Fact]
+    public void RespondToTroopTransfer_WhenAccepted_MovesTroopsAndSetsCooldown()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .WithCarriedTroops("p1", 5)
+            .WithCarriedTroops("p2", 1)
+            .Build();
+        state.ActiveTroopTransfers.Add(new ActiveTroopTransfer
+        {
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            RecipientId = "p2",
+            RecipientName = "Bob",
+            Amount = 3,
+            ExpiresAt = DateTime.UtcNow.AddSeconds(20)
+        });
+        var context = new ServiceTestContext(state);
+        var transferId = state.ActiveTroopTransfers[0].Id;
+
+        var result = context.AbilityService.RespondToTroopTransfer(ServiceTestContext.RoomCode, "p2", transferId, true);
+
+        result.error.Should().BeNull();
+        context.Player("p1").CarriedTroops.Should().Be(2);
+        context.Player("p2").CarriedTroops.Should().Be(4);
+        context.Player("p1").TroopTransferCooldownUntil.Should().NotBeNull();
+        context.State.ActiveTroopTransfers.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void InitiateFieldBattle_WhenValid_CreatesActiveBattle()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .WithCarriedTroops("p2", 3)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.InitiateFieldBattle(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        result.battle.Should().NotBeNull();
+        context.State.ActiveFieldBattles.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void ResolveFieldBattle_WhenEnemyJoins_ResolvesAndClearsBattle()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .WithCarriedTroops("p2", 2)
+            .Build();
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 4,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(10),
+            JoinedEnemyIds = ["p2"]
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ResolveFieldBattle(ServiceTestContext.RoomCode, battleId);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        result.result.Should().NotBeNull();
+        context.State.ActiveFieldBattles.Should().BeEmpty();
     }
 
 }

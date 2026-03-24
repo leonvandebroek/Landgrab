@@ -7,7 +7,9 @@ export type AbilityKey =
   | 'fortConstruction'
   | 'sabotage'
   | 'demolish'
-  | 'intercept';
+  | 'intercept'
+  | 'troopTransfer'
+  | 'fieldBattle';
 
 export type AbilityMode = 'idle' | 'targeting' | 'confirming' | 'active' | 'inProgress';
 

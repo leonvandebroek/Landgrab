@@ -9,6 +9,8 @@ mcp-servers:
     type: local
     command: "node"
     args: ["/Users/leonvandebroek/Projects/Github/Landgrab/tools/landgrab-agent-mcp/dist/server.js"]
+    env:
+      LANDGRAB_HEADLESS: "false"
     tools: ["*"]
   playwright:
     type: local

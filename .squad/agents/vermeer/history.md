@@ -155,3 +155,48 @@ Added new i18n keys: `shareIntel`, `shareIntelDone` (interpolated `{{count}}`), 
 
 - **2026-03-23 (client-side visibility computation):** Implemented client-side visibility override to eliminate the 750ms delay when tiles reveal upon player movement. Previously, the frontend waited for a backend round-trip to receive updated `visibilityTier` values via `StateUpdated`, causing a noticeable lag when players moved adjacent to hidden territory. The fix generalizes the existing beacon cone pattern: created `isLocallyVisible()` utility in `src/utils/localVisibility.ts` that mirrors the backend's `ComputeVisibleHexKeys` logic (allied player radius-1, alliance-owned territory, hostile hexes adjacent to alliance-owned, beacon cone). In `tricorderTileState.ts`, the `visibilityTierEarly` derivation now checks local visibility first (`locallyVisible ? 'Visible' : serverTier`), instantly revealing tiles without waiting for the server. The sets `alliedPlayerHexKeys` and `allianceOwnedHexKeys` are computed once per component via `useMemo` in both `HexTile.tsx` and `TileInfoCard.tsx`, reacting to player position changes (including the lightweight `PlayersMoved` event). The server's `visibilityTier` remains the fallback for remembered tiles and alliance-shared intel. React Compiler required full `myPlayer` / `currentPlayer` objects in dependency arrays (not just `?.allianceId`) to preserve manual memoization. Build: lint + tsc + vite all clean. Orchestration log: `.squad/orchestration-log/2026-03-23T13:40:42Z-vermeer-visibility.md`.
 
+
+## 2025-01-26: Game Manual Research
+
+**Context:** Rembrandt (orchestrator) requested comprehensive documentation of player-facing experience for game manual creation.
+
+**Research conducted:**
+- Analyzed complete i18n/en.ts file (1400+ lines) — extracted ALL player-facing text
+- Reviewed all 9 ability card components (Beacon, Tactical Strike, Rally Point, Commando Raid, Fort Construction, Sabotage, Demolish, Share Intel, Intercept)
+- Examined TileInfoCard for hex inspection UX
+- Studied PlayerHUD and PlayingHud for HUD layout and interactions
+- Analyzed SetupWizard and GameLobby for complete setup flow
+- Documented GameView for main game structure
+
+**Key findings:**
+1. **Setup wizard is 6 steps:** Location → Teams → Rules → Dynamics → Roles (optional) → Review
+2. **3 visibility tiers:** Visible (full info) → Remembered (stale intel with "ARCHIVED" badge) → Hidden (unknown)
+3. **Ability cards follow consistent pattern:** Status pill, description, metadata rows, action buttons, back/abort controls
+4. **Combat is two-phase:** Preview modal (with retreat option) → Result modal (with troop deployment)
+5. **HUD is contextual:** Shows different action buttons based on hex relation (own/team/enemy/neutral)
+6. **Map legend has 30+ entries** covering territory, markers, borders, progress, and status indicators
+7. **Roles grant 2-4 abilities each:** Commander (4), Scout (4), Engineer (3)
+8. **Fog of war is sophisticated:** Uses lastKnownOwner fields, staleness indicators, time-since-seen display
+9. **Guest flow is simplified:** No wizard navigation, just waiting screens with progress updates
+10. **All validation is inline:** Field-level error messages, disabled states with tooltips
+
+**Deliverable:** Created comprehensive 600+ line research document at `.squad/decisions/inbox/vermeer-game-manual-research.md` with:
+- Complete player journey (13 sections)
+- Every ability card's UI flow
+- All setup wizard options
+- Map legend entries
+- Fog of war mechanics
+- Combat modals
+- Error messages
+- Visual feedback patterns
+
+This provides authoritative source for player-facing game manual that matches the actual in-game experience word-for-word.
+
+### Abilities Expansion (troopTransfer + fieldBattle)
+- Added TroopTransfer and FieldBattle ability types with full SignalR event handling
+- CommandoRaidCard simplified: no more bearing-based target selection, raids current position
+- TacticalStrikeCard: removed currentHex prop and "Use Current Hex" fallback
+- New components: TroopTransferCard, TroopTransferReceivedPanel, FieldBattleCard, FieldBattleInvitePanel
+- Notification panels (TroopTransferReceivedPanel, FieldBattleInvitePanel) get invoke via props threaded through PlayingHud
+- Valid icon used for "troops": `helmet`; for "victory": `trophy`
+- abilityUi.ts extended to restore troopTransfer/fieldBattle active state on reconnect

@@ -1,13 +1,17 @@
 import { create } from 'zustand';
-import type { HostMessage } from '../types/game';
+import type { FieldBattleInvite, HostMessage, TroopTransferRequest } from '../types/game';
 
 const HOST_MESSAGE_TIMEOUT_MS = 10000;
 
-type NotificationTimerKey = 'hostMessage';
+type NotificationTimerKey = 'hostMessage' | 'troopTransferRequest' | 'fieldBattleInvite';
 
 interface NotificationStore {
   hostMessage: HostMessage | null;
   setHostMessage: (message: HostMessage | null) => void;
+  troopTransferRequest: TroopTransferRequest | null;
+  setTroopTransferRequest: (request: TroopTransferRequest | null) => void;
+  fieldBattleInvite: FieldBattleInvite | null;
+  setFieldBattleInvite: (invite: FieldBattleInvite | null) => void;
   clearAll: () => void;
 }
 
@@ -25,6 +29,8 @@ function clearNotificationTimer(key: NotificationTimerKey): void {
 
 function clearAllNotificationTimers(): void {
   clearNotificationTimer('hostMessage');
+  clearNotificationTimer('troopTransferRequest');
+  clearNotificationTimer('fieldBattleInvite');
 }
 
 function scheduleNotificationClear(
@@ -51,10 +57,22 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
 
     scheduleNotificationClear('hostMessage', HOST_MESSAGE_TIMEOUT_MS, () => set({ hostMessage: null }));
   },
+  troopTransferRequest: null,
+  setTroopTransferRequest: (troopTransferRequest) => {
+    clearNotificationTimer('troopTransferRequest');
+    set({ troopTransferRequest });
+  },
+  fieldBattleInvite: null,
+  setFieldBattleInvite: (fieldBattleInvite) => {
+    clearNotificationTimer('fieldBattleInvite');
+    set({ fieldBattleInvite });
+  },
   clearAll: () => {
     clearAllNotificationTimers();
     set({
       hostMessage: null,
+      troopTransferRequest: null,
+      fieldBattleInvite: null,
     });
   },
 }));

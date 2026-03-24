@@ -17,6 +17,8 @@ export interface GameDynamics {
   hqAutoAssign: boolean;
   tileDecayEnabled: boolean;
   enemySightingMemorySeconds?: number;
+  fieldBattleResolutionMode?: 'InitiatorVsSumOfJoined' | 'InitiatorVsHighestOfJoined'
+    | 'InitiatorPlusRandomVsSumPlusRandom' | 'InitiatorPlusRandomVsHighestPlusRandom';
 }
 
 export interface HexCoordinate {
@@ -168,6 +170,8 @@ export interface Player {
   sabotageBlockedTiles?: Record<string, string>;  // key: "q,r", value: ISO date string
   // Scout Share Intel
   shareIntelCooldownUntil?: string;           // ISO date string — null when ready
+  troopTransferCooldownUntil?: string;
+  fieldBattleCooldownUntil?: string;
 }
 
 export interface AllianceDto {
@@ -233,6 +237,8 @@ export interface GameState {
   hostObserverMode?: boolean;
   isPaused?: boolean;
   activeRaids?: ActiveCommandoRaid[];
+  activeTroopTransfers?: ActiveTroopTransfer[];
+  activeFieldBattles?: ActiveFieldBattle[];
   contestedEdges?: ContestedEdgeDto[] | null;
 }
 
@@ -365,4 +371,61 @@ export interface HostMessage {
   message: string;
   fromHost: boolean;
   targetAllianceIds?: string[];
+}
+
+export interface TroopTransferRequest {
+  transferId: string;
+  initiatorId: string;
+  initiatorName: string;
+  amount: number;
+  expiresAt: string;
+}
+
+export interface TroopTransferResult {
+  accepted: boolean;
+  amount: number;
+  recipientName: string;
+  initiatorName: string;
+}
+
+export interface ActiveTroopTransfer {
+  id: string;
+  initiatorId: string;
+  initiatorName: string;
+  recipientId: string;
+  recipientName: string;
+  amount: number;
+  expiresAt: string;
+}
+
+export interface ActiveFieldBattle {
+  id: string;
+  initiatorId: string;
+  initiatorName: string;
+  initiatorAllianceId: string;
+  q: number;
+  r: number;
+  joinDeadline: string;
+  joinedEnemyIds: string[];
+  resolved: boolean;
+}
+
+export interface FieldBattleInvite {
+  battleId: string;
+  initiatorName: string;
+  initiatorAllianceName: string;
+  q: number;
+  r: number;
+  joinDeadline: string;
+}
+
+export interface FieldBattleResult {
+  battleId: string;
+  initiatorWon: boolean;
+  initiatorName: string;
+  q: number;
+  r: number;
+  initiatorTroopsLost: number;
+  enemyTroopsLost: number;
+  noEnemiesJoined: boolean;
 }

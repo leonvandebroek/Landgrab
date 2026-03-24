@@ -1,5 +1,5 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
 import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
@@ -10,7 +10,6 @@ interface TacticalStrikeCardProps {
   myUserId: string;
   onActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean> | void;
   onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
-  currentHex: [number, number] | null;
 }
 
 function formatTimeRemaining(until: string | undefined): string | null {
@@ -32,10 +31,8 @@ export function TacticalStrikeCard({
   myUserId,
   onActivateTacticalStrike,
   onResolveTacticalStrikeTarget,
-  currentHex,
 }: TacticalStrikeCardProps) {
   const { t } = useTranslation();
-  const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
   );
@@ -50,24 +47,14 @@ export function TacticalStrikeCard({
   const strikeCountdown = formatTimeRemaining(player?.tacticalStrikeExpiry);
   const isArmed = Boolean(player?.tacticalStrikeActive) || abilityUi.mode === 'active';
 
-  let isCurrentHexValid = false;
-  if (currentHex && gameState && player) {
-    const key = `${currentHex[0]},${currentHex[1]}`;
-    const cell = gameState.grid[key];
-    if (cell && (cell.ownerId === undefined || cell.ownerAllianceId !== player.allianceId)) {
-      isCurrentHexValid = true;
-    }
-  }
-
   useEffect(() => {
     let handle = -1;
-    // For tactical strike, "ready" means we are targeting
     if (!isArmed && onResolveTacticalStrikeTarget) {
       handle = window.setInterval(() => {
-        const h = heading ?? 0;
-        void onResolveTacticalStrikeTarget(h).then(res => {
-          if (res) {
-            setResolvedTarget([res.targetQ, res.targetR]);
+        const nextHeading = heading ?? 0;
+        void onResolveTacticalStrikeTarget(nextHeading).then((result) => {
+          if (result) {
+            setResolvedTarget([result.targetQ, result.targetR]);
           } else {
             setResolvedTarget(null);
           }
@@ -76,7 +63,7 @@ export function TacticalStrikeCard({
     } else {
       setTimeout(() => { setResolvedTarget(null); }, 0);
     }
-    
+
     return () => {
       if (handle !== -1) {
         window.clearInterval(handle);
@@ -141,32 +128,18 @@ export function TacticalStrikeCard({
         </>
       )}
       footerContent={!isArmed ? (
-        <>
-          <button
-            type="button"
-            className="ability-card__primary-btn"
-            onClick={() => {
-              if (resolvedTarget) {
-                void handleArmStrike(resolvedTarget[0], resolvedTarget[1]);
-              }
-            }}
-            disabled={!resolvedTarget}
-          >
-            Lock Target
-          </button>
-          
-          {isCurrentHexValid && currentHex && (
-            <button
-              type="button"
-              className="ability-card__secondary-btn"
-              onClick={() => {
-                void handleArmStrike(currentHex[0], currentHex[1]);
-              }}
-            >
-              Use Current Hex
-            </button>
-          )}
-        </>
+        <button
+          type="button"
+          className="ability-card__primary-btn"
+          onClick={() => {
+            if (resolvedTarget) {
+              void handleArmStrike(resolvedTarget[0], resolvedTarget[1]);
+            }
+          }}
+          disabled={!resolvedTarget}
+        >
+          Lock Target
+        </button>
       ) : undefined}
       onBackToHud={handleBackToHud}
     >
