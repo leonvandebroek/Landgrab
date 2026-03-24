@@ -261,6 +261,51 @@
 
 **SignalR Impact:** None — `PlayersMoved` event already existed; only reduced unnecessary `BroadcastState` calls.
 
+### 24. Game Manual: Comprehensive player-facing documentation (2026-03-23 to 2026-03-24)
+
+**Status:** Completed & Approved  
+**Deliverable:** `docs/game-manual.md` (6,615 words, 13 sections)
+
+**Scope:** 
+- All 3 player roles (Scout, Commander, Engineer) with passive/active ability details
+- All 9 abilities with exact mechanics, cooldowns, ranges, and tactical guidance
+- Both game modes: Alliances (room-based, real-time) and Free-for-All (persistent global map)
+- Complete player journey: setup wizard → lobby → gameplay → win conditions
+- Fog of War & visibility system
+- Combat modes (Classic, Balanced, Siege) with damage/defense formulas
+- Troop regeneration mechanics (+1 base, +3 presence, 0 hostile/sabotage, -1 decay)
+- HQ capture mechanics (40% unlock threshold, 5-min claim freeze, Commando Raid only)
+
+**Quality Gates:** 3-pass review process
+- **Pass 1 (Rembrandt):** Identified 5 critical + 2 minor errors; Vondel applied 7 fixes ✅
+- **Pass 2 (Rembrandt):** Verified Vondel's 7 fixes; found 2 new critical errors; De Ruyter applied 2 fixes ✅
+- **Pass 3 (Rembrandt):** Verified De Ruyter's 2 fixes; found 1 final consistency error; Coordinator applied 1-word fix ✅
+
+**Key Corrections Applied:**
+| # | Error | Fix |
+|---|-------|-----|
+| 1 | FFA "advantage" mechanic (roll 2d6 take highest) | Single d6 + 1 if attacker has more troops |
+| 2 | FFA ties go to attacker (≥ defender) | Ties go to defender (strictly greater) |
+| 3 | Fog of War is optional | Always active; host configures EnemySightingMemory duration |
+| 4 | HQ claim freeze ends on recapture | Runs full 5 minutes regardless |
+| 5 | HQ capturable by direct combat | HQ hexes immune — Commando Raid only |
+| 6 | Commando Raid success: "≥50% of alliance" | 2 members minimum + outnumber defenders |
+| 7 | Demolish initiation: "adjacent to fort" | Standing ON the fort hex |
+| 8 | Enemy sighting memory range: "0–300s" | Actual options: 0, 15, 30, 60, 120s |
+| 9 | Elimination tiebreaker: "prior territory" | Current territory count; alphabetical if tied |
+| 10 | Engineer role summary: "adjacent to fort" | Standing ON the fort hex |
+
+**Research Foundations:** 
+- Vondel (game design): 29,461-word analysis of roles, abilities, mechanics, fog of war
+- De Ruyter (backend): 28,590-word extraction of authoritative mechanical values from C# code
+- Vermeer (frontend): 32,715-word documentation of player UX journey, ability cards, setup wizard
+
+**Authorship:** Erasmus synthesized three research streams into coherent narrative
+
+**Decision:** Multi-pass review structure with rotating correction agents (Vondel → De Ruyter → Coordinator) prevented groupthink, enabled fresh perspective on each cycle, and caught all cascading errors. Final manual verified against backend code and frontend implementation.
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus
