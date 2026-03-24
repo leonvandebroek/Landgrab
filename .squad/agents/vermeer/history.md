@@ -200,3 +200,6 @@ This provides authoritative source for player-facing game manual that matches th
 - Notification panels (TroopTransferReceivedPanel, FieldBattleInvitePanel) get invoke via props threaded through PlayingHud
 - Valid icon used for "troops": `helmet`; for "victory": `trophy`
 - abilityUi.ts extended to restore troopTransfer/fieldBattle active state on reconnect
+
+- 2026-03-24 (abilities-expansion-frontend): Implemented frontend abilities expansion from Rembrandt blueprint. Commando Raid refactored to current-hex-only (removed coordinate UI), Tactical Strike constraint enforced (adjacent-only), Troop Transfer added with bearing-based targeting + name preview + confirmation, Field Battle added with notification banner join flow + 30s countdown + host-configurable resolution modes. Added troopTransfer + fieldBattle to AbilityKey union; extended notificationStore; wired 4 new hub event handlers; added 5 new useGameActionsAbilities callbacks; created 4 new components (TroopTransferCard, TroopTransferReceivedPanel, FieldBattleCard, FieldBattleInvitePanel); updated DynamicsStep with Field Battle mode radio; added 12+ new i18n keys (EN + NL). Validation: `npm run lint` ✅ (0 errors), `npm run build` ✅ (0 errors). Files: 43 changed, +2270/-257 lines. Commit: 0c6e61b. See orchestration log `.squad/orchestration-log/2026-03-24T16:25:04Z-vermeer.md`.
+

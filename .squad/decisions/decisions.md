@@ -260,3 +260,162 @@ A `QueuedOutcomeDialog` discriminated union (`{ type: 'combat'; result: CombatRe
 - Build: ✅ `npm run lint && npm run build` — 0 errors, 293 modules
 - Backward compatible; no breaking changes
 - Surgical changes isolated to cone rendering paths
+
+---
+
+## Abilities Expansion — Architectural Decisions (Rembrandt, 2026-03-24)
+
+**Status:** Binding  
+**Related:** `rembrandt-abilities-expansion-blueprint.md`
+
+### Decision A — Tactical Strike: Confirm Required (No Auto-Fire)
+
+**Status:** Binding  
+**Ruling:** Bearing auto-targets the adjacent hex in real time (polling every 500ms via `ResolveTacticalStrikeTarget`), but the player must explicitly tap "Arm Strike" to commit. No auto-fire on pointing.  
+**Rationale:** 20-minute cooldown makes accidental activation a severe UX failure. Consistent with the existing "Lock Target" confirmation pattern across all bearing-based abilities.  
+**Impact:** Frontend `TacticalStrikeCard.tsx` keeps the "Lock Target" button. Backend unchanged.
+
+### Decision B — Troop Transfer Targeting: Name Preview + Confirm Required
+
+**Status:** Binding  
+**Ruling:** `ResolveTroopTransferTarget(heading)` returns the closest alliance member within a **45° bearing cone** from the caller's position. The card shows "Targeting: [PlayerName]" in real time. The player must tap "Send Troops" to commit.  
+**Rationale:** Transferring to the wrong teammate is a costly mistake. Name preview with explicit confirmation protects against mis-sends. 45° tolerance (vs 30° for hex targeting) accounts for imprecise GPS between players.  
+**Impact:** New hub method `ResolveTroopTransferTarget(heading)`. New `TroopTransferCard.tsx` with polling useEffect.
+
+### Decision C — Field Battle Join UX: Notification Banner (Not Modal)
+
+**Status:** Binding  
+**Ruling:** Enemy players on the same hex receive a **non-blocking notification banner** (extended `notificationStore`) with inline Join/Ignore buttons and a live 30-second countdown. No full-screen modal.  
+**Rationale:** A full modal interrupts active player movement. A banner allows response without blocking game context. Consistent with `hostMessage` notification pattern already in `notificationStore`.  
+**Impact:** New `FieldBattleInvitePanel.tsx`. Extend `notificationStore` with `fieldBattleInvite` key. New `TroopTransferReceivedPanel.tsx` uses same pattern.
+
+### Decision D — Field Battle Timer: Background Task in Hub Method
+
+**Status:** Binding  
+**Ruling:** The 30-second resolution timer fires via `_ = Task.Run(async () => { await Task.Delay(30s); ... })` inside the `InitiateFieldBattle` hub method. `IHubContext<GameHub>` is injected into the `GameHub` constructor to support pushing from the background task.  
+**Rationale:** A new `BackgroundService` is overkill for a per-battle event. `Task.Run` with captured hub context is lightweight and precedented in this codebase (see `TroopRegenerationService` for the hub context injection pattern). `battle.Resolved` flag prevents double-resolution.  
+**Impact:** Add `IHubContext<GameHub>` to `GameHub` constructor. Verify DI registration in `Program.cs`.
+
+### Decision E — Field Battle No-Join Outcome: Cancellation (Not Initiator Win)
+
+**Status:** Binding  
+**Ruling:** If 30 seconds expire with zero enemies joining, the battle is **cancelled**. No troops are lost by either side. The initiator's cooldown still applies.  
+**Rationale:** Awarding a victory with no opponent engaged is gameable and feels hollow. Cancellation with cooldown creates a deliberate risk/reward trade-off: initiating costs a cooldown even if no one responds.  
+**Impact:** `ResolveFieldBattle` must set `result.NoEnemiesJoined = true` and skip troop deduction when `JoinedEnemyIds` is empty.
+
+### Non-Decisions (Explicitly Out of Scope)
+
+- **Troop Transfer max range:** Unbounded — any alliance member with a known GPS location is a valid target. No radius cap. This may be revisited if abuse patterns emerge.
+- **Field Battle tile-claiming:** The spec is explicit — Field Battle does NOT claim the tile. No change to territory logic.
+- **Wizard step numbering:** Field Battle config is added WITHIN the existing Game Dynamics wizard step, not as a new numbered step. Avoids renumbering.
+
+---
+
+## De Ruyter — Abilities Expansion Backend Done (2026-03-24)
+
+Implemented backend changes from Rembrandt's blueprint across models, services, hubs, and tests.
+
+### Implemented
+
+1. **Commando Raid target removal**
+   - `AbilityService.ResolveRaidTarget` now resolves to the commander's current hex (heading accepted for signature compatibility, no adjacency targeting).
+   - `AbilityService.ActivateCommandoRaid` signature changed to `(roomCode, userId)` and derives target from current hex.
+   - `GameService` facade updated to match new signature.
+   - `GameHub.Gameplay.ActivateCommandoRaid` changed to parameterless; target coordinate validation removed.
+   - Event log text updated to reflect raid launch from current hex.
+
+2. **Tactical Strike adjacency tightening**
+   - In `AbilityService.ActivateTacticalStrike`, range check changed from `> 1` to `!= 1`.
+   - Error message updated to: `"Tactical Strike target must be an adjacent hex."`
+
+3. **Troop Transfer (new)**
+   - Added models to `GameState.cs`: `ActiveTroopTransfer`, `TroopTransferResultDto`, `PlayerDto.TroopTransferCooldownUntil`, `GameState.ActiveTroopTransfers`
+   - Added service methods in `AbilityService`: `ResolveTroopTransferTarget`, `InitiateTroopTransfer`, `RespondToTroopTransfer`
+   - Added `GameService` facades for all three methods.
+   - Added hub methods in `GameHub.Gameplay.cs`: `ResolveTroopTransferTarget`, `InitiateTroopTransfer`, `RespondToTroopTransfer`
+   - Added recipient/initiator notifications: `TroopTransferReceived`, `TroopTransferResult`
+
+4. **Field Battle (new)**
+   - Added enum/models to `GameState.cs`: `FieldBattleResolutionMode`, `ActiveFieldBattle`, `FieldBattleResultDto`, `GameDynamics.FieldBattleResolutionMode` (default `InitiatorVsSumOfJoined`), `PlayerDto.FieldBattleCooldownUntil`, `GameState.ActiveFieldBattles`
+   - Added `AbilityService` methods: `InitiateFieldBattle`, `JoinFieldBattle`, `ResolveFieldBattle`
+   - Added required `room.SyncRoot` locking and `battle.Resolved` race protection in `ResolveFieldBattle`.
+   - Added `GameService` facades for the field battle methods.
+   - Added `GameHub.Gameplay` methods: `InitiateFieldBattle`, `JoinFieldBattle`
+   - Added async timer-based auto-resolution path in hub via injected `IHubContext<GameHub>`.
+   - Added host config: `GameConfigService.SetFieldBattleResolutionMode`, `GameService.SetFieldBattleResolutionMode`, `GameHub.Host.SetFieldBattleResolutionMode`
+   - Added cooldown lifecycle clear in `GameplayService.UpdatePlayerLocation` when player moves hex or reaches 0 carried troops.
+
+5. **Snapshot/state propagation updates**
+   - `GameStateCommon.SnapshotState` updated to clone all newly added ability fields/collections and new dynamics value.
+   - `GameHub.SanitizeGameDynamics` updated to include `FieldBattleResolutionMode`.
+   - `GameConfigService.SetGameDynamics` updated to persist `FieldBattleResolutionMode`.
+
+6. **Tests**
+   - Updated existing `AbilityServiceTests` for Commando Raid / Tactical Strike behavior changes.
+   - Added new `AbilityServiceTests` for: Troop transfer initiation and acceptance, Field battle initiation and resolution
+
+### Validation
+
+- `dotnet build --configuration Debug` (backend/Landgrab.Api): ✅
+- `dotnet test` (backend/Landgrab.Tests): ✅ (299 total, 298 passed, 1 skipped)
+
+---
+
+## Vermeer — Abilities Expansion Frontend Done (2026-03-24)
+
+### Implemented
+- Steps 1–21 of the abilities blueprint
+- troopTransfer and fieldBattle added to AbilityKey union
+- All new type interfaces in game.ts
+- notificationStore extended for TroopTransferRequest and FieldBattleInvite
+- useSignalR: 4 new GameEvents + conn.on registrations
+- useSignalRHandlers: 4 new event handlers with toast notifications
+- useGameActionsAbilities: CommandoRaid simplified (no args), 5 new callbacks added
+- CommandoRaidCard: rewritten — raids current hex directly
+- TacticalStrikeCard: currentHex prop removed
+- New components: TroopTransferCard, TroopTransferReceivedPanel, FieldBattleCard, FieldBattleInvitePanel
+- PlayingHud, GameView, App: wired all new components and handlers
+- DynamicsStep: Field Battle resolution mode radio group added
+- i18n/en.ts and i18n/nl.ts: all new keys added
+
+### Deviations from Blueprint
+- Blueprint suggested 'troops' as icon; used `helmet` (closest valid GameIconName)
+- Blueprint suggested 'victory' as icon; used `trophy` (valid GameIconName)
+- TroopTransferReceivedPanel and FieldBattleInvitePanel get invoke via `onRespondToTroopTransfer`/`onJoinFieldBattle` props threaded through PlayingHud (no context/direct invoke access in components)
+
+### Validation
+- `npm run lint`: ✅ (0 errors)
+- `npm run build`: ✅ (0 errors)
+- Commit: 0c6e61b
+
+---
+
+## Validation: Instant Tile Visibility, Compass Stability, Scout Ability Gating (steen, 2026-03-23)
+
+**Requested by:** Léon van de Broek  
+**Session type:** Code-level validation (Landgrab MCP not connected; live browser testing blocked)
+
+### Test 1 — Instant tile visibility (non-Scout player)
+
+**Status: PASS (code-level)**
+
+**Fix:** Adds `isLocallyVisible()` in `frontend/landgrab-ui/src/utils/localVisibility.ts` — mirrors backend `ComputeVisibleHexKeys` logic client-side. Both `HexTile.tsx` and `TileInfoCard.tsx` compute `alliedPlayerHexKeys` and `allianceOwnedHexKeys` via `useMemo`. `tricorderTileState.ts` calls `isLocallyVisible()` immediately, deriving `visibilityTierEarly = 'Visible'` without waiting for server message. Location broadcast throttle reduced: `LOCATION_BROADCAST_THROTTLE_MS = 750ms` (was 3000ms).
+
+**Verdict:** When a Commander player moves adjacent to an enemy tile, `alliedPlayerHexKeys` updates in the same React render cycle, `isLocallyVisible()` returns `true`, and the tile info renders immediately.
+
+### Test 2 — Compass stability (90+ seconds)
+
+**Status: PASS (code-level)**
+
+**Fix applied:** Original bug was perpetual `requestAnimationFrame` loop in `lerpBearing` never exited. Fix adds convergence check: `if (Math.abs(diff) < 0.3) { ... return; // Stop loop }`. Loop self-terminates on convergence and restarts only when `effectiveHeading` changes. Additional stability: state updates throttled to max once per 60ms via RAF; `headingRef` holds latest raw value; proper cleanup on unmount; pauses when `document.hidden`.
+
+**Verdict:** No perpetual loop. Loop runs only during active bearing changes, then stops. Memory stable for 90+ seconds.
+
+### Test 3 — Scout ability gating
+
+**Status: PASS (code-level)**
+
+**Implementation:** Scout sees `intercept` + `beacon` + `shareIntel` (when beaconEnabled). Commander sees `tacticalStrike` + `commandoRaid` only. Engineer sees role-specific abilities only. Gating logic is unambiguous.
+
+---
+
