@@ -188,4 +188,77 @@ public sealed class VisibilityServiceTests
         rememberedCell.LastKnownIsFort.Should().BeFalse();
         rememberedCell.LastSeenAt.Should().NotBeNull();
     }
+
+
+    [Fact]
+    public void ComputeVisibleHexKeys_WhenViewerHasCurrentHex_IncludesAllHexesWithinVisibilityRadius()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice")
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        var service = new VisibilityService();
+
+        var visibleHexKeys = service.ComputeVisibleHexKeys(state, "p1");
+
+        visibleHexKeys.Should().Contain(HexService.Key(1, 0));
+        visibleHexKeys.Should().Contain(HexService.Key(2, 0));
+        visibleHexKeys.Should().Contain(HexService.Key(0, 0));
+        visibleHexKeys.Should().Contain(HexService.Key(1, 1));
+        visibleHexKeys.Should().NotContain(HexService.Key(3, 0));
+    }
+
+    [Fact]
+    public void BuildStateForViewer_WhenEnemyHexIsWithinVisibilityRadius_MarksHexVisible()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 1, 0)
+            .OwnHex(2, 0, "p2", "a2", troops: 4)
+            .Build();
+        var service = new VisibilityService();
+        var visibleHexKeys = service.ComputeVisibleHexKeys(state, "p1");
+
+        var visibleState = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(state),
+            "p1",
+            new PlayerVisibilityMemory(),
+            visibleHexKeys,
+            isHostObserver: false,
+            enemySightingMemorySeconds: 0);
+
+        visibleState.Grid[HexService.Key(2, 0)].VisibilityTier.Should().Be(VisibilityTier.Visible);
+    }
+
+    [Fact]
+    public void BuildStateForViewer_WhenEnemyHexIsOutsideVisibilityRadius_MarksHexHidden()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 1, 0)
+            .OwnHex(3, 0, "p2", "a2", troops: 4)
+            .Build();
+        var service = new VisibilityService();
+        var visibleHexKeys = service.ComputeVisibleHexKeys(state, "p1");
+
+        var visibleState = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(state),
+            "p1",
+            new PlayerVisibilityMemory(),
+            visibleHexKeys,
+            isHostObserver: false,
+            enemySightingMemorySeconds: 0);
+
+        visibleState.Grid[HexService.Key(3, 0)].VisibilityTier.Should().Be(VisibilityTier.Hidden);
+    }
+
 }

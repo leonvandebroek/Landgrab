@@ -45,6 +45,7 @@ builder.Services.AddSingleton<RoomPersistenceService>();
 builder.Services.AddScoped<GlobalMapService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
+builder.Services.AddSingleton<TokenBlocklist>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
 
@@ -69,7 +70,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.Zero
         };
 
-        // Support JWT in SignalR query string
+        // Support JWT in SignalR query string and cookies
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
@@ -85,6 +86,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     ctx.Token = cookieToken;
                 }
 
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = ctx =>
+            {
+                var blocklist = ctx.HttpContext.RequestServices.GetRequiredService<TokenBlocklist>();
+                var jti = ctx.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                if (jti is not null && blocklist.IsRevoked(jti))
+                    ctx.Fail("Token has been revoked.");
                 return Task.CompletedTask;
             }
         };

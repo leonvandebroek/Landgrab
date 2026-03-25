@@ -94,8 +94,27 @@ public static class AuthEndpoints
         else
             user = await db.Users.FirstOrDefaultAsync(u => u.Username == req.UsernameOrEmail);
 
-        if (user == null || !passwords.Verify(req.Password, user.PasswordHash))
+        if (user == null)
             return Results.Unauthorized();
+
+        // ── Account lockout check ─────────────────────────────────────────
+        if (user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.UtcNow)
+            return Results.BadRequest(new { error = "Account temporarily locked. Try again later." });
+
+        if (!passwords.Verify(req.Password, user.PasswordHash))
+        {
+            // Failed attempt — increment counter and potentially lock
+            user.FailedLoginAttempts += 1;
+            if (user.FailedLoginAttempts >= 5)
+                user.LockedUntil = DateTime.UtcNow.AddMinutes(15);
+            await db.SaveChangesAsync();
+            return Results.Unauthorized();
+        }
+
+        // Successful login — clear lockout state
+        user.FailedLoginAttempts = 0;
+        user.LockedUntil = null;
+        await db.SaveChangesAsync();
 
         var token = jwt.GenerateToken(user);
         AppendAuthCookie(context, environment, token);
@@ -103,8 +122,21 @@ public static class AuthEndpoints
         return Results.Ok(new AuthResponse(token, user.Username, user.Id.ToString()));
     }
 
-    private static IResult Logout(HttpContext context, IWebHostEnvironment environment)
+    private static IResult Logout(
+        HttpContext context,
+        IWebHostEnvironment environment,
+        TokenBlocklist tokenBlocklist)
     {
+        // Revoke the current JWT so it cannot be replayed after logout
+        var jti = context.User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+        var expClaim = context.User.FindFirstValue(JwtRegisteredClaimNames.Exp);
+        if (jti is not null && expClaim is not null
+            && long.TryParse(expClaim, out var expUnix))
+        {
+            var expiry = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+            tokenBlocklist.Revoke(jti, expiry);
+        }
+
         context.Response.Cookies.Delete(AuthCookieName, new CookieOptions
         {
             HttpOnly = true,

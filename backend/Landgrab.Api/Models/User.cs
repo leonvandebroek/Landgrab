@@ -16,6 +16,10 @@ public class User
     public bool EmailVerified { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    // Account lockout — incremented on each failed login; cleared on success
+    public int FailedLoginAttempts { get; set; } = 0;
+    public DateTime? LockedUntil { get; set; }
+
     public ICollection<AllianceMember> AllianceMemberships { get; set; } = [];
     public ICollection<MapTemplate> MapTemplates { get; set; } = [];
 }
