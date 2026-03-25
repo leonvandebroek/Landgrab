@@ -22,6 +22,12 @@ public partial class GameHub
 
     public async Task JoinRoom(string roomCode)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
@@ -45,6 +51,13 @@ public partial class GameHub
 
     public async Task<string> RejoinRoom(string roomCode)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            const string message = "Room code is required.";
+            await Clients.Caller.SendAsync("Error", message);
+            throw new HubException(message);
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             const string message = "Invalid room code.";

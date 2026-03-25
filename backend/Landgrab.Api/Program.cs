@@ -21,7 +21,9 @@ builder.Services.AddResponseCompression(options =>
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null)));
 
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
@@ -133,8 +135,8 @@ builder.Services.AddRateLimiter(options =>
             ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                Window = TimeSpan.FromSeconds(1),
-                PermitLimit = 60
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10
             }));
 });
 

@@ -42,6 +42,12 @@ public partial class GameHub
 
     public async Task SetHostBypassGps(string roomCode, bool bypass)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
@@ -71,6 +77,12 @@ public partial class GameHub
 
     public async Task SetMaxFootprint(string roomCode, int meters)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
@@ -100,6 +112,12 @@ public partial class GameHub
 
     public async Task LoadMapTemplate(string roomCode, Guid templateId)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
@@ -129,6 +147,12 @@ public partial class GameHub
 
     public async Task SaveCurrentAreaAsTemplate(string roomCode, string name, string? description)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode) ||
             string.IsNullOrWhiteSpace(name) ||
             !ValidateStringLength(name, MaxTemplateNameLength) ||
@@ -158,6 +182,12 @@ public partial class GameHub
 
     public async Task SetHostObserverMode(string roomCode, bool enabled)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
@@ -183,6 +213,12 @@ public partial class GameHub
 
     public async Task UpdateGameDynamicsLive(string roomCode, GameDynamics dynamics)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (dynamics == null)
         {
             await SendError(InvalidRequestCode, "Invalid game dynamics configuration.");
@@ -216,6 +252,12 @@ public partial class GameHub
 
     public async Task SendHostMessage(string roomCode, string message, List<string>? targetAllianceIds)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode) ||
             string.IsNullOrWhiteSpace(message) ||
             !ValidateStringLength(message, MaxHostMessageLength) ||
@@ -266,6 +308,12 @@ public partial class GameHub
 
     public async Task PauseGame(string roomCode, bool paused)
     {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            await Clients.Caller.SendAsync("Error", "Room code is required.");
+            return;
+        }
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
