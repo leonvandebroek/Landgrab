@@ -132,6 +132,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
   const strengthUnknown = !isInBeaconConeEarly && getStrengthUnknownState({
     cell,
     baseState,
+    visibilityTier: visibilityTierEarly,
   });
 
   const relationState: TricorderTileState['relationState'] = {
@@ -351,15 +352,17 @@ export function getProgressState(
 function getStrengthUnknownState({
   cell,
   baseState,
+  visibilityTier,
 }: {
   cell: HexCell | undefined;
   baseState: TricorderTileState['baseState'];
+  visibilityTier: 'Visible' | 'Remembered' | 'Hidden';
 }): boolean {
   if (baseState !== 'enemy' || !cell) {
     return false;
   }
 
-  return cell.visibilityTier === 'Hidden';
+  return visibilityTier === 'Hidden';
 }
 
 function getEarliestFutureIso(values: string[], now: number): string | undefined {
