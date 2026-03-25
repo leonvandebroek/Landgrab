@@ -858,7 +858,9 @@ export function PlayingHud({
         }
         const { Card } = entry;
         return <Card myUserId={myUserId} invoke={invoke} />;
-      })()
+      })()}
+
+      {!(abilityUi.activeAbility !== null && abilityUi.cardVisible) && (
         <PlayerHUD
           actions={currentHexActions ?? []}
           onAction={onCurrentHexAction ?? (() => { })}
@@ -872,13 +874,6 @@ export function PlayingHud({
           myAllianceName={myAlliance?.name}
           player={me}
           dynamics={state.dynamics}
-          onActivateBeacon={onActivateBeacon ?? (() => { })}
-          onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
-          onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
-          onActivateRallyPoint={onActivateRallyPoint ?? (() => { })}
-          onActivateSabotage={onActivateSabotage ?? (() => { })}
-          onStartDemolish={onStartDemolish ?? (() => { })}
-          onStartFortConstruction={onStartFortConstruction ?? (() => { })}
           guidanceHint={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.hint : null}
           guidanceVisible={canShowIntegratedIdleContext && !hasCurrentHexActions ? guidanceState.isVisible : false}
           interactionPrompt={canShowIntegratedIdleContext && !hasCurrentHexActions && interactionStatus && interactionStatus.action !== 'none'

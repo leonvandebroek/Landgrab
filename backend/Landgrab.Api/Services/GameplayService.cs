@@ -2,11 +2,16 @@ using Landgrab.Api.Models;
 
 namespace Landgrab.Api.Services;
 
+// CS9107: gameStateService is intentionally captured by both base (QueuePersistence) and derived
+// (QueuePersistenceIfGameOver). This dual capture is correct — base handles the common case,
+// derived needs the overload.
+#pragma warning disable CS9107
 public class GameplayService(
     IGameRoomProvider roomProvider,
     GameStateService gameStateService,
     WinConditionService winConditionService,
     Abilities.RoleProgressService roleProgressService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
     private const int BalancedCombatRounds = 3;
     private const double MinCombatHitProbability = 0.2;
@@ -46,10 +51,6 @@ public class GameplayService(
         int[] AttackDice,
         int[] DefendDice);
 
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
     public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId,

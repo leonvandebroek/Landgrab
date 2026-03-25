@@ -12,6 +12,8 @@ import { useUiStore } from '../stores/uiStore';
 import type { GameDynamics, HexCell } from '../types/game';
 import type { PlayerDisplayPreferences } from '../types/playerPreferences';
 import type { TileAction, TileActionType } from './game/tileInteraction';
+import type { InvokeFn } from '../types/abilities';
+import type { LocationPoint } from '../types/common';
 
 // Heavy components loaded lazily — same split as original App.
 const GameMap = lazy(() =>
@@ -20,11 +22,6 @@ const GameMap = lazy(() =>
 const PlayingHud = lazy(() =>
   import('./game/PlayingHud').then(m => ({ default: m.PlayingHud }))
 );
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
 
 /** All game-action callbacks sourced from useGameActions in App. */
 export interface GameViewActions {
@@ -36,25 +33,6 @@ export interface GameViewActions {
   onCurrentHexAction: (actionType: TileActionType) => void;
   onDismissTileActions: () => void;
   onConfirmAttack: () => Promise<void>;
-  onActivateBeacon: (heading: number) => Promise<boolean>;
-  onDeactivateBeacon: () => Promise<boolean>;
-  onShareBeaconIntel: () => Promise<number>;
-  onActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean>;
-  onResolveTacticalStrikeTarget: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
-  onActivateCommandoRaid: () => Promise<boolean>;
-  onActivateRallyPoint: () => Promise<boolean>;
-  onActivateSabotage: () => Promise<boolean>;
-  onCancelFortConstruction: () => Promise<boolean>;
-  onCancelSabotage: () => Promise<boolean>;
-  onCancelDemolish: () => Promise<boolean>;
-  onStartDemolish: () => Promise<boolean>;
-  onStartFortConstruction: () => Promise<boolean>;
-  onAttemptIntercept: (heading: number) => Promise<{ status: string; seconds?: number }>;
-  onResolveTroopTransferTarget: (heading: number) => Promise<{ recipientId: string; recipientName: string } | null>;
-  onInitiateTroopTransfer: (amount: number, recipientId: string) => Promise<{ transferId: string } | null>;
-  onRespondToTroopTransfer: (transferId: string, accepted: boolean) => Promise<boolean>;
-  onInitiateFieldBattle: () => Promise<{ battleId: string } | null>;
-  onJoinFieldBattle: (battleId: string) => Promise<boolean>;
   onSetObserverMode: (enabled: boolean) => void;
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
@@ -81,6 +59,8 @@ export interface GameViewProps {
   onNavigateMap: (lat: number, lng: number) => void;
   debugToggle: ReactNode;
   debugPanel: ReactNode;
+  /** Single invoke function for all SignalR hub calls. */
+  invoke: InvokeFn | null;
   actions: GameViewActions;
 }
 
@@ -103,6 +83,7 @@ export function GameView({
   onNavigateMap,
   debugToggle,
   debugPanel,
+  invoke,
   actions,
 }: GameViewProps) {
   // ── Store reads ─────────────────────────────────────────────────────────
@@ -215,25 +196,7 @@ export function GameView({
           currentHexActions={actions.currentHexActions}
           onCurrentHexAction={actions.onCurrentHexAction}
           onDismissTileActions={actions.onDismissTileActions}
-          onActivateBeacon={actions.onActivateBeacon}
-          onDeactivateBeacon={actions.onDeactivateBeacon}
-          onShareBeaconIntel={actions.onShareBeaconIntel}
-          onActivateTacticalStrike={actions.onActivateTacticalStrike}
-          onResolveTacticalStrikeTarget={actions.onResolveTacticalStrikeTarget}
-          onActivateCommandoRaid={actions.onActivateCommandoRaid}
-          onActivateRallyPoint={actions.onActivateRallyPoint}
-          onActivateSabotage={actions.onActivateSabotage}
-          onCancelFortConstruction={actions.onCancelFortConstruction}
-          onCancelSabotage={actions.onCancelSabotage}
-          onCancelDemolish={actions.onCancelDemolish}
-          onStartDemolish={actions.onStartDemolish}
-          onStartFortConstruction={actions.onStartFortConstruction}
-          onAttemptIntercept={actions.onAttemptIntercept}
-          onResolveTroopTransferTarget={actions.onResolveTroopTransferTarget}
-          onInitiateTroopTransfer={actions.onInitiateTroopTransfer}
-          onRespondToTroopTransfer={actions.onRespondToTroopTransfer}
-          onInitiateFieldBattle={actions.onInitiateFieldBattle}
-          onJoinFieldBattle={actions.onJoinFieldBattle}
+          invoke={invoke}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}

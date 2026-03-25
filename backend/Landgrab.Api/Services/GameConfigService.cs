@@ -3,10 +3,8 @@ using Landgrab.Api.Models;
 namespace Landgrab.Api.Services;
 
 public class GameConfigService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
 
     public (GameState? state, string? error) SetClaimMode(string roomCode, string userId, string claimMode)
     {

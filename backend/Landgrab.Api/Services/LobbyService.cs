@@ -3,6 +3,7 @@ using Landgrab.Api.Models;
 namespace Landgrab.Api.Services;
 
 public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
     private const int StartingTroopCount = 3;
 
@@ -13,10 +14,6 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
     internal static string[] Colors => GameStateCommon.Colors;
     internal static string[] AllianceColors => GameStateCommon.AllianceColors;
 
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private static void SetCellOwner(HexCell cell, PlayerDto player) => GameplayService.SetCellOwner(cell, player);
     private static void RefreshTerritoryCount(GameState state) => GameplayService.RefreshTerritoryCount(state);
 

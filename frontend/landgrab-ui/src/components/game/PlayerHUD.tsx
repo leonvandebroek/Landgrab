@@ -35,13 +35,6 @@ interface PlayerHUDProps {
   myAllianceName?: string;
   player?: Player;
   dynamics?: GameDynamics;
-  onActivateBeacon: ((heading: number) => Promise<boolean> | void) | (() => Promise<boolean> | void);
-  onDeactivateBeacon: () => Promise<boolean> | void;
-  onActivateTacticalStrike: ((targetQ: number, targetR: number) => Promise<boolean> | void) | (() => Promise<boolean> | void);
-  onActivateRallyPoint: () => Promise<boolean> | void;
-  onActivateSabotage: () => Promise<boolean> | void;
-  onStartDemolish: () => Promise<boolean> | void;
-  onStartFortConstruction: () => Promise<boolean> | void;
   guidanceHint?: string | null;
   guidanceVisible?: boolean;
   interactionPrompt?: {
@@ -167,12 +160,6 @@ export function PlayerHUD({
   myAllianceId,
   player,
   dynamics,
-  onActivateBeacon,
-  onActivateTacticalStrike,
-  onActivateRallyPoint,
-  onActivateSabotage,
-  onStartDemolish,
-  onStartFortConstruction,
   guidanceHint,
   guidanceVisible = false,
   interactionPrompt,
@@ -352,7 +339,7 @@ export function PlayerHUD({
       buttonState: tacticalStrikeState,
       accentClassName: ROLE_ACCENT_CLASSES.Commander,
       disabled: tacticalStrikeState === 'cooldown' || tacticalStrikeState === 'blocked',
-      onClick: getAbilityAction('tacticalStrike', tacticalStrikeState, onActivateTacticalStrike, 'confirming'),
+      onClick: getAbilityAction('tacticalStrike', tacticalStrikeState, () => undefined, 'confirming'),
       role: 'Commander',
       abilityKey: 'tacticalStrike',
     });
@@ -376,7 +363,7 @@ export function PlayerHUD({
       buttonState: rallyState,
       accentClassName: ROLE_ACCENT_CLASSES.Commander,
       disabled: rallyState === 'cooldown' || rallyState === 'blocked',
-      onClick: getAbilityAction('rallyPoint', rallyState, onActivateRallyPoint, 'confirming'),
+      onClick: getAbilityAction('rallyPoint', rallyState, () => undefined, 'confirming'),
       role: 'Commander',
       abilityKey: 'rallyPoint',
     });
@@ -432,7 +419,7 @@ export function PlayerHUD({
       buttonState: fortState,
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
       disabled: fortState === 'blocked',
-      onClick: getAbilityAction('fortConstruction', fortState, onStartFortConstruction, 'targeting', false, 'localTracking'),
+      onClick: getAbilityAction('fortConstruction', fortState, () => undefined, 'targeting', false, 'localTracking'),
       role: 'Engineer',
       abilityKey: 'fortConstruction',
     });
@@ -452,7 +439,7 @@ export function PlayerHUD({
       buttonState: sabotageState,
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
       disabled: sabotageState === 'cooldown' || sabotageState === 'blocked',
-      onClick: getAbilityAction('sabotage', sabotageState, onActivateSabotage, 'targeting', false, 'localTracking'),
+      onClick: getAbilityAction('sabotage', sabotageState, () => undefined, 'targeting', false, 'localTracking'),
       role: 'Engineer',
       abilityKey: 'sabotage',
     });
@@ -472,7 +459,7 @@ export function PlayerHUD({
       buttonState: demolishState,
       accentClassName: ROLE_ACCENT_CLASSES.Engineer,
       disabled: demolishState === 'cooldown' || demolishState === 'blocked',
-      onClick: getAbilityAction('demolish', demolishState, onStartDemolish, 'targeting', false, 'localTracking'),
+      onClick: getAbilityAction('demolish', demolishState, () => undefined, 'targeting', false, 'localTracking'),
       role: 'Engineer',
       abilityKey: 'demolish',
     });
@@ -511,7 +498,7 @@ export function PlayerHUD({
         className: `player-hud__ability player-hud__ability--beacon ${beaconState === 'active' ? 'player-hud__ability--active player-hud__ability--beacon-active' : ''}`,
         buttonState: beaconState,
         accentClassName: 'player-hud__ability--beacon',
-        onClick: getAbilityAction('beacon', beaconState, onActivateBeacon, 'confirming'),
+        onClick: getAbilityAction('beacon', beaconState, () => undefined, 'confirming'),
         isPressed: beaconState === 'active',
         role: 'Scout',
         abilityKey: 'beacon',
