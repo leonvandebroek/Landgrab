@@ -306,6 +306,143 @@
 
 ---
 
+### 26. Platform Analysis: Binding Architectural Findings & Roadmap (2026-03-25)
+
+**Status:** Documented (6 independent domain experts)  
+**Lead:** Rembrandt  
+**Team:** Vermeer, De Ruyter, Grotius, Huygens, Tasman, Spinoza
+
+**Scope:** Comprehensive six-domain platform analysis conducted March 22–25, 2026. All 40 KB of backend C#, 30 KB of frontend TypeScript, infrastructure, and CI/CD reviewed. Six independent read-only analyses cross-referenced for binding findings.
+
+**Key Findings:**
+
+#### Critical Issues (Fix Immediately, This Week)
+
+1. **Rate Limiter Misconfiguration** (De Ruyter, Grotius, Huygens confirmed)
+   - Current: `Window = 1s, PermitLimit = 60` = **3,600 req/min** (breaks brute-force protection)
+   - Intended: 10 req/min per documented design
+   - Fix: `Window = TimeSpan.FromMinutes(1), PermitLimit = 10` (1-line change)
+   - Impact: CVSS 5.3 (Medium severity); auth endpoints unprotected
+
+2. **EF Core Shadow Foreign Key Bug** (De Ruyter, Huygens confirmed)
+   - `GlobalHex.Owner` always returns null
+   - Root cause: Missing `.HasForeignKey(h => h.OwnerUserId)` in `AppDbContext`
+   - Consequence: FFA ownership display broken; `OwnerUserId` column ignored
+   - Fix: Add FK configuration + migration to drop shadow `OwnerId` column
+   - Impact: Blocks FFA mode ownership feature
+
+3. **Database Engine Documentation Mismatch** (Huygens)
+   - Actual: SQL Server 2022 via `UseSqlServer()`
+   - Documented: PostgreSQL (CLAUDE.md, README, .env)
+   - Consequence: Developer onboarding broken; environment incompatibilities
+   - Fix: Update all documentation, .env templates
+
+#### Binding Cross-Domain Findings
+
+- **GameHub zero test coverage** (De Ruyter, Spinoza critical): 2160 lines, 0 tests; single largest regression risk
+- **Azure SignalR Service not provisioned** (Tasman): blocking horizontal scale-out; in-process rooms not shared across instances
+- **Service concentration risks** (De Ruyter detailed, all confirmed): GameplayService (1440 lines), AbilityService (1331 lines), PlayingHud.tsx (1018 lines), App.tsx (721 lines + 26 subscriptions)
+
+#### Architecture Strengths (Cross-Confirmed)
+
+- GameService thin-facade pattern
+- eventsRef stale-closure fix preventing React/SignalR closure bugs
+- Two-level concurrency model (ConcurrentDictionary + lock)
+- Server-is-source-of-truth discipline (no client mutation)
+- Hub input validation suite (ValidateCoordRange, ValidateLatLng, etc.)
+- 276 passing backend unit tests with GameStateBuilder fixture
+- Zero raw SQL (100% EF Core LINQ)
+
+#### Phased Roadmap
+
+**Immediate (This Week):**
+- Rate limiter fix (De Ruyter + Grotius confirmation)
+- EF Core FK fix (De Ruyter + Huygens confirmation)
+- Database docs update (Huygens)
+
+**Phase 1 (1 Sprint):**
+- CSP header middleware (Grotius)
+- Database resilience: `EnableRetryOnFailure(5)` (Huygens + Tasman)
+- Transparent Data Encryption on SQL Server (Tasman)
+
+**Phase 2 (2–3 Sprints):**
+- Service decomposition: AbilityService by role (De Ruyter lead)
+- GameHub integration tests (Spinoza + De Ruyter)
+- Frontend test infrastructure: Vitest (Spinoza + Vermeer)
+- JWT revocation blocklist (Grotius + De Ruyter)
+- Account lockout after failed logins (Grotius + De Ruyter)
+- Frontend HUD split: PlayingHud into AbilityPanelArea, HudInfoArea, ModalArea (Vermeer)
+- Optimize useSignalRHandlers allocation (Vermeer)
+- Extract useAppOrchestrator hook (Vermeer)
+
+**Phase 3 (Infrastructure Sprint):**
+- Azure SignalR Service provisioning (Tasman lead)
+- Key Vault integration for secrets (Tasman + Grotius)
+- SQL Server geo-replication for HA/DR (Tasman + Huygens)
+
+**Output:** `docs/analysis/platform-analysis-2026-03-25.md` (32 KB consolidated reference document)
+
+**Decisions Triggered:**
+- Rate limiter + EF Core FK fixes → approved for immediate implementation
+- Service split strategy → De Ruyter proposes, Rembrandt approves
+- Frontend HUD split → Vermeer proposes, Rembrandt approves
+- Azure SignalR provisioning → Tasman produces Bicep diff, Rembrandt approves before deploy
+
+---
+
+### 27. Frontend Bug Fix: Adjacent Enemy Tiles Troops Not Revealed on PlayersMoved (2026-03-25)
+
+**Status:** Fix Specification Ready  
+**Lead:** Rembrandt (Root Cause Analysis)  
+**Implementation:** Vermeer (Frontend)  
+**Rationale:** Platform analysis identified visibility bug during consolidation
+
+**Root Cause:** `getStrengthUnknownState` in `frontend/landgrab-ui/src/components/map/tricorderTileState.ts` reads stale `cell.visibilityTier` from last `StateUpdated` instead of locally-derived `visibilityTierEarly` value.
+
+**Bug Symptom:** 
+- When player moves to hex adjacent to enemy territory, troop count shows as "?" (strengthUnknown)
+- Backend correctly stamps visibility, frontend locally computes it correctly
+- But render gate uses stale server data, not locally-derived value
+- Issue resolves only on next full `StateUpdated`
+
+**Fix (Two Changes):**
+
+1. **In `deriveTileState` (~line 132):** Pass locally-derived visibility tier to function
+   ```typescript
+   const strengthUnknown = !isInBeaconConeEarly && getStrengthUnknownState({
+     cell,
+     baseState,
+     visibilityTier: visibilityTierEarly,  // Add this line
+   });
+   ```
+
+2. **In `getStrengthUnknownState` (~line 355):** Update signature and use passed tier
+   ```typescript
+   function getStrengthUnknownState({
+     cell,
+     baseState,
+     visibilityTier,  // Add to signature
+   }: {
+     cell: HexCell | undefined;
+     baseState: TricorderTileState['baseState'];
+     visibilityTier: 'Visible' | 'Remembered' | 'Hidden';  // Add type
+   }): boolean {
+     if (baseState !== 'enemy' || !cell) {
+       return false;
+     }
+     return visibilityTier === 'Hidden';  // Use derived value instead of cell.visibilityTier
+   }
+   ```
+
+**Validation:**
+- `npm run lint` must pass (TypeScript strict, no unused params)
+- `npm run build` must pass (tsc -b clean)
+- Smoke test: Move to adjacent enemy tile → troop badge appears immediately
+
+**Impact:** 1 file, 1 function + 1 call site. No store changes, no SignalR changes, no backend changes.
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

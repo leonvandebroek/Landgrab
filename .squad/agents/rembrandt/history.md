@@ -28,3 +28,16 @@ Key patterns:
 ## Learnings
 
 - **2026-05-15 (visibility-fix-diagnosis):** Diagnosed adjacent-enemy-tile reveal bug introduced by `PlayersMoved` optimisation. Root cause: `getStrengthUnknownState` in `tricorderTileState.ts` checks `cell.visibilityTier` (raw server-stamped value from last `StateUpdated`) instead of the locally-derived `visibilityTierEarly`. After `PlayersMoved`, `alliedPlayerHexKeys` and `isLocallyVisible` correctly promote the tile to `'Visible'`, but `strengthUnknown` bypasses this because it never received the overridden tier. The backend is correct — `BuildStateForViewer` stamps `VisibilityTier.Hidden` but does NOT zero `troops`; the raw data is already in the store. Fix: pass `visibilityTierEarly` into `getStrengthUnknownState` instead of relying on `cell.visibilityTier`. Single-function, single-call-site change in `tricorderTileState.ts`. Fix spec written to `.squad/decisions/inbox/rembrandt-visibility-fix-spec.md`.
+
+- **2026-03-25 (platform-analysis):** Led six-domain consolidated analysis. Key architectural findings:
+  1. **Rate limiter critical bug**: `Program.cs` configures 60 req/s (3600/min) instead of 10 req/min — brute-force unprotected. Confirmed by De Ruyter, Grotius, Huygens. One-line fix.
+  2. **EF Core shadow FK bug**: `GlobalHex.Owner` always null. `OwnerUserId` column not wired to navigation; EF uses shadow `OwnerId`. Fix: `.HasForeignKey(h => h.OwnerUserId)` + migration.
+  3. **Database is SQL Server, not PostgreSQL**: Root `.env` and multiple docs reference PostgreSQL incorrectly. Actual stack: SQL Server 2022 throughout.
+  4. **Service concentration risk**: `GameplayService` (1440 LOC) + `AbilityService` (1331 LOC) violate SRP; need splitting into role-specific services with `IRoleAbilityService` interface.
+  5. **Frontend concentration risk**: `App.tsx` (721 LOC, 26 store reads) + `PlayingHud.tsx` (1018 LOC, 74-prop interface) need decomposition. `useSignalRHandlers` recreates 28 functions per `StateUpdated` due to `gameState` memo dep.
+  6. **GameHub zero test coverage at 2160 LOC**: Confirmed by both De Ruyter and Spinoza. Highest regression risk in the codebase.
+  7. **No Azure SignalR Service in Bicep**: Horizontal scale-out is impossible without it. Must provision before any App Service scaling.
+  8. **No JWT revocation or account lockout**: Combined with misconfigured rate limiter, login brute-forcing is currently unconstrained.
+  9. **Test suite strengths**: 276 deterministic unit tests with excellent `GameStateBuilder` infrastructure. Strong coverage for core services. Gaps in `DerivedMapStateService`, `GlobalMapService`, visibility service non-beacon paths, and all cancellation ability flows.
+  10. **No frontend unit test runner**: Vitest setup is a 30-min investment that unlocks pure-function coverage for store reducers and tile interaction logic.
+  Full analysis: `docs/analysis/platform-analysis-2026-03-25.md`. Decisions inbox: `.squad/decisions/inbox/rembrandt-platform-analysis-findings.md`.
