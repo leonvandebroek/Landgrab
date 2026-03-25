@@ -3,20 +3,9 @@ import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import type { AbilityCardProps } from '../../../types/abilities';
 
-interface FortConstructionCardProps {
-  myUserId: string;
-  currentHex: [number, number] | null;
-  onStartFortConstruction: () => Promise<boolean> | void;
-  onCancelFortConstruction: () => Promise<boolean> | void;
-}
-
-export function FortConstructionCard({
-  myUserId,
-  currentHex,
-  onStartFortConstruction,
-  onCancelFortConstruction,
-}: FortConstructionCardProps) {
+export function FortConstructionCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -26,6 +15,12 @@ export function FortConstructionCard({
   const setAbilityMode = useGameplayStore((store) => store.setAbilityMode);
   const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
+
+  // Derive currentHex from player position instead of requiring it as a prop.
+  const currentHex: [number, number] | null =
+    player?.currentHexQ != null && player?.currentHexR != null
+      ? [player.currentHexQ, player.currentHexR]
+      : null;
 
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
@@ -45,29 +40,20 @@ export function FortConstructionCard({
       hideAbilityCard();
       return;
     }
-
     exitAbilityMode();
   };
 
   const handleStart = async () => {
-    if (!isCurrentHexValid) {
-      return;
-    }
-
-    const succeeded = await Promise.resolve(onStartFortConstruction());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke || !isCurrentHexValid) return;
+    const succeeded = await invoke<boolean>('StartFortConstruction');
+    if (succeeded === false) return;
     setAbilityMode('inProgress');
   };
 
   const handleAbort = async () => {
-    const succeeded = await Promise.resolve(onCancelFortConstruction());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke) return;
+    const succeeded = await invoke<boolean>('CancelFortConstruction');
+    if (succeeded === false) return;
     exitAbilityMode();
   };
 
@@ -119,9 +105,7 @@ export function FortConstructionCard({
         <button
           type="button"
           className="ability-card__primary-btn"
-          onClick={() => {
-            void handleStart();
-          }}
+          onClick={() => { void handleStart(); }}
           disabled={!isCurrentHexValid}
         >
           {t('abilities.fortConstruction.start' as never)}
@@ -129,9 +113,7 @@ export function FortConstructionCard({
       ) : undefined}
       onBackToHud={handleBackToHud}
       showAbort={isMissionInProgress}
-      onAbort={() => {
-        void handleAbort();
-      }}
+      onAbort={() => { void handleAbort(); }}
     >
       <div className="ability-card__stack">
         {isMissionInProgress ? (

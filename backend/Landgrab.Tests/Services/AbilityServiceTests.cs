@@ -865,6 +865,301 @@ public sealed class AbilityServiceTests
         context.State.ActiveFieldBattles.Should().BeEmpty();
     }
 
+    // ── Area 1: Ability cancel paths ─────────────────────────────────────────
+
+    [Fact]
+    public void CancelFortConstruction_WhenFortConstructionIsActive_CancelsAndClearsState()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var player = state.Players.Single(p => p.Id == "p1");
+        player.FortTargetQ = 1;
+        player.FortTargetR = 0;
+        player.FortPerimeterVisited.Add(HexService.Key(0, 0));
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.CancelFortConstruction(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.Player("p1").FortTargetQ.Should().BeNull();
+        context.Player("p1").FortTargetR.Should().BeNull();
+        context.Player("p1").FortPerimeterVisited.Should().BeEmpty();
+        context.State.EventLog.Should().Contain(entry => entry.Type == "FortConstructionCancelled" && entry.PlayerId == "p1");
+    }
+
+    [Fact]
+    public void CancelFortConstruction_WhenNoFortConstructionActive_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.CancelFortConstruction(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("You do not have a fort construction mission in progress.");
+    }
+
+    [Fact]
+    public void CancelSabotage_WhenSabotageIsActive_CancelsAndClearsState()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var engineer = state.Players.Single(p => p.Id == "p1");
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        engineer.SabotagePerimeterVisited.Add(HexService.Key(0, 0));
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.CancelSabotage(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.Player("p1").SabotageTargetQ.Should().BeNull();
+        context.Player("p1").SabotageTargetR.Should().BeNull();
+        context.Player("p1").SabotagePerimeterVisited.Should().BeEmpty();
+        context.State.EventLog.Should().Contain(entry => entry.Type == "SabotageCancelled" && entry.PlayerId == "p1");
+    }
+
+    [Fact]
+    public void CancelSabotage_WhenNoSabotageActive_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.CancelSabotage(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("You do not have a sabotage mission in progress.");
+    }
+
+    [Fact]
+    public void CancelDemolish_WhenNoDemolishActive_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.CancelDemolish(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("You do not have a demolish mission in progress.");
+    }
+
+    // ── Area 2: Troop transfer — decline path ────────────────────────────────
+
+    [Fact]
+    public void RespondToTroopTransfer_WhenDeclined_RemovesTransferAndSetsCooldown()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .WithCarriedTroops("p1", 5)
+            .WithCarriedTroops("p2", 1)
+            .Build();
+        state.ActiveTroopTransfers.Add(new ActiveTroopTransfer
+        {
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            RecipientId = "p2",
+            RecipientName = "Bob",
+            Amount = 3,
+            ExpiresAt = DateTime.UtcNow.AddSeconds(20)
+        });
+        var context = new ServiceTestContext(state);
+        var transferId = state.ActiveTroopTransfers[0].Id;
+
+        var result = context.AbilityService.RespondToTroopTransfer(ServiceTestContext.RoomCode, "p2", transferId, false);
+
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.State.ActiveTroopTransfers.Should().BeEmpty();
+        context.Player("p1").CarriedTroops.Should().Be(5);
+        context.Player("p2").CarriedTroops.Should().Be(1);
+        context.Player("p1").TroopTransferCooldownUntil.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RespondToTroopTransfer_WhenCallerIsNotRecipient_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddPlayer("p3", "Carol", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2", "p3")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .WithPlayerPosition("p3", -1, 0)
+            .WithCarriedTroops("p1", 5)
+            .Build();
+        var transferId = Guid.NewGuid();
+        state.ActiveTroopTransfers.Add(new ActiveTroopTransfer
+        {
+            Id = transferId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            RecipientId = "p2",
+            RecipientName = "Bob",
+            Amount = 3,
+            ExpiresAt = DateTime.UtcNow.AddSeconds(20)
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.RespondToTroopTransfer(ServiceTestContext.RoomCode, "p3", transferId, false);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Only the recipient can respond to this troop transfer.");
+        context.State.ActiveTroopTransfers.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RespondToTroopTransfer_WhenTransferNotFound_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var unknownId = Guid.NewGuid();
+
+        var result = context.AbilityService.RespondToTroopTransfer(ServiceTestContext.RoomCode, "p2", unknownId, false);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Troop transfer not found.");
+    }
+
+    // ── Area 3: Field battle ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ResolveFieldBattle_WhenDefenderHasMoreTroops_DefenderWins()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 2)
+            .WithCarriedTroops("p2", 5)
+            .Build();
+        // Default resolution mode is InitiatorVsSumOfJoined — fully deterministic.
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 2,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(10),
+            JoinedEnemyIds = ["p2"]
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ResolveFieldBattle(ServiceTestContext.RoomCode, battleId);
+
+        result.error.Should().BeNull();
+        result.result.Should().NotBeNull();
+        result.result!.InitiatorWon.Should().BeFalse();
+        context.Player("p1").CarriedTroops.Should().Be(0);
+        context.Player("p2").CarriedTroops.Should().BeGreaterThan(0);
+        context.State.ActiveFieldBattles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void JoinFieldBattle_WhenPlayerIsOnBattleHex_JoinsSuccessfully()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .WithCarriedTroops("p2", 3)
+            .Build();
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 4,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(10)
+        });
+        var context = new ServiceTestContext(state);
+
+        var error = context.AbilityService.JoinFieldBattle(ServiceTestContext.RoomCode, "p2", battleId);
+
+        error.Should().BeNull();
+        context.State.ActiveFieldBattles.Single().JoinedEnemyIds.Should().Contain("p2");
+    }
+
+    [Fact]
+    public void JoinFieldBattle_WhenBattleNotFound_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p2", 3)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var unknownBattleId = Guid.NewGuid();
+
+        var error = context.AbilityService.JoinFieldBattle(ServiceTestContext.RoomCode, "p2", unknownBattleId);
+
+        error.Should().Be("Field battle not found.");
+    }
+
 
 
     [Fact]

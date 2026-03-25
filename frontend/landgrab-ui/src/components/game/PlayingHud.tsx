@@ -18,24 +18,15 @@ import { ScoreRow } from './PlayerPanel';
 import { TileInfoCard } from './TileInfoCard';
 import { PlayerHUD } from './PlayerHUD';
 import { AbilityCard } from './AbilityCard';
-import { BeaconCard } from './abilities/BeaconCard';
-import { ShareIntelCard } from './abilities/ShareIntelCard';
-import { CommandoRaidCard } from './abilities/CommandoRaidCard';
-import { DemolishCard } from './abilities/DemolishCard';
-import { FortConstructionCard } from './abilities/FortConstructionCard';
-import { RallyPointCard } from './abilities/RallyPointCard';
-import { SabotageCard } from './abilities/SabotageCard';
-import { TacticalStrikeCard } from './abilities/TacticalStrikeCard';
-import { InterceptCard } from './abilities/InterceptCard';
-import { TroopTransferCard } from './abilities/TroopTransferCard';
 import { TroopTransferReceivedPanel } from './abilities/TroopTransferReceivedPanel';
-import { FieldBattleCard } from './abilities/FieldBattleCard';
 import { FieldBattleInvitePanel } from './abilities/FieldBattleInvitePanel';
 import { MiniMap } from '../map/MiniMap';
 import { getTileInteractionStatus } from './tileInteraction';
 import type { TileAction, TileActionType } from './tileInteraction';
 import { useSecondTick } from '../../hooks/useSecondTick';
 import { GameIcon } from '../common/GameIcon';
+import { abilityRegistry } from '../../config/abilityRegistry';
+import type { InvokeFn } from '../../types/abilities';
 
 interface Props {
   myUserId: string;
@@ -48,25 +39,8 @@ interface Props {
   currentHexActions?: TileAction[];
   onCurrentHexAction?: (actionType: TileActionType) => void;
   onDismissTileActions?: () => void;
-  onActivateBeacon?: (heading: number) => Promise<boolean> | void;
-  onDeactivateBeacon?: () => Promise<boolean> | void;
-  onShareBeaconIntel?: () => Promise<number>;
-  onActivateTacticalStrike?: (targetQ: number, targetR: number) => Promise<boolean> | void;
-  onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
-  onActivateCommandoRaid?: () => Promise<boolean> | void;
-  onActivateRallyPoint?: () => Promise<boolean> | void;
-  onActivateSabotage?: () => Promise<boolean> | void;
-  onCancelFortConstruction?: () => Promise<boolean> | void;
-  onCancelSabotage?: () => Promise<boolean> | void;
-  onCancelDemolish?: () => Promise<boolean> | void;
-  onStartDemolish?: () => Promise<boolean> | void;
-  onStartFortConstruction?: () => Promise<boolean> | void;
-  onAttemptIntercept?: (heading: number) => Promise<{ status: string; seconds?: number }>;
-  onResolveTroopTransferTarget?: (heading: number) => Promise<{ recipientId: string; recipientName: string } | null>;
-  onInitiateTroopTransfer?: (amount: number, recipientId: string) => Promise<{ transferId: string } | null>;
-  onRespondToTroopTransfer?: (transferId: string, accepted: boolean) => Promise<boolean>;
-  onInitiateFieldBattle?: () => Promise<{ battleId: string } | null>;
-  onJoinFieldBattle?: (battleId: string) => Promise<boolean>;
+  /** Single invoke function replacing all per-ability callback props. */
+  invoke: InvokeFn | null;
   playerDisplayPrefs: PlayerDisplayPreferences;
   onPlayerDisplayPrefsChange: (prefs: PlayerDisplayPreferences) => void;
   currentPlayerName: string;
@@ -99,25 +73,7 @@ export function PlayingHud({
   currentHexActions,
   onCurrentHexAction,
   onDismissTileActions,
-  onActivateBeacon,
-  onDeactivateBeacon,
-  onShareBeaconIntel,
-  onActivateTacticalStrike,
-  onResolveTacticalStrikeTarget,
-  onActivateCommandoRaid,
-  onActivateRallyPoint,
-  onActivateSabotage,
-  onCancelFortConstruction,
-  onCancelSabotage,
-  onCancelDemolish,
-  onStartDemolish,
-  onStartFortConstruction,
-  onAttemptIntercept,
-  onResolveTroopTransferTarget,
-  onInitiateTroopTransfer,
-  onRespondToTroopTransfer,
-  onInitiateFieldBattle,
-  onJoinFieldBattle,
+  invoke,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   currentPlayerName,
@@ -869,100 +825,40 @@ export function PlayingHud({
       {!activeModal && shouldShowDevSection && debugPanel}
 
       <TroopTransferReceivedPanel
-        onRespondToTroopTransfer={onRespondToTroopTransfer ?? (async () => false)}
+        invoke={invoke}
       />
       <FieldBattleInvitePanel
-        onJoinFieldBattle={onJoinFieldBattle ?? (async () => false)}
+        invoke={invoke}
       />
 
-      {abilityUi.activeAbility !== null && abilityUi.cardVisible ? (
-        abilityUi.activeAbility === 'beacon' ? (
-          <BeaconCard
-            myUserId={myUserId}
-            onActivateBeacon={onActivateBeacon ?? (() => { })}
-            onDeactivateBeacon={onDeactivateBeacon ?? (() => { })}
-            onShareBeaconIntel={onShareBeaconIntel ?? (async () => 0)}
-          />
-        ) : abilityUi.activeAbility === 'shareIntel' ? (
-          <ShareIntelCard
-            myUserId={myUserId}
-            onShareBeaconIntel={onShareBeaconIntel ?? (async () => 0)}
-          />
-        ) : abilityUi.activeAbility === 'tacticalStrike' ? (
-          <TacticalStrikeCard
-            myUserId={myUserId}
-            onActivateTacticalStrike={onActivateTacticalStrike ?? (() => { })}
-            onResolveTacticalStrikeTarget={onResolveTacticalStrikeTarget ?? (async () => null)}
-          />
-        ) : abilityUi.activeAbility === 'rallyPoint' ? (
-          <RallyPointCard
-            myUserId={myUserId}
-            currentHex={currentHex}
-            onActivateRallyPoint={onActivateRallyPoint ?? (() => { })}
-          />
-        ) : abilityUi.activeAbility === 'commandoRaid' ? (
-          <CommandoRaidCard
-            myUserId={myUserId}
-            onActivateCommandoRaid={onActivateCommandoRaid ?? (() => { })}
-          />
-        ) : abilityUi.activeAbility === 'fortConstruction' ? (
-          <FortConstructionCard
-            myUserId={myUserId}
-            currentHex={currentHex}
-            onStartFortConstruction={onStartFortConstruction ?? (() => { })}
-            onCancelFortConstruction={onCancelFortConstruction ?? (() => { })}
-          />
-        ) : abilityUi.activeAbility === 'sabotage' ? (
-          <SabotageCard
-            myUserId={myUserId}
-            currentHex={currentHex}
-            onActivateSabotage={onActivateSabotage ?? (() => { })}
-            onCancelSabotage={onCancelSabotage ?? (() => { })}
-          />
-        ) : abilityUi.activeAbility === 'demolish' ? (
-          <DemolishCard
-            myUserId={myUserId}
-            currentHex={currentHex}
-            onStartDemolish={onStartDemolish ?? (() => { })}
-            onCancelDemolish={onCancelDemolish ?? (() => { })}
-          />
-        ) : abilityUi.activeAbility === 'intercept' ? (
-          <InterceptCard
-            myUserId={myUserId}
-            onAttemptIntercept={onAttemptIntercept ?? (async () => ({ status: 'noTarget' }))}
-          />
-        ) : abilityUi.activeAbility === 'troopTransfer' ? (
-          <TroopTransferCard
-            myUserId={myUserId}
-            onResolveTroopTransferTarget={onResolveTroopTransferTarget ?? (async () => null)}
-            onInitiateTroopTransfer={onInitiateTroopTransfer ?? (async () => null)}
-          />
-        ) : abilityUi.activeAbility === 'fieldBattle' ? (
-          <FieldBattleCard
-            myUserId={myUserId}
-            onInitiateFieldBattle={onInitiateFieldBattle ?? (async () => null)}
-          />
-        ) : (
-          <AbilityCard
-            title={t(`abilities.${abilityUi.activeAbility}.title` as never, { defaultValue: abilityUi.activeAbility })}
-            icon={<GameIcon name="gearHammer" size="sm" />}
-            onBackToHud={() => {
-              if (abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming') {
-                exitAbilityMode();
-              } else {
-                hideAbilityCard();
-              }
-            }}
-            showAbort={abilityUi.mode === 'inProgress'}
-            onAbort={() => exitAbilityMode()}
-          >
-            <div className="placeholder-ability-content">
-              <p>Ability card for {abilityUi.activeAbility}</p>
-              <p>Mode: {abilityUi.mode}</p>
-            </div>
-          </AbilityCard>
-        )
-      ) : (
+      {abilityUi.activeAbility !== null && abilityUi.cardVisible && (() => {
+        const entry = abilityRegistry[abilityUi.activeAbility];
+        if (!entry) {
+          // Fallback for unregistered abilities (should not occur in production).
+          return (
+            <AbilityCard
+              title={`${abilityUi.activeAbility}`}
+              icon={<GameIcon name="gearHammer" size="sm" />}
+              onBackToHud={() => {
+                if (abilityUi.mode === 'targeting' || abilityUi.mode === 'confirming') {
+                  exitAbilityMode();
+                } else {
+                  hideAbilityCard();
+                }
+              }}
+              showAbort={abilityUi.mode === 'inProgress'}
+              onAbort={() => exitAbilityMode()}
+            >
+              <div className="placeholder-ability-content">
+                <p>Ability card for {abilityUi.activeAbility}</p>
+                <p>Mode: {abilityUi.mode}</p>
+              </div>
+            </AbilityCard>
+          );
+        }
+        const { Card } = entry;
+        return <Card myUserId={myUserId} invoke={invoke} />;
+      })()
         <PlayerHUD
           actions={currentHexActions ?? []}
           onAction={onCurrentHexAction ?? (() => { })}

@@ -5,33 +5,18 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceMotion } from '../../../hooks/useDeviceMotion';
-
-interface RallyPointCardProps {
-  myUserId: string;
-  currentHex: [number, number] | null;
-  onActivateRallyPoint: () => Promise<boolean> | void;
-}
+import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatTimeRemaining(until: string | undefined): string | null {
-  if (!until) {
-    return null;
-  }
-
+  if (!until) return null;
   const remaining = new Date(until).getTime() - Date.now();
-  if (remaining <= 0) {
-    return null;
-  }
-
+  if (remaining <= 0) return null;
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function RallyPointCard({
-  myUserId,
-  currentHex,
-  onActivateRallyPoint,
-}: RallyPointCardProps) {
+export function RallyPointCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -45,6 +30,12 @@ export function RallyPointCard({
   const { pitch, supported, permissionState, requestPermission } = useDeviceMotion(true);
   const [holdProgress, setHoldProgress] = useState(0);
   const timerRef = useRef<number | null>(null);
+
+  // Derive currentHex from player position instead of requiring it as a prop.
+  const currentHex: [number, number] | null =
+    player?.currentHexQ != null && player?.currentHexR != null
+      ? [player.currentHexQ, player.currentHexR]
+      : null;
 
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
@@ -70,10 +61,7 @@ export function RallyPointCard({
 
   const currentHexLabel = currentHex ? `${currentHex[0]}, ${currentHex[1]}` : '—';
   const rallyHexCell = useMemo(() => {
-    if (!gameState || player?.rallyPointQ == null || player.rallyPointR == null) {
-      return null;
-    }
-
+    if (!gameState || player?.rallyPointQ == null || player.rallyPointR == null) return null;
     return gameState.grid[`${player.rallyPointQ},${player.rallyPointR}`] ?? null;
   }, [gameState, player?.rallyPointQ, player?.rallyPointR]);
 
@@ -82,35 +70,26 @@ export function RallyPointCard({
       hideAbilityCard();
       return;
     }
-
     exitAbilityMode();
   };
 
   const handleActivate = async () => {
-    if (!isFriendlyHex) {
-      return;
-    }
-
-    const succeeded = await Promise.resolve(onActivateRallyPoint());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke || !isFriendlyHex) return;
+    const succeeded = await invoke<boolean>('ActivateRallyPoint');
+    if (succeeded === false) return;
     activateAbility();
   };
 
   useEffect(() => {
     if (isRallyActive || !isFriendlyHex) {
-      if (holdProgress !== 0) {
-        setHoldProgress(0);
-      }
+      if (holdProgress !== 0) setHoldProgress(0);
       if (timerRef.current !== null) {
         window.clearInterval(timerRef.current);
         timerRef.current = null;
       }
       return;
     }
-    
+
     if (pitch !== null && pitch >= 60) {
       if (timerRef.current === null) {
         timerRef.current = window.setInterval(() => {
@@ -130,9 +109,7 @@ export function RallyPointCard({
         window.clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      if (holdProgress !== 0) {
-        setHoldProgress(0);
-      }
+      if (holdProgress !== 0) setHoldProgress(0);
     }
     return () => {
       if (timerRef.current !== null) {
@@ -210,7 +187,7 @@ export function RallyPointCard({
           {supported ? (
             <div className="ability-card__pitch-indicator">
               <p className="ability-card__status-copy">
-                {pitch !== null && pitch >= 60 
+                {pitch !== null && pitch >= 60
                   ? <strong>Holding steady… {(holdProgress / 1000).toFixed(1)}s / 2.0s</strong>
                   : "Raise your device to signal the rally"}
               </p>

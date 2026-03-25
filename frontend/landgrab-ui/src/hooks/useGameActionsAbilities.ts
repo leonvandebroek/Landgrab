@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useMemo } from 'react';
 import { useUiStore } from '../stores/uiStore';
+import type { InvokeFn } from '../types/abilities';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 
 interface UseGameActionsAbilitiesResult {
@@ -25,288 +26,69 @@ interface UseGameActionsAbilitiesResult {
   attemptIntercept: (heading: number) => Promise<{ status: string; seconds?: number }>;
 }
 
+/**
+ * Generic handler factory — eliminates the repetitive try/catch boilerplate.
+ * Preserves the exact same public API as the old per-method useCallback approach.
+ */
+function makeHandler<TArgs extends unknown[], TResult>(
+  invoke: InvokeFn | null,
+  setError: (msg: string) => void,
+  method: string,
+  fallback: TResult,
+): (...args: TArgs) => Promise<TResult> {
+  return async (...args) => {
+    if (!invoke) return fallback;
+    try {
+      return (await invoke<TResult>(method, ...args)) ?? fallback;
+    } catch (error) {
+      setError(String(error));
+      return fallback;
+    }
+  };
+}
+
 export function useGameActionsAbilities({
   invoke,
 }: Pick<UseGameActionsOptions, 'invoke'>): UseGameActionsAbilitiesResult {
   const setError = useUiStore((state) => state.setError);
 
-  const handleActivateBeacon = useCallback(async (heading: number): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
+  // Cast invoke to InvokeFn — SignalRInvoke and InvokeFn are compatible at runtime;
+  // InvokeFn allows undefined return which is the safer superset.
+  const invokeFn = invoke as InvokeFn | null;
 
-    try {
-      await invoke('ActivateBeacon', heading);
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleDeactivateBeacon = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('DeactivateBeacon');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleShareBeaconIntel = useCallback(async (): Promise<number> => {
-    if (!invoke) {
-      return 0;
-    }
-
-    try {
-      const count = await invoke<number>('ShareBeaconIntel');
-      return count ?? 0;
-    } catch (error) {
-      setError(String(error));
-      return 0;
-    }
-  }, [invoke, setError]);
-
-  const handleActivateCommandoRaid = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('ActivateCommandoRaid');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const resolveRaidTarget = useCallback(async (heading: number): Promise<{ targetQ: number; targetR: number } | null> => {
-    if (!invoke) {
-      return null;
-    }
-
-    try {
-      return await invoke<{ targetQ: number; targetR: number } | null>('ResolveRaidTarget', heading);
-    } catch (error) {
-      console.warn('ResolveRaidTarget error:', error);
-      return null;
-    }
-  }, [invoke]);
-
-  const handleActivateTacticalStrike = useCallback(async (targetQ: number, targetR: number): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('ActivateTacticalStrike', targetQ, targetR);
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const resolveTacticalStrikeTarget = useCallback(async (heading: number): Promise<{ targetQ: number; targetR: number } | null> => {
-    if (!invoke) {
-      return null;
-    }
-
-    try {
-      return await invoke<{ targetQ: number; targetR: number } | null>('ResolveTacticalStrikeTarget', heading);
-    } catch (error) {
-      console.warn('ResolveTacticalStrikeTarget error:', error);
-      return null;
-    }
-  }, [invoke]);
-
-  const resolveTroopTransferTarget = useCallback(async (heading: number): Promise<{ recipientId: string; recipientName: string } | null> => {
-    if (!invoke) return null;
-    try {
-      return await invoke<{ recipientId: string; recipientName: string } | null>('ResolveTroopTransferTarget', heading);
-    } catch {
-      return null;
-    }
-  }, [invoke]);
-
-  const handleInitiateTroopTransfer = useCallback(async (amount: number, recipientId: string): Promise<{ transferId: string } | null> => {
-    if (!invoke) return null;
-    try {
-      return await invoke<{ transferId: string }>('InitiateTroopTransfer', amount, recipientId);
-    } catch (error) {
-      setError(String(error));
-      return null;
-    }
-  }, [invoke, setError]);
-
-  const handleRespondToTroopTransfer = useCallback(async (transferId: string, accepted: boolean): Promise<boolean> => {
-    if (!invoke) return false;
-    try {
-      await invoke('RespondToTroopTransfer', transferId, accepted);
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleInitiateFieldBattle = useCallback(async (): Promise<{ battleId: string } | null> => {
-    if (!invoke) return null;
-    try {
-      return await invoke<{ battleId: string }>('InitiateFieldBattle');
-    } catch (error) {
-      setError(String(error));
-      return null;
-    }
-  }, [invoke, setError]);
-
-  const handleJoinFieldBattle = useCallback(async (battleId: string): Promise<boolean> => {
-    if (!invoke) return false;
-    try {
-      await invoke('JoinFieldBattle', battleId);
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleActivateRallyPoint = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('ActivateRallyPoint');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleActivateSabotage = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('ActivateSabotage');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleCancelFortConstruction = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('CancelFortConstruction');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleCancelSabotage = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('CancelSabotage');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleCancelDemolish = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('CancelDemolish');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleStartDemolish = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('StartDemolish');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const handleStartFortConstruction = useCallback(async (): Promise<boolean> => {
-    if (!invoke) {
-      return false;
-    }
-
-    try {
-      await invoke('StartFortConstruction');
-      return true;
-    } catch (error) {
-      setError(String(error));
-      return false;
-    }
-  }, [invoke, setError]);
-
-  const attemptIntercept = useCallback(async (heading: number): Promise<{ status: string; seconds?: number }> => {
-    if (!invoke) {
-      return { status: 'noTarget' };
-    }
-    try {
-      return await invoke<{ status: string; seconds?: number }>('AttemptIntercept', heading);
-    } catch (error) {
-      console.warn('AttemptIntercept error:', error);
-      return { status: 'noTarget' };
-    }
-  }, [invoke]);
-
-  return {
-    handleActivateBeacon,
-    handleDeactivateBeacon,
-    handleShareBeaconIntel,
-    handleActivateCommandoRaid,
-    resolveRaidTarget,
-    handleActivateTacticalStrike,
-    resolveTacticalStrikeTarget,
-    resolveTroopTransferTarget,
-    handleInitiateTroopTransfer,
-    handleRespondToTroopTransfer,
-    handleInitiateFieldBattle,
-    handleJoinFieldBattle,
-    handleActivateRallyPoint,
-    handleActivateSabotage,
-    handleCancelFortConstruction,
-    handleCancelSabotage,
-    handleCancelDemolish,
-    handleStartDemolish,
-    handleStartFortConstruction,
-    attemptIntercept,
-  };
+  return useMemo(() => ({
+    handleActivateBeacon:         makeHandler(invokeFn, setError, 'ActivateBeacon',              false as boolean),
+    handleDeactivateBeacon:       makeHandler(invokeFn, setError, 'DeactivateBeacon',            false as boolean),
+    handleShareBeaconIntel:       makeHandler(invokeFn, setError, 'ShareBeaconIntel',            0 as number),
+    handleActivateCommandoRaid:   makeHandler(invokeFn, setError, 'ActivateCommandoRaid',        false as boolean),
+    resolveRaidTarget:            makeHandler<[number], { targetQ: number; targetR: number } | null>(
+      invokeFn, setError, 'ResolveRaidTarget', null,
+    ),
+    handleActivateTacticalStrike: makeHandler(invokeFn, setError, 'ActivateTacticalStrike',      false as boolean),
+    resolveTacticalStrikeTarget:  makeHandler<[number], { targetQ: number; targetR: number } | null>(
+      invokeFn, setError, 'ResolveTacticalStrikeTarget', null,
+    ),
+    resolveTroopTransferTarget:   makeHandler<[number], { recipientId: string; recipientName: string } | null>(
+      invokeFn, setError, 'ResolveTroopTransferTarget', null,
+    ),
+    handleInitiateTroopTransfer:  makeHandler<[number, string], { transferId: string } | null>(
+      invokeFn, setError, 'InitiateTroopTransfer', null,
+    ),
+    handleRespondToTroopTransfer: makeHandler(invokeFn, setError, 'RespondToTroopTransfer',      false as boolean),
+    handleInitiateFieldBattle:    makeHandler<[], { battleId: string } | null>(
+      invokeFn, setError, 'InitiateFieldBattle', null,
+    ),
+    handleJoinFieldBattle:        makeHandler(invokeFn, setError, 'JoinFieldBattle',             false as boolean),
+    handleActivateRallyPoint:     makeHandler(invokeFn, setError, 'ActivateRallyPoint',          false as boolean),
+    handleActivateSabotage:       makeHandler(invokeFn, setError, 'ActivateSabotage',            false as boolean),
+    handleCancelFortConstruction: makeHandler(invokeFn, setError, 'CancelFortConstruction',      false as boolean),
+    handleCancelSabotage:         makeHandler(invokeFn, setError, 'CancelSabotage',              false as boolean),
+    handleCancelDemolish:         makeHandler(invokeFn, setError, 'CancelDemolish',              false as boolean),
+    handleStartDemolish:          makeHandler(invokeFn, setError, 'StartDemolish',               false as boolean),
+    handleStartFortConstruction:  makeHandler(invokeFn, setError, 'StartFortConstruction',       false as boolean),
+    // attemptIntercept uses console.warn (not setError) on failure — kept explicit.
+    attemptIntercept: makeHandler<[number], { status: string; seconds?: number }>(
+      invokeFn, setError, 'AttemptIntercept', { status: 'noTarget' },
+    ),
+  }), [invokeFn, setError]);
 }

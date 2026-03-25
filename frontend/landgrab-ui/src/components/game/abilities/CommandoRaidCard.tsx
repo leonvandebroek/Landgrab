@@ -4,11 +4,7 @@ import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
-
-interface CommandoRaidCardProps {
-  myUserId: string;
-  onActivateCommandoRaid: () => Promise<boolean> | void;
-}
+import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatTimeRemaining(until: string | undefined): string | null {
   if (!until) return null;
@@ -19,7 +15,7 @@ function formatTimeRemaining(until: string | undefined): string | null {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function CommandoRaidCard({ myUserId, onActivateCommandoRaid }: CommandoRaidCardProps) {
+export function CommandoRaidCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -58,7 +54,8 @@ export function CommandoRaidCard({ myUserId, onActivateCommandoRaid }: CommandoR
   };
 
   const handleLaunchRaid = async () => {
-    const succeeded = await Promise.resolve(onActivateCommandoRaid());
+    if (!invoke) return;
+    const succeeded = await invoke<boolean>('ActivateCommandoRaid');
     if (succeeded === false) return;
     activateAbility();
   };

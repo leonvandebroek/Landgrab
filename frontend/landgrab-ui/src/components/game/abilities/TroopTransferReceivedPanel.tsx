@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
+import type { InvokeFn } from '../../../types/abilities';
 
 function getSecondsLeft(expiresAt: string | undefined, now: number): number | null {
   if (!expiresAt) {
@@ -17,10 +18,10 @@ function getSecondsLeft(expiresAt: string | undefined, now: number): number | nu
 }
 
 interface TroopTransferReceivedPanelProps {
-  onRespondToTroopTransfer: (transferId: string, accepted: boolean) => Promise<boolean>;
+  invoke: InvokeFn | null;
 }
 
-export function TroopTransferReceivedPanel({ onRespondToTroopTransfer }: TroopTransferReceivedPanelProps) {
+export function TroopTransferReceivedPanel({ invoke }: TroopTransferReceivedPanelProps) {
   const { t } = useTranslation();
   const troopTransferRequest = useNotificationStore((store) => store.troopTransferRequest);
   const setTroopTransferRequest = useNotificationStore((store) => store.setTroopTransferRequest);
@@ -41,12 +42,12 @@ export function TroopTransferReceivedPanel({ onRespondToTroopTransfer }: TroopTr
   if (!troopTransferRequest) return null;
 
   const handleAccept = async () => {
-    await onRespondToTroopTransfer(troopTransferRequest.transferId, true);
+    await invoke?.('RespondToTroopTransfer', troopTransferRequest.transferId, true);
     setTroopTransferRequest(null);
   };
 
   const handleDecline = async () => {
-    await onRespondToTroopTransfer(troopTransferRequest.transferId, false);
+    await invoke?.('RespondToTroopTransfer', troopTransferRequest.transferId, false);
     setTroopTransferRequest(null);
   };
 

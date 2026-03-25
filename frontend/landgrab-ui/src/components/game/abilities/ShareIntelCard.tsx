@@ -5,18 +5,14 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
-
-interface ShareIntelCardProps {
-  myUserId: string;
-  onShareBeaconIntel: () => Promise<number>;
-}
+import type { AbilityCardProps } from '../../../types/abilities';
 
 function getCooldownRemaining(cooldownUntil: string | undefined): number {
   if (!cooldownUntil) return 0;
   return Math.max(0, Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000));
 }
 
-export function ShareIntelCard({ myUserId, onShareBeaconIntel }: ShareIntelCardProps) {
+export function ShareIntelCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
@@ -37,8 +33,9 @@ export function ShareIntelCard({ myUserId, onShareBeaconIntel }: ShareIntelCardP
   const isOnCooldown = cooldownRemaining > 0;
 
   const handleShareIntel = async () => {
+    if (!invoke) return;
     setIsSharing(true);
-    const count = await onShareBeaconIntel();
+    const count = (await invoke<number>('ShareBeaconIntel')) ?? 0;
     setShareCount(count);
     setIsSharing(false);
     setTimeout(() => setShareCount(null), 3000);
@@ -51,7 +48,7 @@ export function ShareIntelCard({ myUserId, onShareBeaconIntel }: ShareIntelCardP
       title={t('abilities.shareIntel.title' as never)}
       icon={<GameIcon name="radioTower" size="sm" />}
       statusContent={(
-        <div className={`ability-card__status-pill ability-card__status-pill--live`}>
+        <div className="ability-card__status-pill ability-card__status-pill--live">
           <GameIcon name="radioTower" size="sm" />
           <span>{t('abilities.shareIntel.description' as never)}</span>
         </div>

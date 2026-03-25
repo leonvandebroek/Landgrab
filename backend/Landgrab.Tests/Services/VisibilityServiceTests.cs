@@ -261,4 +261,50 @@ public sealed class VisibilityServiceTests
         visibleState.Grid[HexService.Key(3, 0)].VisibilityTier.Should().Be(VisibilityTier.Hidden);
     }
 
+    // ── Area 4: Fog-of-war radius ─────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeVisibleHexKeys_WhenAlliedPlayerIsOnDifferentHex_IncludesAlliesRadiusInViewerVisibility()
+    {
+        // p1 is far from (2,0). Only p2 (allied) is near (2,0), so (2,0) should be visible to p1 through alliance.
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", -3, 0)
+            .WithPlayerPosition("p2", 2, 0)
+            .Build();
+        var service = new VisibilityService();
+
+        var visibleHexKeys = service.ComputeVisibleHexKeys(state, "p1");
+
+        // (2,0) is p2's hex — radius 1 around p2 includes (1,0), (2,0), (3,0) etc.
+        visibleHexKeys.Should().Contain(HexService.Key(2, 0));
+        // (-3,0) is p1's own hex
+        visibleHexKeys.Should().Contain(HexService.Key(-3, 0));
+        // (0,0) is outside radius-1 of both players
+        visibleHexKeys.Should().NotContain(HexService.Key(0, 0));
+    }
+
+    [Fact]
+    public void ComputeVisibleHexKeys_WhenViewerOwnsAllianceTile_AllianceTileIsAlwaysVisible()
+    {
+        // p1 is far from the owned tile at (2,0), but alliance ownership keeps it in visible set.
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", -3, 0)
+            .OwnHex(2, 0, "p1", "a1", troops: 2)
+            .Build();
+        var service = new VisibilityService();
+
+        var visibleHexKeys = service.ComputeVisibleHexKeys(state, "p1");
+
+        visibleHexKeys.Should().Contain(HexService.Key(2, 0));
+    }
+
 }

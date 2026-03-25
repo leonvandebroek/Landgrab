@@ -1,5 +1,6 @@
 using Landgrab.Api.Models;
 using Landgrab.Api.Services;
+using Landgrab.Api.Services.Abilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -24,7 +25,7 @@ internal sealed class ServiceTestContext
     public GameStateService GameStateService { get; }
     public WinConditionService WinConditionService { get; } = new();
     public GameplayService GameplayService { get; }
-    public AbilityService AbilityService { get; }
+    public AbilityServiceFacade AbilityService { get; }
     public HostControlService HostControlService { get; }
     public VisibilityService VisibilityService { get; } = new();
 
@@ -44,8 +45,14 @@ internal sealed class ServiceTestContext
 
         var roomPersistenceService = new RoomPersistenceService(new DisabledPersistenceScopeFactory(), RoomPersistenceLogger.Object);
         GameStateService = new GameStateService(RoomProvider.Object, roomPersistenceService, GameStateLogger.Object);
-        GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService);
-        AbilityService = new AbilityService(RoomProvider.Object, GameStateService, VisibilityService);
+        var roleProgressService = new RoleProgressService();
+        GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, roleProgressService);
+        var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<Landgrab.Api.Hubs.GameHub>>();
+        AbilityService = new AbilityServiceFacade(
+            new CommanderAbilityService(RoomProvider.Object, GameStateService),
+            new ScoutAbilityService(RoomProvider.Object, GameStateService, VisibilityService),
+            new EngineerAbilityService(RoomProvider.Object, GameStateService, roleProgressService),
+            new SharedAbilityService(RoomProvider.Object, GameStateService, hubContextMock.Object));
         HostControlService = new HostControlService(RoomProvider.Object, GameStateService);
     }
 

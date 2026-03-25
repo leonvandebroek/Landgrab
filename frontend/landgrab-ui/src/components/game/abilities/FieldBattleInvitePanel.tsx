@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
+import type { InvokeFn } from '../../../types/abilities';
 
 function getSecondsLeft(joinDeadline: string | undefined, now: number): number | null {
   if (!joinDeadline) {
@@ -17,10 +18,10 @@ function getSecondsLeft(joinDeadline: string | undefined, now: number): number |
 }
 
 interface FieldBattleInvitePanelProps {
-  onJoinFieldBattle: (battleId: string) => Promise<boolean>;
+  invoke: InvokeFn | null;
 }
 
-export function FieldBattleInvitePanel({ onJoinFieldBattle }: FieldBattleInvitePanelProps) {
+export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) {
   const { t } = useTranslation();
   const fieldBattleInvite = useNotificationStore((store) => store.fieldBattleInvite);
   const setFieldBattleInvite = useNotificationStore((store) => store.setFieldBattleInvite);
@@ -41,7 +42,7 @@ export function FieldBattleInvitePanel({ onJoinFieldBattle }: FieldBattleInviteP
   if (!fieldBattleInvite) return null;
 
   const handleJoin = async () => {
-    await onJoinFieldBattle(fieldBattleInvite.battleId);
+    await invoke?.('JoinFieldBattle', fieldBattleInvite.battleId);
     setFieldBattleInvite(null);
   };
 

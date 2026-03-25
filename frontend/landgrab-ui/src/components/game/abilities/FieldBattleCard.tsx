@@ -5,11 +5,7 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import type { Player } from '../../../types/game';
-
-interface FieldBattleCardProps {
-  myUserId: string;
-  onInitiateFieldBattle: () => Promise<{ battleId: string } | null>;
-}
+import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatSecondsLeft(until: string | undefined): string | null {
   if (!until) return null;
@@ -18,7 +14,7 @@ function formatSecondsLeft(until: string | undefined): string | null {
   return String(Math.ceil(remaining / 1000));
 }
 
-export function FieldBattleCard({ myUserId, onInitiateFieldBattle }: FieldBattleCardProps) {
+export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -52,31 +48,25 @@ export function FieldBattleCard({ myUserId, onInitiateFieldBattle }: FieldBattle
     if (!player || !gameState || !currentCell) {
       return { isEligible: false, reason: 'noLocation', enemiesOnTile: [] };
     }
-
     if (currentCell.ownerId != null) {
       return { isEligible: false, reason: 'notNeutral', enemiesOnTile: [] };
     }
-
     if ((player.carriedTroops ?? 0) === 0) {
       return { isEligible: false, reason: 'noTroops', enemiesOnTile: [] };
     }
-
     const enemiesHere = gameState.players.filter(
       (candidate) => candidate.id !== myUserId
         && candidate.currentHexQ === player.currentHexQ
         && candidate.currentHexR === player.currentHexR
         && candidate.allianceId !== player.allianceId,
     );
-
     if (enemiesHere.length === 0) {
       return { isEligible: false, reason: 'noEnemies', enemiesOnTile: [] };
     }
-
     const enemiesWithTroops = enemiesHere.filter((candidate) => (candidate.carriedTroops ?? 0) > 0);
     if (enemiesWithTroops.length === 0) {
       return { isEligible: false, reason: 'enemiesNoTroops', enemiesOnTile: enemiesHere };
     }
-
     return { isEligible: true, reason: null, enemiesOnTile: enemiesHere };
   }, [player, gameState, currentCell, myUserId]);
 
@@ -89,7 +79,8 @@ export function FieldBattleCard({ myUserId, onInitiateFieldBattle }: FieldBattle
   };
 
   const handleInitiate = async () => {
-    const result = await onInitiateFieldBattle();
+    if (!invoke) return;
+    const result = await invoke<{ battleId: string }>('InitiateFieldBattle');
     if (!result) return;
     activateAbility();
   };

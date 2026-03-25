@@ -6,20 +6,9 @@ import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { useSecondTick } from '../../../hooks/useSecondTick';
+import type { AbilityCardProps } from '../../../types/abilities';
 
-interface DemolishCardProps {
-  myUserId: string;
-  currentHex: [number, number] | null;
-  onStartDemolish: () => Promise<boolean> | void;
-  onCancelDemolish: () => Promise<boolean> | void;
-}
-
-export function DemolishCard({
-  myUserId,
-  currentHex,
-  onStartDemolish,
-  onCancelDemolish,
-}: DemolishCardProps) {
+export function DemolishCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -29,6 +18,12 @@ export function DemolishCard({
   const setAbilityMode = useGameplayStore((store) => store.setAbilityMode);
   const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
+
+  // Derive currentHex from player position instead of requiring it as a prop.
+  const currentHex: [number, number] | null =
+    player?.currentHexQ != null && player?.currentHexR != null
+      ? [player.currentHexQ, player.currentHexR]
+      : null;
 
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
@@ -57,8 +52,7 @@ export function DemolishCard({
   const demolishProgress = player?.demolishApproachDirectionsMade?.length ?? 0;
   const isMissionInProgress = Boolean(player?.demolishTargetKey) || abilityUi.mode === 'inProgress';
   const currentHexLabel = currentHex ? `${currentHex[0]}, ${currentHex[1]}` : '—';
-  
-  // Demolish lock state
+
   const isHolding = Boolean(player?.demolishFacingLockStartAt);
   const lockStartAt = player?.demolishFacingLockStartAt;
   const facingHexKey = player?.demolishFacingHexKey;
@@ -69,20 +63,12 @@ export function DemolishCard({
 
   const getStatusText = () => {
     if (!isMissionInProgress) return t('abilities.demolish.targetingSummary' as never);
-
-    if (demolishProgress >= 3) {
-      return "Demolition complete!";
-    }
-
-    if (isHolding) {
-      return `Holding… ${holdProgressSec.toFixed(1)}s / 5.0s`;
-    }
-
+    if (demolishProgress >= 3) return 'Demolition complete!';
+    if (isHolding) return `Holding… ${holdProgressSec.toFixed(1)}s / 5.0s`;
     if (currentHexKey !== null && currentHexKey === facingHexKey && !isHolding) {
-       return "Facing lock lost — hold steady"; // Was holding but lost lock while in the same hex area maybe? Actually we just default to "Face the fort and hold for 5 seconds"
+      return 'Facing lock lost — hold steady';
     }
-    
-    return "Face the fort and hold for 5 seconds";
+    return 'Face the fort and hold for 5 seconds';
   };
 
   const handleBackToHud = () => {
@@ -90,29 +76,20 @@ export function DemolishCard({
       hideAbilityCard();
       return;
     }
-
     exitAbilityMode();
   };
 
   const handleStart = async () => {
-    if (!isCurrentHexValid) {
-      return;
-    }
-
-    const succeeded = await Promise.resolve(onStartDemolish());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke || !isCurrentHexValid) return;
+    const succeeded = await invoke<boolean>('StartDemolish');
+    if (succeeded === false) return;
     setAbilityMode('inProgress');
   };
 
   const handleAbort = async () => {
-    const succeeded = await Promise.resolve(onCancelDemolish());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke) return;
+    const succeeded = await invoke<boolean>('CancelDemolish');
+    if (succeeded === false) return;
     exitAbilityMode();
   };
 
@@ -145,7 +122,7 @@ export function DemolishCard({
               {isMissionInProgress ? `${demolishProgress}/3` : currentHexLabel}
             </span>
           </div>
-          
+
           {isMissionInProgress && (
             <div className="ability-card__meta-row">
               <span className="ability-card__meta-label">Target Hex</span>
@@ -184,9 +161,7 @@ export function DemolishCard({
         <button
           type="button"
           className="ability-card__primary-btn ability-card__primary-btn--hostile"
-          onClick={() => {
-            void handleStart();
-          }}
+          onClick={() => { void handleStart(); }}
           disabled={!isCurrentHexValid}
         >
           {t('abilities.demolish.start' as never)}
@@ -194,9 +169,7 @@ export function DemolishCard({
       ) : undefined}
       onBackToHud={handleBackToHud}
       showAbort={isMissionInProgress}
-      onAbort={() => {
-        void handleAbort();
-      }}
+      onAbort={() => { void handleAbort(); }}
     >
       <div className="ability-card__stack">
         {isMissionInProgress ? (

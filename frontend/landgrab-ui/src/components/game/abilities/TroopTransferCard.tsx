@@ -6,26 +6,16 @@ import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { useSecondTick } from '../../../hooks/useSecondTick';
-
-interface TroopTransferCardProps {
-  myUserId: string;
-  onResolveTroopTransferTarget: (heading: number) => Promise<{ recipientId: string; recipientName: string } | null>;
-  onInitiateTroopTransfer: (amount: number, recipientId: string) => Promise<{ transferId: string } | null>;
-}
+import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatTimeRemaining(until: string | undefined, now: number): string | null {
   if (!until) return null;
   const remaining = new Date(until).getTime() - now;
   if (remaining <= 0) return null;
-  const seconds = Math.ceil(remaining / 1000);
-  return String(seconds);
+  return String(Math.ceil(remaining / 1000));
 }
 
-export function TroopTransferCard({
-  myUserId,
-  onResolveTroopTransferTarget,
-  onInitiateTroopTransfer,
-}: TroopTransferCardProps) {
+export function TroopTransferCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -57,19 +47,16 @@ export function TroopTransferCard({
   const displayedTransferAmount = maxTroops > 0 ? Math.min(transferAmount, maxTroops) : transferAmount;
 
   useEffect(() => {
-    if (isActive || cooldownCountdown) {
-      return undefined;
-    }
+    if (isActive || cooldownCountdown || !invoke) return undefined;
 
     const handle = window.setInterval(() => {
       const nextHeading = heading ?? 0;
-      void onResolveTroopTransferTarget(nextHeading).then((result) => {
-        setResolvedRecipient(result);
-      });
+      void invoke<{ recipientId: string; recipientName: string } | null>('ResolveTroopTransferTarget', nextHeading)
+        .then((result) => { setResolvedRecipient(result ?? null); });
     }, 500);
 
     return () => window.clearInterval(handle);
-  }, [isActive, cooldownCountdown, heading, onResolveTroopTransferTarget]);
+  }, [isActive, cooldownCountdown, heading, invoke]);
 
   const handleBackToHud = useCallback(() => {
     if (isActive || cooldownCountdown) {
@@ -80,11 +67,11 @@ export function TroopTransferCard({
   }, [isActive, cooldownCountdown, hideAbilityCard, exitAbilityMode]);
 
   const handleSend = useCallback(async () => {
-    if (!resolvedRecipient || displayedTransferAmount < 1) return;
-    const result = await onInitiateTroopTransfer(displayedTransferAmount, resolvedRecipient.recipientId);
+    if (!resolvedRecipient || displayedTransferAmount < 1 || !invoke) return;
+    const result = await invoke<{ transferId: string }>('InitiateTroopTransfer', displayedTransferAmount, resolvedRecipient.recipientId);
     if (!result) return;
     activateAbility();
-  }, [resolvedRecipient, displayedTransferAmount, onInitiateTroopTransfer, activateAbility]);
+  }, [resolvedRecipient, displayedTransferAmount, invoke, activateAbility]);
 
   const canSend = Boolean(resolvedRecipient) && displayedTransferAmount >= 1 && maxTroops > 0;
 

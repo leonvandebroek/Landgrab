@@ -3,44 +3,35 @@ import { useTranslation } from 'react-i18next';
 import { AbilityCard } from '../AbilityCard';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { useGameplayStore } from '../../../stores';
-import { type UseGameActionsResult } from '../../../hooks/useGameActions.shared';
+import type { AbilityCardProps } from '../../../types/abilities';
 
-interface InterceptCardProps {
-  myUserId: string; // Kept to match component signature contract standard if needed later
-  onAttemptIntercept: UseGameActionsResult['attemptIntercept'];
-}
-
-export function InterceptCard({ onAttemptIntercept }: InterceptCardProps) {
+export function InterceptCard({ invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const exitAbilityMode = useGameplayStore((s) => s.exitAbilityMode);
   const [targetStatus, setTargetStatus] = useState<string>('noTarget');
-  // Add some fallback so the type system is happy about 'number' return type if needed
   const [lockSeconds, setLockSeconds] = useState<number>(0);
   const { heading } = useDeviceOrientation(true);
-  
-  // Track continuous API calls across the life of the component
   const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (heading == null) return;
+    if (heading == null || !invoke) return undefined;
 
     if (intervalRef.current !== null) {
       window.clearInterval(intervalRef.current);
     }
 
     intervalRef.current = window.setInterval(async () => {
-      const result = await onAttemptIntercept(heading);
-      
+      const result = await invoke<{ status: string; seconds?: number }>('AttemptIntercept', heading)
+        ?? { status: 'noTarget' };
+
       setTargetStatus(result.status);
       if (result.seconds !== undefined) {
         setLockSeconds(result.seconds);
       }
-      
-      // If we got success, auto-exit the modal
+
       if (result.status === 'success') {
         exitAbilityMode();
       }
-      
     }, 500);
 
     return () => {
@@ -49,7 +40,7 @@ export function InterceptCard({ onAttemptIntercept }: InterceptCardProps) {
         intervalRef.current = null;
       }
     };
-  }, [heading, onAttemptIntercept, exitAbilityMode]);
+  }, [heading, invoke, exitAbilityMode]);
 
   let statusText: string = t('abilities.intercept.noTarget', 'Scanning for enemy signals...');
   let statusClass = 'text-gray-400';
@@ -65,23 +56,20 @@ export function InterceptCard({ onAttemptIntercept }: InterceptCardProps) {
     statusClass = 'text-green-500 font-bold';
   }
 
-  // Ensure role has an icon fallback
-  const icon = '🔭';
-  
   return (
     <AbilityCard
       title={t('abilities.intercept.title', 'Intercept')}
-      icon={icon}
+      icon="🔭"
       onBackToHud={exitAbilityMode}
     >
       <div className="flex flex-col items-center justify-center p-4 space-y-4">
         <p className="text-sm text-gray-300 text-center mb-2">
           {t(
             'abilities.intercept.instructions',
-            'Point your device around to search for enemy signals. Maintain heading to complete the intercept.'
+            'Point your device around to search for enemy signals. Maintain heading to complete the intercept.',
           )}
         </p>
-        
+
         <div className="text-xl font-mono tracking-wider bg-gray-900 px-4 py-2 rounded-lg border border-gray-700 w-full text-center">
           Heading: {heading != null ? `${Math.round(heading)}°` : '--°'}
         </div>

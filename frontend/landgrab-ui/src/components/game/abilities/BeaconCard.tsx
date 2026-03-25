@@ -5,20 +5,9 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
+import type { AbilityCardProps } from '../../../types/abilities';
 
-interface BeaconCardProps {
-  myUserId: string;
-  onActivateBeacon: (heading: number) => Promise<boolean> | void;
-  onDeactivateBeacon: () => Promise<boolean> | void;
-  onShareBeaconIntel: () => Promise<number>;
-}
-
-export function BeaconCard({
-  myUserId,
-  onActivateBeacon,
-  onDeactivateBeacon,
-  onShareBeaconIntel,
-}: BeaconCardProps) {
+export function BeaconCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
@@ -41,32 +30,30 @@ export function BeaconCard({
       hideAbilityCard();
       return;
     }
-
     exitAbilityMode();
   };
 
   const handleActivate = async () => {
+    if (!invoke) return;
     const activeHeading = heading ?? 0;
     activateAbility();
-    const succeeded = await Promise.resolve(onActivateBeacon(activeHeading));
+    const succeeded = await invoke<boolean>('ActivateBeacon', activeHeading);
     if (succeeded === false) {
       exitAbilityMode();
-      return;
     }
   };
 
   const handleDeactivate = async () => {
-    const succeeded = await Promise.resolve(onDeactivateBeacon());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke) return;
+    const succeeded = await invoke<boolean>('DeactivateBeacon');
+    if (succeeded === false) return;
     exitAbilityMode();
   };
 
   const handleShareIntel = async () => {
+    if (!invoke) return;
     setIsSharing(true);
-    const count = await onShareBeaconIntel();
+    const count = (await invoke<number>('ShareBeaconIntel')) ?? 0;
     setShareCount(count);
     setIsSharing(false);
     setTimeout(() => setShareCount(null), 3000);
@@ -107,9 +94,7 @@ export function BeaconCard({
             <button
               type="button"
               className="ability-card__secondary-btn ability-card__secondary-btn--danger"
-              onClick={() => {
-                void handleDeactivate();
-              }}
+              onClick={() => { void handleDeactivate(); }}
             >
               {t('abilities.beacon.deactivate' as never)}
             </button>
@@ -118,9 +103,7 @@ export function BeaconCard({
             type="button"
             className="ability-card__primary-btn"
             disabled={isSharing}
-            onClick={() => {
-              void handleShareIntel();
-            }}
+            onClick={() => { void handleShareIntel(); }}
           >
             {t('abilities.beacon.shareIntel' as never)}
           </button>
@@ -129,9 +112,7 @@ export function BeaconCard({
         <button
           type="button"
           className="ability-card__primary-btn"
-          onClick={() => {
-            void handleActivate();
-          }}
+          onClick={() => { void handleActivate(); }}
         >
           {t('abilities.beacon.activate' as never)}
         </button>

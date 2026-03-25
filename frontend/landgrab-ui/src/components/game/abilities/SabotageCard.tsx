@@ -3,20 +3,9 @@ import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import type { AbilityCardProps } from '../../../types/abilities';
 
-interface SabotageCardProps {
-  myUserId: string;
-  currentHex: [number, number] | null;
-  onActivateSabotage: () => Promise<boolean> | void;
-  onCancelSabotage: () => Promise<boolean> | void;
-}
-
-export function SabotageCard({
-  myUserId,
-  currentHex,
-  onActivateSabotage,
-  onCancelSabotage,
-}: SabotageCardProps) {
+export function SabotageCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
@@ -26,6 +15,12 @@ export function SabotageCard({
   const setAbilityMode = useGameplayStore((store) => store.setAbilityMode);
   const exitAbilityMode = useGameplayStore((store) => store.exitAbilityMode);
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
+
+  // Derive currentHex from player position instead of requiring it as a prop.
+  const currentHex: [number, number] | null =
+    player?.currentHexQ != null && player?.currentHexR != null
+      ? [player.currentHexQ, player.currentHexR]
+      : null;
 
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
@@ -52,29 +47,20 @@ export function SabotageCard({
       hideAbilityCard();
       return;
     }
-
     exitAbilityMode();
   };
 
   const handleStart = async () => {
-    if (!isCurrentHexValid) {
-      return;
-    }
-
-    const succeeded = await Promise.resolve(onActivateSabotage());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke || !isCurrentHexValid) return;
+    const succeeded = await invoke<boolean>('ActivateSabotage');
+    if (succeeded === false) return;
     setAbilityMode('inProgress');
   };
 
   const handleAbort = async () => {
-    const succeeded = await Promise.resolve(onCancelSabotage());
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke) return;
+    const succeeded = await invoke<boolean>('CancelSabotage');
+    if (succeeded === false) return;
     exitAbilityMode();
   };
 
@@ -126,9 +112,7 @@ export function SabotageCard({
         <button
           type="button"
           className="ability-card__primary-btn ability-card__primary-btn--hostile"
-          onClick={() => {
-            void handleStart();
-          }}
+          onClick={() => { void handleStart(); }}
           disabled={!isCurrentHexValid}
         >
           {t('abilities.sabotage.start' as never)}
@@ -136,9 +120,7 @@ export function SabotageCard({
       ) : undefined}
       onBackToHud={handleBackToHud}
       showAbort={isMissionInProgress}
-      onAbort={() => {
-        void handleAbort();
-      }}
+      onAbort={() => { void handleAbort(); }}
     >
       <div className="ability-card__stack">
         {isMissionInProgress ? (

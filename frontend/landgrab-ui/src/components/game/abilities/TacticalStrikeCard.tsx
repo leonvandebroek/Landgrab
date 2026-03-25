@@ -5,33 +5,18 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
-
-interface TacticalStrikeCardProps {
-  myUserId: string;
-  onActivateTacticalStrike: (targetQ: number, targetR: number) => Promise<boolean> | void;
-  onResolveTacticalStrikeTarget?: (heading: number) => Promise<{ targetQ: number; targetR: number } | null>;
-}
+import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatTimeRemaining(until: string | undefined): string | null {
-  if (!until) {
-    return null;
-  }
-
+  if (!until) return null;
   const remaining = new Date(until).getTime() - Date.now();
-  if (remaining <= 0) {
-    return null;
-  }
-
+  if (remaining <= 0) return null;
   const minutes = Math.floor(remaining / 60000);
   const seconds = Math.floor((remaining % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-export function TacticalStrikeCard({
-  myUserId,
-  onActivateTacticalStrike,
-  onResolveTacticalStrikeTarget,
-}: TacticalStrikeCardProps) {
+export function TacticalStrikeCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
@@ -48,44 +33,31 @@ export function TacticalStrikeCard({
   const isArmed = Boolean(player?.tacticalStrikeActive) || abilityUi.mode === 'active';
 
   useEffect(() => {
-    let handle = -1;
-    if (!isArmed && onResolveTacticalStrikeTarget) {
-      handle = window.setInterval(() => {
-        const nextHeading = heading ?? 0;
-        void onResolveTacticalStrikeTarget(nextHeading).then((result) => {
-          if (result) {
-            setResolvedTarget([result.targetQ, result.targetR]);
-          } else {
-            setResolvedTarget(null);
-          }
-        });
-      }, 500);
-    } else {
-      setTimeout(() => { setResolvedTarget(null); }, 0);
-    }
+    if (isArmed || !invoke) return undefined;
 
-    return () => {
-      if (handle !== -1) {
-        window.clearInterval(handle);
-      }
-    };
-  }, [isArmed, heading, onResolveTacticalStrikeTarget]);
+    const handle = window.setInterval(() => {
+      const nextHeading = heading ?? 0;
+      void invoke<{ targetQ: number; targetR: number } | null>('ResolveTacticalStrikeTarget', nextHeading)
+        .then((result) => {
+          setResolvedTarget(result ? [result.targetQ, result.targetR] : null);
+        });
+    }, 500);
+
+    return () => window.clearInterval(handle);
+  }, [isArmed, heading, invoke]);
 
   const handleBackToHud = () => {
     if (isArmed) {
       hideAbilityCard();
       return;
     }
-
     exitAbilityMode();
   };
 
   const handleArmStrike = async (targetQ: number, targetR: number) => {
-    const succeeded = await Promise.resolve(onActivateTacticalStrike(targetQ, targetR));
-    if (succeeded === false) {
-      return;
-    }
-
+    if (!invoke) return;
+    const succeeded = await invoke<boolean>('ActivateTacticalStrike', targetQ, targetR);
+    if (succeeded === false) return;
     activateAbility();
   };
 
