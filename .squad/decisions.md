@@ -448,3 +448,53 @@
 - All meaningful changes require team consensus
 - Document architectural decisions here
 - Keep history focused on work, decisions focused on direction
+
+### 28. Abstract Base Class over Pure Interface (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** `RoleAbilityServiceBase` is an `abstract class`, not a pure interface. A thin `IRoleAbilityService` marker interface is defined but declares no methods.  
+**Rationale:** ~15 private static helpers in `AbilityService` (`ResolveClosestAdjacentHex`, `TryGetCurrentHex`, `HasActiveSabotage`, etc.) need to be shared across all concrete services. An interface cannot carry these. A pure interface with an `Execute()` contract is unworkable because each ability has a unique method signature.  
+**Impact:** All concrete services inherit from `RoleAbilityServiceBase` and implement `IRoleAbilityService`. DI can still enumerate all role services via `IEnumerable<IRoleAbilityService>` if needed in future.
+
+### 29. Explicit Delegation in GameService (No Runtime Role Dictionary) (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** `GameService` delegates to named service instances explicitly: `_commanderService.ActivateTacticalStrike(…)`. There is **no** `Dictionary<PlayerRole, IRoleAbilityService>` runtime lookup.  
+**Rationale:** Runtime lookup requires a polymorphic `Execute(method, args)` pattern which is not type-safe and would require reflection or discriminated unions across heterogeneous return types. Explicit delegation is verifiable at compile time, instantly navigable in an IDE, and matches the existing `GameService` pattern for all other domain services.  
+**Impact:** Adding a new ability = 2 new lines in `GameService` (new delegation + existing constructor param). No architectural change needed.
+
+### 30. Four Concrete Services (Commander, Scout, Engineer, Shared) (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** Abilities are split into four services. `SharedAbilityService` is not a role but holds role-agnostic abilities (TroopTransfer, FieldBattle) that cannot meaningfully belong to any one role class.  
+**Rationale:** Forcing TroopTransfer and FieldBattle into a role service would misrepresent their design intent and create incorrect role-guard coupling. A `SharedAbilityService` provides a natural home for future role-agnostic abilities.  
+**Impact:** `GameService` has four constructor params replacing the single `AbilityService`. All singletons.
+
+### 31. RoleProgressService Extracted from GameplayService (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** `UpdateSabotageProgress`, `UpdateDemolishProgress`, and fort-construction-invalidation logic are extracted to a new singleton `RoleProgressService`. `GameplayService` depends on it; `EngineerAbilityService` also depends on it.  
+**Rationale:** This logic is movement-tick–driven (called from `GameplayService.UpdatePlayerLocation`) but semantically belongs to the Engineer role domain. Keeping it in `GameplayService` would mean Engineer-specific logic persists in a non-Engineer service after the split, violating SRP. A shared service avoids duplication while keeping the movement-tick call site clean.  
+**Impact:** New `RoleProgressService` singleton. `GameplayService` constructor adds one parameter. `EngineerAbilityService` may call `RoleProgressService` methods at ability-start time to validate preconditions.
+
+### 32. Frontend Registry is Metadata-Only; Card Rendering Stays Explicit (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** `abilityRegistry` stores metadata (roles, hubMethod, titleKey, mapFocusPreset, Card component reference). `PlayingHud` renders `<entry.Card myUserId={…} invoke={…} />` for the active ability. Cards are static imports — not dynamic/lazy loaded from the registry.  
+**Rationale:** Dynamic registry-driven card loading would lose TypeScript static analysis on props. Since `AbilityCardProps` is a simple interface (`myUserId` + `invoke`), static imports with a registry lookup is type-safe and sufficient. Lazy loading is an independent optimization concern.  
+**Impact:** `PlayingHud`'s 13-branch ability card if/else chain collapses to a single `const entry = abilityRegistry[activeAbility]` + render. All per-ability callback props removed from `PlayingHud`'s interface; single `invoke` prop added.
+
+### 33. Standard AbilityCardProps Contract (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** All ability card components accept `{ myUserId: string; invoke: InvokeFn | null }`. Cards call hub methods directly via `invoke`. They continue to read game state from Zustand stores.  
+**Rationale:** Cards already use Zustand stores for state — they are not truly "dumb" components. The only thing they need injected is `invoke` to dispatch SignalR actions. Standardizing on this minimal interface enables the registry pattern without redesigning the card component layer.  
+**Impact:** Each existing card component needs a one-time update to replace callback props with `invoke(hubMethod, …)` calls. New cards implement `AbilityCardProps` directly and need no wiring in `App.tsx` or `GameView.tsx`.
+
+### 34. useGameActionsAbilities Reduced via makeHandler Factory (2026-03-25)
+**Status:** Binding  
+**Lead:** Rembrandt  
+**Decision:** A `makeHandler` factory function replaces the 19 duplicated `useCallback + try/catch` blocks. The public hook API surface is preserved unchanged.  
+**Rationale:** The duplication is pure noise — each block is identical except for the hub method name and fallback value. The factory makes this structural pattern explicit and removes the risk of inconsistent error handling in one-off blocks. Existing consumers are unaffected.  
+**Impact:** `useGameActionsAbilities` shrinks from ~290 lines to ~30. The hook still returns the same named handler functions.
+
