@@ -73,6 +73,6 @@ internal sealed class TestServiceFactory
     {
         var gameStateService = CreateGameStateService();
         var winConditionService = CreateWinConditionService();
-        return new GameplayService(RoomProvider, gameStateService, winConditionService, new RoleProgressService());
+        return new GameplayService(RoomProvider, gameStateService, winConditionService, new RoleProgressService(), NullLogger<GameplayService>.Instance);
     }
 }

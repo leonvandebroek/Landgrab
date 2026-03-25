@@ -3,6 +3,7 @@ using Landgrab.Api.Services;
 using Landgrab.Api.Services.Abilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Landgrab.Tests.TestSupport;
@@ -46,7 +47,7 @@ internal sealed class ServiceTestContext
         var roomPersistenceService = new RoomPersistenceService(new DisabledPersistenceScopeFactory(), RoomPersistenceLogger.Object);
         GameStateService = new GameStateService(RoomProvider.Object, roomPersistenceService, GameStateLogger.Object);
         var roleProgressService = new RoleProgressService();
-        GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, roleProgressService);
+        GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, roleProgressService, NullLogger<GameplayService>.Instance);
         var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<Landgrab.Api.Hubs.GameHub>>();
         AbilityService = new AbilityServiceFacade(
             new CommanderAbilityService(RoomProvider.Object, GameStateService),
