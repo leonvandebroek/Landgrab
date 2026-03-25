@@ -380,7 +380,7 @@ export function useSignalRHandlers({
       useUiStore.getState().clearError();
 
       // Show toasts for new event log entries
-      const prevLog = gameState?.eventLog ?? [];
+      const prevLog = useGameStore.getState().gameState?.eventLog ?? [];
       const newLog = normalizedState.eventLog ?? [];
       if (newLog.length > prevLog.length) {
         const newEntries = newLog.slice(prevLog.length);
@@ -601,5 +601,5 @@ export function useSignalRHandlers({
         // Silently ignore — the justConnected auto-resume flow also attempts rejoin.
       });
     },
-  }), [dispatchPlayersOnly, dispatchStateToLayers, gameState, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
+  }), [dispatchPlayersOnly, dispatchStateToLayers, getInvoke, playSound, resolveResumeFromError, resolveResumeFromState, saveSession, savedSessionRef, t]);
 }

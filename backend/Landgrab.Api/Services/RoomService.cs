@@ -7,6 +7,9 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
 {
     private readonly ConcurrentDictionary<string, GameRoom> _rooms = new();
 
+    // Reverse index: connectionId → roomCode. Maintained alongside ConnectionMap for O(1) lookup.
+    private readonly ConcurrentDictionary<string, string> _connectionRoomIndex = new();
+
     private static int DefaultGridRadius => GameStateCommon.DefaultGridRadius;
     private static int DefaultTileSizeMeters => GameStateCommon.DefaultTileSizeMeters;
     private static int MaxFootprintMeters => GameStateCommon.MaxFootprintMeters;
@@ -54,6 +57,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
         };
 
         room.ConnectionMap.TryAdd(connectionId, hostUserId);
+        _connectionRoomIndex[connectionId] = code;
         room.State.RoomCode = code;
         room.State.GridRadius = DefaultGridRadius;
         room.State.GameAreaMode = GameAreaMode.Centered;
@@ -220,9 +224,13 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
                     .ToList();
 
                 foreach (var stale in staleConnections)
+                {
                     room.ConnectionMap.TryRemove(stale, out _);
+                    _connectionRoomIndex.TryRemove(stale, out _);
+                }
 
                 room.ConnectionMap.TryAdd(connectionId, userId);
+                _connectionRoomIndex[connectionId] = room.Code;
                 existingPlayer.IsConnected = true;
                 if (string.IsNullOrWhiteSpace(existingPlayer.Emoji))
                     existingPlayer.Emoji = GetPlayerEmoji(room.State.Players.IndexOf(existingPlayer));
@@ -248,6 +256,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
             GameStateCommon.SyncBeaconStateForRole(room.State, room.State.Players[^1]);
 
             room.ConnectionMap.TryAdd(connectionId, userId);
+            _connectionRoomIndex[connectionId] = room.Code;
             AppendEventLog(room.State, new GameEventLogEntry
             {
                 Type = "PlayerJoined",
@@ -274,7 +283,7 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
     }
 
     public GameRoom? GetRoomByConnection(string connectionId) =>
-        _rooms.Values.FirstOrDefault(room => room.ConnectionMap.ContainsKey(connectionId));
+        _connectionRoomIndex.TryGetValue(connectionId, out var code) ? GetRoom(code) : null;
 
     public GameRoom? GetRoomByUserId(string userId, string? roomCode = null)
     {
@@ -404,6 +413,8 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
     {
         if (!room.ConnectionMap.TryRemove(connectionId, out var userId))
             return;
+
+        _connectionRoomIndex.TryRemove(connectionId, out _);
 
         lock (room.SyncRoot)
         {

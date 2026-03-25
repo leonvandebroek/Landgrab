@@ -16,6 +16,7 @@ import type {
 import type { SoundName } from './useSound';
 // Re-export canonical types so callers that import from here don't need to change.
 export type { SignalRInvoke, LocationPoint } from '../types/common';
+import type { SignalRInvoke, LocationPoint } from '../types/common';
 
 export interface UseGameActionsOptions {
   invoke: SignalRInvoke | null;
