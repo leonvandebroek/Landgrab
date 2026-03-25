@@ -108,13 +108,18 @@ if (!string.IsNullOrEmpty(azureSignalRConn))
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 
+// Always allow explicitly configured production origins; localhost only in development.
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
-var defaultOrigins = new[] { "http://localhost:5173", "http://localhost:3000" };
-var allOrigins = defaultOrigins.Concat(allowedOrigins).ToArray();
+var allOrigins = new List<string>(allowedOrigins);
+if (builder.Environment.IsDevelopment())
+{
+    allOrigins.Add("http://localhost:5173");
+    allOrigins.Add("http://localhost:3000");
+}
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins(allOrigins)
+        policy.WithOrigins(allOrigins.ToArray())
               .WithHeaders("Content-Type", "Authorization", "X-Requested-With")
               .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
               .AllowCredentials()));
@@ -149,6 +154,17 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)";
+
+    // TODO: tighten script-src once Vite build no longer requires unsafe-inline/unsafe-eval
+    // (nonce-based CSP or hash-based allowlist should replace these directives long-term)
+    context.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data: https://*.tile.openstreetmap.org https://*.tile.openstreetmap.fr https://*.basemaps.cartocdn.com; " +
+        "connect-src 'self' wss: ws:; " +
+        "font-src 'self'; " +
+        "frame-ancestors 'none';";
 
     if (!app.Environment.IsDevelopment())
     {
