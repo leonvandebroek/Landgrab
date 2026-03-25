@@ -30,7 +30,7 @@ export interface PendingResume {
   timeoutId: number;
 }
 
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
+import type { SignalRInvoke } from '../types/common';
 
 interface UseAutoResumeOptions {
   auth: AuthState | null;

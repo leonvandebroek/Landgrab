@@ -14,13 +14,8 @@ import type {
   WinConditionType,
 } from '../types/game';
 import type { SoundName } from './useSound';
-
-export type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
-
-export interface LocationPoint {
-  lat: number;
-  lng: number;
-}
+// Re-export canonical types so callers that import from here don't need to change.
+export type { SignalRInvoke, LocationPoint } from '../types/common';
 
 export interface UseGameActionsOptions {
   invoke: SignalRInvoke | null;

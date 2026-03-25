@@ -36,14 +36,9 @@ import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge'
 import './styles/index.css';
 import './styles/tricorder-v2.css';
 
+import type { SignalRInvoke, LocationPoint } from './types/common';
+
 const DEBUG_GPS_AVAILABLE = import.meta.env.DEV;
-
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
 
 export default function App() {
   const { t } = useTranslation();
@@ -525,25 +520,6 @@ export default function App() {
     onCurrentHexAction: handleCurrentHexAction,
     onDismissTileActions: handleDismissTileActions,
     onConfirmAttack: handleConfirmAttack,
-    onActivateBeacon: handleActivateBeacon,
-    onDeactivateBeacon: handleDeactivateBeacon,
-    onShareBeaconIntel: handleShareBeaconIntel,
-    onActivateCommandoRaid: handleActivateCommandoRaid,
-    onActivateTacticalStrike: handleActivateTacticalStrike,
-    onResolveTacticalStrikeTarget: resolveTacticalStrikeTarget ?? (async () => null),
-    onActivateRallyPoint: handleActivateRallyPoint,
-    onActivateSabotage: handleActivateSabotage,
-    onCancelFortConstruction: handleCancelFortConstruction,
-    onCancelSabotage: handleCancelSabotage,
-    onCancelDemolish: handleCancelDemolish,
-    onStartDemolish: handleStartDemolish,
-    onStartFortConstruction: handleStartFortConstruction,
-    onAttemptIntercept: attemptIntercept,
-    onResolveTroopTransferTarget: resolveTroopTransferTarget,
-    onInitiateTroopTransfer: handleInitiateTroopTransfer,
-    onRespondToTroopTransfer: handleRespondToTroopTransfer,
-    onInitiateFieldBattle: handleInitiateFieldBattle,
-    onJoinFieldBattle: handleJoinFieldBattle,
     onSetObserverMode: handleSetObserverMode,
     onUpdateDynamicsLive: handleUpdateDynamicsLive,
     onSendHostMessage: handleSendHostMessage,
@@ -553,13 +529,8 @@ export default function App() {
   }), [
     handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
-    handleActivateBeacon, handleDeactivateBeacon, handleShareBeaconIntel, handleActivateCommandoRaid, handleActivateTacticalStrike, resolveTacticalStrikeTarget,
-    handleActivateRallyPoint, handleActivateSabotage, handleCancelFortConstruction,
-    handleCancelSabotage, handleCancelDemolish,
-    handleStartDemolish, handleStartFortConstruction, attemptIntercept, resolveTroopTransferTarget,
-    handleInitiateTroopTransfer, handleRespondToTroopTransfer, handleInitiateFieldBattle, handleJoinFieldBattle, handleSetObserverMode,
-    handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleDeployCombatTroops,
-    handleDeployNeutralClaimTroops,
+    handleSetObserverMode, handleUpdateDynamicsLive, handleSendHostMessage,
+    handlePauseGame, handleDeployCombatTroops, handleDeployNeutralClaimTroops,
   ]);
 
   const lobbyViewActions = useMemo<LobbyViewActions>(() => ({
@@ -695,6 +666,7 @@ export default function App() {
         onNavigateMap={handleMiniMapNavigate}
         debugToggle={debugToggleButton}
         debugPanel={debugGpsPanel}
+        invoke={invoke}
         actions={gameViewActions}
       />
     );

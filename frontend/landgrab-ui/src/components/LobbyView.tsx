@@ -20,12 +20,7 @@ const GameLobby = lazy(() =>
   import('./lobby/GameLobby').then(m => ({ default: m.GameLobby }))
 );
 
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
+import type { SignalRInvoke, LocationPoint } from '../types/common';
 
 /** All lobby-specific action callbacks sourced from useGameActions in App. */
 export interface LobbyViewActions {

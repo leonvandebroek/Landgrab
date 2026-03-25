@@ -1,4 +1,5 @@
 using Landgrab.Api.Models;
+using Landgrab.Api.Services;
 
 namespace Landgrab.Api.Services.Abilities;
 
@@ -11,22 +12,8 @@ public interface IRoleAbilityService { }
 /// </summary>
 public abstract class RoleAbilityServiceBase(
     IGameRoomProvider roomProvider,
-    GameStateService gameStateService) : IRoleAbilityService
+    GameStateService gameStateService) : RoomScopedServiceBase(roomProvider, gameStateService), IRoleAbilityService
 {
-    /// <summary>Returns the active room for the given code, or null if not found.</summary>
-    protected GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-
-    /// <summary>Creates a deep snapshot of the given game state.</summary>
-    protected static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-
-    /// <summary>Appends an entry to the state event log.</summary>
-    protected static void AppendEventLog(GameState state, GameEventLogEntry entry) =>
-        GameStateCommon.AppendEventLog(state, entry);
-
-    /// <summary>Queues the state snapshot for persistence.</summary>
-    protected void QueuePersistence(GameRoom room, GameState snapshot) =>
-        gameStateService.QueuePersistence(room, snapshot);
-
     /// <summary>
     /// Resolves the player's current hex cell.
     /// Returns false if the player has no current hex or it is not in the grid.

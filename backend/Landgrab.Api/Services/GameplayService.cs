@@ -1,4 +1,5 @@
 using Landgrab.Api.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Landgrab.Api.Services;
 
@@ -10,7 +11,8 @@ public class GameplayService(
     IGameRoomProvider roomProvider,
     GameStateService gameStateService,
     WinConditionService winConditionService,
-    Abilities.RoleProgressService roleProgressService)
+    Abilities.RoleProgressService roleProgressService,
+    ILogger<GameplayService> logger)
     : RoomScopedServiceBase(roomProvider, gameStateService)
 {
     private const int BalancedCombatRounds = 3;
@@ -58,20 +60,32 @@ public class GameplayService(
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
+        {
+            logger.LogWarning("UpdatePlayerLocation rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
             return (null, error, false);
+        }
 
         var room = GetRoom(roomCode);
         if (room == null)
+        {
+            logger.LogWarning("UpdatePlayerLocation: room {RoomCode} not found for user {UserId}", roomCode, userId);
             return (null, "Room not found.", false);
+        }
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
+            {
+                logger.LogWarning("UpdatePlayerLocation: room {RoomCode} is in phase {Phase}, not Playing", roomCode, room.State.Phase);
                 return (null, "Player locations are only tracked while the game is playing.", false);
+            }
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
+            {
+                logger.LogWarning("UpdatePlayerLocation: player {UserId} not found in room {RoomCode}", userId, roomCode);
                 return (null, "Player not in room.", false);
+            }
 
             var now = DateTime.UtcNow;
             player.CurrentHeading = heading;
@@ -153,6 +167,11 @@ public class GameplayService(
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
             gridChanged |= snapshot.Phase != previousPhase;
+            logger.LogDebug(
+                "Player {UserId} moved to ({Lat:F6},{Lng:F6}) hex ({HexQ},{HexR}) in {RoomCode}; gridChanged={GridChanged}",
+                userId, lat, lng,
+                player.CurrentHexQ, player.CurrentHexR,
+                roomCode, gridChanged);
             return (snapshot, null, gridChanged);
         }
     }
@@ -169,7 +188,10 @@ public class GameplayService(
 
         var room = GetRoom(roomCode);
         if (room == null)
+        {
+            logger.LogWarning("PickUpTroops: room {RoomCode} not found for user {UserId}", roomCode, userId);
             return (null, "Room not found.");
+        }
 
         if (room.State.IsPaused)
             return (null, "Game is paused.");
@@ -179,7 +201,10 @@ public class GameplayService(
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
+            {
+                logger.LogWarning("PickUpTroops rejected for {UserId} in {RoomCode} at ({Q},{R}): {Error}", userId, roomCode, q, r, validationError);
                 return (null, validationError);
+            }
             if (cell.IsMasterTile)
                 return (null, "The master tile cannot be used for troop pick-up.");
 
@@ -196,6 +221,7 @@ public class GameplayService(
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
+            logger.LogDebug("Player {UserId} picked up {Count} troops from ({Q},{R}) in {RoomCode}", userId, count, q, r, roomCode);
             return (snapshot, null);
         }
     }
@@ -249,11 +275,17 @@ public class GameplayService(
     {
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
+        {
+            logger.LogWarning("PlaceTroops rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
             return (null, error, null, null);
+        }
 
         var room = GetRoom(roomCode);
         if (room == null)
+        {
+            logger.LogWarning("PlaceTroops: room {RoomCode} not found for user {UserId}", roomCode, userId);
             return (null, "Room not found.", null, null);
+        }
 
         if (room.State.IsPaused)
             return (null, "Game is paused.", null, null);
@@ -263,7 +295,10 @@ public class GameplayService(
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
+            {
+                logger.LogWarning("PlaceTroops rejected for {UserId} in {RoomCode} at ({Q},{R}): {Error}", userId, roomCode, q, r, validationError);
                 return (null, validationError, null, null);
+            }
             if (cell.IsMasterTile)
                 return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
@@ -294,6 +329,7 @@ public class GameplayService(
                 winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
+                logger.LogDebug("Player {UserId} reinforced ({Q},{R}) with {Troops} troops in {RoomCode}", userId, q, r, reinforcedTroops, roomCode);
                 return (reinforceSnapshot, null, null, null);
             }
 
@@ -307,6 +343,7 @@ public class GameplayService(
                 winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
+                logger.LogDebug("Player {UserId} claimed neutral hex ({Q},{R}) in {RoomCode}", userId, q, r, roomCode);
                 return (neutralClaimSnapshot, null, null, null);
             }
 
@@ -438,6 +475,11 @@ public class GameplayService(
                 AttackerBonuses = combatStats.AttackerBonuses.Select(CloneBonusDetail).ToList(),
                 DefenderBonuses = combatStats.DefenderBonuses.Select(CloneBonusDetail).ToList()
             };
+            logger.LogDebug(
+                "Combat at ({Q},{R}) in {RoomCode}: {UserId} {Outcome} (attackerLost={ALost}, defenderLost={DLost})",
+                q, r, roomCode, userId,
+                combatResolution.AttackerWon ? "won" : "repelled",
+                combatResolution.AttackerTroopsLost, combatResolution.DefenderTroopsLost);
             return (attackSnapshot, null, previousOwnerId, combatResult);
         }
     }

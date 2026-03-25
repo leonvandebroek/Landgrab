@@ -12,12 +12,7 @@ const DEFAULT_LAT = 50.8503;
 const DEFAULT_LNG = 4.3517;
 const EVENT_LOG_LIMIT = 300;
 
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
+import type { SignalRInvoke, LocationPoint } from '../types/common';
 
 interface AgentConnectionStatus {
   state: 'connected' | 'reconnecting' | 'disconnected';

@@ -16,8 +16,7 @@ import { getErrorMessage, localizeLobbyError, normalizeGameState } from '../util
 import { readPersistedDebugLocation } from '../utils/debugLocationSession';
 import { useMapOrchestrator } from './useMapOrchestrator';
 import { recordAgentEvent } from '../testing/agentBridge';
-
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
+import type { SignalRInvoke } from '../types/common';
 
 interface UseSignalRHandlersOptions {
   getInvoke: () => SignalRInvoke | null;
@@ -204,13 +203,14 @@ export function useSignalRHandlers({
   t,
   playSound,
 }: UseSignalRHandlersOptions): GameEvents {
-  const gameState = useGameStore(state => state.gameState);
+  // gameState is read from the store directly inside handlers (not as a subscription)
+  // to avoid triggering useMemo re-creation on every game state update.
   const { dispatchStateToLayers, dispatchPlayersOnly } = useMapOrchestrator();
 
   return useMemo<GameEvents>(() => ({
     onRoomCreated: (code, state) => {
       const roomCode = code || state.roomCode;
-      const normalizedState = normalizeGameState(state, gameState);
+      const normalizedState = normalizeGameState(state, useGameStore.getState().gameState);
       recordAgentEvent('RoomCreated', {
         roomCode,
         phase: normalizedState.phase,
@@ -228,7 +228,7 @@ export function useSignalRHandlers({
       useUiStore.getState().clearError();
     },
     onPlayerJoined: (state) => {
-      const normalizedState = normalizeGameState(state, gameState);
+      const normalizedState = normalizeGameState(state, useGameStore.getState().gameState);
       recordAgentEvent('PlayerJoined', {
         roomCode: normalizedState.roomCode,
         phase: normalizedState.phase,
@@ -259,7 +259,7 @@ export function useSignalRHandlers({
       useUiStore.getState().clearError();
     },
     onGameStarted: (state) => {
-      const normalizedState = normalizeGameState(state, gameState);
+      const normalizedState = normalizeGameState(state, useGameStore.getState().gameState);
       recordAgentEvent('GameStarted', {
         roomCode: normalizedState.roomCode,
         playerCount: normalizedState.players.length,
@@ -281,7 +281,7 @@ export function useSignalRHandlers({
       useUiStore.getState().clearError();
     },
     onStateUpdated: (state) => {
-      const normalizedState = normalizeGameState(state, gameState);
+      const normalizedState = normalizeGameState(state, useGameStore.getState().gameState);
       recordAgentEvent('StateUpdated', {
         roomCode: normalizedState.roomCode,
         phase: normalizedState.phase,
@@ -292,22 +292,22 @@ export function useSignalRHandlers({
       const gameplayState = useGameplayStore.getState();
       const shouldClearPickup = shouldClearPickupPrompt(
         gameplayState.pickupPrompt,
-        gameState,
+        useGameStore.getState().gameState,
         normalizedState
       );
       const shouldClearAttack = shouldClearAttackPrompt(
         gameplayState.attackPrompt,
-        gameState,
+        useGameStore.getState().gameState,
         normalizedState
       );
       const shouldClearPreview = shouldClearCombatPreview(
         gameplayState.combatPreview,
-        gameState,
+        useGameStore.getState().gameState,
         normalizedState
       );
       const shouldClearReinforce = shouldClearReinforcePrompt(
         gameplayState.reinforcePrompt,
-        gameState,
+        useGameStore.getState().gameState,
         normalizedState
       );
 
@@ -330,7 +330,7 @@ export function useSignalRHandlers({
         gameplayState.setReinforcePrompt(null);
       }
       if (normalizedState.phase === 'Playing') {
-        if (gameState?.phase !== 'Playing') {
+        if (useGameStore.getState().gameState?.phase !== 'Playing') {
           restorePersistedDebugLocation(normalizedState.roomCode);
         }
         useUiStore.getState().setView('game');
