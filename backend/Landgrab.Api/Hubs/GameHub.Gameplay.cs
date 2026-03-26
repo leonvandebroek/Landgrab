@@ -556,7 +556,6 @@ public partial class GameHub
             var enemyIds = state!.Players
                 .Where(p =>
                     p.Id != UserId
-                    && p.CarriedTroops > 0
                     && GameplayService.TryGetCurrentHex(state, p, out var playerQ, out var playerR)
                     && playerQ == q
                     && playerR == r

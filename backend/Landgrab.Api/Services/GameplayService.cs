@@ -379,7 +379,6 @@ public class GameplayService(
             var enemyOnTile = room.State.Players.Any(p =>
                 p.Id != userId
                 && p.AllianceId != player.AllianceId
-                && p.CarriedTroops > 0
                 && TryGetCurrentHex(room.State, p, out var pq, out var pr)
                 && pq == q && pr == r);
 
@@ -584,7 +583,6 @@ public class GameplayService(
         var enemiesOnHex = state.Players
             .Where(player =>
                 player.Id != mover.Id
-                && player.CarriedTroops > 0
                 && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
                 && playerQ == q
                 && playerR == r
@@ -658,7 +656,6 @@ public class GameplayService(
         var enemiesOnHex = state.Players
             .Where(player =>
                 player.Id != mover.Id
-                && player.CarriedTroops > 0
                 && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
                 && playerQ == q
                 && playerR == r
