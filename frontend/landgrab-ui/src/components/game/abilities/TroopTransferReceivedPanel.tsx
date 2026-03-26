@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import '../../../styles/notification-panel.css';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
 import type { InvokeFn } from '../../../types/abilities';
