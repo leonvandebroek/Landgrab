@@ -202,8 +202,9 @@ export function useGameActionsGameplay({
       throw new Error('SignalR connection is not available.');
     }
 
-    return invoke<CombatPreviewDto>('GetCombatPreview', q, r);
-  }, [invoke]);
+    const coords = resolveActionCoordinates([q, r], gameState, currentLocation, isHostBypass);
+    return invoke<CombatPreviewDto>('GetCombatPreview', q, r, coords?.lat ?? null, coords?.lng ?? null);
+  }, [invoke, gameState, currentLocation, isHostBypass]);
 
   const placeTroopsAction = useCallback((targetHex: [number, number], actionType: ClaimTileActionType): void => {
     if (!invoke) {

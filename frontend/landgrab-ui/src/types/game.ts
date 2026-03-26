@@ -417,6 +417,7 @@ export interface FieldBattleInvite {
   q: number;
   r: number;
   joinDeadline: string;
+  isInitiator?: boolean;
 }
 
 export interface FieldBattleResult {

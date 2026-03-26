@@ -118,9 +118,9 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         return gameplayService.PickUpTroops(roomCode, userId, q, r, count, playerLat, playerLng);
     }
 
-    public (CombatPreviewDto? preview, string? error) GetCombatPreview(string roomCode, string userId, int q, int r)
+    public (CombatPreviewDto? preview, string? error) GetCombatPreview(string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
     {
-        return gameplayService.GetCombatPreview(roomCode, userId, q, r);
+        return gameplayService.GetCombatPreview(roomCode, userId, q, r, playerLat, playerLng);
     }
 
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult, ActiveFieldBattle? autoTriggeredBattle) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount);

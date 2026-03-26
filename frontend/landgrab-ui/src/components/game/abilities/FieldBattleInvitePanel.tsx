@@ -42,6 +42,8 @@ export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) 
 
   if (!fieldBattleInvite) return null;
 
+  const isInitiator = fieldBattleInvite.isInitiator === true;
+
   const handleJoin = async () => {
     await invoke?.('JoinFieldBattle', fieldBattleInvite.battleId);
     setFieldBattleInvite(null);
@@ -54,29 +56,33 @@ export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) 
   return (
     <div className="notification-panel notification-panel--field-battle">
       <p className="notification-panel__message">
-        {t('abilities.fieldBattle.inviteReceived' as never, { name: fieldBattleInvite.initiatorName })}
+        {isInitiator
+          ? t('abilities.fieldBattle.waitingForJoin' as never)
+          : t('abilities.fieldBattle.inviteReceived' as never, { name: fieldBattleInvite.initiatorName })}
       </p>
       {secondsLeft != null && (
         <p className="notification-panel__countdown">
           {t('abilities.fieldBattle.joinsIn' as never, { seconds: secondsLeft })}
         </p>
       )}
-      <div className="notification-panel__actions">
-        <button
-          type="button"
-          className="ability-card__primary-btn"
-          onClick={() => { void handleJoin(); }}
-        >
-          {t('abilities.fieldBattle.joinCta' as never)}
-        </button>
-        <button
-          type="button"
-          className="ability-card__secondary-btn"
-          onClick={handleIgnore}
-        >
-          {t('abilities.fieldBattle.ignoreBtn' as never)}
-        </button>
-      </div>
+      {!isInitiator && (
+        <div className="notification-panel__actions">
+          <button
+            type="button"
+            className="ability-card__primary-btn"
+            onClick={() => { void handleJoin(); }}
+          >
+            {t('abilities.fieldBattle.joinCta' as never)}
+          </button>
+          <button
+            type="button"
+            className="ability-card__secondary-btn"
+            onClick={handleIgnore}
+          >
+            {t('abilities.fieldBattle.ignoreBtn' as never)}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

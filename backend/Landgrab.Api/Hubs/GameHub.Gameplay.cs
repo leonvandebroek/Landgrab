@@ -12,7 +12,7 @@ namespace Landgrab.Api.Hubs;
 public partial class GameHub
 {
     [Authorize]
-    public async Task<CombatPreviewDto> GetCombatPreview(int q, int r)
+    public async Task<CombatPreviewDto> GetCombatPreview(int q, int r, double? playerLat = null, double? playerLng = null)
     {
         if (!ValidateCoordRange(q, r))
         {
@@ -29,7 +29,7 @@ public partial class GameHub
             throw new HubException(message);
         }
 
-        var (preview, error) = gameService.GetCombatPreview(room.Code, UserId, q, r);
+        var (preview, error) = gameService.GetCombatPreview(room.Code, UserId, q, r, playerLat, playerLng);
         if (error != null || preview == null)
         {
             var message = error ?? "Unable to calculate combat preview.";
@@ -586,6 +586,19 @@ public partial class GameHub
                             await Clients.Client(connId).SendAsync("FieldBattleInvite", invite);
                     }
                 }
+
+                // Also notify the initiator so they know the battle has started
+                await Clients.Caller.SendAsync("FieldBattleInvite", new
+                {
+                    battleId = autoTriggeredBattle.Id.ToString(),
+                    initiatorName = autoTriggeredBattle.InitiatorName,
+                    initiatorAllianceName = state.Alliances
+                        .FirstOrDefault(alliance => alliance.Id == autoTriggeredBattle.InitiatorAllianceId)?.Name ?? "",
+                    q = autoTriggeredBattle.Q,
+                    r = autoTriggeredBattle.R,
+                    joinDeadline = autoTriggeredBattle.JoinDeadline.ToString("O"),
+                    isInitiator = true
+                });
 
                 // Schedule auto-resolution after 30 seconds (same as manual trigger)
                 var capturedBattleId = autoTriggeredBattle.Id;

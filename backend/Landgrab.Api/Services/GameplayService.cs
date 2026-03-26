@@ -235,7 +235,7 @@ public class GameplayService(
         }
     }
 
-    public (CombatPreviewDto? preview, string? error) GetCombatPreview(string roomCode, string userId, int q, int r)
+    public (CombatPreviewDto? preview, string? error) GetCombatPreview(string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
     {
         var room = GetRoom(roomCode);
         if (room == null)
@@ -257,7 +257,7 @@ public class GameplayService(
             if (!room.State.Grid.TryGetValue(HexService.Key(q, r), out var cell))
                 return (null, "Invalid hex.");
 
-            var previewError = ValidateCombatPreview(room.State, player, cell, q, r);
+            var previewError = ValidateCombatPreview(room.State, player, cell, q, r, playerLat, playerLng);
             if (previewError != null)
                 return (null, previewError);
 
@@ -682,7 +682,7 @@ public class GameplayService(
         return battle;
     }
 
-    private static string? ValidateCombatPreview(GameState state, PlayerDto player, HexCell cell, int q, int r)
+    private static string? ValidateCombatPreview(GameState state, PlayerDto player, HexCell cell, int q, int r, double? playerLat = null, double? playerLng = null)
     {
         if (cell.IsMasterTile)
             return "The master tile is invincible and cannot be conquered.";
@@ -697,6 +697,14 @@ public class GameplayService(
 
         if (player.IsHost && state.HostBypassGps)
             return null;
+
+        // Check coordinates passed by the client first (e.g. debug GPS position)
+        if (playerLat.HasValue && playerLng.HasValue && state.HasMapLocation)
+        {
+            if (HexService.IsPlayerInHex(playerLat.Value, playerLng.Value, q, r,
+                    state.MapLat!.Value, state.MapLng!.Value, state.TileSizeMeters))
+                return null;
+        }
 
         if (player.CurrentLat.HasValue && player.CurrentLng.HasValue)
         {
