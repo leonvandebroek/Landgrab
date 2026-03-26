@@ -302,6 +302,80 @@ public sealed class SharedAbilityService(
         }
     }
 
+    /// <summary>Selects a targeted enemy for an active field battle.</summary>
+    public (GameState? state, string? error) SelectFieldBattleTarget(
+        string roomCode,
+        string initiatorId,
+        Guid battleId,
+        string targetId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            var battle = room.State.ActiveFieldBattles.FirstOrDefault(item => item.Id == battleId);
+            if (battle == null)
+                return (null, "Field battle not found.");
+            if (battle.Resolved)
+                return (null, "Battle already resolved.");
+            if (battle.JoinDeadline <= DateTime.UtcNow)
+                return (null, "Field battle join window has closed.");
+            if (!string.Equals(battle.InitiatorId, initiatorId, StringComparison.Ordinal))
+                return (null, "Only the battle initiator can select a target.");
+            if (!string.IsNullOrWhiteSpace(battle.TargetEnemyId))
+                return (null, "Field battle target already selected.");
+
+            var target = room.State.Players.FirstOrDefault(player => player.Id == targetId);
+            if (target == null)
+                return (null, "Target player not in room.");
+            if (target.AllianceId == battle.InitiatorAllianceId)
+                return (null, "Target must be an enemy player.");
+            if (target.CarriedTroops <= 0)
+                return (null, "Target has no carried troops.");
+            if (!GameplayService.TryGetCurrentHex(room.State, target, out var targetQ, out var targetR)
+                || targetQ != battle.Q
+                || targetR != battle.R)
+            {
+                return (null, "Target must be on the battle hex.");
+            }
+            if (battle.FledEnemyIds.Contains(targetId, StringComparer.Ordinal))
+                return (null, "Target has already fled this battle.");
+
+            battle.TargetEnemyId = targetId;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
+    /// <summary>Marks the targeted enemy as having fled the field battle.</summary>
+    public string? FleeBattle(string roomCode, string playerId, Guid battleId)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return "Room not found.";
+
+        lock (room.SyncRoot)
+        {
+            var battle = room.State.ActiveFieldBattles.FirstOrDefault(item => item.Id == battleId);
+            if (battle == null)
+                return "Field battle not found.";
+            if (battle.Resolved)
+                return "Battle already resolved.";
+            if (battle.JoinDeadline <= DateTime.UtcNow)
+                return "Field battle join window has closed.";
+            if (!string.Equals(battle.TargetEnemyId, playerId, StringComparison.Ordinal))
+                return "Only the targeted enemy can flee this battle.";
+            if (battle.FledEnemyIds.Contains(playerId, StringComparer.Ordinal))
+                return "You have already fled this battle.";
+
+            battle.FledEnemyIds.Add(playerId);
+            return null;
+        }
+    }
+
     /// <summary>Resolves the field battle outcome, distributing troop losses to both sides.</summary>
     public (GameState? state, FieldBattleResultDto? result, string? error) ResolveFieldBattle(
         string roomCode, Guid battleId)
@@ -340,7 +414,9 @@ public sealed class SharedAbilityService(
             {
                 result.NoEnemiesJoined = true;
                 result.InitiatorWon = true;
-                initiator.FieldBattleCooldownUntil = DateTime.UtcNow.AddSeconds(30);
+                initiator.FieldBattleCooldownUntil = DateTime.UtcNow.AddHours(24);
+                initiator.FieldBattleCooldownHexQ = battle.Q;
+                initiator.FieldBattleCooldownHexR = battle.R;
                 room.State.ActiveFieldBattles.RemoveAll(item => item.Id == battle.Id);
                 var noEnemySnapshot = SnapshotState(room.State);
                 QueuePersistence(room, noEnemySnapshot);
@@ -354,7 +430,9 @@ public sealed class SharedAbilityService(
             {
                 result.NoEnemiesJoined = true;
                 result.InitiatorWon = true;
-                initiator.FieldBattleCooldownUntil = DateTime.UtcNow.AddSeconds(30);
+                initiator.FieldBattleCooldownUntil = DateTime.UtcNow.AddHours(24);
+                initiator.FieldBattleCooldownHexQ = battle.Q;
+                initiator.FieldBattleCooldownHexR = battle.R;
                 room.State.ActiveFieldBattles.RemoveAll(item => item.Id == battle.Id);
                 var missingEnemySnapshot = SnapshotState(room.State);
                 QueuePersistence(room, missingEnemySnapshot);
@@ -417,10 +495,16 @@ public sealed class SharedAbilityService(
                 initiator.CarriedTroops = 0;
             }
 
-            var cooldownUntil = DateTime.UtcNow.AddSeconds(30);
+            var cooldownUntil = DateTime.UtcNow.AddHours(24);
             initiator.FieldBattleCooldownUntil = cooldownUntil;
+            initiator.FieldBattleCooldownHexQ = battle.Q;
+            initiator.FieldBattleCooldownHexR = battle.R;
             foreach (var enemy in joinedEnemies)
+            {
                 enemy.FieldBattleCooldownUntil = cooldownUntil;
+                enemy.FieldBattleCooldownHexQ = battle.Q;
+                enemy.FieldBattleCooldownHexR = battle.R;
+            }
 
             room.State.ActiveFieldBattles.RemoveAll(item => item.Id == battle.Id);
             AppendEventLog(room.State, new GameEventLogEntry

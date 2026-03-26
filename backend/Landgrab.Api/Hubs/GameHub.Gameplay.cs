@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Landgrab.Api.Models;
 using Landgrab.Api.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Landgrab.Api.Hubs;
@@ -424,92 +425,77 @@ public partial class GameHub
             return;
         }
 
-        var result = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng, heading);
-        if (result.error != null)
+        var roomCode = room.Code;
+        var (state, error, gridChanged, playerHexChanged, autoTriggeredBattle, fledBattle) =
+            gameService.UpdatePlayerLocation(roomCode, UserId, lat, lng, heading);
+        if (error != null)
         {
-            await SendError(result.error);
+            await SendError(error);
             return;
         }
 
         // Dispatch FieldBattle invite if moving to this hex triggered a battle
-        if (result.autoTriggeredBattle != null)
+        if (autoTriggeredBattle != null)
         {
-            var battle = result.autoTriggeredBattle;
-            var state = result.state!;
-            var enemyIds = state.Players
-                .Where(p =>
-                    p.Id != UserId
-                    && p.CarriedTroops > 0
-                    && GameplayService.TryGetCurrentHex(state, p, out var pq, out var pr)
-                    && pq == battle.Q
-                    && pr == battle.R
-                    && p.AllianceId != battle.InitiatorAllianceId)
-                .Select(p => p.Id)
-                .ToList();
-
-            if (enemyIds.Count > 0)
+            var battle = autoTriggeredBattle;
+            var invite = new
             {
-                var invite = new
-                {
-                    battleId = battle.Id.ToString(),
-                    initiatorName = battle.InitiatorName,
-                    initiatorAllianceName = state.Alliances
-                        .FirstOrDefault(a => a.Id == battle.InitiatorAllianceId)?.Name ?? "",
-                    q = battle.Q,
-                    r = battle.R,
-                    joinDeadline = battle.JoinDeadline.ToString("O")
-                };
+                battleId = battle.Id.ToString(),
+                initiatorName = battle.InitiatorName,
+                initiatorAllianceName = state!.Alliances
+                    .FirstOrDefault(a => a.Id == battle.InitiatorAllianceId)?.Name ?? "",
+                q = battle.Q,
+                r = battle.R,
+                joinDeadline = battle.JoinDeadline.ToString("O"),
+                isInitiator = true
+            };
 
-                foreach (var enemyId in enemyIds)
-                {
-                    foreach (var (connId, uid) in room.ConnectionMap)
-                    {
-                        if (uid == enemyId)
-                            await Clients.Client(connId).SendAsync("FieldBattleInvite", invite);
-                    }
-                }
+            await Clients.Caller.SendAsync("FieldBattleInvite", invite);
 
-                await Clients.Caller.SendAsync("FieldBattleInvite", new
-                {
-                    battleId = battle.Id.ToString(),
-                    initiatorName = battle.InitiatorName,
-                    initiatorAllianceName = state.Alliances
-                        .FirstOrDefault(a => a.Id == battle.InitiatorAllianceId)?.Name ?? "",
-                    q = battle.Q,
-                    r = battle.R,
-                    joinDeadline = battle.JoinDeadline.ToString("O"),
-                    isInitiator = true
-                });
+            var capturedBattleId = battle.Id;
+            var capturedRoomCode = roomCode;
+            var capturedHubContext = hubContext;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30));
+                var resolvedRoom = gameService.GetRoom(capturedRoomCode);
+                if (resolvedRoom == null) return;
+                var (resolvedState, resolveResult, resolveError) = gameService.ResolveFieldBattle(capturedRoomCode, capturedBattleId);
+                if (resolveError != null || resolvedState == null) return;
+                await capturedHubContext.Clients.Group(capturedRoomCode)
+                    .SendAsync("FieldBattleResolved", new { battleId = capturedBattleId.ToString(), result = resolveResult });
+                await capturedHubContext.Clients.Group(capturedRoomCode)
+                    .SendAsync("StateUpdated", resolvedState);
+            });
+        }
 
-                var capturedBattleId = battle.Id;
-                var capturedRoomCode = room.Code;
-                var capturedHubContext = hubContext;
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(30));
-                    var resolvedRoom = gameService.GetRoom(capturedRoomCode);
-                    if (resolvedRoom == null) return;
-                    var (resolvedState, resolveResult, resolveError) = gameService.ResolveFieldBattle(capturedRoomCode, capturedBattleId);
-                    if (resolveError != null || resolvedState == null) return;
-                    await capturedHubContext.Clients.Group(capturedRoomCode)
-                        .SendAsync("FieldBattleResolved", new { battleId = capturedBattleId.ToString(), result = resolveResult });
-                    await capturedHubContext.Clients.Group(capturedRoomCode)
-                        .SendAsync("StateUpdated", resolvedState);
-                });
+        // If a targeted enemy fled this move, immediately resolve the battle
+        if (fledBattle != null)
+        {
+            var capturedFledRoomCode = Context.GetHttpContext()?.GetRouteValue("roomCode") as string
+                ?? roomCode;
+            var capturedFledBattleId = fledBattle.Id;
+            var (resolvedState, resolveResult, resolveError) = gameService.ResolveFieldBattle(capturedFledRoomCode, capturedFledBattleId);
+            if (resolveError is null && resolvedState is not null && resolveResult is not null)
+            {
+                var allParticipantIds = resolveResult.AllParticipantIds;
+                foreach (var pid in allParticipantIds)
+                    await Clients.User(pid).SendAsync("FieldBattleResolved", resolveResult);
+                await Clients.Group(capturedFledRoomCode).SendAsync("StateUpdated", resolvedState);
             }
         }
 
         // Broadcast full state when the authoritative grid changes OR when mover crosses hex boundaries.
-        if (result.gridChanged || result.playerHexChanged)
+        if (gridChanged || playerHexChanged)
         {
-            await BroadcastState(room.Code, result.state!);
+            await BroadcastState(roomCode, state!);
             return;
         }
 
         // Player moved but no grid changes — send lightweight position update
         await visibilityBroadcastHelper.BroadcastPlayersPerViewer(
             room,
-            result.state!,
+            state!,
             connectionId => Clients.Client(connectionId),
             visibilityService);
     }
@@ -1051,6 +1037,50 @@ public partial class GameHub
         return new { battleId = battle.Id.ToString() };
     }
 
+    public async Task SelectFieldBattleTarget(string battleId, string targetId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+        if (!Guid.TryParse(battleId, out var parsedBattleId))
+        {
+            await SendError(InvalidRequestCode, "Invalid battle ID.");
+            return;
+        }
+
+        var (state, error) = gameService.SelectFieldBattleTarget(room.Code, UserId, parsedBattleId, targetId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        if (state == null)
+            return;
+
+        var battle = state.ActiveFieldBattles.FirstOrDefault(item => item.Id == parsedBattleId);
+        if (battle != null)
+        {
+            var invite = new
+            {
+                BattleId = battle.Id.ToString(),
+                InitiatorId = battle.InitiatorId,
+                InitiatorName = battle.InitiatorName,
+                InitiatorAllianceId = battle.InitiatorAllianceId,
+                Q = battle.Q,
+                R = battle.R,
+                InitiatorTroops = battle.InitiatorTroops,
+                JoinDeadline = battle.JoinDeadline,
+                IsInitiator = false
+            };
+            await Clients.User(targetId).SendAsync("FieldBattleInvite", invite);
+            await Clients.Group(room.Code).SendAsync("StateUpdated", state);
+        }
+    }
+
     public async Task JoinFieldBattle(string battleId)
     {
         if (!Guid.TryParse(battleId, out var parsedBattleId))
@@ -1100,6 +1130,36 @@ public partial class GameHub
                     }
                 }
             }
+        }
+    }
+
+    public async Task FleeBattle(string battleId)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+        if (!Guid.TryParse(battleId, out var parsedBattleId))
+        {
+            await SendError(InvalidRequestCode, "Invalid battle ID.");
+            return;
+        }
+
+        var error = gameService.FleeBattle(room.Code, UserId, parsedBattleId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        var (resolvedState, result, resolveError) = gameService.ResolveFieldBattle(room.Code, parsedBattleId);
+        if (resolveError is null && resolvedState is not null && result is not null)
+        {
+            foreach (var pid in result.AllParticipantIds)
+                await Clients.User(pid).SendAsync("FieldBattleResolved", result);
+            await Clients.Group(room.Code).SendAsync("StateUpdated", resolvedState);
         }
     }
 

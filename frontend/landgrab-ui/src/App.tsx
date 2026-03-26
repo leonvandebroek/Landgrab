@@ -289,6 +289,7 @@ export default function App() {
     handleConfirmAttack,
     handleDeployCombatTroops,
     handleDeployNeutralClaimTroops,
+    handleFleeBattle,
     handlePlayAgain,
   } = useGameActions({
     invoke,
@@ -507,11 +508,12 @@ export default function App() {
     onPauseGame: handlePauseGame,
     onDeployCombatTroops: handleDeployCombatTroops,
     onDeployNeutralClaimTroops: handleDeployNeutralClaimTroops,
+    onFleeBattle: handleFleeBattle,
   }), [
     handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
     handleSetObserverMode, handleUpdateDynamicsLive, handleSendHostMessage,
-    handlePauseGame, handleDeployCombatTroops, handleDeployNeutralClaimTroops,
+    handlePauseGame, handleDeployCombatTroops, handleDeployNeutralClaimTroops, handleFleeBattle,
   ]);
 
   const lobbyViewActions = useMemo<LobbyViewActions>(() => ({

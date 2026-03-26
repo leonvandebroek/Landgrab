@@ -405,9 +405,12 @@ export interface ActiveFieldBattle {
   initiatorAllianceId: string;
   q: number;
   r: number;
+  initiatorTroops: number;
   joinDeadline: string;
   joinedEnemyIds: string[];
   resolved: boolean;
+  targetEnemyId: string | null;
+  fledEnemyIds: string[];
 }
 
 export interface FieldBattleInvite {
@@ -418,6 +421,7 @@ export interface FieldBattleInvite {
   r: number;
   joinDeadline: string;
   isInitiator?: boolean;
+  targetEnemyId?: string | null;
 }
 
 export interface FieldBattleResult {

@@ -39,6 +39,7 @@ export interface GameViewActions {
   onPauseGame: (paused: boolean) => void;
   onDeployCombatTroops: (count: number) => Promise<void>;
   onDeployNeutralClaimTroops: (count: number) => Promise<void>;
+  onFleeBattle: (battleId: string) => Promise<boolean>;
 }
 
 export interface GameViewProps {
@@ -202,6 +203,7 @@ export function GameView({
           currentPlayerName={currentPlayerName}
           hasLocation={Boolean(currentLocation)}
           onSetObserverMode={actions.onSetObserverMode}
+          onFleeBattle={actions.onFleeBattle}
           debugToggle={debugToggle}
           debugPanel={debugPanel}
           onNavigateMap={onNavigateMap}

@@ -56,21 +56,21 @@ public class GameplayService(
 
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
-    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? autoTriggeredBattle) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? autoTriggeredBattle, ActiveFieldBattle? fledBattle) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng, double? heading)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
         {
             logger.LogWarning("UpdatePlayerLocation rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
-            return (null, error, false, false, null);
+            return (null, error, false, false, null, null);
         }
 
         var room = GetRoom(roomCode);
         if (room == null)
         {
             logger.LogWarning("UpdatePlayerLocation: room {RoomCode} not found for user {UserId}", roomCode, userId);
-            return (null, "Room not found.", false, false, null);
+            return (null, "Room not found.", false, false, null, null);
         }
 
         lock (room.SyncRoot)
@@ -78,14 +78,14 @@ public class GameplayService(
             if (room.State.Phase != GamePhase.Playing)
             {
                 logger.LogWarning("UpdatePlayerLocation: room {RoomCode} is in phase {Phase}, not Playing", roomCode, room.State.Phase);
-                return (null, "Player locations are only tracked while the game is playing.", false, false, null);
+                return (null, "Player locations are only tracked while the game is playing.", false, false, null, null);
             }
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
             {
                 logger.LogWarning("UpdatePlayerLocation: player {UserId} not found in room {RoomCode}", userId, roomCode);
-                return (null, "Player not in room.", false, false, null);
+                return (null, "Player not in room.", false, false, null, null);
             }
 
             var now = DateTime.UtcNow;
@@ -106,10 +106,36 @@ public class GameplayService(
                 ? HexService.Key(player.CurrentHexQ.Value, player.CurrentHexR.Value)
                 : null;
             var playerHexChanged = !string.Equals(player.PreviousHexKey, currentHexKey, StringComparison.Ordinal);
+            
+            // CHANGE 4: Position-based cooldown - clear when player moves off the cooldown hex
             if (player.FieldBattleCooldownUntil.HasValue
-                && (player.PreviousHexKey != currentHexKey || player.CarriedTroops == 0))
+                && player.FieldBattleCooldownHexQ.HasValue
+                && player.FieldBattleCooldownHexR.HasValue
+                && (player.CurrentHexQ != player.FieldBattleCooldownHexQ
+                    || player.CurrentHexR != player.FieldBattleCooldownHexR))
             {
                 player.FieldBattleCooldownUntil = null;
+                player.FieldBattleCooldownHexQ = null;
+                player.FieldBattleCooldownHexR = null;
+            }
+            
+            // CHANGE 1: Detect flee - if targeted enemy moved off battle hex
+            ActiveFieldBattle? fledBattle = null;
+            if (playerHexChanged && player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue)
+            {
+                var targetedBattle = room.State.ActiveFieldBattles
+                    .FirstOrDefault(b => b.TargetEnemyId == userId && !b.Resolved);
+                
+                if (targetedBattle != null
+                    && (targetedBattle.Q != player.CurrentHexQ.Value || targetedBattle.R != player.CurrentHexR.Value))
+                {
+                    if (!targetedBattle.FledEnemyIds.Contains(userId, StringComparer.Ordinal))
+                    {
+                        targetedBattle.FledEnemyIds.Add(userId);
+                        fledBattle = targetedBattle;
+                        gridChanged = true;
+                    }
+                }
             }
 
             if (room.State.Dynamics.PlayerRolesEnabled)
@@ -199,7 +225,7 @@ public class GameplayService(
                 userId, lat, lng,
                 player.CurrentHexQ, player.CurrentHexR,
                 roomCode, gridChanged);
-            return (snapshot, null, gridChanged, playerHexChanged, autoTriggeredBattle);
+            return (snapshot, null, gridChanged, playerHexChanged, autoTriggeredBattle, fledBattle);
         }
     }
 

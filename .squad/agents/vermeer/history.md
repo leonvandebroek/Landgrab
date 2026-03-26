@@ -297,3 +297,45 @@ const cy = lp.y - pixelOrigin.y;
 
   **Build:** `npm run lint && npm run build` — 0 errors, 302 modules clean.
   **See:** `.squad/decisions/inbox/vermeer-fieldbattle-resolved-clearance.md`
+
+## 2026-XX-XX — FieldBattle Target Selection & Flee
+
+**Task:** Update TypeScript types, add new invoke calls, and wire through component chain for FieldBattle target selection and flee functionality.
+
+**Changes made:**
+1. **TypeScript types** (`types/game.ts`):
+   - Updated `ActiveFieldBattle` interface: added `initiatorTroops: number`, `targetEnemyId: string | null`, and `fledEnemyIds: string[]`
+   - Updated `FieldBattleInvite` interface: added `targetEnemyId?: string | null`
+
+2. **New invoke functions** (`hooks/useGameActionsAbilities.ts`):
+   - Added `handleSelectFieldBattleTarget(battleId: string, targetId: string) => Promise<boolean>`
+   - Added `handleFleeBattle(battleId: string) => Promise<boolean>`
+   - Both use the `makeHandler` pattern for consistent error handling
+
+3. **Hook chain wiring** (`hooks/useGameActions.ts` and `hooks/useGameActions.shared.ts`):
+   - Exported both new functions from `useGameActionsAbilities`
+   - Added them to `UseGameActionsResult` interface
+   - Wired through `useGameActions` composite hook
+
+4. **fieldBattleResolutionMode verification** (`components/lobby/DynamicsStep.tsx`):
+   - Confirmed all four enum values are correctly defined and wired:
+     - `InitiatorVsSumOfJoined`
+     - `InitiatorVsHighestOfJoined`
+     - `InitiatorPlusRandomVsSumPlusRandom`
+     - `InitiatorPlusRandomVsHighestPlusRandom`
+   - Radio group correctly binds to `dynamics.fieldBattleResolutionMode`
+
+**Build status:** ✅ PASS
+- `npm run lint`: 0 errors
+- `npm run build`: Clean build (tsc + vite)
+- All TypeScript types compile successfully
+
+**Note:** Hals is implementing the UI components (`FieldBattleCard` and `FieldBattleInvitePanel`) that will consume these new handlers. The prop signatures are ready — Hals needs to:
+- Add `onSelectFieldBattleTarget` prop to `FieldBattleCard` (for initiator target selection)
+- Add `onFleeBattle` prop to `FieldBattleInvitePanel` (for enemy flee action)
+- Wire through `PlayingHud` → ability cards
+
+**Pattern notes:**
+- Used `makeHandler` factory for both new methods (consistent with existing ability handlers)
+- Both return `Promise<boolean>` (success/failure)
+- No changes to SignalR handlers needed — backend will broadcast state updates as usual

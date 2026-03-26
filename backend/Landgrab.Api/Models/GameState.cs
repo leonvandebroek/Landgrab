@@ -143,6 +143,8 @@ public class PlayerDto
 
     // Engineer abilities
     public DateTime? FieldBattleCooldownUntil { get; set; }
+    public int? FieldBattleCooldownHexQ { get; set; }
+    public int? FieldBattleCooldownHexR { get; set; }
     public int? FortTargetQ { get; set; }
     public int? FortTargetR { get; set; }
     public List<string> FortPerimeterVisited { get; set; } = new();
@@ -233,7 +235,9 @@ public class ActiveFieldBattle
     public int R { get; set; }
     public int InitiatorTroops { get; set; }
     public DateTime JoinDeadline { get; set; }
+    public string? TargetEnemyId { get; set; }
     public List<string> JoinedEnemyIds { get; set; } = [];
+    public List<string> FledEnemyIds { get; set; } = [];
     public bool Resolved { get; set; }
 }
 

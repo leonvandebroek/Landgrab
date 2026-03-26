@@ -21,9 +21,10 @@ function getSecondsLeft(joinDeadline: string | undefined, now: number): number |
 
 interface FieldBattleInvitePanelProps {
   invoke: InvokeFn | null;
+  onFleeBattle: (battleId: string) => Promise<boolean>;
 }
 
-export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) {
+export function FieldBattleInvitePanel({ invoke, onFleeBattle }: FieldBattleInvitePanelProps) {
   const { t } = useTranslation();
   const fieldBattleInvite = useNotificationStore((store) => store.fieldBattleInvite);
   const setFieldBattleInvite = useNotificationStore((store) => store.setFieldBattleInvite);
@@ -47,6 +48,11 @@ export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) 
 
   const handleJoin = async () => {
     await invoke?.('JoinFieldBattle', fieldBattleInvite.battleId);
+    setFieldBattleInvite(null);
+  };
+
+  const handleFlee = async () => {
+    await onFleeBattle(fieldBattleInvite.battleId);
     setFieldBattleInvite(null);
   };
 
@@ -87,7 +93,20 @@ export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) 
         </div>
       )}
 
+      <p className="notification-panel__message">
+        {t('abilities.fieldBattle.invite.fleeDescription' as never, { seconds: secondsLeft ?? 30 })}
+        {' '}
+        {t('abilities.fieldBattle.invite.stayDescription' as never)}
+      </p>
+
       <div className="fb-invite__actions">
+        <button
+          type="button"
+          className="fb-invite__ignore-btn"
+          onClick={() => { void handleFlee(); }}
+        >
+          {t('abilities.fieldBattle.invite.fleeBtn' as never)}
+        </button>
         <button
           type="button"
           className="fb-invite__join-btn"

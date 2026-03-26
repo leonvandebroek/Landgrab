@@ -75,6 +75,8 @@ export interface UseGameActionsResult {
   handleRespondToTroopTransfer: (transferId: string, accepted: boolean) => Promise<boolean>;
   handleInitiateFieldBattle: () => Promise<{ battleId: string } | null>;
   handleJoinFieldBattle: (battleId: string) => Promise<boolean>;
+  handleSelectFieldBattleTarget: (battleId: string, targetId: string) => Promise<boolean>;
+  handleFleeBattle: (battleId: string) => Promise<boolean>;
   handleSetMasterTile: (lat: number, lng: number) => void;
   handleSetMasterTileByHex: (q: number, r: number) => void;
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;

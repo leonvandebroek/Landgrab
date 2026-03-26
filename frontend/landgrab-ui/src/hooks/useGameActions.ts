@@ -50,6 +50,8 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleRespondToTroopTransfer: abilityActions.handleRespondToTroopTransfer,
     handleInitiateFieldBattle: abilityActions.handleInitiateFieldBattle,
     handleJoinFieldBattle: abilityActions.handleJoinFieldBattle,
+    handleSelectFieldBattleTarget: abilityActions.handleSelectFieldBattleTarget,
+    handleFleeBattle: abilityActions.handleFleeBattle,
     handleSetMasterTile: lobbyActions.handleSetMasterTile,
     handleSetMasterTileByHex: lobbyActions.handleSetMasterTileByHex,
     handleAssignStartingTile: lobbyActions.handleAssignStartingTile,

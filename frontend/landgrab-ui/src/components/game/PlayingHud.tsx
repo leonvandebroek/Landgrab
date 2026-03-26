@@ -46,6 +46,7 @@ interface Props {
   currentPlayerName: string;
   hasLocation: boolean;
   onSetObserverMode?: (enabled: boolean) => void;
+  onFleeBattle: (battleId: string) => Promise<boolean>;
   debugToggle?: React.ReactNode;
   debugPanel?: React.ReactNode;
   children?: React.ReactNode;
@@ -79,6 +80,7 @@ export function PlayingHud({
   currentPlayerName,
   hasLocation,
   onSetObserverMode,
+  onFleeBattle,
   debugToggle,
   debugPanel,
   children,
@@ -829,6 +831,7 @@ export function PlayingHud({
       />
       <FieldBattleInvitePanel
         invoke={invoke}
+        onFleeBattle={onFleeBattle}
       />
 
       {abilityUi.activeAbility !== null && abilityUi.cardVisible && (() => {

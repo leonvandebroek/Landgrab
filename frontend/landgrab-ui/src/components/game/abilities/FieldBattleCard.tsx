@@ -34,6 +34,7 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
   }, [gameState, myUserId]);
 
   const isWaiting = isActive || activeBattle != null;
+  const isTargetSelectionPhase = activeBattle != null && activeBattle.targetEnemyId == null;
 
   const joinDeadlineCountdown = activeBattle ? formatSecondsLeft(activeBattle.joinDeadline) : null;
 
@@ -72,15 +73,28 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
     return { isEligible: true, reason: null, enemiesOnTile: enemiesHere };
   }, [player, gameState, currentCell, myUserId]);
 
+  const validTargets = useMemo(() => {
+    if (!activeBattle || !gameState || !player) return [];
+    const fledIds = new Set(activeBattle.fledEnemyIds ?? []);
+    return enemiesOnTile.filter((e) => (e.carriedTroops ?? 0) > 0 && !fledIds.has(e.id));
+  }, [activeBattle, gameState, enemiesOnTile, player]);
+
   const joinedEnemies = useMemo(() => {
     if (!activeBattle || !gameState) return [];
     return gameState.players.filter((p) => activeBattle.joinedEnemyIds.includes(p.id));
   }, [activeBattle, gameState]);
 
-  const pendingEnemies = useMemo(
-    () => enemiesOnTile.filter((e) => !activeBattle?.joinedEnemyIds.includes(e.id)),
-    [activeBattle, enemiesOnTile],
-  );
+  const fledEnemies = useMemo(() => {
+    if (!activeBattle || !gameState) return [];
+    const fledIds = new Set(activeBattle.fledEnemyIds ?? []);
+    return gameState.players.filter((p) => fledIds.has(p.id));
+  }, [activeBattle, gameState]);
+
+  const pendingEnemies = useMemo(() => {
+    if (!activeBattle) return enemiesOnTile;
+    const fledIds = new Set(activeBattle.fledEnemyIds ?? []);
+    return enemiesOnTile.filter((e) => !activeBattle.joinedEnemyIds.includes(e.id) && !fledIds.has(e.id));
+  }, [activeBattle, enemiesOnTile]);
 
   const handleBackToHud = () => {
     if (isWaiting || cooldownCountdown) {
@@ -97,11 +111,18 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
     activateAbility();
   };
 
-  const pillClass = isWaiting
+  const handleSelectTarget = async (enemyId: string) => {
+    if (!invoke || !activeBattle) return;
+    await invoke('SelectFieldBattleTarget', activeBattle.id, enemyId);
+  };
+
+  const pillClass = isWaiting && !isTargetSelectionPhase
     ? 'ability-card__status-pill--hostile'
-    : !cooldownCountdown && isEligible
+    : isTargetSelectionPhase
       ? 'ability-card__status-pill--armed'
-      : '';
+      : !cooldownCountdown && isEligible
+        ? 'ability-card__status-pill--armed'
+        : '';
 
   return (
     <AbilityCard
@@ -112,15 +133,23 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
           <div className={`ability-card__status-pill ${pillClass}`}>
             <GameIcon name="contested" size="sm" />
             <span>
-              {isWaiting
-                ? t('abilities.fieldBattle.active' as never)
-                : cooldownCountdown
-                  ? t('abilities.fieldBattle.cooldown' as never)
-                  : t('abilities.fieldBattle.confirming' as never)}
+              {isTargetSelectionPhase
+                ? t('abilities.fieldBattle.targetSelection.title' as never)
+                : isWaiting
+                  ? t('abilities.fieldBattle.active' as never)
+                  : cooldownCountdown
+                    ? t('abilities.fieldBattle.cooldown' as never)
+                    : t('abilities.fieldBattle.confirming' as never)}
             </span>
           </div>
 
-          {isWaiting && activeBattle && (
+          {isTargetSelectionPhase && (
+            <p className="ability-card__status-copy">
+              {t('abilities.fieldBattle.targetSelection.subtitle' as never)}
+            </p>
+          )}
+
+          {isWaiting && activeBattle && !isTargetSelectionPhase && (
             <>
               {joinDeadlineCountdown && (
                 <div className="fb-countdown">
@@ -155,6 +184,41 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
       onBackToHud={handleBackToHud}
     >
       <div className="ability-card__stack">
+        {/* Target Selection Phase */}
+        {isTargetSelectionPhase && (
+          <>
+            {validTargets.length > 0 ? (
+              <div className="fb-target-list">
+                {validTargets.map((enemy) => (
+                  <div key={enemy.id} className="fb-target-row">
+                    <span
+                      className="fb-target-row__color"
+                      style={{ backgroundColor: enemy.color }}
+                      aria-hidden="true"
+                    />
+                    <span className="fb-target-row__name">{enemy.name}</span>
+                    <span className="fb-target-row__troops">{enemy.carriedTroops ?? 0}</span>
+                    <button
+                      type="button"
+                      className="fb-target-btn"
+                      onClick={() => { void handleSelectTarget(enemy.id); }}
+                    >
+                      {t('abilities.fieldBattle.targetSelection.challengeBtn' as never)}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="ability-card__warning">
+                {t('abilities.fieldBattle.targetSelection.noTargets' as never)}
+              </div>
+            )}
+            <p className="ability-card__status-copy">
+              {t('abilities.fieldBattle.targetSelection.hint' as never)}
+            </p>
+          </>
+        )}
+
         {/* Pre-confirm: battle roster */}
         {!isWaiting && !cooldownCountdown && (
           <>
@@ -190,8 +254,8 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
           </>
         )}
 
-        {/* Waiting: roster of pending / joined enemies */}
-        {isWaiting && (pendingEnemies.length > 0 || joinedEnemies.length > 0) && (
+        {/* Waiting: roster of pending / joined / fled enemies */}
+        {isWaiting && !isTargetSelectionPhase && (pendingEnemies.length > 0 || joinedEnemies.length > 0 || fledEnemies.length > 0) && (
           <div className="fb-roster">
             {pendingEnemies.map((enemy) => (
               <div key={enemy.id} className="fb-roster__combatant fb-roster__combatant--pending">
@@ -211,11 +275,22 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
                 <span className="fb-roster__combatant-status">{t('abilities.fieldBattle.joinedStatus' as never)}</span>
               </div>
             ))}
+            {fledEnemies.map((enemy) => (
+              <div key={enemy.id} className="fb-roster__combatant fb-roster__combatant--fled">
+                <span className="fb-roster__combatant-icon">
+                  <GameIcon name="hourglass" size="sm" />
+                </span>
+                <span className="fb-roster__combatant-name">{enemy.name}</span>
+                <span className="fb-roster__combatant-status fb-roster__fled-badge">
+                  {t('abilities.fieldBattle.fled.badge' as never)}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
         {/* Cooldown hint */}
-        {(isWaiting || cooldownCountdown) && (
+        {(isWaiting || cooldownCountdown) && !isTargetSelectionPhase && (
           <p className="ability-card__status-copy">{t('abilities.fieldBattle.cooldownHint' as never)}</p>
         )}
       </div>
