@@ -121,13 +121,14 @@ function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
       const cssH = cvs.height / dpr;
 
       // Player center in layer-space canvas coordinates.
-      // The canvas lives inside rotatePane, so it's in pre-rotation layer space.
-      // latLngToContainerPoint returns post-rotation screen coords (double-applies rotation);
-      // latLngToLayerPoint minus getPixelOrigin gives the correct pre-rotation canvas position.
+      // The canvas lives inside rotatePane at top:0,left:0, so its origin is
+      // at layer-space (0,0). latLngToLayerPoint already subtracts pixelOrigin
+      // internally, giving coords relative to that same origin — use directly.
+      // (Do NOT subtract pixelOrigin again; that would double-offset the center
+      // by millions of pixels and cause the off-screen guard to skip drawing.)
       const lp = map.latLngToLayerPoint(L.latLng(playerLat, playerLng));
-      const pixelOrigin = map.getPixelOrigin();
-      const cx = lp.x - pixelOrigin.x;
-      const cy = lp.y - pixelOrigin.y;
+      const cx = lp.x;
+      const cy = lp.y;
 
       const radiusPx = computeRadiusPx(map, playerLat, playerLng);
 

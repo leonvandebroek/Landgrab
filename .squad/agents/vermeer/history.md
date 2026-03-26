@@ -251,3 +251,9 @@ const cy = lp.y - pixelOrigin.y;
 **Rule:** Any canvas that is a child of `rotatePane` (or any pane appended to it) must use `latLngToLayerPoint - getPixelOrigin()` for geographic-to-canvas coordinate conversion. `latLngToContainerPoint` is only safe in non-rotating maps or in DOM elements that are *not* inside the rotating subtree.
 
 **Events:** always include `rotate` alongside `moveend zoomend viewreset` when listening for projection changes on a rotation-enabled Leaflet map.
+
+- **2026-07-xx (vermeer-radar-invisible-fix):** Fixed RadarSweepLayer rendering completely invisible.
+  - **Root cause — double pixelOrigin subtraction:** In `drawFrame`, the code computed `cx = lp.x - pixelOrigin.x` and `cy = lp.y - pixelOrigin.y`, where `lp = map.latLngToLayerPoint(...)`. However, `latLngToLayerPoint` **already** subtracts `getPixelOrigin()` internally (standard Leaflet behaviour: `layerPoint = project(latlng) − pixelOrigin`). Subtracting `pixelOrigin` a second time displaced the center by tens of millions of pixels off-canvas. The off-screen guard (`cx < -radiusPx - 50`) then fired immediately every frame and returned without drawing anything.
+  - **Fix:** Removed the redundant subtraction — `cx = lp.x; cy = lp.y;` — using `latLngToLayerPoint` directly as the canvas coordinate. The canvas lives at `top:0, left:0` in the radar pane whose origin IS layer-space (0,0), so the layer point maps 1:1 to canvas pixels.
+  - **Other causes checked and cleared:** Phase string `'Playing'` matches the `GamePhase` type. `radarSweep: true` in `DEFAULT_MAP_LAYER_PREFS`. Radar pane created in `useLayoutEffect` before layers mount. `screen` blend mode correct for dark tiles. `prefers-reduced-motion` guard is correct. No issues found — the coordinate math was the sole root cause.
+  - **Build:** `npm run lint && npm run build` — 0 errors, 301 modules, clean.
