@@ -498,3 +498,32 @@
 **Rationale:** The duplication is pure noise — each block is identical except for the hub method name and fallback value. The factory makes this structural pattern explicit and removes the risk of inconsistent error handling in one-off blocks. Existing consumers are unaffected.  
 **Impact:** `useGameActionsAbilities` shrinks from ~290 lines to ~30. The hook still returns the same named handler functions.
 
+
+### 35. Enemy Tile Sighting Memory Persistence (2026-03-26)
+**Status:** Implemented  
+**Lead:** Rembrandt  
+**Backend:** De Ruyter  
+**Frontend:** Vermeer  
+**Decision:** Enforce memory-window expiry at the authoritative projection layer (backend `VisibilityService.BuildStateForViewer`). Frontend adds defensive Hidden→Remembered upgrade safety net and dynamic staleness threshold based on configured `enemySightingMemorySeconds`.
+
+**Problem:** Enemy-owned tiles dropped to `Hidden` immediately after player moved away, despite configured sighting memory window. Tiles failed to persist in `Remembered` state with amber fading overlay.
+
+**Root Causes:**
+1. **Backend:** `BroadcastPlayersPerViewer` skipped `UpdateMemory` call on movement-only broadcasts, so sightings were never recorded in `RememberedHexes`.
+2. **Frontend:** `serverTier` held pre-approach tier (Hidden) + hardcoded 120s staleness threshold ignored game config.
+
+**Implementation:**
+- **Backend:** Added memory cutoff evaluation in `BuildStateForViewer(...)`. Keep remembered tier only while `RememberedHex.SeenAt >= cutoff`. Purge expired entries during projection. If memory disabled (0s), immediately hide and purge.
+- **Frontend:** Local sighting memory safety net in `HexTile.tsx` (useRef-based ref mutation); upgrades Hidden→Remembered when `lastSeenAt` within window. Replaced hardcoded 120s with dynamic `memorySeconds * 1000` in `computeStalenessTier`.
+
+**Rationale:** 
+- Backend: Projection is the authoritative location for applying game config constraints; enables consistent TTL enforcement across all viewers.
+- Frontend: Local memory bridges gap between `PlayersMoved` and next `StateUpdated`; defensive measure with zero impact when backend works correctly.
+
+**Files Changed:** 
+- Backend: `Services/VisibilityService.cs`; added tests in `VisibilityServiceTests.cs`
+- Frontend: `components/map/tricorderTileState.ts`
+
+**Backward Compatibility:** Yes. Pre-existing game saves unaffected; config-driven behavior applies prospectively.
+
+**SignalR Impact:** None — no message format changes.
