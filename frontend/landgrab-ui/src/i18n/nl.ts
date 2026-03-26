@@ -421,6 +421,7 @@ const nl = {
       troopTransferAccepted: '{{name}} accepteerde {{count}} troepen',
       troopTransferDeclined: '{{name}} weigerde je overdracht',
       fieldBattleInvite: '{{name}} heeft een veldslag gestart — doe nu mee!',
+      fieldBattleDetected: 'Vijand gedetecteerd op uw positie — veldslag beschikbaar!',
       fieldBattleWon: 'Veldslag gewonnen bij ({{q}}, {{r}})',
       fieldBattleLost: 'Veldslag verloren bij ({{q}}, {{r}})',
       achievementUnlocked: '🏹 Prestatie behaald: {{name}}',

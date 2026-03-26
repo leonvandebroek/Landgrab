@@ -421,6 +421,7 @@ const en = {
       troopTransferAccepted: '{{name}} accepted {{count}} troops',
       troopTransferDeclined: '{{name}} declined your transfer',
       fieldBattleInvite: '{{name}} started a field battle — join now!',
+      fieldBattleDetected: 'Enemy detected on your position — field battle available!',
       fieldBattleWon: 'Field battle won at ({{q}}, {{r}})',
       fieldBattleLost: 'Field battle lost at ({{q}}, {{r}})',
       achievementUnlocked: '🏹 Achievement unlocked: {{name}}',
