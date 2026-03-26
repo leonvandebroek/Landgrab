@@ -90,7 +90,7 @@ function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
     }
 
     resizeCanvas();
-    map.on('resize zoomend moveend viewreset', resizeCanvas);
+    map.on('resize zoomend moveend viewreset rotate', resizeCanvas);
 
     const { lat: playerLat, lng: playerLng } = currentLocation;
 
@@ -120,10 +120,14 @@ function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
       const cssW = cvs.width / dpr;
       const cssH = cvs.height / dpr;
 
-      // Player center in container (CSS) pixel coordinates
-      const center = map.latLngToContainerPoint(L.latLng(playerLat, playerLng));
-      const cx = center.x;
-      const cy = center.y;
+      // Player center in layer-space canvas coordinates.
+      // The canvas lives inside rotatePane, so it's in pre-rotation layer space.
+      // latLngToContainerPoint returns post-rotation screen coords (double-applies rotation);
+      // latLngToLayerPoint minus getPixelOrigin gives the correct pre-rotation canvas position.
+      const lp = map.latLngToLayerPoint(L.latLng(playerLat, playerLng));
+      const pixelOrigin = map.getPixelOrigin();
+      const cx = lp.x - pixelOrigin.x;
+      const cy = lp.y - pixelOrigin.y;
 
       const radiusPx = computeRadiusPx(map, playerLat, playerLng);
 
@@ -203,7 +207,7 @@ function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
       prevFrameTimeRef.current = null;
-      map.off('resize zoomend moveend viewreset', resizeCanvas);
+      map.off('resize zoomend moveend viewreset rotate', resizeCanvas);
       mql.removeEventListener('change', handleMotionPrefChange);
       canvas.remove();
       canvasRef.current = null;

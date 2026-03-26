@@ -224,3 +224,30 @@ This provides authoritative source for player-facing game manual that matches th
 - **2026-07-xx (vermeer-radar-sweep):** Implemented `RadarSweepLayer.tsx` — a canvas-based Leaflet layer that renders a rotating radar sweep animation emanating from the player's GPS position. Uses `requestAnimationFrame` loop; sweep arm at 18°/s, 120° fading comet trail built from 40 gradient arc slices, 400m real-world sweep radius via `metersToPixels()` CRS projection, center dot + glow ring. Respects `prefers-reduced-motion`. Only active when `state.phase === 'Playing'` and `currentLocation != null`. Attached to `game-map-hex-pane` (above hex tiles, z-index 350, below player pane). Exported from `layers/index.ts` and wired into `GameMap.tsx`. `npm run lint && npm run build` clean. No i18n keys needed.
 
 - **2026-07-xx (vermeer-radar-sweep-hals-update):** Updated RadarSweepLayer to Hals visual spec. Changes: phosphor cyan palette (`rgba(0,243,255,…)` for arm/bloom/tail); `screen` blend mode for arm, bloom, tail; `source-over` for outer ring; draw order clear→ring→tail→arm→bloom→glow; 4 RPM (15s period) via delta-time; 30fps cap; SCAN_RADIUS_METERS=600 via `latLngToLayerPoint` distance; DPR clamped to 2; `setTransform(dpr,0,0,dpr,0,0)` per frame; radial-gradient wedge fill for comet tail; origin glow breathes with north-crossing flare; dedicated `game-map-radar-pane` at z-index 540 registered in `GameMap.tsx`; player position read from `usePlayerLayerStore` (removes lat/lng props); `radarSweep: boolean` added to `MapLayerPreferences` (default true), added to 'overlays' LAYER_GROUP, wired into `isActive` in GameMap; i18n keys `layerPanel.radarSweep` added (EN: "Radar sweep", NL: "Radarveeg"); CSS `.leaflet-game-map-radar-pane { pointer-events: none }` added; `prefers-reduced-motion` with MQL change listener. `npm run lint && npm run build` clean (0 errors).
+
+## Learnings
+
+### RadarSweepLayer — rotation anchor fix (2025)
+
+**Bug:** The radar sweep drifted from the player's GPS position when the map heading changed.
+
+**Root causes (both present):**
+1. **Wrong coordinate method for rotated map (Cause A):** `drawFrame` used `map.latLngToContainerPoint()` to compute the player's canvas position. Because `leaflet-rotate` makes `latLngToContainerPoint` return post-rotation *screen-space* coordinates, and the canvas lives inside `rotatePane` (which already receives the CSS rotation transform), the rotation was applied twice. The sweep appeared correct with no heading but drifted proportionally with any bearing change.
+
+2. **Missing `rotate` event (Cause D):** The `resizeCanvas` handler only subscribed to `resize zoomend moveend viewreset`, missing `rotate`. Not critical for the redraw (the RAF loop redraws every frame) but inconsistent with all other layers.
+
+**Fix pattern for any canvas layer inside `rotatePane`:**
+```typescript
+// WRONG — returns post-rotation screen coords, applied on top of CSS pane rotation = double rotation
+const center = map.latLngToContainerPoint(L.latLng(lat, lng));
+
+// CORRECT — pre-rotation layer coords; subtract pixelOrigin to get canvas-space coords
+const lp = map.latLngToLayerPoint(L.latLng(lat, lng));
+const pixelOrigin = map.getPixelOrigin();
+const cx = lp.x - pixelOrigin.x;
+const cy = lp.y - pixelOrigin.y;
+```
+
+**Rule:** Any canvas that is a child of `rotatePane` (or any pane appended to it) must use `latLngToLayerPoint - getPixelOrigin()` for geographic-to-canvas coordinate conversion. `latLngToContainerPoint` is only safe in non-rotating maps or in DOM elements that are *not* inside the rotating subtree.
+
+**Events:** always include `rotate` alongside `moveend zoomend viewreset` when listening for projection changes on a rotation-enabled Leaflet map.
