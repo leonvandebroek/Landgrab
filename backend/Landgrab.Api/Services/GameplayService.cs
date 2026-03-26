@@ -375,6 +375,28 @@ public class GameplayService(
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
                 return (null, "You cannot attack an allied hex.", null, null, null);
 
+            // Check if an enemy player is physically standing on this tile
+            var enemyOnTile = room.State.Players.Any(p =>
+                p.Id != userId
+                && p.AllianceId != player.AllianceId
+                && p.CarriedTroops > 0
+                && TryGetCurrentHex(room.State, p, out var pq, out var pr)
+                && pq == q && pr == r);
+
+            if (enemyOnTile)
+            {
+                var autoTriggeredBattle = CheckAndAutoTriggerFieldBattleOnEnemyTile(room.State, player, q, r);
+                if (autoTriggeredBattle != null)
+                {
+                    logger.LogInformation("Auto-triggered FieldBattle {BattleId} on enemy-owned tile at ({Q},{R}) for {UserId}",
+                        autoTriggeredBattle.Id, q, r, userId);
+                    
+                    var battleSnapshot = SnapshotState(room.State);
+                    QueuePersistence(room, battleSnapshot);
+                    return (battleSnapshot, null, null, null, autoTriggeredBattle);
+                }
+            }
+
             // HQ tiles are immune to normal combat — must be captured via CommandoRaid
             if (room.State.Dynamics.HQEnabled)
             {
@@ -534,6 +556,80 @@ public class GameplayService(
         // Guard: Hex must be neutral (no owner after claim)
         if (cell.OwnerId != null)
             return null;
+
+        // Guard: Can't initiate on Tactical Strike hex
+        var hasActiveTacticalStrike = state.Players.Any(player =>
+            player.TacticalStrikeActive
+            && player.TacticalStrikeTargetQ == q
+            && player.TacticalStrikeTargetR == r);
+        if (hasActiveTacticalStrike)
+            return null;
+
+        // Guard: Can't initiate on Commando Raid hex
+        var hasActiveCommandoRaid = state.ActiveRaids.Any(raid => raid.TargetQ == q && raid.TargetR == r);
+        if (hasActiveCommandoRaid)
+            return null;
+
+        // Guard: Check if there's already a pending battle for this hex
+        var existingBattle = state.ActiveFieldBattles.FirstOrDefault(b => 
+            b.Q == q && b.R == r && !b.Resolved);
+        if (existingBattle != null)
+        {
+            // If there's already a battle, the arriving player should auto-join it
+            // But we don't auto-join here - the hub will handle JoinFieldBattle logic
+            return null;
+        }
+
+        // Find all enemy players with troops on this exact hex
+        var enemiesOnHex = state.Players
+            .Where(player =>
+                player.Id != mover.Id
+                && player.CarriedTroops > 0
+                && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
+                && playerQ == q
+                && playerR == r
+                && player.AllianceId != mover.AllianceId)
+            .ToList();
+
+        // Only trigger if there are enemies present
+        if (enemiesOnHex.Count == 0)
+            return null;
+
+        // Create the FieldBattle
+        var battle = new ActiveFieldBattle
+        {
+            InitiatorId = mover.Id,
+            InitiatorName = mover.Name,
+            InitiatorAllianceId = mover.AllianceId ?? "",
+            Q = q,
+            R = r,
+            InitiatorTroops = mover.CarriedTroops,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(30)
+        };
+
+        state.ActiveFieldBattles.Add(battle);
+        return battle;
+    }
+
+    private ActiveFieldBattle? CheckAndAutoTriggerFieldBattleOnEnemyTile(GameState state, PlayerDto mover, int q, int r)
+    {
+        // Guard: Player must have carried troops to fight
+        if (mover.CarriedTroops <= 0)
+            return null;
+
+        // Guard: Player must be on cooldown check
+        if (mover.FieldBattleCooldownUntil.HasValue && mover.FieldBattleCooldownUntil > DateTime.UtcNow)
+            return null;
+
+        // Guard: Player can't already have an active field battle
+        if (state.ActiveFieldBattles.Any(battle => battle.InitiatorId == mover.Id))
+            return null;
+
+        var hexKey = HexService.Key(q, r);
+        if (!state.Grid.TryGetValue(hexKey, out var cell))
+            return null;
+
+        // NOTE: This variant does NOT require neutral tile — enemy-owned is OK
 
         // Guard: Can't initiate on Tactical Strike hex
         var hasActiveTacticalStrike = state.Players.Any(player =>
