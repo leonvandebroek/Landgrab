@@ -544,6 +544,7 @@ public sealed class GameplayServiceTests
         context.Player("p1").CurrentLat.Should().Be(lat);
         context.Player("p1").CurrentLng.Should().Be(lng);
         context.Player("p1").CurrentHeading.Should().Be(heading);
+        result.playerHexChanged.Should().BeTrue();
     }
 
     [Fact]
@@ -578,6 +579,7 @@ public sealed class GameplayServiceTests
 
         result.error.Should().BeNull();
         result.gridChanged.Should().BeFalse();
+        result.playerHexChanged.Should().BeTrue();
         context.Player("p1").BeaconLat.Should().Be(movedLat);
         context.Player("p1").BeaconLng.Should().Be(movedLng);
         context.Player("p1").BeaconHeading.Should().BeApproximately(HexService.NormalizeHeading(updatedHeading), 0.0001d);
@@ -686,6 +688,7 @@ public sealed class GameplayServiceTests
 
         result.error.Should().BeNull();
         result.gridChanged.Should().BeTrue();
+        result.playerHexChanged.Should().BeFalse();
         context.Cell(1, 0).IsFort.Should().BeFalse();
         context.Player("p1").DemolishTargetKey.Should().BeNull();
         context.Player("p1").DemolishApproachDirectionsMade.Should().BeEmpty();
@@ -715,6 +718,7 @@ public sealed class GameplayServiceTests
         var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, 180d);
 
         result.error.Should().BeNull();
+        result.playerHexChanged.Should().BeFalse();
         context.Player("p1").SabotageAlertNearby.Should().BeTrue();
     }
 
@@ -736,6 +740,7 @@ public sealed class GameplayServiceTests
         var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, 90d);
 
         result.error.Should().BeNull();
+        result.playerHexChanged.Should().BeFalse();
         player.SabotageBlockedTiles.Should().NotContainKey(HexService.Key(1, 0));
         player.SabotageBlockedTiles.Should().ContainKey(HexService.Key(0, 1));
     }
@@ -816,6 +821,7 @@ public sealed class GameplayServiceTests
 
         result.error.Should().BeNull();
         result.gridChanged.Should().BeTrue();
+        result.playerHexChanged.Should().BeFalse();
         context.Cell(1, 0).SabotagedUntil.Should().NotBeNull();
         context.Cell(1, 0).SabotagedUntil!.Value.Should().BeCloseTo(
             DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(10));
@@ -823,6 +829,35 @@ public sealed class GameplayServiceTests
         engineer.SabotageTargetR.Should().BeNull();
         engineer.SabotagePerimeterVisited.Should().BeEmpty();
         engineer.SabotageCooldownUntil.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenEnemyHexLeavesVisibility_StampsRememberedHexBeforeMove()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Bravo", "p2")
+            .OwnHex(2, 1, "p2", "a2", troops: 4)
+            .WithPlayerPosition("p1", 1, 1)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var memory = context.Room.VisibilityMemory.GetOrAdd("p1", _ => new PlayerVisibilityMemory());
+        var enemyHexKey = HexService.Key(2, 1);
+        memory.RememberedHexes.Should().NotContainKey(enemyHexKey);
+        var (newLat, newLng) = ServiceTestContext.HexCenter(-2, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", newLat, newLng, null);
+
+        result.error.Should().BeNull();
+        result.playerHexChanged.Should().BeTrue();
+        memory.RememberedHexes.Should().ContainKey(enemyHexKey);
+        memory.RememberedHexes[enemyHexKey].OwnerId.Should().Be("p2");
+        memory.RememberedHexes[enemyHexKey].OwnerAllianceId.Should().Be("a2");
+        memory.RememberedHexes[enemyHexKey].SeenAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
 
     [Fact]

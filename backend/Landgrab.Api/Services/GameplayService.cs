@@ -12,6 +12,7 @@ public class GameplayService(
     GameStateService gameStateService,
     WinConditionService winConditionService,
     Abilities.RoleProgressService roleProgressService,
+    VisibilityService visibilityService,
     ILogger<GameplayService> logger)
     : RoomScopedServiceBase(roomProvider, gameStateService)
 {
@@ -55,21 +56,21 @@ public class GameplayService(
 
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
-    public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng, double? heading)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
         {
             logger.LogWarning("UpdatePlayerLocation rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
-            return (null, error, false);
+            return (null, error, false, false);
         }
 
         var room = GetRoom(roomCode);
         if (room == null)
         {
             logger.LogWarning("UpdatePlayerLocation: room {RoomCode} not found for user {UserId}", roomCode, userId);
-            return (null, "Room not found.", false);
+            return (null, "Room not found.", false, false);
         }
 
         lock (room.SyncRoot)
@@ -77,18 +78,25 @@ public class GameplayService(
             if (room.State.Phase != GamePhase.Playing)
             {
                 logger.LogWarning("UpdatePlayerLocation: room {RoomCode} is in phase {Phase}, not Playing", roomCode, room.State.Phase);
-                return (null, "Player locations are only tracked while the game is playing.", false);
+                return (null, "Player locations are only tracked while the game is playing.", false, false);
             }
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
             {
                 logger.LogWarning("UpdatePlayerLocation: player {UserId} not found in room {RoomCode}", userId, roomCode);
-                return (null, "Player not in room.", false);
+                return (null, "Player not in room.", false, false);
             }
 
             var now = DateTime.UtcNow;
             player.CurrentHeading = heading;
+
+            if (room.State.GameMode == GameMode.Alliances)
+            {
+                var preMoveVisibleHexKeys = visibilityService.ComputeVisibleHexKeys(room.State, userId);
+                var viewerAllianceId = player.AllianceId ?? string.Empty;
+                visibilityService.UpdateMemory(room, room.State, userId, viewerAllianceId, preMoveVisibleHexKeys);
+            }
 
             var previousPhase = room.State.Phase;
             var gridChanged = false;
@@ -97,6 +105,7 @@ public class GameplayService(
             var currentHexKey = player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue
                 ? HexService.Key(player.CurrentHexQ.Value, player.CurrentHexR.Value)
                 : null;
+            var playerHexChanged = !string.Equals(player.PreviousHexKey, currentHexKey, StringComparison.Ordinal);
             if (player.FieldBattleCooldownUntil.HasValue
                 && (player.PreviousHexKey != currentHexKey || player.CarriedTroops == 0))
             {
@@ -172,7 +181,7 @@ public class GameplayService(
                 userId, lat, lng,
                 player.CurrentHexQ, player.CurrentHexR,
                 roomCode, gridChanged);
-            return (snapshot, null, gridChanged);
+            return (snapshot, null, gridChanged, playerHexChanged);
         }
     }
 

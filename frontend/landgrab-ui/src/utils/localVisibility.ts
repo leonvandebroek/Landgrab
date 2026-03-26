@@ -1,5 +1,27 @@
 import type { HexCell } from '../types/game';
 
+// Module-level cache tracking the last time each hex was locally visible on the client.
+// Bridges the timing gap between PlayersMoved (local visibility drops) and the next
+// StateUpdated (which carries server-recorded Remembered state from UpdateMemory).
+// Keyed by hex key ("q,r"), value is ms epoch timestamp.
+const _localHexSightingTimestamps = new Map<string, number>();
+
+/**
+ * Records that the given hex was just locally visible (call when it leaves local adjacency).
+ * Used as a client-side substitute for server-recorded lastSeenAt when the server hasn't
+ * yet broadcast a StateUpdated with memory data.
+ */
+export function recordLocalHexSighting(hexKey: string): void {
+  _localHexSightingTimestamps.set(hexKey, Date.now());
+}
+
+/**
+ * Returns the last time (ms epoch) a hex was recorded as locally visible, or 0 if never.
+ */
+export function getLocalHexSightingMs(hexKey: string): number {
+  return _localHexSightingTimestamps.get(hexKey) ?? 0;
+}
+
 /**
  * Hex neighbor offsets for flat-top orientation.
  * Use these to find the 6 adjacent hexes.

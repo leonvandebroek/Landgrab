@@ -16,6 +16,7 @@ import {
   getHexPolygonClassName,
   getHexTerritoryStatus,
 } from '../game/map/hexRendering';
+import { getLocalHexSightingMs } from '../../utils/localVisibility';
 
 interface HexTileProps {
   hexId: string;
@@ -180,6 +181,10 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     beaconConeHexKeys,
     alliedPlayerHexKeys,
     allianceOwnedHexKeys,
+    // Client-tracked sighting timestamp: non-reactive module-level map read is intentional.
+    // alliedPlayerHexKeys (in deps) changes on the same PlayersMoved event that records
+    // the sighting, so this memo re-runs and picks up the updated value.
+    locallySeenAtMs: getLocalHexSightingMs(hexId),
   }), [
     activeRaids,
     alliances,

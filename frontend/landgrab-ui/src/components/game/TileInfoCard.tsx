@@ -8,6 +8,7 @@ import { usePlayerLayerStore } from '../../stores/playerLayerStore';
 import type { AllianceDto, ClaimMode, GameDynamics, HexCell, Player } from '../../types/game';
 import { GameIcon } from '../common/GameIcon';
 import { deriveTileState } from '../map/tricorderTileState';
+import { getLocalHexSightingMs } from '../../utils/localVisibility';
 
 const TILE_OWNER_FALLBACK_COLOR = 'rgba(177, 204, 220, 0.5)';
 const TILE_VALUE_POSITIVE_COLOR = 'rgba(46, 204, 113, 0.85)';
@@ -148,6 +149,9 @@ export function TileInfoCard({ targetCell, targetHex, onDismiss, isPresenceBoost
     beaconConeHexKeys,
     alliedPlayerHexKeys,
     allianceOwnedHexKeys,
+    // alliedPlayerHexKeys (in deps) changes on the same PlayersMoved event that records
+    // the sighting, so this memo re-runs and picks up the updated value.
+    locallySeenAtMs: getLocalHexSightingMs(hexKey),
   }), [
     activeRaids,
     alliances,

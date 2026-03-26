@@ -186,6 +186,8 @@ public class VisibilityService
         var viewerAllianceId = snapshotState.Players
             .FirstOrDefault(player => player.Id == viewerUserId)
             ?.AllianceId;
+        var now = DateTime.UtcNow;
+        var rememberCutoff = now.AddSeconds(-Math.Max(0, enemySightingMemorySeconds));
 
         foreach (var (key, cell) in snapshotState.Grid)
         {
@@ -200,6 +202,13 @@ public class VisibilityService
 
             if (memory.RememberedHexes.TryGetValue(key, out var rememberedHex))
             {
+                if (enemySightingMemorySeconds <= 0 || rememberedHex.SeenAt < rememberCutoff)
+                {
+                    memory.RememberedHexes.Remove(key);
+                    cell.VisibilityTier = VisibilityTier.Hidden;
+                    continue;
+                }
+
                 ApplyRememberedCell(cell, rememberedHex);
                 continue;
             }
@@ -207,7 +216,6 @@ public class VisibilityService
             cell.VisibilityTier = VisibilityTier.Hidden;
         }
 
-        var now = DateTime.UtcNow;
         foreach (var player in snapshotState.Players)
         {
             if (IsAlliedPlayer(player, viewerUserId, viewerAllianceId))

@@ -17,6 +17,7 @@ import { readPersistedDebugLocation } from '../utils/debugLocationSession';
 import { useMapOrchestrator } from './useMapOrchestrator';
 import { recordAgentEvent } from '../testing/agentBridge';
 import type { SignalRInvoke } from '../types/common';
+import { isLocallyVisible, recordLocalHexSighting } from '../utils/localVisibility';
 
 interface UseSignalRHandlersOptions {
   getInvoke: () => SignalRInvoke | null;
@@ -420,6 +421,55 @@ export function useSignalRHandlers({
           currentHexR: player.currentHexR,
         })),
       });
+
+      // Record client-side sightings for enemy tiles that just left local visibility.
+      // This bridges the gap between PlayersMoved (no UpdateMemory on backend) and the
+      // next StateUpdated — without this, tiles snap to Hidden the moment the player
+      // moves away because cell.lastSeenAt is null until the server sends Remembered.
+      const currentState = useGameStore.getState().gameState;
+      const myUserId = savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId;
+      if (currentState && myUserId) {
+        const memorySecs = currentState.dynamics?.enemySightingMemorySeconds ?? 0;
+        if (memorySecs > 0) {
+          const myAllianceId = currentState.players.find((p) => p.id === myUserId)?.allianceId;
+
+          const oldAlliedKeys = new Set<string>();
+          for (const p of currentState.players) {
+            const isAllied = p.id === myUserId || (myAllianceId && p.allianceId === myAllianceId);
+            if (isAllied && p.currentHexQ != null && p.currentHexR != null) {
+              oldAlliedKeys.add(`${p.currentHexQ},${p.currentHexR}`);
+            }
+          }
+
+          const newAlliedKeys = new Set<string>();
+          for (const p of players) {
+            const isAllied = p.id === myUserId || (myAllianceId && p.allianceId === myAllianceId);
+            if (isAllied && p.currentHexQ != null && p.currentHexR != null) {
+              newAlliedKeys.add(`${p.currentHexQ},${p.currentHexR}`);
+            }
+          }
+
+          const allianceOwnedKeys = new Set<string>();
+          if (myAllianceId) {
+            for (const [key, cell] of Object.entries(currentState.grid)) {
+              if (cell.ownerAllianceId === myAllianceId) {
+                allianceOwnedKeys.add(key);
+              }
+            }
+          }
+
+          for (const [key, cell] of Object.entries(currentState.grid)) {
+            if (!cell.ownerId || cell.ownerAllianceId === myAllianceId) continue;
+            if (
+              isLocallyVisible(key, oldAlliedKeys, allianceOwnedKeys, currentState.grid)
+              && !isLocallyVisible(key, newAlliedKeys, allianceOwnedKeys, currentState.grid)
+            ) {
+              recordLocalHexSighting(key);
+            }
+          }
+        }
+      }
+
       useGameStore.getState().updateGameState((currentState) => {
         if (!currentState) {
           return currentState;

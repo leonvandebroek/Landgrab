@@ -77,6 +77,8 @@ export interface DeriveTileStateParams {
   beaconConeHexKeys?: ReadonlySet<string>;
   alliedPlayerHexKeys?: ReadonlySet<string>;
   allianceOwnedHexKeys?: ReadonlySet<string>;
+  /** Client-side last-seen timestamp (ms) for this hex, recorded when it last left local adjacency. */
+  locallySeenAtMs?: number;
 }
 
 export function deriveTileState(params: DeriveTileStateParams): TricorderTileState {
@@ -123,7 +125,21 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
 
   // Beacon cone bypass must be resolved before strengthUnknown so that enemy
   // Hidden tiles inside the cone show the real troop count (not '?').
-  const serverTier = cell?.visibilityTier ?? 'Visible';
+  const memorySecs = dynamics?.enemySightingMemorySeconds ?? 0;
+  const serverTierRaw = cell?.visibilityTier ?? 'Visible';
+  const locallySeenAtMs = params.locallySeenAtMs ?? 0;
+  // Frontend safety net: if the server sends Hidden but a recent sighting exists (either
+  // server-provided lastSeenAt or a client-tracked timestamp from when the tile last left
+  // local adjacency), treat the tile as Remembered so the fading overlay renders.
+  // This covers the timing gap between PlayersMoved and the next StateUpdated.
+  const serverTier: 'Visible' | 'Remembered' | 'Hidden' =
+    serverTierRaw === 'Hidden' && memorySecs > 0
+      ? (() => {
+          const serverSeenMs = cell?.lastSeenAt ? new Date(cell.lastSeenAt).getTime() : 0;
+          const seenMs = Math.max(serverSeenMs, locallySeenAtMs);
+          return seenMs > 0 && Date.now() - seenMs < memorySecs * 1000 ? 'Remembered' : 'Hidden';
+        })()
+      : serverTierRaw;
   const locallyVisible = alliedPlayerHexKeys && allianceOwnedHexKeys
     ? isLocallyVisible(hexKey, alliedPlayerHexKeys, allianceOwnedHexKeys, grid, beaconConeHexKeys)
     : false;
@@ -232,7 +248,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
   const isRemembered = visibilityTier === 'Remembered' && !isInBeaconCone;
 
   // Amber Archive: Compute staleness tier for remembered enemy tiles
-  const stalenessTier = computeStalenessTier(cell, isRemembered, baseState);
+  const stalenessTier = computeStalenessTier(cell, isRemembered, baseState, memorySecs, locallySeenAtMs);
 
   const troopCount = isRemembered ? (cell?.lastKnownTroops ?? 0) : (cell?.troops ?? 0);
 
@@ -516,21 +532,29 @@ function parseHexKey(hexKey: string | null): [number, number] | null {
   return [q, r];
 }
 
-const STALENESS_FADING_THRESHOLD_MS = 120_000; // 0–120s → fading
-
 function computeStalenessTier(
   cell: HexCell | undefined,
   isRemembered: boolean,
   _baseState: TricorderTileState['baseState'],
+  memorySecs: number,
+  locallySeenAtMs?: number,
 ): TricorderTileState['stalenessTier'] {
   if (!isRemembered) {
     return 'live';
   }
 
-  if (!cell?.lastSeenAt) {
+  // Use the most recent of server-provided lastSeenAt and client-tracked local sighting.
+  const serverSeenMs = cell?.lastSeenAt ? new Date(cell.lastSeenAt).getTime() : 0;
+  const lastSeenMs = Math.max(serverSeenMs, locallySeenAtMs ?? 0);
+
+  if (!lastSeenMs) {
     return 'stale';
   }
 
-  const ageMs = Date.now() - new Date(cell.lastSeenAt).getTime();
-  return ageMs < STALENESS_FADING_THRESHOLD_MS ? 'fading' : 'stale';
+  const ageMs = Date.now() - lastSeenMs;
+  // Use the configured memory interval as the fading threshold so the amber
+  // overlay remains visible for the full configured window. Fall back to 120s
+  // for games that have not explicitly configured enemy sighting memory.
+  const thresholdMs = memorySecs > 0 ? memorySecs * 1000 : 120_000;
+  return ageMs < thresholdMs ? 'fading' : 'stale';
 }

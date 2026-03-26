@@ -431,9 +431,9 @@ public partial class GameHub
             return;
         }
 
-        // Only broadcast full state on actual grid changes (territory claims, forts, combat, etc.)
-        // Frontend now derives visibility locally from player positions
-        if (result.gridChanged)
+        // Broadcast full state when the authoritative grid changes OR when mover crosses hex boundaries.
+        // Hex-boundary moves must project visibility/memory immediately (prevents hidden-after-move memory gap).
+        if (result.gridChanged || result.playerHexChanged)
         {
             await BroadcastState(room.Code, result.state!);
             return;

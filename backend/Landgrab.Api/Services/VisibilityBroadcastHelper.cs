@@ -174,6 +174,8 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
 
         var viewerAllianceId = state.Players.FirstOrDefault(player => player.Id == viewerUserId)?.AllianceId;
         var visibleHexKeys = visibilityService.ComputeVisibleHexKeys(state, viewerUserId);
+        var normalizedViewerAllianceId = viewerAllianceId ?? string.Empty;
+        visibilityService.UpdateMemory(room, state, viewerUserId, normalizedViewerAllianceId, visibleHexKeys);
         var projectedPlayers = new List<PlayerDto>(state.Players.Count);
 
         foreach (var player in state.Players)

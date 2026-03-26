@@ -140,6 +140,7 @@ public sealed class VisibilityServiceTests
             .OwnHex(1, 0, "p2", "a2", troops: 6)
             .Build();
         state.Dynamics.BeaconSectorAngle = 45;
+        state.Dynamics.EnemySightingMemorySeconds = 30;
         var viewer = state.Players.Single(player => player.Id == "p1");
         var (beaconLat, beaconLng) = ServiceTestContext.HexCenter(0, 0);
         var (eastLat, eastLng) = ServiceTestContext.HexCenter(1, 0);
@@ -207,6 +208,118 @@ public sealed class VisibilityServiceTests
         visibleHexKeys.Should().Contain(HexService.Key(0, 0));
         visibleHexKeys.Should().Contain(HexService.Key(1, 1));
         visibleHexKeys.Should().NotContain(HexService.Key(3, 0));
+    }
+
+    [Fact]
+    public void BuildStateForViewer_WhenRememberedEnemyHexIsWithinMemoryWindow_KeepsRememberedTier()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", -3, 0)
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .Build();
+        var service = new VisibilityService();
+        var memory = new PlayerVisibilityMemory();
+        var hexKey = HexService.Key(1, 0);
+        var seenAt = DateTime.UtcNow.AddSeconds(-3);
+        memory.RememberedHexes[hexKey] = new RememberedHex(
+            OwnerId: "p2",
+            OwnerName: "Bob",
+            OwnerColor: "#ff0000",
+            OwnerAllianceId: "a2",
+            Troops: 4,
+            IsFort: false,
+            IsMasterTile: false,
+            SeenAt: seenAt);
+
+        var projected = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(state),
+            "p1",
+            memory,
+            service.ComputeVisibleHexKeys(state, "p1"),
+            isHostObserver: false,
+            enemySightingMemorySeconds: 10);
+
+        projected.Grid[hexKey].VisibilityTier.Should().Be(VisibilityTier.Remembered);
+        projected.Grid[hexKey].LastSeenAt.Should().BeCloseTo(seenAt, TimeSpan.FromMilliseconds(100));
+    }
+
+    [Fact]
+    public void BuildStateForViewer_WhenRememberedEnemyHexIsOutsideMemoryWindow_HidesAndPurgesMemory()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", -3, 0)
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .Build();
+        var service = new VisibilityService();
+        var memory = new PlayerVisibilityMemory();
+        var hexKey = HexService.Key(1, 0);
+        memory.RememberedHexes[hexKey] = new RememberedHex(
+            OwnerId: "p2",
+            OwnerName: "Bob",
+            OwnerColor: "#ff0000",
+            OwnerAllianceId: "a2",
+            Troops: 4,
+            IsFort: false,
+            IsMasterTile: false,
+            SeenAt: DateTime.UtcNow.AddSeconds(-15));
+
+        var projected = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(state),
+            "p1",
+            memory,
+            service.ComputeVisibleHexKeys(state, "p1"),
+            isHostObserver: false,
+            enemySightingMemorySeconds: 10);
+
+        projected.Grid[hexKey].VisibilityTier.Should().Be(VisibilityTier.Hidden);
+        memory.RememberedHexes.Should().NotContainKey(hexKey);
+    }
+
+    [Fact]
+    public void BuildStateForViewer_WhenEnemyMemoryIsDisabled_HidesAndPurgesRememberedHex()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", -3, 0)
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .Build();
+        var service = new VisibilityService();
+        var memory = new PlayerVisibilityMemory();
+        var hexKey = HexService.Key(1, 0);
+        memory.RememberedHexes[hexKey] = new RememberedHex(
+            OwnerId: "p2",
+            OwnerName: "Bob",
+            OwnerColor: "#ff0000",
+            OwnerAllianceId: "a2",
+            Troops: 4,
+            IsFort: false,
+            IsMasterTile: false,
+            SeenAt: DateTime.UtcNow);
+
+        var projected = service.BuildStateForViewer(
+            GameStateCommon.SnapshotState(state),
+            "p1",
+            memory,
+            service.ComputeVisibleHexKeys(state, "p1"),
+            isHostObserver: false,
+            enemySightingMemorySeconds: 0);
+
+        projected.Grid[hexKey].VisibilityTier.Should().Be(VisibilityTier.Hidden);
+        memory.RememberedHexes.Should().NotContainKey(hexKey);
     }
 
     [Fact]

@@ -111,6 +111,48 @@ public sealed class VisibilityBroadcastHelperTests
     }
 
     [Fact]
+    public async Task BroadcastPlayersPerViewer_WhenEnemyTileIsVisible_RefreshesRememberedHexMemory()
+    {
+        var hostUserId = Guid.NewGuid();
+        var enemyUserId = Guid.NewGuid().ToString();
+        var state = new TestSupport.GameStateBuilder()
+            .WithGrid(5)
+            .WithMap()
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer(hostUserId.ToString(), "Host")
+            .AddPlayer(enemyUserId, "Enemy")
+            .AddAlliance("a1", "Blue", hostUserId.ToString())
+            .AddAlliance("a2", "Red", enemyUserId)
+            .WithPlayerPosition(hostUserId.ToString(), 1, 0)
+            .WithPlayerPosition(enemyUserId, 3, 0)
+            .OwnHex(2, 0, enemyUserId, "a2", troops: 7)
+            .Build();
+
+        var room = new GameRoom
+        {
+            Code = state.RoomCode,
+            HostUserId = hostUserId,
+            State = state
+        };
+        room.ConnectionMap.TryAdd("conn-host", hostUserId.ToString());
+
+        var hostProxy = new RecordingClientProxy();
+        var helper = new VisibilityBroadcastHelper(new VisibilityService());
+        var targetKey = HexService.Key(2, 0);
+
+        await helper.BroadcastPlayersPerViewer(
+            room,
+            state,
+            connectionId => connectionId == "conn-host"
+                ? hostProxy
+                : throw new InvalidOperationException("Unexpected connection."),
+            new VisibilityService());
+
+        room.VisibilityMemory.Should().ContainKey(hostUserId.ToString());
+        room.VisibilityMemory[hostUserId.ToString()].RememberedHexes.Should().ContainKey(targetKey);
+    }
+
+    [Fact]
     public void CreateStateForViewer_WhenHostObserverModeIsEnabledForHost_ReturnsUnfilteredState()
     {
         var hostUserId = Guid.NewGuid();

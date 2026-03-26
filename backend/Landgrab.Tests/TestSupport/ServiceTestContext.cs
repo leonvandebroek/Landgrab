@@ -47,7 +47,7 @@ internal sealed class ServiceTestContext
         var roomPersistenceService = new RoomPersistenceService(new DisabledPersistenceScopeFactory(), RoomPersistenceLogger.Object);
         GameStateService = new GameStateService(RoomProvider.Object, roomPersistenceService, GameStateLogger.Object);
         var roleProgressService = new RoleProgressService();
-        GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, roleProgressService, NullLogger<GameplayService>.Instance);
+        GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, roleProgressService, VisibilityService, NullLogger<GameplayService>.Instance);
         var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<Landgrab.Api.Hubs.GameHub>>();
         AbilityService = new AbilityServiceFacade(
             new CommanderAbilityService(RoomProvider.Object, GameStateService),
