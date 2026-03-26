@@ -74,7 +74,6 @@ const en = {
     settings: {
       enemySightingMemory: 'Remember Enemy Positions',
       enemySightingMemoryDesc: 'How long enemy positions stay visible after you lose sight of them',
-      enemySightingMemoryOff: 'Off',
       enemySightingMemorySeconds: '{{seconds}}s',
     },
     roomRole: 'Role: {{role}}',

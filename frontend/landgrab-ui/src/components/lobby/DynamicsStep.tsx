@@ -5,7 +5,7 @@ import { FEATURE_KEYS } from '../../utils/dynamics';
 import type { FeatureKey } from '../../utils/dynamics';
 
 const COMBAT_MODES: CombatMode[] = ['Classic', 'Balanced', 'Siege'];
-const ENEMY_SIGHTING_MEMORY_OPTIONS = [0, 15, 30, 60, 120] as const;
+const ENEMY_SIGHTING_MEMORY_OPTIONS = [15, 30, 60, 120] as const;
 const FIELD_BATTLE_RESOLUTION_MODES = [
     'InitiatorVsSumOfJoined',
     'InitiatorVsHighestOfJoined',
@@ -183,12 +183,10 @@ export function DynamicsStep({
                             </p>
                         </div>
                         <CustomSelect
-                            value={String(dynamics.enemySightingMemorySeconds ?? 0)}
+                            value={String(dynamics.enemySightingMemorySeconds ?? 120)}
                             options={ENEMY_SIGHTING_MEMORY_OPTIONS.map((seconds) => ({
                                 value: String(seconds),
-                                label: seconds === 0
-                                    ? t('lobby.settings.enemySightingMemoryOff' as never)
-                                    : t('lobby.settings.enemySightingMemorySeconds' as never, { seconds }),
+                                label: t('lobby.settings.enemySightingMemorySeconds' as never, { seconds }),
                             }))}
                             disabled={!isHost}
                             onChange={handleEnemySightingMemoryChange}

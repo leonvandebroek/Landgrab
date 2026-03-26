@@ -136,7 +136,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error) SetEnemySightingMemory(string roomCode, string userId, int seconds)
     {
         if (seconds < 0 || seconds > 300)
-            return (null, "Enemy sighting memory must be between 0 and 300 seconds.");
+            return (null, "Enemy sighting memory must be between 15 and 300 seconds.");
 
         var room = GetRoom(roomCode);
         if (room == null)
@@ -149,7 +149,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Enemy sighting memory can only be changed in the lobby.");
 
-            room.State.Dynamics.EnemySightingMemorySeconds = seconds;
+            room.State.Dynamics.EnemySightingMemorySeconds = Math.Max(15, seconds);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);

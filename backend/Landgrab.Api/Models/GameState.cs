@@ -78,7 +78,7 @@ public class GameDynamics
     public bool PlayerRolesEnabled { get; set; }
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
-    public int EnemySightingMemorySeconds { get; set; }
+    public int EnemySightingMemorySeconds { get; set; } = 120;
     public FieldBattleResolutionMode FieldBattleResolutionMode { get; set; }
         = FieldBattleResolutionMode.InitiatorVsSumOfJoined;
 }

@@ -74,7 +74,6 @@ const nl = {
     settings: {
       enemySightingMemory: 'Vijandposities onthouden',
       enemySightingMemoryDesc: 'Hoe lang vijandposities zichtbaar blijven nadat je ze uit het zicht verliest',
-      enemySightingMemoryOff: 'Uit',
       enemySightingMemorySeconds: '{{seconds}}s',
     },
     roomRole: 'Rol: {{role}}',
