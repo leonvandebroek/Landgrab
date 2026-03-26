@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
 import type { InvokeFn } from '../../../types/abilities';
-import '../../../styles/notification-panel.css';
 
 function getSecondsLeft(joinDeadline: string | undefined, now: number): number | null {
   if (!joinDeadline) {
