@@ -377,8 +377,7 @@ public class GameplayService(
 
             // Check if an enemy player is physically standing on this tile
             var enemyOnTile = room.State.Players.Any(p =>
-                p.Id != userId
-                && p.AllianceId != player.AllianceId
+                IsHostileToPlayer(player, p)
                 && p.CarriedTroops > 0
                 && TryGetCurrentHex(room.State, p, out var pq, out var pr)
                 && pq == q && pr == r);
@@ -583,12 +582,11 @@ public class GameplayService(
         // Find all enemy players with troops on this exact hex
         var enemiesOnHex = state.Players
             .Where(player =>
-                player.Id != mover.Id
+                IsHostileToPlayer(mover, player)
                 && player.CarriedTroops > 0
                 && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
                 && playerQ == q
-                && playerR == r
-                && player.AllianceId != mover.AllianceId)
+                && playerR == r)
             .ToList();
 
         // Only trigger if there are enemies present
@@ -657,12 +655,11 @@ public class GameplayService(
         // Find all enemy players with troops on this exact hex
         var enemiesOnHex = state.Players
             .Where(player =>
-                player.Id != mover.Id
+                IsHostileToPlayer(mover, player)
                 && player.CarriedTroops > 0
                 && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
                 && playerQ == q
-                && playerR == r
-                && player.AllianceId != mover.AllianceId)
+                && playerR == r)
             .ToList();
 
         // Only trigger if there are enemies present
