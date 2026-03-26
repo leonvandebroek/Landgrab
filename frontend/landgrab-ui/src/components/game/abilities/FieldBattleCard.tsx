@@ -33,6 +33,8 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
     return gameState.activeFieldBattles?.find((battle) => battle.initiatorId === myUserId) ?? null;
   }, [gameState, myUserId]);
 
+  const isWaiting = isActive || activeBattle != null;
+
   const joinDeadlineCountdown = activeBattle ? formatSecondsLeft(activeBattle.joinDeadline) : null;
 
   const currentHexKey = player?.currentHexQ != null && player?.currentHexR != null
@@ -70,8 +72,18 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
     return { isEligible: true, reason: null, enemiesOnTile: enemiesHere };
   }, [player, gameState, currentCell, myUserId]);
 
+  const joinedEnemies = useMemo(() => {
+    if (!activeBattle || !gameState) return [];
+    return gameState.players.filter((p) => activeBattle.joinedEnemyIds.includes(p.id));
+  }, [activeBattle, gameState]);
+
+  const pendingEnemies = useMemo(
+    () => enemiesOnTile.filter((e) => !activeBattle?.joinedEnemyIds.includes(e.id)),
+    [activeBattle, enemiesOnTile],
+  );
+
   const handleBackToHud = () => {
-    if (isActive || cooldownCountdown) {
+    if (isWaiting || cooldownCountdown) {
       hideAbilityCard();
       return;
     }
@@ -85,16 +97,22 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
     activateAbility();
   };
 
+  const pillClass = isWaiting
+    ? 'ability-card__status-pill--hostile'
+    : !cooldownCountdown && isEligible
+      ? 'ability-card__status-pill--armed'
+      : '';
+
   return (
     <AbilityCard
       title={t('abilities.fieldBattle.title' as never)}
       icon={<GameIcon name="contested" size="sm" />}
       statusContent={(
         <>
-          <div className={`ability-card__status-pill ${isActive ? 'ability-card__status-pill--armed' : ''}`}>
+          <div className={`ability-card__status-pill ${pillClass}`}>
             <GameIcon name="contested" size="sm" />
             <span>
-              {isActive
+              {isWaiting
                 ? t('abilities.fieldBattle.active' as never)
                 : cooldownCountdown
                   ? t('abilities.fieldBattle.cooldown' as never)
@@ -102,41 +120,17 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
             </span>
           </div>
 
-          {!isActive && !cooldownCountdown && (
-            <div className="ability-card__meta-row">
-              <span className="ability-card__meta-label">{t('abilities.fieldBattle.eligibilityLabel' as never)}</span>
-              <span className="ability-card__meta-value">
-                {isEligible
-                  ? t('abilities.fieldBattle.eligible' as never)
-                  : reason === 'notNeutral'
-                    ? t('abilities.fieldBattle.notNeutral' as never)
-                    : reason === 'noEnemies'
-                      ? t('abilities.fieldBattle.noEnemies' as never)
-                      : reason === 'enemiesNoTroops'
-                        ? t('abilities.fieldBattle.enemiesNoTroops' as never)
-                        : t('abilities.fieldBattle.noTroops' as never)}
-              </span>
-            </div>
-          )}
-
-          {enemiesOnTile.length > 0 && !isActive && (
-            <div className="ability-card__meta-row">
-              <span className="ability-card__meta-label">{t('abilities.fieldBattle.enemyListTitle' as never)}</span>
-              <span className="ability-card__meta-value">{enemiesOnTile.map((enemy) => enemy.name).join(', ')}</span>
-            </div>
-          )}
-
-          {isActive && activeBattle && (
+          {isWaiting && activeBattle && (
             <>
+              {joinDeadlineCountdown && (
+                <div className="fb-countdown">
+                  <span className="fb-countdown__number">{joinDeadlineCountdown}</span>
+                  <span className="fb-countdown__label">{t('abilities.fieldBattle.joinWindowLabel' as never)}</span>
+                </div>
+              )}
               <p className="ability-card__status-copy">
                 {t('abilities.fieldBattle.waitingForJoin' as never)}
               </p>
-              {joinDeadlineCountdown && (
-                <div className="ability-card__meta-row">
-                  <span className="ability-card__meta-label">{t('abilities.fieldBattle.joinWindowLabel' as never)}</span>
-                  <span className="ability-card__meta-value">{t('abilities.fieldBattle.joinsIn' as never, { seconds: joinDeadlineCountdown })}</span>
-                </div>
-              )}
             </>
           )}
 
@@ -148,10 +142,10 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
           )}
         </>
       )}
-      footerContent={!isActive && !cooldownCountdown ? (
+      footerContent={!isWaiting && !cooldownCountdown ? (
         <button
           type="button"
-          className="ability-card__primary-btn"
+          className={`ability-card__primary-btn ${isEligible ? 'ability-card__primary-btn--hostile' : ''}`}
           onClick={() => { void handleInitiate(); }}
           disabled={!isEligible}
         >
@@ -161,9 +155,69 @@ export function FieldBattleCard({ myUserId, invoke }: AbilityCardProps) {
       onBackToHud={handleBackToHud}
     >
       <div className="ability-card__stack">
-        <div className="ability-card__copy">
-          <p className="ability-card__hint">{t('abilities.fieldBattle.cooldownHint' as never)}</p>
-        </div>
+        {/* Pre-confirm: battle roster */}
+        {!isWaiting && !cooldownCountdown && (
+          <>
+            {enemiesOnTile.length > 0 ? (
+              <div className="fb-roster">
+                <div className="fb-roster__header">
+                  <GameIcon name="contested" size="sm" />
+                  <span className="fb-roster__title">{t('abilities.fieldBattle.battleRosterTitle' as never)}</span>
+                </div>
+                <div className="fb-roster__combatants">
+                  {enemiesOnTile.map((enemy) => (
+                    <div key={enemy.id} className="fb-roster__combatant">
+                      <span className="fb-roster__combatant-icon">
+                        <GameIcon name="fist" size="sm" />
+                      </span>
+                      <span className="fb-roster__combatant-name">{enemy.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : reason && (
+              <div className="ability-card__warning">
+                {reason === 'notNeutral'
+                  ? t('abilities.fieldBattle.notNeutral' as never)
+                  : reason === 'noEnemies'
+                    ? t('abilities.fieldBattle.noEnemies' as never)
+                    : reason === 'enemiesNoTroops'
+                      ? t('abilities.fieldBattle.enemiesNoTroops' as never)
+                      : t('abilities.fieldBattle.noTroops' as never)}
+              </div>
+            )}
+            <p className="ability-card__status-copy">{t('abilities.fieldBattle.cooldownHint' as never)}</p>
+          </>
+        )}
+
+        {/* Waiting: roster of pending / joined enemies */}
+        {isWaiting && (pendingEnemies.length > 0 || joinedEnemies.length > 0) && (
+          <div className="fb-roster">
+            {pendingEnemies.map((enemy) => (
+              <div key={enemy.id} className="fb-roster__combatant fb-roster__combatant--pending">
+                <span className="fb-roster__combatant-icon">
+                  <GameIcon name="hourglass" size="sm" />
+                </span>
+                <span className="fb-roster__combatant-name">{enemy.name}</span>
+                <span className="fb-roster__combatant-status">{t('abilities.fieldBattle.awaitingLabel' as never)}</span>
+              </div>
+            ))}
+            {joinedEnemies.map((enemy) => (
+              <div key={enemy.id} className="fb-roster__combatant fb-roster__combatant--joined">
+                <span className="fb-roster__combatant-icon">
+                  <GameIcon name="contested" size="sm" />
+                </span>
+                <span className="fb-roster__combatant-name">{enemy.name}</span>
+                <span className="fb-roster__combatant-status">{t('abilities.fieldBattle.joinedStatus' as never)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Cooldown hint */}
+        {(isWaiting || cooldownCountdown) && (
+          <p className="ability-card__status-copy">{t('abilities.fieldBattle.cooldownHint' as never)}</p>
+        )}
       </div>
     </AbilityCard>
   );

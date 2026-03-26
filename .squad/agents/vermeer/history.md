@@ -274,3 +274,26 @@ const cy = lp.y - pixelOrigin.y;
   - **Pattern:** Ref-guarded `useEffect` that compares `hexKey` to `lastReportedHexRef.current` before invoking — prevents re-firing when `gameState` or other deps change without the hex changing.
   - **Build:** `npm run lint && npm run build` — 0 errors, 302 modules clean.
   - **See:** `.squad/decisions/inbox/vermeer-fieldbattle-position-tracking.md`
+
+- **2026-XX-XX (vermeer-fieldbattle-frontend-cleanup):** Removed FieldBattle auto-trigger frontend artifacts as part of the manual-only FieldBattle flow.
+  - **What was removed:** The "Detect field battle opportunity" block (~40 lines) in `useSignalRHandlers.ts` `onStateUpdated` handler. This block compared player positions before/after state update, detected enemies on the same neutral tile, and pushed a `fieldBattleDetected` toast. This was an artefact of the GPS-auto-trigger flow now being removed from the backend.
+  - **i18n keys removed:** `game.toast.fieldBattleDetected` from both `en.ts` and `nl.ts`.
+  - **Audited (no changes needed):**
+    - `FieldBattleInvitePanel.tsx`: `isInitiator = fieldBattleInvite.isInitiator === true` (strict check) means falsy/undefined always shows Join/Ignore buttons — correct for the enemy player.
+    - `notificationStore.setFieldBattleInvite`: simple overwrite — last invite wins. Fine now that only one source (manual InitiateFieldBattle) triggers invites.
+    - `FieldBattleCard.tsx`: `handleInitiate()` calls `InitiateFieldBattle` then `activateAbility()` — sets `abilityUi.mode = 'active'` and renders the waiting state for the initiator correctly.
+    - `onFieldBattleInvite` and `onFieldBattleResolved` handlers in `useSignalRHandlers.ts` are untouched — they are the correct manual-flow handlers.
+  - **Build:** `npm run lint && npm run build` — 0 errors, clean (302 modules).
+
+- **2026-07-xx (vermeer-fieldbattle-autotrigger-waiting):** Fixed two FieldBattle bugs introduced after Hals's UX redesign.
+
+  **Bug 1 — Auto-triggered battles never show waiting state:**
+  `FieldBattleCard.tsx` gated all waiting-state UI behind `isActive` (`abilityUi.mode === 'active'`), which is only set by `activateAbility()` in the manual `handleInitiate()` path. Auto-triggered battles (from backend `UpdatePlayerLocation`) populate `activeBattle` via `gameState.activeFieldBattles` without going through `handleInitiate`, so `isActive` stayed false and the waiting UI never appeared.
+  - **Fix:** Introduced `const isWaiting = isActive || activeBattle != null` (placed after the `activeBattle` useMemo to avoid TS2448 forward-reference error). Replaced all waiting-state condition uses of `isActive` with `isWaiting`: status pill class, pill text, `isActive && activeBattle &&` countdown section, footer button visibility, `handleBackToHud` guard, pre-confirm body guard (`!isActive` → `!isWaiting`), waiting roster guard, and cooldown hint guard. `isActive` retained only for the `activateAbility()` call in `handleInitiate` (unchanged).
+
+  **Bug 2 — `onFieldBattleResolved` doesn't clear FieldBattle UI:**
+  The handler fired a toast but left `notificationStore.fieldBattleInvite` set (invite panel stayed visible) and `abilityUi.mode` as `'active'` (FieldBattleCard stayed in waiting state).
+  - **Fix:** Added `useNotificationStore.getState().setFieldBattleInvite(null)` and `useGameplayStore.getState().exitAbilityMode()` at the end of the `onFieldBattleResolved` handler. Both imports (`useNotificationStore`, `useGameplayStore`) were already present.
+
+  **Build:** `npm run lint && npm run build` — 0 errors, 302 modules clean.
+  **See:** `.squad/decisions/inbox/vermeer-fieldbattle-resolved-clearance.md`

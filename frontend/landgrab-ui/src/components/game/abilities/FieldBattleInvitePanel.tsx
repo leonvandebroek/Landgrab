@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import '../../../styles/notification-panel.css';
 import { useNotificationStore } from '../../../stores/notificationStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
+import { GameIcon } from '../../common/GameIcon';
 import type { InvokeFn } from '../../../types/abilities';
 
 function getSecondsLeft(joinDeadline: string | undefined, now: number): number | null {
@@ -53,36 +54,56 @@ export function FieldBattleInvitePanel({ invoke }: FieldBattleInvitePanelProps) 
     setFieldBattleInvite(null);
   };
 
+  if (isInitiator) return null;
+
   return (
     <div className="notification-panel notification-panel--field-battle">
-      <p className="notification-panel__message">
-        {isInitiator
-          ? t('abilities.fieldBattle.waitingForJoin' as never)
-          : t('abilities.fieldBattle.inviteReceived' as never, { name: fieldBattleInvite.initiatorName })}
-      </p>
+      <div className="fb-invite__header">
+        <span className="fb-invite__header-icon">
+          <GameIcon name="contested" size="sm" />
+        </span>
+        <h3 className="fb-invite__title">{t('abilities.fieldBattle.battleInviteTitle' as never)}</h3>
+      </div>
+
+      <div className="fb-invite__initiator">
+        <span className="fb-invite__initiator-label">{t('abilities.fieldBattle.initiatedByLabel' as never)}</span>
+        <span className="fb-invite__initiator-name">{fieldBattleInvite.initiatorName}</span>
+        {fieldBattleInvite.initiatorAllianceName && (
+          <span className="fb-invite__initiator-alliance">{fieldBattleInvite.initiatorAllianceName}</span>
+        )}
+      </div>
+
+      <div className="fb-invite__location">
+        <span className="fb-invite__location-label">{t('abilities.fieldBattle.locationLabel' as never)}</span>
+        <span className="fb-invite__location-coords">
+          ({fieldBattleInvite.q}, {fieldBattleInvite.r})
+        </span>
+      </div>
+
       {secondsLeft != null && (
-        <p className="notification-panel__countdown">
-          {t('abilities.fieldBattle.joinsIn' as never, { seconds: secondsLeft })}
-        </p>
-      )}
-      {!isInitiator && (
-        <div className="notification-panel__actions">
-          <button
-            type="button"
-            className="ability-card__primary-btn"
-            onClick={() => { void handleJoin(); }}
-          >
-            {t('abilities.fieldBattle.joinCta' as never)}
-          </button>
-          <button
-            type="button"
-            className="ability-card__secondary-btn"
-            onClick={handleIgnore}
-          >
-            {t('abilities.fieldBattle.ignoreBtn' as never)}
-          </button>
+        <div className="fb-invite__timer">
+          <span className="fb-invite__timer-number">{secondsLeft}</span>
+          <span className="fb-invite__timer-label">{t('abilities.fieldBattle.joinWindowLabel' as never)}</span>
         </div>
       )}
+
+      <div className="fb-invite__actions">
+        <button
+          type="button"
+          className="fb-invite__join-btn"
+          onClick={() => { void handleJoin(); }}
+        >
+          <GameIcon name="fist" size="sm" />
+          {t('abilities.fieldBattle.joinCta' as never)}
+        </button>
+        <button
+          type="button"
+          className="fb-invite__ignore-btn"
+          onClick={handleIgnore}
+        >
+          {t('abilities.fieldBattle.ignoreBtn' as never)}
+        </button>
+      </div>
     </div>
   );
 }

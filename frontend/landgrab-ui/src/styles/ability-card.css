@@ -327,3 +327,144 @@
 .ability-card__secondary-btn:active {
   transform: scale(0.985);
 }
+
+/* ── Field Battle: Battle Roster ── */
+
+.fb-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.fb-roster__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid rgba(231, 76, 60, 0.25);
+}
+
+.fb-roster__title {
+  font-family: var(--font-tactical);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--scanner-red);
+}
+
+.fb-roster__combatants {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.fb-roster__combatant {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-sharp);
+  clip-path: var(--clip-chamfer);
+  border: 1px solid rgba(231, 76, 60, 0.28);
+  background: linear-gradient(
+    90deg,
+    rgba(231, 76, 60, 0.13) 0%,
+    rgba(231, 76, 60, 0.04) 100%
+  );
+}
+
+.fb-roster__combatant-icon {
+  color: var(--scanner-red);
+  opacity: 0.75;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fb-roster__combatant-name {
+  font-family: var(--font-tactical);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fb-roster__combatant-status {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-family: var(--font-tactical);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.fb-roster__combatant--joined {
+  border-color: rgba(46, 204, 113, 0.32);
+  background: linear-gradient(
+    90deg,
+    rgba(46, 204, 113, 0.12) 0%,
+    rgba(46, 204, 113, 0.03) 100%
+  );
+}
+
+.fb-roster__combatant--joined .fb-roster__combatant-icon {
+  color: var(--scanner-green);
+  opacity: 1;
+}
+
+.fb-roster__combatant--joined .fb-roster__combatant-name {
+  color: #c8ffe0;
+}
+
+.fb-roster__combatant--joined .fb-roster__combatant-status {
+  color: var(--scanner-green);
+}
+
+.fb-roster__combatant--pending {
+  opacity: 0.65;
+}
+
+.fb-roster__combatant--pending .fb-roster__combatant-status {
+  color: var(--text-muted);
+}
+
+/* ── Field Battle: Big Countdown (waiting state) ── */
+
+.fb-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-sm) 0 var(--space-xs);
+}
+
+.fb-countdown__number {
+  font-family: var(--font-tactical);
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--scanner-red);
+  text-shadow: 0 0 24px rgba(231, 76, 60, 0.55);
+  animation: fb-countdown-pulse 1s ease-in-out infinite;
+}
+
+.fb-countdown__label {
+  font-family: var(--font-tactical);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+@keyframes fb-countdown-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}

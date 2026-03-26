@@ -102,9 +102,8 @@ This section describes any new abilities that are planned to be added to the gam
 **Cooldown:** Cooldown ends when player moves off the tile or when the player is no longer carrying troops, whichever comes first.
 **How to use it:**
 1. Stand on a neutral tile with at least one enemy player present and carrying troops
-2. Tap **Field Battle**
-3. Similar modal to the tile attack modal opens showing the players present on the tile but not their troop counts and asking the player to confirm initiating the battle.
-4. Enemy players receive a notification that a field battle has been initiated and can choose to join the battle by tapping on the notification and accepting to join the battle within 30 seconds.
-5. Player who initiated the battle waits for enemy players to join. If no enemy player joins the battle within 30 seconds, the battle is resolved immediately. If at least one enemy player joins the battle, the battle is resolved immediately. In case of a tie, the player that initiated the battle wins.
+2. App displays a dialog where fieldbattle is explained and allows the player to tap a button to activate **Field Battle** and then select a target enemy player located in the same tile, OR ignore the dialog and not activate the ability.
+3. Similar modal opens on the target enemy players' screens who is located on the same tile informing them that an enemy player has initiated a field battle and allows them to move out of the tile within 30 seconds to 'flee' the fieldbattle. If the enemy player does not move out of the tile within 30 seconds, they are considered to have accepted to join the battle. If the enemy player moves out of the tile within 30 seconds, they are considered to have fled the battle and cannot join the battle anymore.
+4. Player who activated **Field Battle** will see the 30 second countdown. If after 30 seconds the target enemy player has not fled, the battle is resolved based on the configured rules.
 
 ---

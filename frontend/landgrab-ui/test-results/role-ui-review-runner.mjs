@@ -151,7 +151,7 @@ async function dismissRulesGateIfPresent(page) {
     return false;
 }
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: false });
 
 try {
     const contextOptions = {

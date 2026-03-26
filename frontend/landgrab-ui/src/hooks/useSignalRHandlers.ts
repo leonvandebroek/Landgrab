@@ -411,47 +411,6 @@ export function useSignalRHandlers({
           }
         }
       }
-
-      // Detect field battle opportunity for initiator (player who just moved onto a neutral tile with enemies)
-      if (normalizedState.phase === 'Playing') {
-        const myUserId = savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId;
-        const previousState = useGameStore.getState().gameState;
-        
-        if (myUserId && previousState) {
-          const myPlayer = normalizedState.players.find((p) => p.id === myUserId);
-          const prevPlayer = previousState.players.find((p) => p.id === myUserId);
-          
-          if (myPlayer && prevPlayer && (myPlayer.currentHexQ !== prevPlayer.currentHexQ || myPlayer.currentHexR !== prevPlayer.currentHexR)) {
-            // Player moved to a new hex
-            const currentHexKey = myPlayer.currentHexQ != null && myPlayer.currentHexR != null
-              ? `${myPlayer.currentHexQ},${myPlayer.currentHexR}`
-              : null;
-            const currentHex = currentHexKey ? normalizedState.grid[currentHexKey] ?? null : null;
-            
-            if (currentHex && currentHex.ownerId == null && (myPlayer.carriedTroops ?? 0) > 0) {
-              // On a neutral hex with troops
-              const enemiesOnSameTile = normalizedState.players.filter(
-                (p) => p.id !== myUserId
-                  && p.currentHexQ === myPlayer.currentHexQ
-                  && p.currentHexR === myPlayer.currentHexR
-                  && p.allianceId !== myPlayer.allianceId
-                  && (p.carriedTroops ?? 0) > 0
-              );
-              
-              if (enemiesOnSameTile.length > 0) {
-                // Field battle is available — push notification
-                useInfoLedgeStore.getState().push({
-                  severity: 'gameEvent',
-                  source: 'gameToast',
-                  persistent: false,
-                  icon: 'contested',
-                  message: t('game.toast.fieldBattleDetected'),
-                });
-              }
-            }
-          }
-        }
-      }
     },
     onPlayersMoved: (players) => {
       recordAgentEvent('PlayersMoved', {
@@ -678,6 +637,8 @@ export function useSignalRHandlers({
           ? t('game.toast.fieldBattleWon' as never, { q: data.q, r: data.r })
           : t('game.toast.fieldBattleLost' as never, { q: data.q, r: data.r }),
       });
+      useNotificationStore.getState().setFieldBattleInvite(null);
+      useGameplayStore.getState().exitAbilityMode();
     },
     onReconnected: () => {
       recordAgentEvent('Reconnected');
