@@ -5,12 +5,13 @@ import { usePlayerLayerStore } from '../../../stores/playerLayerStore';
 export interface RadarSweepLayerProps {
   map: L.Map;
   isActive: boolean;
+  visibilityHexes: number;
+  hexSizeMeters: number;
 }
 
 // 4 RPM = one revolution every 15 seconds
 const DEG_PER_SEC = (4 / 60) * 360;
 const TRAIL_ARC_DEG = 120;
-const SCAN_RADIUS_METERS = 600;
 const TARGET_FRAME_MS = 1000 / 30; // 30 fps cap
 const RADAR_PANE = 'game-map-radar-pane';
 const GLOW_RADIUS_PX = 20;
@@ -27,16 +28,18 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
-/** Pixel radius for SCAN_RADIUS_METERS at the current zoom, using layerPoint distance. */
-function computeRadiusPx(map: L.Map, lat: number, lng: number): number {
+/** Pixel radius for given meters at the current zoom, using layerPoint distance. */
+function computeRadiusPx(map: L.Map, lat: number, lng: number, scanRadiusMeters: number): number {
   const origin = map.latLngToLayerPoint(L.latLng(lat, lng));
-  const edgeLat = lat + SCAN_RADIUS_METERS / 111_320;
+  const edgeLat = lat + scanRadiusMeters / 111_320;
   const edge = map.latLngToLayerPoint(L.latLng(edgeLat, lng));
   return Math.max(40, origin.distanceTo(edge));
 }
 
-function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
+function RadarSweepLayerComponent({ map, isActive, visibilityHexes, hexSizeMeters }: RadarSweepLayerProps) {
   const currentLocation = usePlayerLayerStore((state) => state.currentLocation);
+  
+  const scanRadiusMeters = hexSizeMeters * visibilityHexes;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number>(0);
@@ -130,7 +133,7 @@ function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
       const cx = lp.x;
       const cy = lp.y;
 
-      const radiusPx = computeRadiusPx(map, playerLat, playerLng);
+      const radiusPx = computeRadiusPx(map, playerLat, playerLng, scanRadiusMeters);
 
       // Reset DPR transform and clear
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -213,7 +216,7 @@ function RadarSweepLayerComponent({ map, isActive }: RadarSweepLayerProps) {
       canvas.remove();
       canvasRef.current = null;
     };
-  }, [shouldRender, map, currentLocation]);
+  }, [shouldRender, map, currentLocation, scanRadiusMeters]);
 
   return null;
 }

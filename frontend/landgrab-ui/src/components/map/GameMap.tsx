@@ -178,6 +178,12 @@ export const GameMap = memo(function GameMap({
     () => state.players.find((player) => player.id === myUserId) ?? null,
     [myUserId, state.players],
   );
+
+  const visibilityHexes = useMemo(() => {
+    if (!myPlayer) return 1;
+    // Scout has permanent beacon, or any player with active beacon gets 3-hex visibility
+    return myPlayer.isBeacon || myPlayer.role === 'Scout' ? 3 : 1;
+  }, [myPlayer]);
   const layerPanelDisclosureProps = isLayerPanelOpen
     ? { 'aria-expanded': 'true' as const }
     : { 'aria-expanded': 'false' as const };
@@ -935,6 +941,8 @@ export const GameMap = memo(function GameMap({
           <RadarSweepLayer
             map={mapInstance}
             isActive={state.phase === 'Playing' && currentLocation != null && layerPrefs.radarSweep}
+            visibilityHexes={visibilityHexes}
+            hexSizeMeters={state.tileSizeMeters ?? 50}
           />
           <HexTooltipOverlay map={mapInstance} />
         </>
