@@ -47,6 +47,10 @@ body {
   background: #0f172a !important; /* Dark Slate */
 }
 
+.leaflet-game-map-radar-pane {
+  pointer-events: none;
+}
+
 .game-map-container .leaflet-tile-pane {
   transition: filter 0.24s ease;
 }

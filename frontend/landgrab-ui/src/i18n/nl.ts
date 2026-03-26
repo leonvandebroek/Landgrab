@@ -644,6 +644,7 @@ const nl = {
     playerMarkers: 'Spelermarkeringen',
     worldDimMask: 'Werelddimmasker',
     timeOverlay: 'Tijdsoverlay',
+    radarSweep: 'Radarveeg',
   },
   mapLooks: {
     cycleButton: 'Kaartlook {{current}} actief. Tik om te wisselen naar {{next}}.',

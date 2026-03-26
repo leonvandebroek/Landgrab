@@ -10,7 +10,7 @@ import { useEffectsStore } from '../../stores/effectsStore';
 import { usePlayerLayerStore } from '../../stores/playerLayerStore';
 import { useGameStore, useGameplayStore, useUiStore } from '../../stores';
 import { latLngToRoomHex, roomHexCornerLatLngs, roomHexToLatLng } from './HexMath';
-import { AbilityOverlayLayer, GameOverlayLayer, EffectsLayer, PlayerLayer } from './layers';
+import { AbilityOverlayLayer, GameOverlayLayer, EffectsLayer, PlayerLayer, RadarSweepLayer } from './layers';
 import { HexTooltipOverlay } from './HexTooltipOverlay';
 import { createGameBaseLayers, MAP_LOOK_TO_BASEMAP, MAP_MAX_ZOOM, type BasemapLayer, type GameBasemapDefinition, type GameBasemapId, type MapLookPreset } from './pdokLayers';
 import { getTimePeriod } from '../../utils/timeOfDay';
@@ -48,6 +48,7 @@ const DEFAULT_MAP_ZOOM = 16;
 const ZOOM_LEVEL_SYNC_DEBOUNCE_MS = 140;
 const HEX_LAYER_PANE = 'game-map-hex-pane';
 const PLAYER_LAYER_PANE = 'game-map-player-pane';
+const RADAR_LAYER_PANE = 'game-map-radar-pane';
 const MAP_BOUNDARY_PADDING_METERS = 500;
 const MAP_LOOK_PRESETS: MapLookPreset[] = ['nightVision', 'military', 'blackWhite', 'normal'];
 
@@ -379,6 +380,13 @@ export const GameMap = memo(function GameMap({
     playerPane.style.zIndex = '650';
     if (rotatePane) {
       rotatePane.appendChild(playerPane);
+    }
+
+    const radarPane = map.createPane(RADAR_LAYER_PANE);
+    radarPane.style.zIndex = '540';
+    radarPane.style.pointerEvents = 'none';
+    if (rotatePane) {
+      rotatePane.appendChild(radarPane);
     }
 
     const basemapDefinitions = createGameBaseLayers();
@@ -924,6 +932,10 @@ export const GameMap = memo(function GameMap({
             isCompassRotationEnabled={isCompassRotationEnabled}
           />
           <PlayerLayer map={mapInstance} layerPreferences={layerPrefs} />
+          <RadarSweepLayer
+            map={mapInstance}
+            isActive={state.phase === 'Playing' && currentLocation != null && layerPrefs.radarSweep}
+          />
           <HexTooltipOverlay map={mapInstance} />
         </>
       ) : null}

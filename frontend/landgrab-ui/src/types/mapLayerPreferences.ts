@@ -4,6 +4,7 @@ export interface MapLayerPreferences {
   borderEffects: boolean;
   contestedEdges: boolean;
   playerMarkers: boolean;
+  radarSweep: boolean;
   timeOverlay: boolean;
   troopAnimations: boolean;
   troopBadges: boolean;
@@ -14,6 +15,7 @@ export const DEFAULT_MAP_LAYER_PREFS: MapLayerPreferences = {
   borderEffects: true,
   contestedEdges: true,
   playerMarkers: true,
+  radarSweep: true,
   timeOverlay: true,
   troopAnimations: true,
   troopBadges: true,
@@ -45,6 +47,6 @@ export const LAYER_GROUPS: LayerGroup[] = [
   {
     key: 'overlays',
     icon: 'fog',
-    layers: ['worldDimMask', 'timeOverlay'],
+    layers: ['worldDimMask', 'timeOverlay', 'radarSweep'],
   },
 ];

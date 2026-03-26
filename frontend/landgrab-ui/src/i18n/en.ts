@@ -644,6 +644,7 @@ const en = {
     playerMarkers: 'Player Markers',
     worldDimMask: 'World Dim Mask',
     timeOverlay: 'Time Overlay',
+    radarSweep: 'Radar sweep',
   },
   mapLooks: {
     cycleButton: 'Map look {{current}} active. Tap to switch to {{next}}.',
