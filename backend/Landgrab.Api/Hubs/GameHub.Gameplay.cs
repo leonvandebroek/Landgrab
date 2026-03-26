@@ -431,8 +431,75 @@ public partial class GameHub
             return;
         }
 
+        // Dispatch FieldBattle invite if moving to this hex triggered a battle
+        if (result.autoTriggeredBattle != null)
+        {
+            var battle = result.autoTriggeredBattle;
+            var state = result.state!;
+            var enemyIds = state.Players
+                .Where(p =>
+                    p.Id != UserId
+                    && p.CarriedTroops > 0
+                    && GameplayService.TryGetCurrentHex(state, p, out var pq, out var pr)
+                    && pq == battle.Q
+                    && pr == battle.R
+                    && p.AllianceId != battle.InitiatorAllianceId)
+                .Select(p => p.Id)
+                .ToList();
+
+            if (enemyIds.Count > 0)
+            {
+                var invite = new
+                {
+                    battleId = battle.Id.ToString(),
+                    initiatorName = battle.InitiatorName,
+                    initiatorAllianceName = state.Alliances
+                        .FirstOrDefault(a => a.Id == battle.InitiatorAllianceId)?.Name ?? "",
+                    q = battle.Q,
+                    r = battle.R,
+                    joinDeadline = battle.JoinDeadline.ToString("O")
+                };
+
+                foreach (var enemyId in enemyIds)
+                {
+                    foreach (var (connId, uid) in room.ConnectionMap)
+                    {
+                        if (uid == enemyId)
+                            await Clients.Client(connId).SendAsync("FieldBattleInvite", invite);
+                    }
+                }
+
+                await Clients.Caller.SendAsync("FieldBattleInvite", new
+                {
+                    battleId = battle.Id.ToString(),
+                    initiatorName = battle.InitiatorName,
+                    initiatorAllianceName = state.Alliances
+                        .FirstOrDefault(a => a.Id == battle.InitiatorAllianceId)?.Name ?? "",
+                    q = battle.Q,
+                    r = battle.R,
+                    joinDeadline = battle.JoinDeadline.ToString("O"),
+                    isInitiator = true
+                });
+
+                var capturedBattleId = battle.Id;
+                var capturedRoomCode = room.Code;
+                var capturedHubContext = hubContext;
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30));
+                    var resolvedRoom = gameService.GetRoom(capturedRoomCode);
+                    if (resolvedRoom == null) return;
+                    var (resolvedState, resolveResult, resolveError) = gameService.ResolveFieldBattle(capturedRoomCode, capturedBattleId);
+                    if (resolveError != null || resolvedState == null) return;
+                    await capturedHubContext.Clients.Group(capturedRoomCode)
+                        .SendAsync("FieldBattleResolved", new { battleId = capturedBattleId.ToString(), result = resolveResult });
+                    await capturedHubContext.Clients.Group(capturedRoomCode)
+                        .SendAsync("StateUpdated", resolvedState);
+                });
+            }
+        }
+
         // Broadcast full state when the authoritative grid changes OR when mover crosses hex boundaries.
-        // Hex-boundary moves must project visibility/memory immediately (prevents hidden-after-move memory gap).
         if (result.gridChanged || result.playerHexChanged)
         {
             await BroadcastState(room.Code, result.state!);
@@ -445,6 +512,125 @@ public partial class GameHub
             result.state!,
             connectionId => Clients.Client(connectionId),
             visibilityService);
+    }
+
+    public async Task UpdatePlayerPosition(int q, int r, double? playerLat = null, double? playerLng = null)
+    {
+        if (!ValidateCoordRange(q, r))
+        {
+            await SendError(InvalidRequestCode, "Invalid hex coordinates.");
+            return;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (autoTriggeredBattle, error) = gameService.UpdatePlayerPosition(room.Code, UserId, q, r, playerLat, playerLng);
+        if (error != null)
+        {
+            await SendError(MapErrorCode(error), error);
+            return;
+        }
+
+        var state = gameService.GetRoom(room.Code)?.State;
+        if (state == null)
+            return;
+
+        if (autoTriggeredBattle != null)
+        {
+            var enemyIds = state.Players
+                .Where(p =>
+                    p.Id != UserId
+                    && p.CarriedTroops > 0
+                    && GameplayService.TryGetCurrentHex(state, p, out var playerQ, out var playerR)
+                    && playerQ == q
+                    && playerR == r
+                    && p.AllianceId != autoTriggeredBattle.InitiatorAllianceId)
+                .Select(p => p.Id)
+                .ToList();
+
+            if (enemyIds.Count > 0)
+            {
+                var invite = new
+                {
+                    battleId = autoTriggeredBattle.Id.ToString(),
+                    initiatorName = autoTriggeredBattle.InitiatorName,
+                    initiatorAllianceName = state.Alliances
+                        .FirstOrDefault(alliance => alliance.Id == autoTriggeredBattle.InitiatorAllianceId)?.Name ?? "",
+                    q = autoTriggeredBattle.Q,
+                    r = autoTriggeredBattle.R,
+                    joinDeadline = autoTriggeredBattle.JoinDeadline.ToString("O")
+                };
+
+                foreach (var enemyId in enemyIds)
+                {
+                    foreach (var (connId, uid) in room.ConnectionMap)
+                    {
+                        if (uid == enemyId)
+                            await Clients.Client(connId).SendAsync("FieldBattleInvite", invite);
+                    }
+                }
+
+                await Clients.Caller.SendAsync("FieldBattleInvite", new
+                {
+                    battleId = autoTriggeredBattle.Id.ToString(),
+                    initiatorName = autoTriggeredBattle.InitiatorName,
+                    initiatorAllianceName = state.Alliances
+                        .FirstOrDefault(alliance => alliance.Id == autoTriggeredBattle.InitiatorAllianceId)?.Name ?? "",
+                    q = autoTriggeredBattle.Q,
+                    r = autoTriggeredBattle.R,
+                    joinDeadline = autoTriggeredBattle.JoinDeadline.ToString("O"),
+                    isInitiator = true
+                });
+
+                var capturedBattleId = autoTriggeredBattle.Id;
+                var capturedRoomCode = room.Code;
+                var capturedHubContext = hubContext;
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30));
+                    var resolvedRoom = gameService.GetRoom(capturedRoomCode);
+                    if (resolvedRoom == null)
+                        return;
+
+                    var (resolvedState, result, resolveError) = gameService.ResolveFieldBattle(capturedRoomCode, capturedBattleId);
+                    if (resolveError != null || resolvedState == null)
+                        return;
+
+                    await capturedHubContext.Clients.Group(capturedRoomCode).SendAsync("StateUpdated", resolvedState);
+                    if (result != null)
+                    {
+                        foreach (var participantId in result.AllParticipantIds)
+                        {
+                            foreach (var (connId, uid) in resolvedRoom.ConnectionMap)
+                            {
+                                if (uid == participantId)
+                                {
+                                    await capturedHubContext.Clients.Client(connId)
+                                        .SendAsync("FieldBattleResolved", new
+                                        {
+                                            battleId = result.BattleId.ToString(),
+                                            initiatorWon = result.InitiatorWon,
+                                            initiatorName = result.InitiatorName,
+                                            q = result.Q,
+                                            r = result.R,
+                                            initiatorTroopsLost = result.InitiatorTroopsLost,
+                                            enemyTroopsLost = result.EnemyTroopsLost,
+                                            noEnemiesJoined = result.NoEnemiesJoined
+                                        });
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        await BroadcastState(room.Code, state);
     }
 
     public async Task PickUpTroops(int q, int r, int count, double playerLat, double playerLng)

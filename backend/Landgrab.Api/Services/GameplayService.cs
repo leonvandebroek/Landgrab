@@ -56,21 +56,21 @@ public class GameplayService(
 
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
-    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? autoTriggeredBattle) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng, double? heading)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
         {
             logger.LogWarning("UpdatePlayerLocation rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
-            return (null, error, false, false);
+            return (null, error, false, false, null);
         }
 
         var room = GetRoom(roomCode);
         if (room == null)
         {
             logger.LogWarning("UpdatePlayerLocation: room {RoomCode} not found for user {UserId}", roomCode, userId);
-            return (null, "Room not found.", false, false);
+            return (null, "Room not found.", false, false, null);
         }
 
         lock (room.SyncRoot)
@@ -78,14 +78,14 @@ public class GameplayService(
             if (room.State.Phase != GamePhase.Playing)
             {
                 logger.LogWarning("UpdatePlayerLocation: room {RoomCode} is in phase {Phase}, not Playing", roomCode, room.State.Phase);
-                return (null, "Player locations are only tracked while the game is playing.", false, false);
+                return (null, "Player locations are only tracked while the game is playing.", false, false, null);
             }
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
             {
                 logger.LogWarning("UpdatePlayerLocation: player {UserId} not found in room {RoomCode}", userId, roomCode);
-                return (null, "Player not in room.", false, false);
+                return (null, "Player not in room.", false, false, null);
             }
 
             var now = DateTime.UtcNow;
@@ -176,12 +176,30 @@ public class GameplayService(
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
             gridChanged |= snapshot.Phase != previousPhase;
+
+            // Check for FieldBattle when player moves to a new hex
+            ActiveFieldBattle? autoTriggeredBattle = null;
+            if (playerHexChanged && player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue)
+            {
+                var hexQ = player.CurrentHexQ.Value;
+                var hexR = player.CurrentHexR.Value;
+                var hexKey2 = HexService.Key(hexQ, hexR);
+                if (room.State.Grid.TryGetValue(hexKey2, out var cell))
+                {
+                    autoTriggeredBattle = cell.OwnerId == null
+                        ? CheckAndAutoTriggerFieldBattle(room.State, player, hexQ, hexR)
+                        : CheckAndAutoTriggerFieldBattleOnEnemyTile(room.State, player, hexQ, hexR);
+                }
+                if (autoTriggeredBattle != null)
+                    gridChanged = true;
+            }
+
             logger.LogDebug(
                 "Player {UserId} moved to ({Lat:F6},{Lng:F6}) hex ({HexQ},{HexR}) in {RoomCode}; gridChanged={GridChanged}",
                 userId, lat, lng,
                 player.CurrentHexQ, player.CurrentHexR,
                 roomCode, gridChanged);
-            return (snapshot, null, gridChanged, playerHexChanged);
+            return (snapshot, null, gridChanged, playerHexChanged, autoTriggeredBattle);
         }
     }
 
@@ -534,20 +552,67 @@ public class GameplayService(
     /// Checks if a FieldBattle should be auto-triggered after a player moves to a neutral hex.
     /// Returns the created battle if conditions are met, null otherwise.
     /// </summary>
+    /// <summary>
+    /// Core FieldBattle trigger logic. Checks all guards and creates an <see cref="ActiveFieldBattle"/>
+    /// when the attacker shares a hex with hostile players who are also carrying troops.
+    /// Does NOT enforce a neutral-tile constraint — callers that need it must check beforehand.
+    /// </summary>
+    public ActiveFieldBattle? TryTriggerFieldBattle(GameState state, PlayerDto attacker, int q, int r)
+    {
+        if (attacker.CarriedTroops <= 0)
+            return null;
+
+        if (attacker.FieldBattleCooldownUntil.HasValue && attacker.FieldBattleCooldownUntil > DateTime.UtcNow)
+            return null;
+
+        if (state.ActiveFieldBattles.Any(battle => battle.InitiatorId == attacker.Id))
+            return null;
+
+        if (!state.Grid.ContainsKey(HexService.Key(q, r)))
+            return null;
+
+        var hasActiveTacticalStrike = state.Players.Any(player =>
+            player.TacticalStrikeActive
+            && player.TacticalStrikeTargetQ == q
+            && player.TacticalStrikeTargetR == r);
+        if (hasActiveTacticalStrike)
+            return null;
+
+        if (state.ActiveRaids.Any(raid => raid.TargetQ == q && raid.TargetR == r))
+            return null;
+
+        if (state.ActiveFieldBattles.Any(b => b.Q == q && b.R == r && !b.Resolved))
+            return null;
+
+        var enemiesOnHex = state.Players
+            .Where(player =>
+                IsHostileToPlayer(attacker, player)
+                && player.CarriedTroops > 0
+                && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
+                && playerQ == q
+                && playerR == r)
+            .ToList();
+
+        if (enemiesOnHex.Count == 0)
+            return null;
+
+        var battle = new ActiveFieldBattle
+        {
+            InitiatorId = attacker.Id,
+            InitiatorName = attacker.Name,
+            InitiatorAllianceId = attacker.AllianceId ?? "",
+            Q = q,
+            R = r,
+            InitiatorTroops = attacker.CarriedTroops,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(30)
+        };
+
+        state.ActiveFieldBattles.Add(battle);
+        return battle;
+    }
+
     private ActiveFieldBattle? CheckAndAutoTriggerFieldBattle(GameState state, PlayerDto mover, int q, int r)
     {
-        // Guard: Player must have carried troops to fight
-        if (mover.CarriedTroops <= 0)
-            return null;
-
-        // Guard: Player must be on cooldown check
-        if (mover.FieldBattleCooldownUntil.HasValue && mover.FieldBattleCooldownUntil > DateTime.UtcNow)
-            return null;
-
-        // Guard: Player can't already have an active field battle
-        if (state.ActiveFieldBattles.Any(battle => battle.InitiatorId == mover.Id))
-            return null;
-
         var hexKey = HexService.Key(q, r);
         if (!state.Grid.TryGetValue(hexKey, out var cell))
             return null;
@@ -556,130 +621,47 @@ public class GameplayService(
         if (cell.OwnerId != null)
             return null;
 
-        // Guard: Can't initiate on Tactical Strike hex
-        var hasActiveTacticalStrike = state.Players.Any(player =>
-            player.TacticalStrikeActive
-            && player.TacticalStrikeTargetQ == q
-            && player.TacticalStrikeTargetR == r);
-        if (hasActiveTacticalStrike)
-            return null;
-
-        // Guard: Can't initiate on Commando Raid hex
-        var hasActiveCommandoRaid = state.ActiveRaids.Any(raid => raid.TargetQ == q && raid.TargetR == r);
-        if (hasActiveCommandoRaid)
-            return null;
-
-        // Guard: Check if there's already a pending battle for this hex
-        var existingBattle = state.ActiveFieldBattles.FirstOrDefault(b => 
-            b.Q == q && b.R == r && !b.Resolved);
-        if (existingBattle != null)
-        {
-            // If there's already a battle, the arriving player should auto-join it
-            // But we don't auto-join here - the hub will handle JoinFieldBattle logic
-            return null;
-        }
-
-        // Find all enemy players with troops on this exact hex
-        var enemiesOnHex = state.Players
-            .Where(player =>
-                IsHostileToPlayer(mover, player)
-                && player.CarriedTroops > 0
-                && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
-                && playerQ == q
-                && playerR == r)
-            .ToList();
-
-        // Only trigger if there are enemies present
-        if (enemiesOnHex.Count == 0)
-            return null;
-
-        // Create the FieldBattle
-        var battle = new ActiveFieldBattle
-        {
-            InitiatorId = mover.Id,
-            InitiatorName = mover.Name,
-            InitiatorAllianceId = mover.AllianceId ?? "",
-            Q = q,
-            R = r,
-            InitiatorTroops = mover.CarriedTroops,
-            JoinDeadline = DateTime.UtcNow.AddSeconds(30)
-        };
-
-        state.ActiveFieldBattles.Add(battle);
-        return battle;
+        return TryTriggerFieldBattle(state, mover, q, r);
     }
 
     private ActiveFieldBattle? CheckAndAutoTriggerFieldBattleOnEnemyTile(GameState state, PlayerDto mover, int q, int r)
     {
-        // Guard: Player must have carried troops to fight
-        if (mover.CarriedTroops <= 0)
-            return null;
+        // No neutral-tile constraint — enemy-owned tile with owner physically present is valid
+        return TryTriggerFieldBattle(state, mover, q, r);
+    }
 
-        // Guard: Player must be on cooldown check
-        if (mover.FieldBattleCooldownUntil.HasValue && mover.FieldBattleCooldownUntil > DateTime.UtcNow)
-            return null;
+    /// <summary>
+    /// Updates the player's authoritative hex position (and optionally lat/lng) and auto-triggers
+    /// a FieldBattle if an enemy carrying troops is already on that hex.
+    /// </summary>
+    public (ActiveFieldBattle? battle, string? error) UpdatePlayerPosition(
+        string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
 
-        // Guard: Player can't already have an active field battle
-        if (state.ActiveFieldBattles.Any(battle => battle.InitiatorId == mover.Id))
-            return null;
-
-        var hexKey = HexService.Key(q, r);
-        if (!state.Grid.TryGetValue(hexKey, out var cell))
-            return null;
-
-        // NOTE: This variant does NOT require neutral tile — enemy-owned is OK
-
-        // Guard: Can't initiate on Tactical Strike hex
-        var hasActiveTacticalStrike = state.Players.Any(player =>
-            player.TacticalStrikeActive
-            && player.TacticalStrikeTargetQ == q
-            && player.TacticalStrikeTargetR == r);
-        if (hasActiveTacticalStrike)
-            return null;
-
-        // Guard: Can't initiate on Commando Raid hex
-        var hasActiveCommandoRaid = state.ActiveRaids.Any(raid => raid.TargetQ == q && raid.TargetR == r);
-        if (hasActiveCommandoRaid)
-            return null;
-
-        // Guard: Check if there's already a pending battle for this hex
-        var existingBattle = state.ActiveFieldBattles.FirstOrDefault(b => 
-            b.Q == q && b.R == r && !b.Resolved);
-        if (existingBattle != null)
+        lock (room.SyncRoot)
         {
-            // If there's already a battle, the arriving player should auto-join it
-            // But we don't auto-join here - the hub will handle JoinFieldBattle logic
-            return null;
+            if (room.State.Phase != GamePhase.Playing)
+                return (null, "Player positions are only tracked while the game is playing.");
+
+            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
+            if (player == null)
+                return (null, "Player not in room.");
+
+            player.CurrentHexQ = q;
+            player.CurrentHexR = r;
+
+            if (playerLat.HasValue && playerLng.HasValue)
+            {
+                player.CurrentLat = playerLat.Value;
+                player.CurrentLng = playerLng.Value;
+            }
+
+            var battle = TryTriggerFieldBattle(room.State, player, q, r);
+            return (battle, null);
         }
-
-        // Find all enemy players with troops on this exact hex
-        var enemiesOnHex = state.Players
-            .Where(player =>
-                IsHostileToPlayer(mover, player)
-                && player.CarriedTroops > 0
-                && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
-                && playerQ == q
-                && playerR == r)
-            .ToList();
-
-        // Only trigger if there are enemies present
-        if (enemiesOnHex.Count == 0)
-            return null;
-
-        // Create the FieldBattle
-        var battle = new ActiveFieldBattle
-        {
-            InitiatorId = mover.Id,
-            InitiatorName = mover.Name,
-            InitiatorAllianceId = mover.AllianceId ?? "",
-            Q = q,
-            R = r,
-            InitiatorTroops = mover.CarriedTroops,
-            JoinDeadline = DateTime.UtcNow.AddSeconds(30)
-        };
-
-        state.ActiveFieldBattles.Add(battle);
-        return battle;
     }
 
     private static string? ValidateCombatPreview(GameState state, PlayerDto player, HexCell cell, int q, int r, double? playerLat = null, double? playerLng = null)
