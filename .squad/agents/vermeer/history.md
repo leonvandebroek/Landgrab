@@ -267,3 +267,10 @@ const cy = lp.y - pixelOrigin.y;
   - **i18n keys added:** `game.toast.fieldBattleDetected` in `en.ts` ("Enemy detected on your position — field battle available!") and `nl.ts` ("Vijand gedetecteerd op uw positie — veldslag beschikbaar!").
   - **Pattern:** For initiator auto-notification on StateUpdated: (1) only act if player position changed (compare prev/current hex coords), (2) check hex is neutral, player has troops, enemies are present with troops, (3) push toast once per move (not every StateUpdated broadcast).
   - **Build:** `npm run lint && npm run build` — 0 errors, clean (293 modules).
+
+- **2026-07-xx (vermeer-fieldbattle-position-tracking):** Implemented automatic `UpdatePlayerPosition` hub call on hex change, enabling FieldBattle to fire without requiring an explicit button press.
+  - **Problem:** `FieldBattle` was only triggered inside `PlaceTroops` (explicit button press). Moving to a hex where an enemy with carried troops was standing did not auto-trigger the battle.
+  - **Solution:** Added `lastReportedHexRef` (string | null) and a new `useEffect` in `useGameActionsGameplay.ts`. The effect watches `currentHex`, `gameState`, `connected`, `invoke`, `currentLocation`, and `isHostBypass`. When the hex key changes (and game is Playing + connected), it calls `invoke('UpdatePlayerPosition', q, r, lat, lng)`, deriving lat/lng via `resolveActionCoordinates` — hex center when `isHostBypass=true`, actual GPS/debug position otherwise. The ref resets to `null` when phase is not 'Playing' so first-move after a new game always fires. Existing `FieldBattleInvite` handler untouched — it handles the server response for both this new path and the existing PlaceTroops path.
+  - **Pattern:** Ref-guarded `useEffect` that compares `hexKey` to `lastReportedHexRef.current` before invoking — prevents re-firing when `gameState` or other deps change without the hex changing.
+  - **Build:** `npm run lint && npm run build` — 0 errors, 302 modules clean.
+  - **See:** `.squad/decisions/inbox/vermeer-fieldbattle-position-tracking.md`

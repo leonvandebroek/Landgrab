@@ -630,40 +630,6 @@ public class GameplayService(
         return TryTriggerFieldBattle(state, mover, q, r);
     }
 
-    /// <summary>
-    /// Updates the player's authoritative hex position (and optionally lat/lng) and auto-triggers
-    /// a FieldBattle if an enemy carrying troops is already on that hex.
-    /// </summary>
-    public (ActiveFieldBattle? battle, string? error) UpdatePlayerPosition(
-        string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
-    {
-        var room = GetRoom(roomCode);
-        if (room == null)
-            return (null, "Room not found.");
-
-        lock (room.SyncRoot)
-        {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Player positions are only tracked while the game is playing.");
-
-            var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
-            if (player == null)
-                return (null, "Player not in room.");
-
-            player.CurrentHexQ = q;
-            player.CurrentHexR = r;
-
-            if (playerLat.HasValue && playerLng.HasValue)
-            {
-                player.CurrentLat = playerLat.Value;
-                player.CurrentLng = playerLng.Value;
-            }
-
-            var battle = TryTriggerFieldBattle(room.State, player, q, r);
-            return (battle, null);
-        }
-    }
-
     private static string? ValidateCombatPreview(GameState state, PlayerDto player, HexCell cell, int q, int r, double? playerLat = null, double? playerLng = null)
     {
         if (cell.IsMasterTile)

@@ -122,8 +122,6 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     }
 
     public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult, ActiveFieldBattle? autoTriggeredBattle) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount);
-    public (ActiveFieldBattle? battle, string? error) UpdatePlayerPosition(string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
-        => gameplayService.UpdatePlayerPosition(roomCode, userId, q, r, playerLat, playerLng);
     public GameplayService.ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
     public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode) => gameplayService.ResolveExpiredCommandoRaids(roomCode);
     public void ResolveExpiredRallyPoints(string roomCode) => gameplayService.ResolveExpiredRallyPoints(roomCode);
