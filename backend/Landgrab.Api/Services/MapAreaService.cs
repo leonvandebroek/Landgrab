@@ -3,11 +3,8 @@ using Landgrab.Api.Models;
 namespace Landgrab.Api.Services;
 
 public class MapAreaService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private static bool IsHost(GameRoom room, string userId) => GameStateCommon.IsHost(room, userId);
     private static string? ValidateCoordinates(double lat, double lng) => GameplayService.ValidateCoordinates(lat, lng);
 
@@ -30,6 +27,11 @@ public class MapAreaService(IGameRoomProvider roomProvider, GameStateService gam
 
             room.State.MapLat = lat;
             room.State.MapLng = lng;
+            if (room.State.CurrentWizardStep == 0)
+            {
+                room.State.CurrentWizardStep = 1;
+            }
+
             GameStateCommon.EnsureGrid(room.State);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);

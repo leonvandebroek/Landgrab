@@ -11,7 +11,7 @@ interface TroopDeployModalProps {
 
 export function TroopDeployModal({ claimResult, onDeploy, onClose }: TroopDeployModalProps) {
     const { t } = useTranslation();
-    const [deployCount, setDeployCount] = useState(0);
+    const [deployCount, setDeployCount] = useState(Math.min(1, claimResult.carriedTroops));
 
     return (
         <div className={styles.overlay} onClick={onClose} role="presentation">
@@ -24,8 +24,7 @@ export function TroopDeployModal({ claimResult, onDeploy, onClose }: TroopDeploy
             >
                 <div className={styles.content}>
                     <div className={styles.badgeRow}>
-                        <span className={styles.modeBadge}>{t('neutralClaim.title')}</span>
-                        <span className={styles.subtleText}>{claimResult.q}, {claimResult.r}</span>
+                        <span className={styles.modeBadgeInverted}>{t('neutralClaim.title')}</span>
                     </div>
 
                     <div className={styles.header}>
@@ -36,20 +35,24 @@ export function TroopDeployModal({ claimResult, onDeploy, onClose }: TroopDeploy
                     </div>
 
                     <section className={styles.sliderCard}>
-                        <p className={styles.subtleText}>
-                            {t('neutralClaim.carriedSummary', {
-                                carriedTroops: claimResult.carriedTroops,
-                                troopsOnHex: claimResult.troopsOnHex,
-                            })}
-                        </p>
+                        <div className={styles.recapGrid}>
+                            <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
+                                <span className={styles.metricLabel}>{t('neutralClaim.troopsOnHex' as never, { defaultValue: 'REMAINING' })}</span>
+                                <span className={styles.statValuePrimary}>{claimResult.troopsOnHex}</span>
+                            </div>
+                            <div className={styles.recapRow}>
+                                <span className={styles.metricLabel}>{t('neutralClaim.carriedTroops' as never, { defaultValue: 'CARRIED' })}</span>
+                                <span className={styles.statValueCasualty}>{claimResult.carriedTroops}</span>
+                            </div>
+                        </div>
 
                         <div className={styles.sliderHeader}>
                             <span>{t('neutralClaim.deploy')}</span>
-                            <span className={styles.probabilityValue}>{deployCount}</span>
+                            <span className={styles.deploymentValue}>{deployCount}</span>
                         </div>
                         <input
                             aria-label={t('neutralClaim.deploy')}
-                            className={styles.slider}
+                            className={styles.deploySlider}
                             max={claimResult.carriedTroops}
                             min={0}
                             onChange={(event) => setDeployCount(Number(event.target.value))}
@@ -57,14 +60,18 @@ export function TroopDeployModal({ claimResult, onDeploy, onClose }: TroopDeploy
                             value={deployCount}
                         />
                         <div className={styles.summaryRow}>
-                            <span className={styles.subtleText}>{t('neutralClaim.keepCarrying')}</span>
-                            <span className={styles.subtleText}>{claimResult.carriedTroops - deployCount}</span>
+                            <span className={styles.sliderHint}>{t('neutralClaim.keepCarrying')}</span>
+                            <span className={styles.sliderHint}>{claimResult.carriedTroops - deployCount}</span>
                         </div>
                     </section>
 
+
+                </div>
+
+                <div className={styles.footer}>
                     <div className={styles.actions}>
                         <button
-                            className={`${styles.button} ${styles.primarySuccessButton}`}
+                            className={`${styles.button} ${styles.primaryClaimButton}`}
                             onClick={() => onDeploy(deployCount)}
                             type="button"
                         >

@@ -1,0 +1,10 @@
+# Hals — History
+
+## Core Context
+Designer/UX on Landgrab. Tricorder-themed visual system. CSS custom properties. Key UI: ability cards, PlayerHUD, TileInfoCard, HexTooltipOverlay, MapLegend. Mobile-responsive hex map with Leaflet canvas layers.
+
+## Learnings
+- Team hired 2026-03-22 by Léon van de Broek
+- 2026-03-22: Tricorder aesthetic research completed. Key visual language: phosphor colors (cyan #00f3ff, amber #ffb000, fuchsia #e879f9, red #ff2a2a), CRT glow/bloom effects, `--font-scifi-mono`, marching ants animations, void backgrounds (rgba(10,15,20,0.85)). Remembered tiles currently use `.hex-remembered` (opacity 0.55, saturate 0.4) and `.stale-badge` (opacity 0.6, saturate 0.3, italic). TileInfoCard shows "~{{count}}" for stale troops. TricorderTileState exposes `visibilityTier: 'Visible'|'Remembered'|'Hidden'` and `isRemembered` boolean.
+- 2026-03-22: Produced 5-option design proposal for stale vs live intel visual differentiation. Options: Faded Memory, Scan-Line Decay, Timestamp Watermark, Amber Archive, Signal Degradation. Each addresses hex tile, TileInfoCard, and transitions with implementation complexity estimates.
+- **2026-07-xx (amber-archive-design):** Amber Archive design specification shipped to Vermeer for implementation. Cool cyan → warm amber shift across 3 tiers (live/fading/stale). Vermeer confirmed all design tokens in CSS `:root` already present (`--color-phosphor-amber: #ffb000`). Visual implementation included stalenessTier-driven classes on HexTile and amber glow on TileInfoCard header + ARCHIVED pill. Feedback integrated from Vondel's 120s threshold specification. No breaking design changes to TricorderTileState interface — stalenessTier and visibilityTier were pre-wired, only compute function was missing. Team consensus: Design ready for production; no follow-up iterations scheduled.

@@ -125,9 +125,6 @@ namespace Landgrab.Api.Migrations
                     b.Property<Guid?>("OwnerAllianceId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("OwnerId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -137,8 +134,6 @@ namespace Landgrab.Api.Migrations
                     b.HasKey("Q", "R");
 
                     b.HasIndex("OwnerAllianceId");
-
-                    b.HasIndex("OwnerId");
 
                     b.HasIndex("OwnerUserId");
 
@@ -281,6 +276,12 @@ namespace Landgrab.Api.Migrations
                     b.Property<bool>("EmailVerified")
                         .HasColumnType("bit");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -324,11 +325,13 @@ namespace Landgrab.Api.Migrations
                 {
                     b.HasOne("Landgrab.Api.Models.Alliance", "OwnerAlliance")
                         .WithMany()
-                        .HasForeignKey("OwnerAllianceId");
+                        .HasForeignKey("OwnerAllianceId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Landgrab.Api.Models.User", "Owner")
                         .WithMany()
-                        .HasForeignKey("OwnerId");
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Owner");
 

@@ -53,19 +53,6 @@ public enum CombatMode
     Siege
 }
 
-public enum TerrainType
-{
-    None,
-    Water,
-    Building,
-    Road,
-    Path,
-    Forest,
-    Park,
-    Hills,
-    Steep
-}
-
 public enum PlayerRole
 {
     None,
@@ -74,18 +61,26 @@ public enum PlayerRole
     Engineer
 }
 
+public enum FieldBattleResolutionMode
+{
+    InitiatorVsSumOfJoined,
+    InitiatorVsHighestOfJoined,
+    InitiatorPlusRandomVsSumPlusRandom,
+    InitiatorPlusRandomVsHighestPlusRandom
+}
+
 public class GameDynamics
 {
     public bool BeaconEnabled { get; set; }
+    public int BeaconSectorAngle { get; set; } = 45;
     public bool TileDecayEnabled { get; set; }
-    public bool TerrainEnabled { get; set; }
     public CombatMode CombatMode { get; set; } = CombatMode.Balanced;
     public bool PlayerRolesEnabled { get; set; }
-    public bool FogOfWarEnabled { get; set; }
     public bool HQEnabled { get; set; }
     public bool HQAutoAssign { get; set; } = true;
-    public bool TimedEscalationEnabled { get; set; }
-    public bool UnderdogPactEnabled { get; set; }
+    public int EnemySightingMemorySeconds { get; set; }
+    public FieldBattleResolutionMode FieldBattleResolutionMode { get; set; }
+        = FieldBattleResolutionMode.InitiatorVsSumOfJoined;
 }
 
 public class HexCoordinateDto
@@ -108,6 +103,7 @@ public class PlayerDto
     public int? CarriedTroopsSourceR { get; set; }
     public double? CurrentLat { get; set; }
     public double? CurrentLng { get; set; }
+    public double? CurrentHeading { get; set; }
     public int? CurrentHexQ { get; set; }
     public int? CurrentHexR { get; set; }
     public bool IsHost { get; set; }
@@ -121,29 +117,45 @@ public class PlayerDto
     public bool IsBeacon { get; set; }
     public double? BeaconLat { get; set; }
     public double? BeaconLng { get; set; }
+    public double? BeaconHeading { get; set; }
 
     // Phase 6: CommandoRaid cooldown (raid itself is now game-level via ActiveRaids)
     public DateTime? CommandoRaidCooldownUntil { get; set; }
+    public DateTime? TroopTransferCooldownUntil { get; set; }
 
     // Commander abilities
     public bool TacticalStrikeActive { get; set; }
     public DateTime? TacticalStrikeExpiry { get; set; }
     public DateTime? TacticalStrikeCooldownUntil { get; set; }
+    public int? TacticalStrikeTargetQ { get; set; }
+    public int? TacticalStrikeTargetR { get; set; }
     public bool RallyPointActive { get; set; }
     public DateTime? RallyPointDeadline { get; set; }
     public DateTime? RallyPointCooldownUntil { get; set; }
     public int? RallyPointQ { get; set; }
     public int? RallyPointR { get; set; }
 
+    // Scout abilities
+    public DateTime? ShareIntelCooldownUntil { get; set; }
+    public bool SabotageAlertNearby { get; set; }
+    public string? InterceptTargetId { get; set; }
+    public DateTime? InterceptLockStartAt { get; set; }
+
     // Engineer abilities
-    public bool SabotageActive { get; set; }
-    public DateTime? SabotageStartedAt { get; set; }
+    public DateTime? FieldBattleCooldownUntil { get; set; }
+    public int? FortTargetQ { get; set; }
+    public int? FortTargetR { get; set; }
+    public List<string> FortPerimeterVisited { get; set; } = new();
     public int? SabotageTargetQ { get; set; }
     public int? SabotageTargetR { get; set; }
+    public List<string> SabotagePerimeterVisited { get; set; } = new();
     public DateTime? SabotageCooldownUntil { get; set; }
-    public bool DemolishActive { get; set; }
+    public Dictionary<string, DateTime> SabotageBlockedTiles { get; set; } = [];
     public string? DemolishTargetKey { get; set; }
-    public DateTime? DemolishStartedAt { get; set; }
+    public List<string> DemolishApproachDirectionsMade { get; set; } = new();
+    public DateTime? DemolishFacingLockStartAt { get; set; }
+    public string? DemolishFacingHexKey { get; set; }
+    public string? PreviousHexKey { get; set; }
     public DateTime? DemolishCooldownUntil { get; set; }
 }
 
@@ -160,8 +172,6 @@ public class AllianceDto
     public int? HQHexR { get; set; }
     public DateTime? ClaimFrozenUntil { get; set; }
 
-    // Phase 8: Underdog Pact
-    public DateTime? UnderdogBoostUntil { get; set; }
 }
 
 public class GameEventLogEntry
@@ -194,6 +204,53 @@ public class ActiveCommandoRaid
     public bool IsHQRaid { get; set; }
 }
 
+public class ActiveTroopTransfer
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string InitiatorId { get; set; } = "";
+    public string InitiatorName { get; set; } = "";
+    public string RecipientId { get; set; } = "";
+    public string RecipientName { get; set; } = "";
+    public int Amount { get; set; }
+    public DateTime ExpiresAt { get; set; }
+}
+
+public class TroopTransferResultDto
+{
+    public bool Accepted { get; set; }
+    public int Amount { get; set; }
+    public string RecipientName { get; set; } = "";
+    public string InitiatorName { get; set; } = "";
+}
+
+public class ActiveFieldBattle
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string InitiatorId { get; set; } = "";
+    public string InitiatorName { get; set; } = "";
+    public string InitiatorAllianceId { get; set; } = "";
+    public int Q { get; set; }
+    public int R { get; set; }
+    public int InitiatorTroops { get; set; }
+    public DateTime JoinDeadline { get; set; }
+    public List<string> JoinedEnemyIds { get; set; } = [];
+    public bool Resolved { get; set; }
+}
+
+public class FieldBattleResultDto
+{
+    public Guid BattleId { get; set; }
+    public bool InitiatorWon { get; set; }
+    public string InitiatorName { get; set; } = "";
+    public string InitiatorAllianceId { get; set; } = "";
+    public int Q { get; set; }
+    public int R { get; set; }
+    public int InitiatorTroopsLost { get; set; }
+    public int EnemyTroopsLost { get; set; }
+    public bool NoEnemiesJoined { get; set; }
+    public List<string> AllParticipantIds { get; set; } = [];
+}
+
 public class GameState
 {
     public string RoomCode { get; set; } = "";
@@ -203,6 +260,8 @@ public class GameState
     public List<PlayerDto> Players { get; set; } = [];
     public List<AllianceDto> Alliances { get; set; } = [];
     public List<ActiveCommandoRaid> ActiveRaids { get; set; } = [];
+    public List<ActiveTroopTransfer> ActiveTroopTransfers { get; set; } = [];
+    public List<ActiveFieldBattle> ActiveFieldBattles { get; set; } = [];
     public List<GameEventLogEntry> EventLog { get; set; } = [];
     public Dictionary<string, HexCell> Grid { get; set; } = [];
     public double? MapLat { get; set; }
@@ -215,7 +274,7 @@ public class GameState
     public ClaimMode ClaimMode { get; set; } = ClaimMode.PresenceOnly;
     public WinConditionType WinConditionType { get; set; } = WinConditionType.TerritoryPercent;
     public int WinConditionValue { get; set; } = 60;
-public GameDynamics Dynamics { get; set; } = new();
+    public GameDynamics Dynamics { get; set; } = new();
     public int? GameDurationMinutes { get; set; }
     public int? MasterTileQ { get; set; }
     public int? MasterTileR { get; set; }
@@ -224,6 +283,7 @@ public GameDynamics Dynamics { get; set; } = new();
     public string? WinnerName { get; set; }
     public bool IsAllianceVictory { get; set; }
     public List<Achievement> Achievements { get; set; } = [];
+    public List<ContestedEdgeDto>? ContestedEdges { get; set; }
 
     // Host settings
     public bool HostBypassGps { get; set; } = false;
@@ -242,6 +302,8 @@ public class GameRoom
     public object SyncRoot { get; } = new();
     [JsonIgnore]
     public ConcurrentDictionary<string, string> ConnectionMap { get; } = new();
+    [JsonIgnore]
+    public ConcurrentDictionary<string, PlayerVisibilityMemory> VisibilityMemory { get; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAt { get; set; }
 }
@@ -275,6 +337,8 @@ public class CombatPreviewDto
     public string? DefenderAllianceName { get; set; }
 }
 
+public sealed record InterceptAttemptResult(string Status, double? Seconds = null);
+
 public class CombatResult
 {
     public int[] AttackDice { get; set; } = [];
@@ -289,7 +353,6 @@ public class CombatResult
     public string? PreviousOwnerName { get; set; }
     public int AttackerBonus { get; set; }
     public int DefenderBonus { get; set; }
-    public string? DefenderTerrainType { get; set; }
     public int EffectiveAttack { get; set; }
     public int EffectiveDefence { get; set; }
     public int AttackerTroopsLost { get; set; }

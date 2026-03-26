@@ -426,36 +426,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PlaceTroops_CombatAccountsForTerrainDefenseBonus()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithTerrainEnabled()
-            .AddPlayer("p1", "Alice")
-            .AddPlayer("p2", "Bob")
-            .OwnHex(0, 0, "p1")
-            .OwnHex(1, 0, "p2")
-            .WithTerrain(1, 0, TerrainType.Steep)
-            .WithTroops(1, 0, 3)
-            .WithCarriedTroops("p1", 4, 0, 0)
-            .Build();
-        state.Dynamics.CombatMode = CombatMode.Classic;
-        var context = new ServiceTestContext(state);
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
-
-        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
-
-        result.state.Should().NotBeNull();
-        result.error.Should().BeNull();
-        result.combatResult.Should().NotBeNull();
-        result.combatResult!.AttackerWon.Should().BeFalse();
-        result.combatResult.DefenderBonus.Should().Be(2);
-        context.Cell(1, 0).OwnerId.Should().Be("p2");
-        context.Cell(1, 0).Troops.Should().Be(3);
-        context.Player("p1").CarriedTroops.Should().Be(2);
-    }
-
-    [Fact]
     public void PlaceTroops_CombatAccountsForFortDefenseBonus()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -557,44 +527,6 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void AddReinforcementsToAllHexes_OnBuildingTerrain_AddsExtraTroop()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .WithTerrainEnabled()
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 2)
-            .WithTerrain(0, 0, TerrainType.Building)
-            .Build();
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(4);
-    }
-
-    [Fact]
-    public void AddReinforcementsToAllHexes_WithTimedEscalation_AddsEscalationBonus()
-    {
-        var state = ServiceTestContext.CreateBuilder()
-            .WithGrid(2)
-            .AddPlayer("p1", "Alice")
-            .OwnHex(0, 0, "p1")
-            .WithTroops(0, 0, 2)
-            .Build();
-        state.Dynamics.TimedEscalationEnabled = true;
-        state.GameStartedAt = DateTime.UtcNow.AddMinutes(-61);
-        var context = new ServiceTestContext(state);
-
-        var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
-
-        result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(5);
-    }
-
-    [Fact]
     public void UpdatePlayerLocation_UpdatesPlayerCoordinates()
     {
         var state = ServiceTestContext.CreateBuilder()
@@ -603,13 +535,52 @@ public sealed class GameplayServiceTests
             .Build();
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+        const double heading = 135d;
 
-        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, heading);
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
         context.Player("p1").CurrentLat.Should().Be(lat);
         context.Player("p1").CurrentLng.Should().Be(lng);
+        context.Player("p1").CurrentHeading.Should().Be(heading);
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenScoutRoleActive_RefreshesBeaconHeadingWithoutForcingGridChange()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithBeaconEnabled()
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Eve", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Bravo", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .Build();
+        state.Dynamics.BeaconSectorAngle = 45;
+        var context = new ServiceTestContext(state);
+        context.Player("p1").CurrentHeading = 90d;
+        GameStateCommon.SyncBeaconStateForRole(state, context.Player("p1"));
+
+        var (movedLat, movedLng) = ServiceTestContext.HexCenter(0, 1);
+        var (scanTargetLat, scanTargetLng) = ServiceTestContext.HexCenter(1, 0);
+        var updatedHeading = HexService.BearingDegrees(movedLat, movedLng, scanTargetLat, scanTargetLng);
+
+        var result = context.GameplayService.UpdatePlayerLocation(
+            ServiceTestContext.RoomCode,
+            "p1",
+            movedLat,
+            movedLng,
+            updatedHeading);
+
+        result.error.Should().BeNull();
+        result.gridChanged.Should().BeFalse();
+        context.Player("p1").BeaconLat.Should().Be(movedLat);
+        context.Player("p1").BeaconLng.Should().Be(movedLng);
+        context.Player("p1").BeaconHeading.Should().BeApproximately(HexService.NormalizeHeading(updatedHeading), 0.0001d);
     }
 
     [Fact]
@@ -631,6 +602,8 @@ public sealed class GameplayServiceTests
         state.Grid[HexService.Key(1, 0)].IsFortified = true;
         state.Players.Single(player => player.Id == "p1").TacticalStrikeActive = true;
         state.Players.Single(player => player.Id == "p1").TacticalStrikeExpiry = DateTime.UtcNow.AddMinutes(5);
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeTargetQ = 1;
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeTargetR = 0;
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
@@ -641,10 +614,12 @@ public sealed class GameplayServiceTests
         result.combatResult!.DefenderBonus.Should().Be(0);
         context.Player("p1").TacticalStrikeActive.Should().BeFalse();
         context.Player("p1").TacticalStrikeExpiry.Should().BeNull();
+        context.Player("p1").TacticalStrikeTargetQ.Should().BeNull();
+        context.Player("p1").TacticalStrikeTargetR.Should().BeNull();
     }
 
     [Fact]
-    public void UpdatePlayerLocation_WhenDemolishChannelCompletes_RemovesFortAndClearsState()
+    public void PlaceTroops_WhenTacticalStrikeTargetsDifferentHex_KeepsDefenderBonusesAndAbility()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -653,26 +628,116 @@ public sealed class GameplayServiceTests
             .AddPlayer("p2", "Bob", "a2")
             .AddAlliance("a1", "Alpha", "p1")
             .AddAlliance("a2", "Beta", "p2")
-            .WithPlayerRole("p1", PlayerRole.Engineer)
-            .OwnHex(1, 0, "p2", "a2", troops: 3)
-            .WithPlayerPosition("p1", 1, 0)
+            .OwnHex(0, 0, "p1", "a1")
+            .OwnHex(1, 0, "p2", "a2")
+            .WithTroops(1, 0, 3)
+            .WithCarriedTroops("p1", 4, 0, 0)
             .Build();
+        state.Dynamics.CombatMode = CombatMode.Classic;
         state.Grid[HexService.Key(1, 0)].IsFort = true;
-        state.Players.Single(player => player.Id == "p1").DemolishActive = true;
-        state.Players.Single(player => player.Id == "p1").DemolishTargetKey = HexService.Key(1, 0);
-        state.Players.Single(player => player.Id == "p1").DemolishStartedAt = DateTime.UtcNow.AddMinutes(-3);
+        state.Grid[HexService.Key(1, 0)].IsFortified = true;
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeActive = true;
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeExpiry = DateTime.UtcNow.AddMinutes(5);
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeTargetQ = 0;
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeTargetR = 0;
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
-        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng);
+        var result = context.GameplayService.PlaceTroops(ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
+
+        result.error.Should().BeNull();
+        result.combatResult.Should().NotBeNull();
+        result.combatResult!.DefenderBonus.Should().Be(2);
+        context.Player("p1").TacticalStrikeActive.Should().BeTrue();
+        context.Player("p1").TacticalStrikeTargetQ.Should().Be(0);
+        context.Player("p1").TacticalStrikeTargetR.Should().Be(0);
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenDemolishFacingLockCompletesThirdApproach_RemovesFortAndClearsState()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerRole("p1", PlayerRole.Engineer)
+            .OwnHex(1, 0, "p2", "a2", troops: 3)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        state.Grid[HexService.Key(1, 0)].IsFort = true;
+        var engineer = state.Players.Single(player => player.Id == "p1");
+        engineer.DemolishTargetKey = HexService.Key(1, 0);
+        engineer.DemolishApproachDirectionsMade =
+        [
+            HexService.Key(2, -1),
+            HexService.Key(1, -1)
+        ];
+        engineer.DemolishFacingHexKey = HexService.Key(0, 0);
+        engineer.DemolishFacingLockStartAt = DateTime.UtcNow.AddSeconds(-6);
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+        var (targetLat, targetLng) = ServiceTestContext.HexCenter(1, 0);
+        var heading = HexService.BearingDegrees(lat, lng, targetLat, targetLng);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, heading);
 
         result.error.Should().BeNull();
         result.gridChanged.Should().BeTrue();
         context.Cell(1, 0).IsFort.Should().BeFalse();
-        context.Player("p1").DemolishActive.Should().BeFalse();
         context.Player("p1").DemolishTargetKey.Should().BeNull();
-        context.Player("p1").DemolishStartedAt.Should().BeNull();
+        context.Player("p1").DemolishApproachDirectionsMade.Should().BeEmpty();
+        context.Player("p1").DemolishFacingHexKey.Should().BeNull();
+        context.Player("p1").DemolishFacingLockStartAt.Should().BeNull();
+        context.Player("p1").DemolishCooldownUntil.Should().NotBeNull();
         context.State.EventLog.Should().Contain(entry => entry.Type == "DemolishCompleted" && entry.PlayerId == "p1");
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_WhenScoutIsNearActiveSabotage_SetsSabotageAlertNearby()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", allianceId: "a2", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 2, 0)
+            .Build();
+        var engineer = state.Players.Single(player => player.Id == "p2");
+        engineer.SabotageTargetQ = 2;
+        engineer.SabotageTargetR = 0;
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, 180d);
+
+        result.error.Should().BeNull();
+        context.Player("p1").SabotageAlertNearby.Should().BeTrue();
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_RemovesExpiredSabotageBlockedTiles()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var player = state.Players.Single(candidate => candidate.Id == "p1");
+        player.SabotageBlockedTiles[HexService.Key(1, 0)] = DateTime.UtcNow.AddMinutes(-1);
+        player.SabotageBlockedTiles[HexService.Key(0, 1)] = DateTime.UtcNow.AddMinutes(2);
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, 90d);
+
+        result.error.Should().BeNull();
+        player.SabotageBlockedTiles.Should().NotContainKey(HexService.Key(1, 0));
+        player.SabotageBlockedTiles.Should().ContainKey(HexService.Key(0, 1));
     }
 
     [Fact]
@@ -686,6 +751,8 @@ public sealed class GameplayServiceTests
             .Build();
         state.Players.Single(player => player.Id == "p1").TacticalStrikeActive = true;
         state.Players.Single(player => player.Id == "p1").TacticalStrikeExpiry = DateTime.UtcNow.AddMinutes(-1);
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeTargetQ = 0;
+        state.Players.Single(player => player.Id == "p1").TacticalStrikeTargetR = 0;
         var context = new ServiceTestContext(state);
 
         var result = context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
@@ -693,6 +760,8 @@ public sealed class GameplayServiceTests
         result.error.Should().BeNull();
         context.Player("p1").TacticalStrikeActive.Should().BeFalse();
         context.Player("p1").TacticalStrikeExpiry.Should().BeNull();
+        context.Player("p1").TacticalStrikeTargetQ.Should().BeNull();
+        context.Player("p1").TacticalStrikeTargetR.Should().BeNull();
     }
 
     [Fact]
@@ -721,7 +790,7 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void ResolveSabotage_EngineerStaysOneMinute_DisablesHexRegen()
+    public void UpdatePlayerLocation_WhenThirdSabotagePerimeterHexIsVisited_DisablesHexRegen()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(3)
@@ -730,23 +799,30 @@ public sealed class GameplayServiceTests
             .AddPlayer("p2", "Bob", allianceId: "a2")
             .OwnHex(1, 0, "p2", allianceId: "a2")
             .WithTroops(1, 0, 3)
+            .WithPlayerPosition("p1", 0, 0)
             .Build();
-        var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
         var engineer = state.Players.First(p => p.Id == "p1");
-        engineer.CurrentLat = lat;
-        engineer.CurrentLng = lng;
-        engineer.SabotageActive = true;
-        engineer.SabotageStartedAt = DateTime.UtcNow.AddMinutes(-1).AddSeconds(-1);
         engineer.SabotageTargetQ = 1;
         engineer.SabotageTargetR = 0;
+        engineer.SabotagePerimeterVisited =
+        [
+            HexService.Key(2, 0),
+            HexService.Key(2, -1)
+        ];
         var context = new ServiceTestContext(state);
 
-        context.GameplayService.ResolveActiveSabotages(ServiceTestContext.RoomCode);
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p1", lat, lng, null);
 
+        result.error.Should().BeNull();
+        result.gridChanged.Should().BeTrue();
         context.Cell(1, 0).SabotagedUntil.Should().NotBeNull();
         context.Cell(1, 0).SabotagedUntil!.Value.Should().BeCloseTo(
             DateTime.UtcNow.AddMinutes(10), TimeSpan.FromSeconds(10));
-        engineer.SabotageActive.Should().BeFalse();
+        engineer.SabotageTargetQ.Should().BeNull();
+        engineer.SabotageTargetR.Should().BeNull();
+        engineer.SabotagePerimeterVisited.Should().BeEmpty();
+        engineer.SabotageCooldownUntil.Should().NotBeNull();
     }
 
     [Fact]

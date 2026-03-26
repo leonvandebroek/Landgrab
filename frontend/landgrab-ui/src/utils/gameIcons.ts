@@ -32,6 +32,7 @@ import crossbowSvgRaw from '../assets/game-icons/svg/carl-olsen/crossbow.svg?raw
 import rallyTroopsSvgRaw from '../assets/game-icons/svg/lorc/rally-the-troops.svg?raw';
 import barricadeSvgRaw from '../assets/game-icons/svg/delapouite/barricade.svg?raw';
 import gearHammerSvgRaw from '../assets/game-icons/svg/lorc/gear-hammer.svg?raw';
+import hammerDropSvgRaw from '../assets/game-icons/svg/lorc/hammer-drop.svg?raw';
 import pineTreeSvgRaw from '../assets/game-icons/svg/lorc/pine-tree.svg?raw';
 import shinyEntranceSvgRaw from '../assets/game-icons/svg/lorc/shiny-entrance.svg?raw';
 import returnArrowSvgRaw from '../assets/game-icons/svg/lorc/return-arrow.svg?raw';
@@ -92,6 +93,7 @@ export const gameIcons = {
     rallyTroops: prepareSvg(rallyTroopsSvgRaw),
     barricade: prepareSvg(barricadeSvgRaw),
     gearHammer: prepareSvg(gearHammerSvgRaw),
+    hammerDrop: prepareSvg(hammerDropSvgRaw),
     pineTree: prepareSvg(pineTreeSvgRaw),
     shinyEntrance: prepareSvg(shinyEntranceSvgRaw),
     returnArrow: prepareSvg(returnArrowSvgRaw),

@@ -94,8 +94,42 @@ public static class AuthEndpoints
         else
             user = await db.Users.FirstOrDefaultAsync(u => u.Username == req.UsernameOrEmail);
 
-        if (user == null || !passwords.Verify(req.Password, user.PasswordHash))
+        if (user == null)
             return Results.Unauthorized();
+
+        // ── Account lockout check ─────────────────────────────────────────
+        if (user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.UtcNow)
+            return Results.BadRequest(new { error = "Account temporarily locked. Try again later." });
+
+        if (!passwords.Verify(req.Password, user.PasswordHash))
+        {
+            // Atomic increment + conditional lockout — avoids last-write-wins race under concurrency
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"""
+                UPDATE Users
+                SET FailedLoginAttempts = FailedLoginAttempts + 1,
+                    LockedUntil = CASE WHEN FailedLoginAttempts + 1 >= 5
+                        THEN DATEADD(MINUTE, 15, GETUTCDATE())
+                        ELSE LockedUntil END
+                WHERE Id = {user.Id}
+                """);
+            return Results.Unauthorized();
+        }
+
+        // Successful login — clear lockout state, but only if account is still unlocked
+        // (guards against TOCTOU: a concurrent 5th failed attempt could have set LockedUntil
+        //  between the check above and here; 0 rows updated = account became locked mid-request)
+        var rowsReset = await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            UPDATE Users
+            SET FailedLoginAttempts = 0,
+                LockedUntil = NULL
+            WHERE Id = {user.Id}
+              AND (LockedUntil IS NULL OR LockedUntil <= GETUTCDATE())
+            """);
+
+        if (rowsReset == 0)
+            return Results.BadRequest(new { error = "Account temporarily locked. Try again later." });
 
         var token = jwt.GenerateToken(user);
         AppendAuthCookie(context, environment, token);
@@ -103,8 +137,21 @@ public static class AuthEndpoints
         return Results.Ok(new AuthResponse(token, user.Username, user.Id.ToString()));
     }
 
-    private static IResult Logout(HttpContext context, IWebHostEnvironment environment)
+    private static IResult Logout(
+        HttpContext context,
+        IWebHostEnvironment environment,
+        TokenBlocklist tokenBlocklist)
     {
+        // Revoke the current JWT so it cannot be replayed after logout
+        var jti = context.User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+        var expClaim = context.User.FindFirstValue(JwtRegisteredClaimNames.Exp);
+        if (jti is not null && expClaim is not null
+            && long.TryParse(expClaim, out var expUnix))
+        {
+            var expiry = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+            tokenBlocklist.Revoke(jti, expiry);
+        }
+
         context.Response.Cookies.Delete(AuthCookieName, new CookieOptions
         {
             HttpOnly = true,

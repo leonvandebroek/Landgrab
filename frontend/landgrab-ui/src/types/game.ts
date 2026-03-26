@@ -6,22 +6,19 @@ export type WinConditionType = 'TerritoryPercent' | 'Elimination' | 'TimedGame';
 export type GameAreaMode = 'Centered' | 'Drawn' | 'Pattern';
 export type GameAreaPattern = 'WideFront' | 'TallFront' | 'Crossroads' | 'Starburst';
 
-export type TerrainType = 'None' | 'Water' | 'Building' | 'Road' | 'Path' | 'Forest' | 'Park' | 'Hills' | 'Steep';
-
 export type PlayerRole = 'None' | 'Commander' | 'Scout' | 'Engineer';
 
 export interface GameDynamics {
-  terrainEnabled: boolean;
   playerRolesEnabled: boolean;
-  fogOfWarEnabled: boolean;
   beaconEnabled: boolean;
+  beaconSectorAngle?: number;
   combatMode?: CombatMode;
-  supplyLinesEnabled: boolean;
   hqEnabled: boolean;
   hqAutoAssign: boolean;
   tileDecayEnabled: boolean;
-  timedEscalationEnabled: boolean;
-  underdogPactEnabled: boolean;
+  enemySightingMemorySeconds?: number;
+  fieldBattleResolutionMode?: 'InitiatorVsSumOfJoined' | 'InitiatorVsHighestOfJoined'
+    | 'InitiatorPlusRandomVsSumPlusRandom' | 'InitiatorPlusRandomVsHighestPlusRandom';
 }
 
 export interface HexCoordinate {
@@ -89,14 +86,22 @@ export interface HexCell {
   ownerColor?: string;
   troops: number;
   isMasterTile: boolean;
-  terrainType?: TerrainType;
+  visibilityTier?: 'Visible' | 'Remembered' | 'Hidden';
+  lastKnownTroops?: number | null;
+  lastKnownOwnerId?: string | null;
+  lastKnownOwnerName?: string | null;
+  lastKnownOwnerColor?: string | null;
+  lastKnownOwnerAllianceId?: string | null;
+  lastKnownIsFort?: boolean;
+  lastKnownIsMasterTile?: boolean;
+  lastSeenAt?: string;
   // Phase 3: Rally
   isFortified?: boolean;
   // Phase 3: Shepherd
   lastVisitedAt?: string;
   // Phase 4: Engineer
-  engineerBuiltAt?: string;
   isFort?: boolean;
+  sabotagedUntil?: string;
 }
 
 export interface Player {
@@ -134,15 +139,39 @@ export interface Player {
   rallyPointQ?: number;
   rallyPointR?: number;
   // Engineer abilities
-  sabotageActive?: boolean;
-  sabotageStartedAt?: string;
+  fortTargetQ?: number;
+  fortTargetR?: number;
+  fortPerimeterVisited?: string[];
   sabotageTargetQ?: number;
   sabotageTargetR?: number;
+  sabotagePerimeterVisited?: string[];
   sabotageCooldownUntil?: string;
-  demolishActive?: boolean;
   demolishTargetKey?: string;
-  demolishStartedAt?: string;
+  demolishApproachDirectionsMade?: string[];
   demolishCooldownUntil?: string;
+  previousHexKey?: string;
+
+  // Compass / heading
+  currentHeading?: number | null;
+  beaconHeading?: number | null;
+
+  // Demolish facing lock  
+  demolishFacingLockStartAt?: string | null;  // ISO date string from backend DateTime
+  demolishFacingHexKey?: string | null;
+
+  // Tactical Strike targeting
+  tacticalStrikeTargetQ?: number | null;
+  tacticalStrikeTargetR?: number | null;
+
+  // Scout Intercept
+  interceptLockStartAt?: string | null;       // ISO date string from backend DateTime
+  interceptTargetId?: string | null;
+  sabotageAlertNearby?: boolean;
+  sabotageBlockedTiles?: Record<string, string>;  // key: "q,r", value: ISO date string
+  // Scout Share Intel
+  shareIntelCooldownUntil?: string;           // ISO date string — null when ready
+  troopTransferCooldownUntil?: string;
+  fieldBattleCooldownUntil?: string;
 }
 
 export interface AllianceDto {
@@ -155,8 +184,6 @@ export interface AllianceDto {
   hqHexQ?: number;
   hqHexR?: number;
   claimFrozenUntil?: string;
-  // Phase 8: Underdog
-  underdogBoostUntil?: string;
 }
 
 export interface GameEventLogEntry {
@@ -210,6 +237,9 @@ export interface GameState {
   hostObserverMode?: boolean;
   isPaused?: boolean;
   activeRaids?: ActiveCommandoRaid[];
+  activeTroopTransfers?: ActiveTroopTransfer[];
+  activeFieldBattles?: ActiveFieldBattle[];
+  contestedEdges?: ContestedEdgeDto[] | null;
 }
 
 export interface ActiveCommandoRaid {
@@ -244,7 +274,6 @@ export interface CombatResult {
   previousOwnerName: string | null;
   attackerBonus: number;
   defenderBonus: number;
-  defenderTerrainType: TerrainType | null;
   effectiveAttack: number;
   effectiveDefence: number;
   attackerTroopsLost: number;
@@ -329,8 +358,74 @@ export interface UpdateMapTemplateRequest {
   centerLng?: number;
 }
 
+export interface ContestedEdgeDto {
+  hexKeyA: string;
+  hexKeyB: string;
+  neighborIndex: number;
+  teamAColor: string;
+  teamBColor: string;
+  intensity: number;
+}
+
 export interface HostMessage {
   message: string;
   fromHost: boolean;
   targetAllianceIds?: string[];
+}
+
+export interface TroopTransferRequest {
+  transferId: string;
+  initiatorId: string;
+  initiatorName: string;
+  amount: number;
+  expiresAt: string;
+}
+
+export interface TroopTransferResult {
+  accepted: boolean;
+  amount: number;
+  recipientName: string;
+  initiatorName: string;
+}
+
+export interface ActiveTroopTransfer {
+  id: string;
+  initiatorId: string;
+  initiatorName: string;
+  recipientId: string;
+  recipientName: string;
+  amount: number;
+  expiresAt: string;
+}
+
+export interface ActiveFieldBattle {
+  id: string;
+  initiatorId: string;
+  initiatorName: string;
+  initiatorAllianceId: string;
+  q: number;
+  r: number;
+  joinDeadline: string;
+  joinedEnemyIds: string[];
+  resolved: boolean;
+}
+
+export interface FieldBattleInvite {
+  battleId: string;
+  initiatorName: string;
+  initiatorAllianceName: string;
+  q: number;
+  r: number;
+  joinDeadline: string;
+}
+
+export interface FieldBattleResult {
+  battleId: string;
+  initiatorWon: boolean;
+  initiatorName: string;
+  q: number;
+  r: number;
+  initiatorTroopsLost: number;
+  enemyTroopsLost: number;
+  noEnemiesJoined: boolean;
 }

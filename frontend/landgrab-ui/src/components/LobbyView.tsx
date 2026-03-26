@@ -20,12 +20,7 @@ const GameLobby = lazy(() =>
   import('./lobby/GameLobby').then(m => ({ default: m.GameLobby }))
 );
 
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
+import type { SignalRInvoke, LocationPoint } from '../types/common';
 
 /** All lobby-specific action callbacks sourced from useGameActions in App. */
 export interface LobbyViewActions {
@@ -43,6 +38,7 @@ export interface LobbyViewActions {
   onSetWinCondition: (type: WinConditionType, value: number) => void;
   onSetBeaconEnabled: (enabled: boolean) => void;
   onSetTileDecayEnabled: (enabled: boolean) => void;
+  onSetEnemySightingMemory: (seconds: number) => void;
   onSetGameDynamics: (dynamics: GameDynamics) => void;
   onSetPlayerRole: (role: string) => Promise<void>;
   onSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
@@ -133,6 +129,7 @@ export function LobbyView({
           onSetWinCondition={actions.onSetWinCondition}
           onSetBeaconEnabled={actions.onSetBeaconEnabled}
           onSetTileDecayEnabled={actions.onSetTileDecayEnabled}
+          onSetEnemySightingMemory={actions.onSetEnemySightingMemory}
           onSetGameDynamics={actions.onSetGameDynamics}
           onSetPlayerRole={actions.onSetPlayerRole}
           onSetAllianceHQ={actions.onSetAllianceHQ}

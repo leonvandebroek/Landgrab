@@ -368,11 +368,40 @@ public sealed class AllianceConfigServiceTests
         context.State.Alliances.Single(alliance => alliance.Id == "a1").HQHexR.Should().Be(0);
         result.state!.Alliances.Single(alliance => alliance.Id == "a1").HQHexQ.Should().Be(1);
         result.state.Alliances.Single(alliance => alliance.Id == "a1").HQHexR.Should().Be(0);
+        context.State.EventLog.Should().ContainSingle(entry =>
+            entry.Type == "AllianceHQAssigned"
+            && entry.PlayerId == hostId
+            && entry.AllianceId == "a1"
+            && entry.Q == 1
+            && entry.R == 0
+            && entry.Message == "Alliance Alpha HQ was assigned at (1, 0).");
     }
 
-    [Fact(Skip = "Current implementation only validates that the hex exists; it does not require alliance ownership before setting HQ.")]
+    [Fact]
     public void SetAllianceHQ_WhenHexIsNotOwnedByAlliance_Fails()
     {
+        var hostId = NewUserId();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPhase(GamePhase.Lobby)
+            .AddPlayer(hostId, "Host", "a1")
+            .WithPlayerAsHost(hostId)
+            .AddPlayer("p2", "Rival", "a2")
+            .AddAlliance("a1", "Alpha", hostId)
+            .AddAlliance("a2", "Beta", "p2")
+            .OwnHex(1, 0, "p2", "a2")
+            .Build();
+        state.Dynamics.HQEnabled = true;
+        var context = CreateHostedContext(state, hostId);
+        var service = CreateService(context);
+
+        var result = service.SetAllianceHQ(ServiceTestContext.RoomCode, hostId, 1, 0, "a1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("HQ must be placed on a tile owned by the selected alliance.");
+        context.State.Alliances.Single(alliance => alliance.Id == "a1").HQHexQ.Should().BeNull();
+        context.State.Alliances.Single(alliance => alliance.Id == "a1").HQHexR.Should().BeNull();
+        context.State.EventLog.Should().NotContain(entry => entry.Type == "AllianceHQAssigned");
     }
 
     [Fact]

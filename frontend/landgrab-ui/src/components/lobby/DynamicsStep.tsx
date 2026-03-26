@@ -1,9 +1,18 @@
 import { useTranslation } from 'react-i18next';
 import type { CombatMode, GameDynamics, GameState } from '../../types/game';
+import { CustomSelect } from './CustomSelect';
 import { FEATURE_KEYS } from '../../utils/dynamics';
 import type { FeatureKey } from '../../utils/dynamics';
 
 const COMBAT_MODES: CombatMode[] = ['Classic', 'Balanced', 'Siege'];
+const ENEMY_SIGHTING_MEMORY_OPTIONS = [0, 15, 30, 60, 120] as const;
+const FIELD_BATTLE_RESOLUTION_MODES = [
+    'InitiatorVsSumOfJoined',
+    'InitiatorVsHighestOfJoined',
+    'InitiatorPlusRandomVsSumPlusRandom',
+    'InitiatorPlusRandomVsHighestPlusRandom',
+] as const;
+type FieldBattleResolutionMode = typeof FIELD_BATTLE_RESOLUTION_MODES[number];
 
 /* ── Component ────────────────────────────────────────────────────────── */
 
@@ -12,6 +21,7 @@ interface Props {
     isHost: boolean;
     onSetBeaconEnabled: (enabled: boolean) => void;
     onSetTileDecayEnabled: (enabled: boolean) => void;
+    onSetEnemySightingMemory: (seconds: number) => void;
     onSetGameDynamics: (dynamics: GameDynamics) => void;
 }
 
@@ -20,6 +30,7 @@ export function DynamicsStep({
     isHost,
     onSetBeaconEnabled,
     onSetTileDecayEnabled,
+    onSetEnemySightingMemory,
     onSetGameDynamics,
 }: Props) {
     const { t } = useTranslation();
@@ -36,24 +47,14 @@ export function DynamicsStep({
 
     const isFeatureEnabled = (key: FeatureKey) => {
         switch (key) {
-            case 'terrain':
-                return dynamics.terrainEnabled;
             case 'playerRoles':
                 return dynamics.playerRolesEnabled;
-            case 'fogOfWar':
-                return dynamics.fogOfWarEnabled;
             case 'beaconEnabled':
                 return dynamics.beaconEnabled;
-            case 'supplyLines':
-                return dynamics.supplyLinesEnabled;
             case 'hq':
                 return dynamics.hqEnabled;
             case 'tileDecayEnabled':
                 return dynamics.tileDecayEnabled;
-            case 'timedEscalation':
-                return dynamics.timedEscalationEnabled;
-            case 'underdogPact':
-                return dynamics.underdogPactEnabled;
         }
     };
 
@@ -73,29 +74,11 @@ export function DynamicsStep({
         }
 
         switch (key) {
-            case 'terrain':
-                updateDynamics({ terrainEnabled: checked });
-                return;
             case 'playerRoles':
                 updateDynamics({ playerRolesEnabled: checked });
                 return;
-            case 'fogOfWar':
-                updateDynamics({ fogOfWarEnabled: checked });
-                return;
-            case 'supplyLines':
-                updateDynamics({
-                    supplyLinesEnabled: checked,
-                    ...(checked ? { hqEnabled: true } : {}),
-                });
-                return;
             case 'hq':
                 updateDynamics({ hqEnabled: checked, ...(checked ? { hqAutoAssign: true } : {}) });
-                return;
-            case 'timedEscalation':
-                updateDynamics({ timedEscalationEnabled: checked });
-                return;
-            case 'underdogPact':
-                updateDynamics({ underdogPactEnabled: checked });
                 return;
         }
     };
@@ -104,6 +87,24 @@ export function DynamicsStep({
         if (!isHost) return;
 
         updateDynamics({ combatMode: mode });
+    };
+
+    const handleFieldBattleResolutionModeChange = (mode: FieldBattleResolutionMode) => {
+        if (!isHost) return;
+        updateDynamics({ fieldBattleResolutionMode: mode });
+    };
+
+    const handleEnemySightingMemoryChange = (value: string) => {
+        if (!isHost) {
+            return;
+        }
+
+        const seconds = Number(value);
+        if (!Number.isFinite(seconds)) {
+            return;
+        }
+
+        onSetEnemySightingMemory(seconds);
     };
 
     /* ── Render ────────────────────────────────────────────────────── */
@@ -139,7 +140,7 @@ export function DynamicsStep({
                             </label>
                             {key === 'hq' && dynamics.hqEnabled && (
                                 <>
-                                    <label className="toggle-row" style={{ paddingLeft: '1.5rem' }}>
+                                    <label className="toggle-row toggle-row--nested">
                                         <input
                                             type="checkbox"
                                             checked={dynamics.hqAutoAssign ?? true}
@@ -152,7 +153,7 @@ export function DynamicsStep({
                                         </span>
                                     </label>
                                     {dynamics.hqAutoAssign && (
-                                        <p className="wizard-hint" style={{ color: '#6ec6ff', paddingLeft: '1.5rem' }}>
+                                        <p className="wizard-hint wizard-hint--info wizard-hint--nested">
                                             {t('dynamics.info.hqAutoAssignNote')}
                                         </p>
                                     )}
@@ -162,7 +163,7 @@ export function DynamicsStep({
                     ))}
 
                     {showHqAssignmentWarning && (
-                        <p className="wizard-hint" role="alert" style={{ color: '#f4b350' }}>
+                        <p className="wizard-hint wizard-hint--warning" role="alert">
                             {alliancesMissingHq.length === 1
                                 ? t('dynamics.warning.missingSingleHq' as never, {
                                     defaultValue: 'HQ is enabled, but 1 alliance still needs an HQ assigned in Review.',
@@ -173,6 +174,26 @@ export function DynamicsStep({
                                 })}
                         </p>
                     )}
+
+                    <div className="settings-row settings-row--top-aligned settings-row--spaced-top">
+                        <div className="wizard-setting-copy">
+                            <strong>{t('lobby.settings.enemySightingMemory' as never)}</strong>
+                            <p className="wizard-hint wizard-hint--compact-top">
+                                {t('lobby.settings.enemySightingMemoryDesc' as never)}
+                            </p>
+                        </div>
+                        <CustomSelect
+                            value={String(dynamics.enemySightingMemorySeconds ?? 0)}
+                            options={ENEMY_SIGHTING_MEMORY_OPTIONS.map((seconds) => ({
+                                value: String(seconds),
+                                label: seconds === 0
+                                    ? t('lobby.settings.enemySightingMemoryOff' as never)
+                                    : t('lobby.settings.enemySightingMemorySeconds' as never, { seconds }),
+                            }))}
+                            disabled={!isHost}
+                            onChange={handleEnemySightingMemoryChange}
+                        />
+                    </div>
                 </div>
 
                 <div className="wizard-rule-card">
@@ -215,6 +236,35 @@ export function DynamicsStep({
                                                 : t('dynamics.combatMode.Siege.description' as never, {
                                                     defaultValue: 'Like Balanced but defenders get +25% bonus',
                                                 })}
+                                    </span>
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="wizard-rule-card">
+                    <h3>{t('lobby.fieldBattleResolution.title' as never)}</h3>
+                    <p className="wizard-hint">{t('lobby.fieldBattleResolution.description' as never)}</p>
+                    <div className="claim-mode-grid">
+                        {FIELD_BATTLE_RESOLUTION_MODES.map(mode => (
+                            <label key={mode} className={`claim-mode-option${(dynamics.fieldBattleResolutionMode ?? 'InitiatorVsSumOfJoined') === mode ? ' active' : ''}`}>
+                                <input
+                                    type="radio"
+                                    name="wizard-field-battle-resolution"
+                                    checked={(dynamics.fieldBattleResolutionMode ?? 'InitiatorVsSumOfJoined') === mode}
+                                    onChange={() => handleFieldBattleResolutionModeChange(mode)}
+                                    disabled={!isHost}
+                                />
+                                <span className="claim-mode-copy">
+                                    <span>
+                                        {mode === 'InitiatorVsSumOfJoined'
+                                            ? t('lobby.fieldBattleResolution.initiatorVsSum' as never)
+                                            : mode === 'InitiatorVsHighestOfJoined'
+                                                ? t('lobby.fieldBattleResolution.initiatorVsHighest' as never)
+                                                : mode === 'InitiatorPlusRandomVsSumPlusRandom'
+                                                    ? t('lobby.fieldBattleResolution.initiatorPlusRandomVsSum' as never)
+                                                    : t('lobby.fieldBattleResolution.initiatorPlusRandomVsHighest' as never)}
                                     </span>
                                 </span>
                             </label>

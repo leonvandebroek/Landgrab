@@ -1,7 +1,7 @@
 ---
 name: Lingo.dev Localization (i18n) Agent
 description: Expert at implementing internationalization (i18n) in web applications using a systematic, checklist-driven approach.
-model: GPT-5.4 (copilot)
+model: claude-sonnet-4.6
 tools:
   - shell
   - read

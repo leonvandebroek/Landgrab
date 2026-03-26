@@ -533,6 +533,64 @@ public sealed class LobbyServiceTests
     }
 
     [Fact]
+    public void StartGame_HostWithValidSetup_InitializesPlayerCurrentHexFromOwnedStartingTiles()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .WithMasterTile(0, 0)
+            .AddPlayer(hostId, "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddAlliance("a1", "Alpha", hostId)
+            .AddAlliance("a2", "Beta", "p2")
+            .OwnHex(1, 0, hostId, "a1", troops: 3)
+            .OwnHex(-1, 0, "p2", "a2", troops: 3)
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        context.Player(hostId).CurrentHexQ.Should().Be(1);
+        context.Player(hostId).CurrentHexR.Should().Be(0);
+        context.Player("p2").CurrentHexQ.Should().Be(-1);
+        context.Player("p2").CurrentHexR.Should().Be(0);
+    }
+
+    [Fact]
+    public void StartGame_HostWithValidSetup_InitializesPlayerCurrentHexFromAllianceTerritory()
+    {
+        var hostGuid = Guid.NewGuid();
+        var hostId = hostGuid.ToString();
+        var state = ServiceTestContext.CreateBuilder()
+            .WithPhase(GamePhase.Lobby)
+            .WithGrid(3)
+            .WithGameMode(GameMode.Alliances)
+            .WithMasterTile(0, 0)
+            .AddPlayer(hostId, "Alice")
+            .AddPlayer("p2", "Bob")
+            .AddAlliance("a1", "Alpha", hostId, "p2")
+            .OwnHex(1, 0, hostId, "a1", troops: 3)
+            .Build();
+        var context = new ServiceTestContext(state, hostGuid);
+        var sut = CreateLobbyService(context);
+
+        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
+
+        error.Should().BeNull();
+        result.Should().NotBeNull();
+        context.Player(hostId).CurrentHexQ.Should().Be(1);
+        context.Player(hostId).CurrentHexR.Should().Be(0);
+        context.Player("p2").CurrentHexQ.Should().Be(1);
+        context.Player("p2").CurrentHexR.Should().Be(0);
+    }
+
+    [Fact]
     public void StartGame_HostWithValidSetup_SetsGameStartedAt()
     {
         var hostGuid = Guid.NewGuid();
@@ -853,38 +911,6 @@ public sealed class LobbyServiceTests
 
         result.Should().BeNull();
         error.Should().Be("The game area must have enough tiles for the master tile and every player.");
-    }
-
-    [Fact]
-    public void StartGame_AllNonMasterHexesAreWater_ReturnsBlockedPlayersError()
-    {
-        // Master tile is pre-set so AutoAssign won't fail on that check.
-        // All remaining hexes are water so no alliance or player can gain territory access.
-        var hostGuid = Guid.NewGuid();
-        var hostId = hostGuid.ToString();
-        var state = ServiceTestContext.CreateBuilder()
-            .WithPhase(GamePhase.Lobby)
-            .WithGrid(2)
-            .WithMasterTile(0, 0)
-            .AddPlayer(hostId, "Alice")
-            .AddPlayer("p2", "Bob")
-            .AddAlliance("a1", "Alpha", hostId)
-            .AddAlliance("a2", "Beta", "p2")
-            .Build();
-
-        foreach (var cell in state.Grid.Values)
-        {
-            if (!cell.IsMasterTile)
-                cell.TerrainType = TerrainType.Water;
-        }
-
-        var context = new ServiceTestContext(state, hostGuid);
-        var sut = CreateLobbyService(context);
-
-        var (result, error) = sut.StartGame(ServiceTestContext.RoomCode, hostId);
-
-        result.Should().BeNull();
-        error.Should().Be("Cannot start the game because these players would begin with 0 troops and no territory access: Alice, Bob.");
     }
 
     [Fact]

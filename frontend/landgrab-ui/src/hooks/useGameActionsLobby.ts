@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { roomHexToLatLng } from '../components/map/HexMath';
 import { useGameStore } from '../stores/gameStore';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type {
   ClaimMode,
@@ -34,6 +34,7 @@ interface UseGameActionsLobbyResult {
   handleSetWinCondition: (type: WinConditionType, value: number) => void;
   handleSetBeaconEnabled: (enabled: boolean) => void;
   handleSetTileDecayEnabled: (enabled: boolean) => void;
+  handleSetEnemySightingMemory: (seconds: number) => void;
   handleSetGameDynamics: (dynamics: GameDynamics) => void;
   handleSetPlayerRole: (role: string) => Promise<void>;
   handleSetAllianceHQ: (q: number, r: number, allianceId: string) => Promise<void>;
@@ -84,6 +85,7 @@ export function useGameActionsLobby({
     setGameState(null);
     setPickupPrompt(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
   }, [clearGameplayUi, clearSession, setGameState, setPickupPrompt, setView]);
 
@@ -231,6 +233,14 @@ export function useGameActionsLobby({
     invoke('SetTileDecayEnabled', enabled).catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
+  const handleSetEnemySightingMemory = useCallback((seconds: number): void => {
+    if (!invoke) {
+      return;
+    }
+
+    invoke('SetEnemySightingMemory', seconds).catch(cause => setError(String(cause)));
+  }, [invoke, setError]);
+
   const handleSetGameDynamics = useCallback((dynamics: GameDynamics): void => {
     if (!invoke) {
       return;
@@ -356,6 +366,7 @@ export function useGameActionsLobby({
     setMyRooms([]);
     setGameState(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
     setError('');
     setPickupPrompt(null);
@@ -378,6 +389,7 @@ export function useGameActionsLobby({
     handleSetWinCondition,
     handleSetBeaconEnabled,
     handleSetTileDecayEnabled,
+    handleSetEnemySightingMemory,
     handleSetGameDynamics,
     handleSetPlayerRole,
     handleSetAllianceHQ,

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Landgrab.Api.Models;
 using Landgrab.Api.Services;
@@ -39,8 +40,14 @@ public partial class GameHub
         return preview;
     }
 
-    public async Task ActivateBeacon()
+    public async Task ActivateBeacon(double heading)
     {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
@@ -48,7 +55,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateBeacon(room.Code, UserId);
+        var (state, error) = gameService.ActivateBeacon(room.Code, UserId, heading);
         if (error != null)
         {
             await SendError(error);
@@ -56,6 +63,34 @@ public partial class GameHub
         }
 
         await BroadcastState(room.Code, state!);
+    }
+
+    public async Task<object?> ResolveRaidTarget(double heading)
+    {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (target, error) = gameService.ResolveRaidTarget(room.Code, UserId, heading);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        if (target is not { } resolvedTarget)
+            return null;
+
+        return new { targetQ = resolvedTarget.targetQ, targetR = resolvedTarget.targetR };
     }
 
     public async Task DeactivateBeacon()
@@ -77,7 +112,84 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateCommandoRaid(int targetQ, int targetR)
+    public async Task<int> ShareBeaconIntel()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return 0;
+        }
+
+        if (room.State.Phase != GamePhase.Playing)
+        {
+            await SendError("Beacons only work during gameplay.");
+            return 0;
+        }
+        var (sharedCount, error) = gameService.ShareBeaconIntel(room.Code, UserId, []);
+        if (error != null)
+        {
+            await SendError(error);
+            return 0;
+        }
+
+        var state = gameService.GetStateSnapshot(room.Code);
+        if (state is not null)
+        {
+            await BroadcastState(room.Code, state);
+        }
+
+        return sharedCount;
+    }
+
+    public async Task ActivateCommandoRaid()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ActivateCommandoRaid(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task<object?> ResolveTacticalStrikeTarget(double heading)
+    {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (target, error) = gameService.ResolveTacticalStrikeTarget(room.Code, UserId, heading);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        if (target is not { } resolvedTarget)
+            return null;
+
+        return new { targetQ = resolvedTarget.targetQ, targetR = resolvedTarget.targetR };
+    }
+
+    public async Task ActivateTacticalStrike(int targetQ, int targetR)
     {
         if (!ValidateCoordRange(targetQ, targetR))
         {
@@ -92,7 +204,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateCommandoRaid(room.Code, UserId, targetQ, targetR);
+        var (state, error) = gameService.ActivateTacticalStrike(room.Code, UserId, targetQ, targetR);
         if (error != null)
         {
             await SendError(error);
@@ -102,7 +214,7 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateTacticalStrike()
+    public async Task ActivateRallyPoint()
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
@@ -111,7 +223,7 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateTacticalStrike(room.Code, UserId);
+        var (state, error) = gameService.ActivateRallyPoint(room.Code, UserId);
         if (error != null)
         {
             await SendError(error);
@@ -121,23 +233,37 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateReinforce()
+    // Backward compatibility — old clients may still call ActivateReinforce
+    public async Task ActivateReinforce() => await ActivateRallyPoint();
+
+    public async Task<object?> AttemptIntercept(double heading)
     {
+        if (!ValidateHeading(heading))
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
         {
             await SendError("ROOM_NOT_JOINED", "Not in a room.");
-            return;
+            return null;
         }
 
-        var (state, error) = gameService.ActivateReinforce(room.Code, UserId);
+        var (result, error) = gameService.AttemptIntercept(room.Code, UserId, heading);
         if (error != null)
         {
             await SendError(error);
-            return;
+            return null;
         }
 
-        await BroadcastState(room.Code, state!);
+        if (result == null)
+            return null;
+
+        return result.Seconds.HasValue
+            ? new { status = result.Status, seconds = result.Seconds.Value }
+            : new { status = result.Status };
     }
 
     public async Task ActivateShieldWall()
@@ -159,7 +285,7 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task ActivateEmergencyRepair()
+    public async Task StartFortConstruction()
     {
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room == null)
@@ -168,7 +294,64 @@ public partial class GameHub
             return;
         }
 
-        var (state, error) = gameService.ActivateEmergencyRepair(room.Code, UserId);
+        var (state, error) = gameService.StartFortConstruction(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task CancelFortConstruction()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.CancelFortConstruction(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task ActivateSabotage()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.ActivateSabotage(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task CancelSabotage()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.CancelSabotage(room.Code, UserId);
         if (error != null)
         {
             await SendError(error);
@@ -197,7 +380,26 @@ public partial class GameHub
         await BroadcastState(room.Code, state!);
     }
 
-    public async Task UpdatePlayerLocation(double lat, double lng)
+    public async Task CancelDemolish()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = gameService.CancelDemolish(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    public async Task UpdatePlayerLocation(double lat, double lng, double? heading = null)
     {
         if (!ValidateLatLng(lat, lng))
         {
@@ -222,20 +424,27 @@ public partial class GameHub
             return;
         }
 
-        var result = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng);
+        var result = gameService.UpdatePlayerLocation(room.Code, UserId, lat, lng, heading);
         if (result.error != null)
         {
             await SendError(result.error);
             return;
         }
 
+        // Only broadcast full state on actual grid changes (territory claims, forts, combat, etc.)
+        // Frontend now derives visibility locally from player positions
         if (result.gridChanged)
         {
             await BroadcastState(room.Code, result.state!);
             return;
         }
 
-        await Clients.Group(room.Code).SendAsync("PlayersMoved", result.state!.Players);
+        // Player moved but no grid changes — send lightweight position update
+        await visibilityBroadcastHelper.BroadcastPlayersPerViewer(
+            room,
+            result.state!,
+            connectionId => Clients.Client(connectionId),
+            visibilityService);
     }
 
     public async Task PickUpTroops(int q, int r, int count, double playerLat, double playerLng)
@@ -298,10 +507,24 @@ public partial class GameHub
         if (previousOwnerId != null)
         {
             var lostConnections = room.ConnectionMap
-                .Where(kv => kv.Value == previousOwnerId)
-                .Select(kv => kv.Key);
-            foreach (var connId in lostConnections)
+                .Where(kv => kv.Value == previousOwnerId);
+            foreach (var (connId, recipientUserId) in lostConnections)
             {
+                var shouldNotify = state!.GameMode != GameMode.Alliances
+                    || state.Phase != GamePhase.Playing
+                    || (room.State.HostObserverMode && GameStateCommon.IsHost(room, recipientUserId));
+
+                if (!shouldNotify)
+                {
+                    var visibleHexKeys = visibilityService.ComputeVisibleHexKeys(state, recipientUserId);
+                    shouldNotify = visibleHexKeys.Contains(HexService.Key(q, r));
+                }
+
+                if (!shouldNotify)
+                {
+                    continue;
+                }
+
                 await Clients.Client(connId).SendAsync("TileLost", new { Q = q, R = r, AttackerName = Username });
             }
         }
@@ -344,6 +567,259 @@ public partial class GameHub
         }
 
         await Clients.Group("global").SendAsync("GlobalHexUpdated", result);
+    }
+
+    public async Task<object?> ResolveTroopTransferTarget(double heading)
+    {
+        if (heading < 0 || heading > 360)
+        {
+            await SendError(InvalidRequestCode, "Invalid heading.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (target, error) = gameService.ResolveTroopTransferTarget(room.Code, UserId, heading);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        if (target is not { } resolved)
+            return null;
+
+        return new { recipientId = resolved.id, recipientName = resolved.name };
+    }
+
+    public async Task<object?> InitiateTroopTransfer(int amount, string recipientId)
+    {
+        if (amount <= 0)
+        {
+            await SendError(InvalidRequestCode, "Amount must be positive.");
+            return null;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (transferId, error) = gameService.InitiateTroopTransfer(room.Code, UserId, amount, recipientId);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        var transfer = room.State.ActiveTroopTransfers.FirstOrDefault(item => item.Id == transferId);
+        if (transfer != null)
+        {
+            var recipientConnId = room.ConnectionMap.FirstOrDefault(pair => pair.Value == recipientId).Key;
+            if (recipientConnId != null)
+            {
+                await Clients.Client(recipientConnId).SendAsync("TroopTransferReceived", new
+                {
+                    transferId = transfer.Id.ToString(),
+                    initiatorId = transfer.InitiatorId,
+                    initiatorName = transfer.InitiatorName,
+                    amount = transfer.Amount,
+                    expiresAt = transfer.ExpiresAt.ToString("O")
+                });
+            }
+        }
+
+        return new { transferId = transferId!.Value.ToString() };
+    }
+
+    public async Task RespondToTroopTransfer(string transferId, bool accepted)
+    {
+        if (!Guid.TryParse(transferId, out var parsedTransferId))
+        {
+            await SendError(InvalidRequestCode, "Invalid transfer ID.");
+            return;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var pendingTransfer = room.State.ActiveTroopTransfers.FirstOrDefault(item => item.Id == parsedTransferId);
+        var initiatorId = pendingTransfer?.InitiatorId;
+        var (state, error) = gameService.RespondToTroopTransfer(room.Code, UserId, parsedTransferId, accepted);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+        if (initiatorId != null && pendingTransfer != null)
+        {
+            var initiatorConnId = room.ConnectionMap.FirstOrDefault(pair => pair.Value == initiatorId).Key;
+            if (initiatorConnId != null)
+            {
+                await Clients.Client(initiatorConnId).SendAsync("TroopTransferResult", new
+                {
+                    accepted,
+                    amount = pendingTransfer.Amount,
+                    recipientName = pendingTransfer.RecipientName,
+                    initiatorName = pendingTransfer.InitiatorName
+                });
+            }
+        }
+    }
+
+    public async Task<object?> InitiateFieldBattle()
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return null;
+        }
+
+        var (battle, error) = gameService.InitiateFieldBattle(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return null;
+        }
+
+        var snapshot = gameService.GetStateSnapshot(room.Code);
+        if (snapshot != null)
+            await BroadcastState(room.Code, snapshot);
+
+        var enemyIds = room.State.Players
+            .Where(player => player.CurrentHexQ == battle!.Q
+                && player.CurrentHexR == battle.R
+                && player.AllianceId != battle.InitiatorAllianceId
+                && player.CarriedTroops > 0)
+            .Select(player => player.Id)
+            .ToList();
+        var invite = new
+        {
+            battleId = battle!.Id.ToString(),
+            initiatorName = battle.InitiatorName,
+            initiatorAllianceName = room.State.Alliances
+                .FirstOrDefault(alliance => alliance.Id == battle.InitiatorAllianceId)?.Name ?? "",
+            q = battle.Q,
+            r = battle.R,
+            joinDeadline = battle.JoinDeadline.ToString("O")
+        };
+        foreach (var enemyId in enemyIds)
+        {
+            foreach (var (connId, uid) in room.ConnectionMap)
+            {
+                if (uid == enemyId)
+                    await Clients.Client(connId).SendAsync("FieldBattleInvite", invite);
+            }
+        }
+
+        var capturedBattleId = battle.Id;
+        var capturedRoomCode = room.Code;
+        var capturedHubContext = hubContext;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30));
+            var resolvedRoom = gameService.GetRoom(capturedRoomCode);
+            if (resolvedRoom == null)
+                return;
+
+            var (state, result, resolveError) = gameService.ResolveFieldBattle(capturedRoomCode, capturedBattleId);
+            if (resolveError != null || state == null)
+                return;
+
+            await capturedHubContext.Clients.Group(capturedRoomCode).SendAsync("StateUpdated", state);
+            if (result != null)
+            {
+                foreach (var participantId in result.AllParticipantIds)
+                {
+                    foreach (var (connId, uid) in resolvedRoom.ConnectionMap)
+                    {
+                        if (uid == participantId)
+                        {
+                            await capturedHubContext.Clients.Client(connId)
+                                .SendAsync("FieldBattleResolved", new
+                                {
+                                    battleId = result.BattleId.ToString(),
+                                    initiatorWon = result.InitiatorWon,
+                                    initiatorName = result.InitiatorName,
+                                    q = result.Q,
+                                    r = result.R,
+                                    initiatorTroopsLost = result.InitiatorTroopsLost,
+                                    enemyTroopsLost = result.EnemyTroopsLost,
+                                    noEnemiesJoined = result.NoEnemiesJoined
+                                });
+                        }
+                    }
+                }
+            }
+        });
+
+        return new { battleId = battle.Id.ToString() };
+    }
+
+    public async Task JoinFieldBattle(string battleId)
+    {
+        if (!Guid.TryParse(battleId, out var parsedBattleId))
+        {
+            await SendError(InvalidRequestCode, "Invalid battle ID.");
+            return;
+        }
+
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var error = gameService.JoinFieldBattle(room.Code, UserId, parsedBattleId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        var (state, result, resolveError) = gameService.ResolveFieldBattle(room.Code, parsedBattleId);
+        if (resolveError != null || state == null)
+            return;
+
+        await BroadcastState(room.Code, state);
+        if (result != null)
+        {
+            foreach (var participantId in result.AllParticipantIds)
+            {
+                foreach (var (connId, uid) in room.ConnectionMap)
+                {
+                    if (uid == participantId)
+                    {
+                        await Clients.Client(connId).SendAsync("FieldBattleResolved", new
+                        {
+                            battleId = result.BattleId.ToString(),
+                            initiatorWon = result.InitiatorWon,
+                            initiatorName = result.InitiatorName,
+                            q = result.Q,
+                            r = result.R,
+                            initiatorTroopsLost = result.InitiatorTroopsLost,
+                            enemyTroopsLost = result.EnemyTroopsLost,
+                            noEnemiesJoined = result.NoEnemiesJoined
+                        });
+                    }
+                }
+            }
+        }
     }
 
     public async Task JoinGlobalMap(double lat, double lng)

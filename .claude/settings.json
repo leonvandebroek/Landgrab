@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "landgrab": {
+      "type": "stdio",
+      "command": "./tools/landgrab-agent-mcp/node_modules/.bin/tsx",
+      "args": ["./tools/landgrab-agent-mcp/src/server.ts"]
+    }
+  }
+}

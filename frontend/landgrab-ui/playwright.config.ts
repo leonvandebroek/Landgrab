@@ -1,4 +1,7 @@
+/// <reference types="node" />
 import { defineConfig, devices } from '@playwright/test';
+
+export {};
 
 export default defineConfig({
   testDir: './e2e',
@@ -19,13 +22,17 @@ export default defineConfig({
       name: 'localization',
       testDir: './e2e',
       testMatch: /^(?!.*\.gameplay\.).*\.spec\.ts$/,
-      use: { browserName: 'chromium' },
+      use: { browserName: 'chromium', 
+            headless: false,
+            ...devices['iPhone 15 Pro'] },
     },
     {
       name: 'setup',
       testDir: './e2e',
       testMatch: /setup\.ts$/,
-      use: { browserName: 'chromium' },
+      use: { browserName: 'chromium',
+            headless: false,
+            ...devices['iPhone 15 Pro'] },
     },
     {
       name: 'gameplay',
@@ -39,7 +46,7 @@ export default defineConfig({
             ...devices['iPhone 15 Pro'],
         video: 'on-first-retry',
         screenshot: 'only-on-failure',
-        trace: 'on-first-retry',
+        trace: 'on-first-retry'
       },
     },
   ],

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface LocationPoint {
@@ -30,6 +31,7 @@ export function DebugLocationPanel({
   onStepByHex
 }: Props) {
   const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState(true);
 
   function handleToggle() {
     if (enabled) {
@@ -41,21 +43,31 @@ export function DebugLocationPanel({
 
   return (
     <aside
-      className={`debug-gps-panel compact${enabled ? ' is-active' : ''}`}
+      className={`debug-gps-panel compact${enabled ? ' is-active' : ''}${collapsed ? ' collapsed' : ''}`}
       data-testid="debug-gps-panel"
       aria-labelledby="debug-gps-title"
     >
-      <button
-        type="button"
-        className={`btn-secondary small${enabled ? ' is-active' : ''}`}
-        data-testid="debug-gps-toggle"
-        onClick={handleToggle}
-        disabled={!enabled && !mapCenter}
-      >
-        {enabled ? t('debugGps.disable') : t('debugGps.enableLocation')}
-      </button>
+      <div className="debug-gps-collapse-row">
+        <button
+          type="button"
+          className={`btn-secondary small${enabled ? ' is-active' : ''}`}
+          data-testid="debug-gps-toggle"
+          onClick={handleToggle}
+          disabled={!enabled && !mapCenter}
+        >
+          {enabled ? t('debugGps.disable') : t('debugGps.enableLocation')}
+        </button>
+        <button
+          type="button"
+          className="debug-gps-collapse-toggle"
+          onClick={() => setCollapsed(c => !c)}
+          aria-label={collapsed ? 'Expand debug GPS' : 'Collapse debug GPS'}
+        >
+          {collapsed ? '▼' : '▲'}
+        </button>
+      </div>
 
-      <div className="debug-gps-step-grid compact">
+      {!collapsed && <div className="debug-gps-step-grid compact">
         <span className="debug-gps-step-spacer" />
         <button
           type="button"
@@ -97,7 +109,7 @@ export function DebugLocationPanel({
           {t('debugGps.stepSouth')}
         </button>
         <span className="debug-gps-step-spacer" />
-      </div>
+      </div>}
     </aside>
   );
 }

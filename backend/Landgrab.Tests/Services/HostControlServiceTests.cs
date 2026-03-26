@@ -83,26 +83,18 @@ public sealed class HostControlServiceTests
         var (context, service) = CreateService(state, hostId);
         var dynamics = new GameDynamics
         {
-            TerrainEnabled = true,
             PlayerRolesEnabled = true,
-            FogOfWarEnabled = true,
             HQEnabled = true,
-            HQAutoAssign = true,
-            TimedEscalationEnabled = true,
-            UnderdogPactEnabled = true
+            HQAutoAssign = true
         };
 
         var result = service.UpdateGameDynamicsLive(ServiceTestContext.RoomCode, hostId, dynamics);
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
-        context.State.Dynamics.TerrainEnabled.Should().BeTrue();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeTrue();
-        context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.HQAutoAssign.Should().BeTrue();
-        context.State.Dynamics.TimedEscalationEnabled.Should().BeTrue();
-        context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
         context.State.EventLog.Should().ContainSingle(entry =>
             entry.Type == "HostAction" &&
             entry.Message == "Host updated game dynamics.");

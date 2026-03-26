@@ -34,6 +34,7 @@ interface Props {
     onSetWinCondition: (type: WinConditionType, value: number) => void;
     onSetBeaconEnabled: (enabled: boolean) => void;
     onSetTileDecayEnabled: (enabled: boolean) => void;
+    onSetEnemySightingMemory: (seconds: number) => void;
     onSetGameDynamics: (dynamics: GameDynamics) => void;
     onSetPlayerRole?: (role: string) => void;
     onSetMasterTileByHex: (q: number, r: number) => void;
@@ -72,6 +73,7 @@ export function SetupWizard({
     onSetWinCondition,
     onSetBeaconEnabled,
     onSetTileDecayEnabled,
+    onSetEnemySightingMemory,
     onSetGameDynamics,
     onSetMasterTileByHex,
     onAssignStartingTile,
@@ -119,6 +121,13 @@ export function SetupWizard({
     const [step, setStep] = useState(() => serverWizardStep ?? deriveStep());
     const effectiveStep = clampWizardStep(serverWizardStep ?? step, totalSteps);
 
+    // Optimistic flag: set as soon as the user submits any location (GPS or manual).
+    // Prevents the Next button from remaining disabled during the round-trip window
+    // between invoking SetMapLocation and receiving the updated hasMapLocation from the server.
+    const [locationApplied, setLocationApplied] = useState(
+        () => gameState.hasMapLocation && gameState.mapLat != null && gameState.mapLng != null,
+    );
+
     const syncWizardStep = useCallback(async (nextStep: number) => {
         const normalizedStep = clampWizardStep(nextStep, totalSteps);
         setStep(normalizedStep);
@@ -139,6 +148,7 @@ export function SetupWizard({
 
     const handleSetMapLocation = useCallback((lat: number, lng: number) => {
         onSetMapLocation(lat, lng);
+        setLocationApplied(true);
 
         if (effectiveStep === 0) {
             void syncWizardStep(1);
@@ -148,7 +158,7 @@ export function SetupWizard({
     const canGoNext = useMemo(() => {
         switch (effectiveStep) {
             case 0:
-                return stepComplete.location;
+                return stepComplete.location || locationApplied;
             case 1:
                 return stepComplete.teams;
             case 2:
@@ -158,7 +168,7 @@ export function SetupWizard({
             default:
                 return effectiveStep < totalSteps - 1;
         }
-    }, [effectiveStep, stepComplete, totalSteps]);
+    }, [effectiveStep, locationApplied, stepComplete, totalSteps]);
 
     const canStart = useMemo(() => {
         return gameState.players.length >= 2
@@ -274,6 +284,7 @@ export function SetupWizard({
                             isHost={isHost}
                             onSetBeaconEnabled={onSetBeaconEnabled}
                             onSetTileDecayEnabled={onSetTileDecayEnabled}
+                            onSetEnemySightingMemory={onSetEnemySightingMemory}
                             onSetGameDynamics={onSetGameDynamics}
                         />
                     )}
@@ -320,6 +331,11 @@ export function SetupWizard({
                     </div>
 
                     <div className="wizard-footer-right">
+                        {effectiveStep === 0 && !canGoNext && (
+                            <p className="wizard-hint wizard-hint-inline" data-testid="wizard-location-required-hint">
+                                {t('wizard.locationRequired')}
+                            </p>
+                        )}
                         {effectiveStep < totalSteps - 1 && (
                             <button
                                 type="button"

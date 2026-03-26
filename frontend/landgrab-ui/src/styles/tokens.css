@@ -1,0 +1,72 @@
+:root {
+  /* ── Z-Index Scale ── */
+  --z-map-base: 0;
+  --z-map-overlays: 10;
+  --z-map-markers: 20;
+  --z-map-floating: 50;
+  --z-hud-base: 100;
+  --z-hud-overlay: 800;
+  --z-hud-active: 200;
+  --z-notifs: 300;
+  --z-modal-sheet: 400;
+  --z-modal: 500;
+  --z-critical: 999;
+
+  /* ── Spacing ── */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --edge-inset: 16px;
+
+  /* ── Glass Surfaces ── */
+  --surface-glass: rgba(8, 12, 18, 0.92);
+  --surface-glass-elevated: rgba(15, 20, 28, 0.88);
+  --surface-glass-heavy: rgba(8, 12, 18, 0.92);
+  --surface-glass-border: rgba(120, 190, 255, 0.12);
+  --surface-glass-border-active: rgba(120, 190, 255, 0.3);
+  --blur-standard: blur(16px) saturate(180%);
+  --blur-heavy: blur(24px) saturate(200%);
+  --inset-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+
+  /* ── Scanner Blue Palette ── */
+  --scanner-blue: rgb(120, 190, 255);
+  --scanner-blue-dim: rgba(120, 190, 255, 0.6);
+  --scanner-blue-faint: rgba(120, 190, 255, 0.15);
+  --glow-blue: 0 0 12px rgba(120, 190, 255, 0.25);
+  --scanner-green: rgb(46, 204, 113);
+  --scanner-red: rgb(231, 76, 60);
+  --scanner-amber: rgb(255, 170, 0);
+
+  /* ── Text ── */
+  --text-primary: #f0f4f8;
+  --text-secondary: #94a3b8;
+  --text-muted: rgba(255, 255, 255, 0.5);
+  --font-mono: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  --font-tactical: 'Share Tech Mono', 'SF Mono', ui-monospace, monospace;
+  --radius-control: 50%;
+
+  /* Geometric tokens for angular/chamfered shapes */
+  --radius-sharp: 3px;
+  --radius-clip: 6px;
+  --clip-chamfer: polygon(8px 0%, calc(100% - 8px) 0%, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0% calc(100% - 8px), 0% 8px);
+
+  /* Scanner color extensions */
+  --scanner-amber: rgb(255, 170, 0);
+  --scanner-blue-dim: rgba(120, 190, 255, 0.5);
+  --scanner-red: rgb(231, 76, 60);
+
+  /* ── PlayerHUD height tracking ── */
+  --player-hud-h: 0px;
+  --player-hud-safe-inset: 0px;
+}
+
+.tactical-glass {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: var(--blur-standard);
+  backdrop-filter: var(--blur-standard);
+  border: 1px solid var(--surface-glass-border);
+}

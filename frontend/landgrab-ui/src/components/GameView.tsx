@@ -7,11 +7,13 @@ import { HostControlPlane } from './game/HostControlPlane';
 import { LoadingFallback } from './LoadingFallback';
 import { TroopDeployModal } from './game/TroopDeployModal';
 import { useGameStore } from '../stores/gameStore';
-import { useGameplayStore } from '../stores/gameplayStore';
+import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
 import type { GameDynamics, HexCell } from '../types/game';
 import type { PlayerDisplayPreferences } from '../types/playerPreferences';
 import type { TileAction, TileActionType } from './game/tileInteraction';
+import type { InvokeFn } from '../types/abilities';
+import type { LocationPoint } from '../types/common';
 
 // Heavy components loaded lazily — same split as original App.
 const GameMap = lazy(() =>
@@ -20,11 +22,6 @@ const GameMap = lazy(() =>
 const PlayingHud = lazy(() =>
   import('./game/PlayingHud').then(m => ({ default: m.PlayingHud }))
 );
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
 
 /** All game-action callbacks sourced from useGameActions in App. */
 export interface GameViewActions {
@@ -36,12 +33,6 @@ export interface GameViewActions {
   onCurrentHexAction: (actionType: TileActionType) => void;
   onDismissTileActions: () => void;
   onConfirmAttack: () => Promise<void>;
-  onActivateBeacon: () => Promise<void>;
-  onDeactivateBeacon: () => Promise<void>;
-  onActivateTacticalStrike: () => Promise<void>;
-  onActivateReinforce: () => Promise<void>;
-  onActivateEmergencyRepair: () => Promise<void>;
-  onStartDemolish: () => Promise<void>;
   onSetObserverMode: (enabled: boolean) => void;
   onUpdateDynamicsLive: (dynamics: GameDynamics) => void;
   onSendHostMessage: (message: string, allianceIds?: string[]) => void;
@@ -68,13 +59,15 @@ export interface GameViewProps {
   onNavigateMap: (lat: number, lng: number) => void;
   debugToggle: ReactNode;
   debugPanel: ReactNode;
+  /** Single invoke function for all SignalR hub calls. */
+  invoke: InvokeFn | null;
   actions: GameViewActions;
 }
 
 /**
  * Renders the full in-game UI for `view === 'game'`.
  *
- * Reads gameState, selectedHex, combatPreview, combatResult, hasAcknowledgedRules, error,
+ * Reads gameState, selectedHexKey, combatPreview, combatResult, hasAcknowledgedRules, error,
  * setMainMapBounds and setSelectedHexScreenPos directly from Zustand stores.
  * Delegates everything else through props to keep App as a thin orchestrator.
  */
@@ -90,11 +83,12 @@ export function GameView({
   onNavigateMap,
   debugToggle,
   debugPanel,
+  invoke,
   actions,
 }: GameViewProps) {
   // ── Store reads ─────────────────────────────────────────────────────────
   const gameState = useGameStore(state => state.gameState);
-  const selectedHex = useGameplayStore(state => state.selectedHex);
+  const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
   const combatPreview = useGameplayStore(state => state.combatPreview);
   const combatResult = useGameplayStore(state => state.combatResult);
   const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
@@ -131,6 +125,13 @@ export function GameView({
     if (!gameState) return null;
     return gameState.players.find(p => p.id === userId) ?? null;
   }, [gameState, userId]);
+  const selectedHex = useMemo<[number, number] | null>(() => {
+    if (!selectedHexKey) {
+      return null;
+    }
+
+    return selectedHexKey.split(',').map(Number) as [number, number];
+  }, [selectedHexKey]);
   const isHost = myPlayer?.isHost ?? false;
 
   // Host GPS-bypass: suppress location error banner when host is bypassing GPS
@@ -195,12 +196,7 @@ export function GameView({
           currentHexActions={actions.currentHexActions}
           onCurrentHexAction={actions.onCurrentHexAction}
           onDismissTileActions={actions.onDismissTileActions}
-          onActivateBeacon={actions.onActivateBeacon}
-          onDeactivateBeacon={actions.onDeactivateBeacon}
-          onActivateTacticalStrike={actions.onActivateTacticalStrike}
-          onActivateReinforce={actions.onActivateReinforce}
-          onActivateEmergencyRepair={actions.onActivateEmergencyRepair}
-          onStartDemolish={actions.onStartDemolish}
+          invoke={invoke}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
           currentPlayerName={currentPlayerName}

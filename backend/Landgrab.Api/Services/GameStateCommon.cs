@@ -29,6 +29,29 @@ internal static class GameStateCommon
         state.EventLog.RemoveRange(0, state.EventLog.Count - MaxEventLogEntries);
     }
 
+    internal static void SyncBeaconStateForRole(GameState state, PlayerDto player)
+    {
+        if (!state.Dynamics.PlayerRolesEnabled)
+            return;
+
+        if (player.Role == PlayerRole.Scout)
+        {
+            player.IsBeacon = true;
+            if (player.CurrentLat.HasValue)
+                player.BeaconLat = player.CurrentLat.Value;
+            if (player.CurrentLng.HasValue)
+                player.BeaconLng = player.CurrentLng.Value;
+            if (player.CurrentHeading.HasValue)
+                player.BeaconHeading = HexService.NormalizeHeading(player.CurrentHeading.Value);
+            return;
+        }
+
+        player.IsBeacon = false;
+        player.BeaconLat = null;
+        player.BeaconLng = null;
+        player.BeaconHeading = null;
+    }
+
     internal static GameState SnapshotState(GameState state)
     {
         return new GameState
@@ -51,6 +74,7 @@ internal static class GameStateCommon
                 CarriedTroopsSourceR = player.CarriedTroopsSourceR,
                 CurrentLat = player.CurrentLat,
                 CurrentLng = player.CurrentLng,
+                CurrentHeading = player.CurrentHeading,
                 CurrentHexQ = player.CurrentHexQ,
                 CurrentHexR = player.CurrentHexR,
                 IsHost = player.IsHost,
@@ -60,23 +84,37 @@ internal static class GameStateCommon
                 IsBeacon = player.IsBeacon,
                 BeaconLat = player.BeaconLat,
                 BeaconLng = player.BeaconLng,
+                BeaconHeading = player.BeaconHeading,
+                ShareIntelCooldownUntil = player.ShareIntelCooldownUntil,
                 CommandoRaidCooldownUntil = player.CommandoRaidCooldownUntil,
+                TroopTransferCooldownUntil = player.TroopTransferCooldownUntil,
                 TacticalStrikeActive = player.TacticalStrikeActive,
                 TacticalStrikeExpiry = player.TacticalStrikeExpiry,
                 TacticalStrikeCooldownUntil = player.TacticalStrikeCooldownUntil,
+                TacticalStrikeTargetQ = player.TacticalStrikeTargetQ,
+                TacticalStrikeTargetR = player.TacticalStrikeTargetR,
                 RallyPointActive = player.RallyPointActive,
                 RallyPointDeadline = player.RallyPointDeadline,
                 RallyPointCooldownUntil = player.RallyPointCooldownUntil,
                 RallyPointQ = player.RallyPointQ,
                 RallyPointR = player.RallyPointR,
-                SabotageActive = player.SabotageActive,
-                SabotageStartedAt = player.SabotageStartedAt,
+                SabotageAlertNearby = player.SabotageAlertNearby,
+                InterceptTargetId = player.InterceptTargetId,
+                InterceptLockStartAt = player.InterceptLockStartAt,
+                FieldBattleCooldownUntil = player.FieldBattleCooldownUntil,
+                FortTargetQ = player.FortTargetQ,
+                FortTargetR = player.FortTargetR,
+                FortPerimeterVisited = [.. player.FortPerimeterVisited],
                 SabotageTargetQ = player.SabotageTargetQ,
                 SabotageTargetR = player.SabotageTargetR,
+                SabotagePerimeterVisited = [.. player.SabotagePerimeterVisited],
                 SabotageCooldownUntil = player.SabotageCooldownUntil,
-                DemolishActive = player.DemolishActive,
+                SabotageBlockedTiles = player.SabotageBlockedTiles.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal),
                 DemolishTargetKey = player.DemolishTargetKey,
-                DemolishStartedAt = player.DemolishStartedAt,
+                DemolishApproachDirectionsMade = [.. player.DemolishApproachDirectionsMade],
+                DemolishFacingLockStartAt = player.DemolishFacingLockStartAt,
+                DemolishFacingHexKey = player.DemolishFacingHexKey,
+                PreviousHexKey = player.PreviousHexKey,
                 DemolishCooldownUntil = player.DemolishCooldownUntil
             }).ToList(),
             Alliances = state.Alliances.Select(alliance => new AllianceDto
@@ -89,7 +127,6 @@ internal static class GameStateCommon
                 HQHexQ = alliance.HQHexQ,
                 HQHexR = alliance.HQHexR,
                 ClaimFrozenUntil = alliance.ClaimFrozenUntil,
-                UnderdogBoostUntil = alliance.UnderdogBoostUntil
             }).ToList(),
             EventLog = state.EventLog.Select(entry => new GameEventLogEntry
             {
@@ -119,11 +156,18 @@ internal static class GameStateCommon
                     OwnerName = entry.Value.OwnerName,
                     OwnerColor = entry.Value.OwnerColor,
                     Troops = entry.Value.Troops,
+                    VisibilityTier = entry.Value.VisibilityTier,
+                    LastKnownTroops = entry.Value.LastKnownTroops,
+                    LastKnownOwnerId = entry.Value.LastKnownOwnerId,
+                    LastKnownOwnerName = entry.Value.LastKnownOwnerName,
+                    LastKnownOwnerColor = entry.Value.LastKnownOwnerColor,
+                    LastKnownOwnerAllianceId = entry.Value.LastKnownOwnerAllianceId,
+                    LastKnownIsFort = entry.Value.LastKnownIsFort,
+                    LastKnownIsMasterTile = entry.Value.LastKnownIsMasterTile,
+                    LastSeenAt = entry.Value.LastSeenAt,
                     IsMasterTile = entry.Value.IsMasterTile,
-                    TerrainType = entry.Value.TerrainType,
                     IsFortified = entry.Value.IsFortified,
                     LastVisitedAt = entry.Value.LastVisitedAt,
-                    EngineerBuiltAt = entry.Value.EngineerBuiltAt,
                     IsFort = entry.Value.IsFort,
                     SabotagedUntil = entry.Value.SabotagedUntil,
                 }),
@@ -139,15 +183,14 @@ internal static class GameStateCommon
             Dynamics = new GameDynamics
             {
                 BeaconEnabled = state.Dynamics.BeaconEnabled,
+                BeaconSectorAngle = state.Dynamics.BeaconSectorAngle,
                 TileDecayEnabled = state.Dynamics.TileDecayEnabled,
-                TerrainEnabled = state.Dynamics.TerrainEnabled,
                 CombatMode = state.Dynamics.CombatMode,
                 PlayerRolesEnabled = state.Dynamics.PlayerRolesEnabled,
-                FogOfWarEnabled = state.Dynamics.FogOfWarEnabled,
                 HQEnabled = state.Dynamics.HQEnabled,
                 HQAutoAssign = state.Dynamics.HQAutoAssign,
-                TimedEscalationEnabled = state.Dynamics.TimedEscalationEnabled,
-                UnderdogPactEnabled = state.Dynamics.UnderdogPactEnabled,
+                EnemySightingMemorySeconds = state.Dynamics.EnemySightingMemorySeconds,
+                FieldBattleResolutionMode = state.Dynamics.FieldBattleResolutionMode,
             },
             GameDurationMinutes = state.GameDurationMinutes,
             MasterTileQ = state.MasterTileQ,
@@ -178,7 +221,39 @@ internal static class GameStateCommon
                 InitiatorPlayerName = r.InitiatorPlayerName,
                 Deadline = r.Deadline,
                 IsHQRaid = r.IsHQRaid
-            }).ToList()
+            }).ToList(),
+            ActiveTroopTransfers = state.ActiveTroopTransfers.Select(transfer => new ActiveTroopTransfer
+            {
+                Id = transfer.Id,
+                InitiatorId = transfer.InitiatorId,
+                InitiatorName = transfer.InitiatorName,
+                RecipientId = transfer.RecipientId,
+                RecipientName = transfer.RecipientName,
+                Amount = transfer.Amount,
+                ExpiresAt = transfer.ExpiresAt
+            }).ToList(),
+            ActiveFieldBattles = state.ActiveFieldBattles.Select(battle => new ActiveFieldBattle
+            {
+                Id = battle.Id,
+                InitiatorId = battle.InitiatorId,
+                InitiatorName = battle.InitiatorName,
+                InitiatorAllianceId = battle.InitiatorAllianceId,
+                Q = battle.Q,
+                R = battle.R,
+                InitiatorTroops = battle.InitiatorTroops,
+                JoinDeadline = battle.JoinDeadline,
+                JoinedEnemyIds = [.. battle.JoinedEnemyIds],
+                Resolved = battle.Resolved
+            }).ToList(),
+            ContestedEdges = state.ContestedEdges?.Select(edge => new ContestedEdgeDto
+            {
+                HexKeyA = edge.HexKeyA,
+                HexKeyB = edge.HexKeyB,
+                NeighborIndex = edge.NeighborIndex,
+                TeamAColor = edge.TeamAColor,
+                TeamBColor = edge.TeamBColor,
+                Intensity = edge.Intensity
+            }).ToList(),
         };
     }
 

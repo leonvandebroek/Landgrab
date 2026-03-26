@@ -98,12 +98,6 @@ public GameStateBuilder WithPaused(bool isPaused = true)
         return this;
     }
 
-    public GameStateBuilder WithTerrainEnabled(bool enabled = true)
-    {
-        _state.Dynamics.TerrainEnabled = enabled;
-        return this;
-    }
-
     public GameStateBuilder WithPlayerRolesEnabled(bool enabled = true)
     {
         _state.Dynamics.PlayerRolesEnabled = enabled;
@@ -173,12 +167,6 @@ public GameStateBuilder AddPlayer(string id, string name, string? allianceId = n
     public GameStateBuilder WithTroops(int q, int r, int troops)
     {
         _state.Grid[HexService.Key(q, r)].Troops = troops;
-        return this;
-    }
-
-    public GameStateBuilder WithTerrain(int q, int r, TerrainType terrainType)
-    {
-        _state.Grid[HexService.Key(q, r)].TerrainType = terrainType;
         return this;
     }
 

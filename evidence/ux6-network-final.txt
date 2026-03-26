@@ -1,0 +1,12 @@
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[GET] http://localhost:5173/api/auth/me => [401] Unauthorized
+[POST] http://localhost:5173/api/auth/register => [200] OK
+[POST] http://localhost:5173/hub/game/negotiate?negotiateVersion=1 => [200] OK
+[GET] http://localhost:5173/api/auth/me => [200] OK
+[GET] http://localhost:5173/api/auth/me => [200] OK
+[POST] http://localhost:5173/hub/game/negotiate?negotiateVersion=1 => [200] OK
+[GET] http://localhost:5173/api/auth/me => [200] OK
+[GET] http://localhost:5173/api/auth/me => [200] OK
+[POST] http://localhost:5173/hub/game/negotiate?negotiateVersion=1 => [200] OK

@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "assignments": [
+    { "persistent_name": "Rembrandt", "universe": "dutch-golden-age", "role": "Lead", "folder": "rembrandt", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Vermeer", "universe": "dutch-golden-age", "role": "Frontend Dev", "folder": "vermeer", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "De Ruyter", "universe": "dutch-golden-age", "role": "Backend Dev", "folder": "de-ruyter", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Spinoza", "universe": "dutch-golden-age", "role": "Tester/QA", "folder": "spinoza", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Tasman", "universe": "dutch-golden-age", "role": "DevOps", "folder": "tasman", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Hals", "universe": "dutch-golden-age", "role": "Designer/UX", "folder": "hals", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Grotius", "universe": "dutch-golden-age", "role": "Security", "folder": "grotius", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Huygens", "universe": "dutch-golden-age", "role": "Data/DB", "folder": "huygens", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Erasmus", "universe": "dutch-golden-age", "role": "Docs/DevRel", "folder": "erasmus", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Vondel", "universe": "dutch-golden-age", "role": "Game Designer", "folder": "vondel", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Steen", "universe": "dutch-golden-age", "role": "Playtester", "folder": "steen", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Scribe", "universe": "exempt", "role": "Session Logger", "folder": "scribe", "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" },
+    { "persistent_name": "Ralph", "universe": "exempt", "role": "Work Monitor", "folder": null, "created_at": "2026-03-22T12:32:22Z", "legacy_named": false, "status": "active" }
+  ]
+}

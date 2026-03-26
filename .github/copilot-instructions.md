@@ -24,7 +24,7 @@ There is no test suite currently.
 
 Two game modes with distinct persistence models:
 - **Alliances (room-based):** Fully in-memory. `GameService` (Singleton) owns all active room state in a `ConcurrentDictionary`. Rooms disappear when the server restarts.
-- **Free-for-All (global map):** Persistent via PostgreSQL. `GlobalMapService` (Scoped) reads/writes `GlobalHex` rows.
+- **Free-for-All (global map):** Persistent via SQL Server. `GlobalMapService` (Scoped) reads/writes `GlobalHex` rows.
 
 **Request flow:**
 1. Auth (HTTP): `POST /api/auth/*` → returns JWT
@@ -80,7 +80,7 @@ context.User?.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
 Required env/config values:
 | Key | Notes |
 |-----|-------|
-| `ConnectionStrings:DefaultConnection` | PostgreSQL connection string |
+| `ConnectionStrings:DefaultConnection` | SQL Server connection string |
 | `Jwt:Secret` | Min 32 chars, validated on startup |
 | `App:BaseUrl` | Frontend URL used in password-reset emails |
 | `Azure:SignalR:ConnectionString` | Optional; omit to use local SignalR |

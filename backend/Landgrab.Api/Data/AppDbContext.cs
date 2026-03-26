@@ -42,6 +42,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         model.Entity<GlobalHex>(e =>
         {
             e.HasKey(h => new { h.Q, h.R });
+            e.HasOne(h => h.Owner)
+                .WithMany()
+                .HasForeignKey(h => h.OwnerUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(h => h.OwnerAlliance)
+                .WithMany()
+                .HasForeignKey(h => h.OwnerAllianceId)
+                .OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(h => h.OwnerUserId);
             e.HasIndex(h => h.OwnerAllianceId);
         });

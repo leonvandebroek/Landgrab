@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import type { GameState, CombatResult, GameDynamics, NeutralClaimResult, Player } from '../types/game';
+import type { CombatResult, FieldBattleInvite, FieldBattleResult, GameDynamics, GameState, NeutralClaimResult, Player, TroopTransferRequest, TroopTransferResult } from '../types/game';
+import { recordAgentEvent, setAgentConnectionStatus } from '../testing/agentBridge';
 
 const AUTO_RECONNECT_DELAYS = [0, 1000, 2000, 5000, 10000, 15000, 30000, 30000, 30000, 30000, 60000, 60000, 60000];
 const MANUAL_RECONNECT_DELAY_MS = 15000;
@@ -16,6 +17,10 @@ export interface GameEvents {
   onNeutralClaimResult?: (result: NeutralClaimResult) => void;
   onDrainTick?: (data: { q: number; r: number; troopsLost: number; allianceId: string | null }) => void;
   onDynamicsChanged?: (dynamics: GameDynamics) => void;
+  onTroopTransferReceived?: (data: TroopTransferRequest) => void;
+  onTroopTransferResult?: (data: TroopTransferResult) => void;
+  onFieldBattleInvite?: (data: FieldBattleInvite) => void;
+  onFieldBattleResolved?: (data: FieldBattleResult) => void;
   onGameOver?: (data: { winnerId: string; winnerName: string; isAllianceVictory: boolean }) => void;
   onTileLost?: (data: { Q: number; R: number; AttackerName: string }) => void;
   onGlobalHexUpdated?: (hex: unknown) => void;
@@ -139,12 +144,22 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('TemplateSaved', (data: { templateId: string; name: string }) => eventsRef.current.onTemplateSaved?.(data));
     conn.on('DrainTick', (data: { q: number; r: number; troopsLost: number; allianceId: string | null }) => eventsRef.current.onDrainTick?.(data));
     conn.on('DynamicsChanged', (dynamics: GameDynamics) => eventsRef.current.onDynamicsChanged?.(dynamics));
+    conn.on('TroopTransferReceived', (data: TroopTransferRequest) =>
+      eventsRef.current.onTroopTransferReceived?.(data));
+    conn.on('TroopTransferResult', (data: TroopTransferResult) =>
+      eventsRef.current.onTroopTransferResult?.(data));
+    conn.on('FieldBattleInvite', (data: FieldBattleInvite) =>
+      eventsRef.current.onFieldBattleInvite?.(data));
+    conn.on('FieldBattleResolved', (data: FieldBattleResult) =>
+      eventsRef.current.onFieldBattleResolved?.(data));
 
     conn.onreconnecting(() => {
       if (!disposed) {
         clearManualReconnect();
         setConnected(false);
         setReconnecting(true);
+        setAgentConnectionStatus(false, true);
+        recordAgentEvent('SignalRConnectionStateChanged', { state: 'reconnecting' });
       }
     });
 
@@ -153,6 +168,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
         clearManualReconnect();
         setConnected(true);
         setReconnecting(false);
+        setAgentConnectionStatus(true, false);
+        recordAgentEvent('SignalRConnectionStateChanged', { state: 'connected' });
         eventsRef.current.onReconnected?.();
       }
     });
@@ -161,6 +178,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
       if (!disposed) {
         setConnected(false);
         setReconnecting(true);
+        setAgentConnectionStatus(false, true);
+        recordAgentEvent('SignalRConnectionStateChanged', { state: 'disconnected' });
         scheduleManualReconnect(conn, isDisposed);
       }
     });
@@ -176,11 +195,15 @@ export function useSignalR(token: string | null, events: GameEvents) {
           clearManualReconnect();
           setConnected(true);
           setReconnecting(false);
+          setAgentConnectionStatus(true, false);
+          recordAgentEvent('SignalRConnectionStateChanged', { state: 'connected' });
         }
       } catch (err) {
         if (!disposed && !isExpectedStartAbort(err)) {
           setConnected(false);
           setReconnecting(true);
+          setAgentConnectionStatus(false, true);
+          recordAgentEvent('SignalRConnectionStateChanged', { state: 'reconnecting' });
           scheduleManualReconnect(conn, isDisposed);
         }
       }
@@ -195,6 +218,7 @@ export function useSignalR(token: string | null, events: GameEvents) {
       }
       setConnected(false);
       setReconnecting(false);
+      setAgentConnectionStatus(false, false);
       void conn.stop();
     };
   }, [clearManualReconnect, scheduleManualReconnect, token]);

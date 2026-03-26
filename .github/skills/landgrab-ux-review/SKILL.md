@@ -23,6 +23,17 @@ Use this skill when the playtester needs to:
 - The playtester has been executing a workflow (host-and-start, join-and-sync, or playturn).
 - Evidence capture should happen alongside gameplay, not as a separate pass.
 
+## Preferred MCP shortcuts
+
+Use these evidence-focused tools throughout the run:
+
+- `evidence_checkpoint` — screenshot + ARIA snapshot + console/network delta + state snapshot in one step
+- `evidence_compare_sessions` — aligned host/guest evidence at the same moment
+- `evidence_console_delta` — incremental console review
+- `network_requests` — failed or slow `/api/*` and `/hub/*` requests
+- `signalr_status` and `wait_for_connection_state` — explicit connection-state verification
+- `assert_sessions_in_sync` — detect multiplayer desync before you classify the UX symptom
+
 ## Evidence Capture Checklist
 
 Capture a screenshot and check for console errors at each of these transitions:
@@ -80,6 +91,8 @@ At each evidence checkpoint:
    - Which phase the error occurred in
 4. Flag any errors that correlate with visible UI issues.
 
+Prefer `evidence_console_delta` so each checkpoint only inspects new errors and warnings since the last cursor.
+
 ## Network Request Monitoring
 
 Check for failed or slow network requests:
@@ -89,6 +102,8 @@ Check for failed or slow network requests:
 3. Flag any requests that took longer than 5 seconds.
 4. Record the endpoint, method, status code, and response time.
 5. Note any CORS errors or blocked requests.
+
+Use `network_requests` with `onlyFailures: true` or `minDurationMs: 5000` to keep the review focused on meaningful traffic.
 
 ## UX Issue Classification
 
@@ -186,6 +201,7 @@ Produce the final report in this structure:
 
 - **Be specific**: reference exact selectors, hex coordinates, and player names.
 - **Be evidence-first**: every finding must have a screenshot or console log reference.
+- Prefer `evidence_checkpoint` at phase transitions so screenshots, ARIA, console, network, and state all line up with the same moment in time.
 - **Be fair**: report what works well, not just what's broken.
 - **Be actionable**: each defect should include reproduction steps a developer can follow.
 - **Never modify source code** as part of a UX review. Only observe and report.

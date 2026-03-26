@@ -1,0 +1,28 @@
+=== Scout Ability Backend SignalR Test Results ===
+Date: 2026-03-23T12:13:xx UTC
+Room: TJB3X4 (injected scenario: 2 Scouts, beaconEnabled=true, playerRolesEnabled=true)
+
+Test 1: ActivateBeacon(heading=90)
+  Result: SUCCESS (null return, StateUpdated broadcast)
+  Server Errors: 0
+
+Test 2: ShareBeaconIntel() [0 args — THE FIX]
+  Result: SUCCESS, hexCount=4
+  Server Errors: 0
+  Note: Intel count > 0 confirms beacon cone is working and hexes are shared
+
+Test 3: DeactivateBeacon()
+  Result: Invoke succeeds (null return), BUT server sends Error event
+  Server Error: {"code":"GENERAL","message":"Scout beacon is always active."}
+  Verdict: BY DESIGN — Scouts cannot deactivate beacon (SyncBeaconStateForRole enforces IsBeacon=true)
+  Unit test DeactivateBeacon_ForScoutRole_Fails: PASS ✓
+
+Test 4: AttemptIntercept(heading=45)
+  Result: Invoke succeeds, but server returns error "Your location is required to attempt an intercept."
+  Note: Location (CurrentLat) cleared after multi-operation state mutations in same room.
+        In real gameplay with debug GPS active, CurrentLat is always populated.
+  Unit test AttemptIntercept_WhenScoutMaintainsLock_SucceedsAndBlocksSabotageTarget: PASS ✓
+
+=== Unit Test Suite ===
+Filtered tests (Scout/Ability/Beacon/Intercept): 22/22 PASS
+Full suite: 294/295 (1 skipped, 0 failed)

@@ -1,0 +1,204 @@
+/* Tricorder Map Design System */
+
+:root {
+  /* Typography */
+  --font-scifi-mono: "JetBrains Mono", "Share Tech Mono", monospace;
+
+  /* Core Palette */
+  --color-void: rgba(10, 15, 20, 0.85);
+  --color-void-solid: #0a0f14;
+  --color-phosphor-cyan: #00f3ff;
+  --color-phosphor-amber: #ffb000;
+  --color-phosphor-fuchsia: #e879f9;
+  --color-warning-red: #ff2a2a;
+
+  /* CRT Bloom & Glows */
+  --crt-glow-text-cyan: 0 0 4px var(--color-phosphor-cyan), 0 0 2px #fff;
+  --crt-glow-text-amber: 0 0 4px var(--color-phosphor-amber), 0 0 2px #fff;
+  --crt-glow-text-fuchsia: 0 0 4px var(--color-phosphor-fuchsia), 0 0 2px #fff;
+  --crt-glow-box-cyan: 0 0 6px rgba(0, 243, 255, 0.6);
+  --crt-glow-box-warning: 0 0 8px rgba(255, 42, 42, 0.8);
+
+  /* Structural */
+  --border-tech-thin: 1px solid;
+  --radius-tech-pill: 2px;
+  --radius-tech-sharp: 0px;
+  --badge-bg-void: rgba(11, 11, 20, 0.9);
+  --border-neutral: rgba(51, 65, 85, 0.3);
+  --glow-cyan: 0 0 8px rgba(0, 255, 255, 0.6);
+  --glow-warning: 0 0 8px rgba(255, 51, 51, 0.8);
+  --glow-fuchsia: 0 0 8px rgba(255, 0, 255, 0.6);
+  --font-mono: 'Share Tech Mono', 'Roboto Mono', 'JetBrains Mono', monospace;
+  --hq-amber: #f1c40f;
+  --hex-void-bg: rgba(10, 15, 20, 0.4);
+  --hex-grid-line: rgba(255, 255, 255, 0.08);
+  --status-gps: #00ffaa;
+  --status-select: #ffffff;
+  --status-contested: #FF00AA;
+  --status-raid: #ffaa00;
+  --status-build: #00ddff;
+  --team-fill-opacity: 0.25;
+  --team-border-interior: 0.05;
+  --team-border-frontier: 0.85;
+  --font-tactical: 'JetBrains Mono', 'Roboto Mono', monospace;
+}
+
+/* Contested border — marching ants scan line */
+@keyframes contested-scan {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -20; }
+}
+
+@keyframes StrobeCritical {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.2; }
+}
+
+@keyframes PulseSlow {
+  0%, 100% { stroke-opacity: 1; }
+  50% { stroke-opacity: 0.4; }
+}
+
+@keyframes MarchingAnts {
+  to { stroke-dashoffset: -20; }
+}
+
+@keyframes threat-breathe {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes heat-pulse {
+  0%, 100% {
+    opacity: 0.2;
+    filter: blur(0px);
+  }
+  50% {
+    opacity: 0.55;
+    filter: blur(1px);
+  }
+}
+
+@keyframes friction-march {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -24;
+    opacity: 0.7;
+  }
+}
+
+@keyframes spark-strobe {
+  0% { opacity: 0; stroke-dashoffset: 0; }
+  10% { opacity: 1; }
+  12%, 18% { opacity: 0; }
+  20% { opacity: 1; }
+  25%, 100% { opacity: 0; stroke-dashoffset: -13; }
+}
+
+/* HQ hex fill overdrive */
+.hex-polygon.is-hq {
+  animation: power-grid-flicker 3.5s ease-in-out infinite;
+}
+
+/* Fort hatch overlay polygon */
+.hex-fort-hatch-overlay {
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* Tricorder player marker components */
+.tricorder-chevron-marker {
+  pointer-events: none;
+}
+
+.tricorder-cluster-node {
+  font-family: var(--font-scifi-mono);
+  font-size: 8px;
+  fill: var(--color-phosphor-cyan);
+}
+
+/* GPS position crosshair */
+.hex-gps-crosshair {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Fog of War Visibility Tiers */
+
+/* Amber Archive — staleness tiers */
+.hex-polygon.hex-fading {
+  filter: sepia(0.6) saturate(0.6) hue-rotate(-20deg) brightness(0.9);
+  opacity: 0.85;
+  transition: filter 500ms ease-out, opacity 500ms ease-out;
+}
+
+.hex-polygon.hex-stale {
+  filter: sepia(0.9) saturate(0.5) hue-rotate(-25deg) brightness(0.8);
+  opacity: 0.7;
+  transition: filter 500ms ease-out, opacity 500ms ease-out;
+}
+
+/* Alias: hex-remembered maps to stale for any legacy references */
+.hex-polygon.hex-remembered {
+  filter: sepia(0.9) saturate(0.5) hue-rotate(-25deg) brightness(0.8);
+  opacity: 0.7;
+  transition: filter 500ms ease-out, opacity 500ms ease-out;
+}
+
+/* Hidden hostile tile — fogged out */
+.hex-polygon.hex-hidden-hostile {
+  opacity: 0.15;
+  filter: saturate(0) brightness(0.5);
+}
+
+/* Stale troop badge — amber glass, ~ prefix, amber glow */
+.stale-badge {
+  background: rgba(180, 140, 60, 0.85);
+  box-shadow: 0 0 4px rgba(255, 176, 0, 0.4);
+  color: #fff;
+}
+
+.tooltip-player-name--remembered {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* ── Compass & Ability Scanner Beams ── */
+
+@keyframes compass-beam-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.9; }
+}
+
+.compass-beam {
+  animation: compass-beam-pulse 2.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.4));
+}
+
+@keyframes ability-beam-sweep {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.5; }
+}
+
+.ability-beam {
+  animation: ability-beam-sweep 2s ease-in-out infinite;
+}
+
+.ability-beam--commander {
+  filter: drop-shadow(0 0 6px rgba(255, 176, 0, 0.4));
+}
+
+.ability-beam--scout {
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.4));
+}
+
+.ability-beam--engineer {
+  filter: drop-shadow(0 0 6px rgba(255, 179, 102, 0.4));
+}

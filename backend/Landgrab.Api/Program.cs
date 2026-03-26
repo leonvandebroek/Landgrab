@@ -5,6 +5,7 @@ using Landgrab.Api.Data;
 using Landgrab.Api.Endpoints;
 using Landgrab.Api.Hubs;
 using Landgrab.Api.Services;
+using Landgrab.Api.Services.Abilities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -21,17 +22,26 @@ builder.Services.AddResponseCompression(options =>
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null)));
 
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
 builder.Services.AddSingleton<GameStateService>();
+builder.Services.AddSingleton<DerivedMapStateService>();
+builder.Services.AddSingleton<VisibilityService>();
+builder.Services.AddSingleton<VisibilityBroadcastHelper>();
 builder.Services.AddSingleton<AllianceConfigService>();
 builder.Services.AddSingleton<MapAreaService>();
 builder.Services.AddSingleton<GameTemplateService>();
 builder.Services.AddSingleton<GameConfigService>();
 builder.Services.AddSingleton<LobbyService>();
-builder.Services.AddSingleton<AbilityService>();
+builder.Services.AddSingleton<RoleProgressService>();
+builder.Services.AddSingleton<CommanderAbilityService>();
+builder.Services.AddSingleton<ScoutAbilityService>();
+builder.Services.AddSingleton<EngineerAbilityService>();
+builder.Services.AddSingleton<SharedAbilityService>();
 builder.Services.AddSingleton<WinConditionService>();
 builder.Services.AddSingleton<GameplayService>();
 builder.Services.AddSingleton<HostControlService>();
@@ -40,9 +50,9 @@ builder.Services.AddSingleton<RoomPersistenceService>();
 builder.Services.AddScoped<GlobalMapService>();
 builder.Services.AddSingleton<JwtService>();
 builder.Services.AddSingleton<PasswordService>();
+builder.Services.AddSingleton<TokenBlocklist>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
-builder.Services.AddHttpClient<TerrainFetchService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 
@@ -65,7 +75,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.Zero
         };
 
-        // Support JWT in SignalR query string
+        // Support JWT in SignalR query string and cookies
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
@@ -81,6 +91,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     ctx.Token = cookieToken;
                 }
 
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = ctx =>
+            {
+                var blocklist = ctx.HttpContext.RequestServices.GetRequiredService<TokenBlocklist>();
+                var jti = ctx.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                if (jti is not null && blocklist.IsRevoked(jti))
+                    ctx.Fail("Token has been revoked.");
                 return Task.CompletedTask;
             }
         };
@@ -106,13 +124,18 @@ if (!string.IsNullOrEmpty(azureSignalRConn))
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 
+// Always allow explicitly configured production origins; localhost only in development.
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
-var defaultOrigins = new[] { "http://localhost:5173", "http://localhost:3000" };
-var allOrigins = defaultOrigins.Concat(allowedOrigins).ToArray();
+var allOrigins = new List<string>(allowedOrigins);
+if (builder.Environment.IsDevelopment())
+{
+    allOrigins.Add("http://localhost:5173");
+    allOrigins.Add("http://localhost:3000");
+}
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins(allOrigins)
+        policy.WithOrigins(allOrigins.ToArray())
               .WithHeaders("Content-Type", "Authorization", "X-Requested-With")
               .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
               .AllowCredentials()));
@@ -126,8 +149,8 @@ builder.Services.AddRateLimiter(options =>
             ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                Window = TimeSpan.FromSeconds(1),
-                PermitLimit = 60
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10
             }));
 });
 
@@ -147,6 +170,17 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)";
+
+    // TODO: tighten script-src once Vite build no longer requires unsafe-inline/unsafe-eval
+    // (nonce-based CSP or hash-based allowlist should replace these directives long-term)
+    context.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data: https://*.tile.openstreetmap.org https://*.tile.openstreetmap.fr https://*.basemaps.cartocdn.com; " +
+        "connect-src 'self' wss: ws:; " +
+        "font-src 'self'; " +
+        "frame-ancestors 'none';";
 
     if (!app.Environment.IsDevelopment())
     {
@@ -175,6 +209,11 @@ app.MapAuthEndpoints();
 app.MapGlobalMapEndpoints();
 app.MapAllianceEndpoints();
 app.MapMapTemplateEndpoints();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapPlaytestEndpoints();
+}
 
 // Health check
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));

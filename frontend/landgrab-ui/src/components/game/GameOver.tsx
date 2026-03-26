@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { GameIcon } from '../common/GameIcon';
+import { useGameStore } from '../../stores';
 import type { GameState } from '../../types/game';
 import type { GameIconName } from '../../utils/gameIcons';
 
@@ -31,6 +32,21 @@ const achievementIcons: Record<string, GameIconName> = {
 
 export function GameOver({ state, onPlayAgain }: Props) {
   const { i18n, t } = useTranslation();
+  const myId = useGameStore((s) => s.savedSession?.userId);
+
+  let myRank: number | undefined;
+  if (myId) {
+    if (state.isAllianceVictory) {
+      const sortedAlliances = [...state.alliances].sort((a, b) => b.territoryCount - a.territoryCount);
+      const idx = sortedAlliances.findIndex(a => a.memberIds.includes(myId));
+      if (idx !== -1) myRank = idx + 1;
+    } else {
+      const sortedPlayers = [...state.players].sort((a, b) => b.territoryCount - a.territoryCount);
+      const idx = sortedPlayers.findIndex(p => p.id === myId);
+      if (idx !== -1) myRank = idx + 1;
+    }
+  }
+
   const winnerColor = state.isAllianceVictory
     ? state.alliances.find(a => a.id === state.winnerId)?.color
     : state.players.find(p => p.id === state.winnerId)?.color;
@@ -57,6 +73,14 @@ export function GameOver({ state, onPlayAgain }: Props) {
       </div>
 
       <div className="gameover-card">
+        {myRank !== undefined && (
+          <div style={myRank === 1
+            ? { fontSize: '1.6rem', fontWeight: 700, color: '#f39c12', textAlign: 'center', marginBottom: '0.5rem', letterSpacing: '0.02em' }
+            : { fontSize: '1.2rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginBottom: '0.5rem' }
+          }>
+            {myRank === 1 ? '🎉 You won!' : myRank === 2 ? '🥈 You came 2nd' : myRank === 3 ? '🥉 You came 3rd' : `You came in place ${myRank}`}
+          </div>
+        )}
         <div className="trophy"><GameIcon name="trophy" size="lg" /></div>
         <h1
           className="winner-glow"
@@ -151,7 +175,7 @@ export function GameOver({ state, onPlayAgain }: Props) {
                         {t(achievement.titleKey as never)}
                       </div>
                       <div style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.88rem',
                         color: playerColor,
                         fontWeight: 500,
                       }}>

@@ -1,11 +1,19 @@
 using Landgrab.Api.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Landgrab.Api.Services;
 
+// CS9107: gameStateService is intentionally captured by both base (QueuePersistence) and derived
+// (QueuePersistenceIfGameOver). This dual capture is correct — base handles the common case,
+// derived needs the overload.
+#pragma warning disable CS9107
 public class GameplayService(
     IGameRoomProvider roomProvider,
     GameStateService gameStateService,
-    WinConditionService winConditionService)
+    WinConditionService winConditionService,
+    Abilities.RoleProgressService roleProgressService,
+    ILogger<GameplayService> logger)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
     private const int BalancedCombatRounds = 3;
     private const double MinCombatHitProbability = 0.2;
@@ -34,8 +42,7 @@ public class GameplayService(
         List<CombatBonusDetail> AttackerBonuses,
         List<CombatBonusDetail> DefenderBonuses,
         string DefenderName,
-        string? DefenderAllianceName,
-        string DefenderTerrainType);
+        string? DefenderAllianceName);
 
     private sealed record CombatResolution(
         bool AttackerWon,
@@ -46,57 +53,79 @@ public class GameplayService(
         int[] AttackDice,
         int[] DefendDice);
 
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
     public (GameState? state, string? error, bool gridChanged) UpdatePlayerLocation(string roomCode, string userId,
-        double lat, double lng)
+        double lat, double lng, double? heading)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
+        {
+            logger.LogWarning("UpdatePlayerLocation rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
             return (null, error, false);
+        }
 
         var room = GetRoom(roomCode);
         if (room == null)
+        {
+            logger.LogWarning("UpdatePlayerLocation: room {RoomCode} not found for user {UserId}", roomCode, userId);
             return (null, "Room not found.", false);
+        }
 
         lock (room.SyncRoot)
         {
             if (room.State.Phase != GamePhase.Playing)
+            {
+                logger.LogWarning("UpdatePlayerLocation: room {RoomCode} is in phase {Phase}, not Playing", roomCode, room.State.Phase);
                 return (null, "Player locations are only tracked while the game is playing.", false);
+            }
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
+            {
+                logger.LogWarning("UpdatePlayerLocation: player {UserId} not found in room {RoomCode}", userId, roomCode);
                 return (null, "Player not in room.", false);
+            }
+
+            var now = DateTime.UtcNow;
+            player.CurrentHeading = heading;
 
             var previousPhase = room.State.Phase;
             var gridChanged = false;
             SetPlayerLocation(room.State, player, lat, lng);
 
+            var currentHexKey = player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue
+                ? HexService.Key(player.CurrentHexQ.Value, player.CurrentHexR.Value)
+                : null;
+            if (player.FieldBattleCooldownUntil.HasValue
+                && (player.PreviousHexKey != currentHexKey || player.CarriedTroops == 0))
+            {
+                player.FieldBattleCooldownUntil = null;
+            }
+
             if (room.State.Dynamics.PlayerRolesEnabled)
-                gridChanged |= UpdateDemolishProgress(room.State, player);
+            {
+                gridChanged |= roleProgressService.UpdateFortProgress(room.State, player, currentHexKey);
+                gridChanged |= roleProgressService.UpdateSabotageProgress(room.State, player, currentHexKey);
+                gridChanged |= roleProgressService.UpdateDemolishProgress(room.State, player, currentHexKey);
+                CleanupExpiredSabotageBlockedTiles(room.State, now);
+                UpdateScoutSabotageAlert(room.State, player);
+            }
+            else
+            {
+                player.SabotageAlertNearby = false;
+            }
 
             // ── Phase 3: Rally — update IsFortified for all hexes ──
-            var ownedCells = room.State.Grid.Values
-                .Where(c => c.OwnerId != null)
-                .ToList();
-            var previousFortifiedStates = ownedCells.ToDictionary(
-                cell => HexService.Key(cell.Q, cell.R),
-                cell => cell.IsFortified);
-
-            foreach (var cell in ownedCells)
+            foreach (var cell in room.State.Grid.Values.Where(c => c.OwnerId != null))
             {
                 var playersInCell = GetPlayersInHex(room.State, cell.Q, cell.R);
                 var alliedCount = playersInCell.Count(p =>
                     cell.OwnerAllianceId != null && p.AllianceId == cell.OwnerAllianceId);
+                var wasFortified = cell.IsFortified;
                 cell.IsFortified = alliedCount >= 2;
+                gridChanged |= cell.IsFortified != wasFortified;
             }
-
-            gridChanged |= ownedCells.Any(cell =>
-                previousFortifiedStates[HexService.Key(cell.Q, cell.R)] != cell.IsFortified);
 
             // ── Phase 3: Shepherd — update LastVisitedAt for hexes player is in ──
             if (room.State.Dynamics.TileDecayEnabled)
@@ -110,70 +139,39 @@ public class GameplayService(
                             || (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId);
                         if (isTeamMember)
                         {
-                            cell.LastVisitedAt = DateTime.UtcNow;
-                            gridChanged = true;
+                            cell.LastVisitedAt = now;
+                            // Do NOT set gridChanged — LastVisitedAt is server-side metadata
+                            // used by TroopRegenerationService; clients don't need immediate broadcast
                         }
                     }
                 }
             }
 
-            // Phase 4: Engineer — staying in own hex builds fort over time
-            if (room.State.Dynamics.PlayerRolesEnabled && player.Role == PlayerRole.Engineer
-                && room.State.HasMapLocation)
+            if (player.IsBeacon)
             {
-                var engHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var engKey = HexService.Key(engHex.q, engHex.r);
-                if (room.State.Grid.TryGetValue(engKey, out var engCell)
-                    && (engCell.OwnerId == userId
-                        || (player.AllianceId != null && engCell.OwnerAllianceId == player.AllianceId)))
+                player.BeaconLat = lat;
+                player.BeaconLng = lng;
+                if (player.CurrentHeading.HasValue)
                 {
-                    if (engCell.EngineerBuiltAt == null)
-                    {
-                        engCell.EngineerBuiltAt = DateTime.UtcNow;
-                        gridChanged = true;
-                    }
-
-                    // Check if engineer has been building for ≥10 minutes
-                    if (!engCell.IsFort && engCell.EngineerBuiltAt.HasValue
-                        && (DateTime.UtcNow - engCell.EngineerBuiltAt.Value).TotalMinutes >= 10)
-                    {
-                        engCell.IsFort = true;
-                        gridChanged = true;
-                        AppendEventLog(room.State, new GameEventLogEntry
-                        {
-                            Type = "FortBuilt",
-                            Message = $"{player.Name} (Engineer) built a fort at ({engHex.q}, {engHex.r}).",
-                            PlayerId = userId,
-                            PlayerName = player.Name,
-                            Q = engHex.q,
-                            R = engHex.r
-                        });
-                    }
+                    player.BeaconHeading = HexService.NormalizeHeading(player.CurrentHeading.Value);
                 }
+                // Preserve existing BeaconHeading when no heading is provided
             }
 
-            // Phase 5: Beacon auto-deactivate — if player moves >1 hex from beacon position
-            if (player.IsBeacon && player.BeaconLat.HasValue && player.BeaconLng.HasValue
-                && room.State.HasMapLocation)
+            if (room.State.Dynamics.PlayerRolesEnabled && player.Role == PlayerRole.Scout)
             {
-                var beaconHex = HexService.LatLngToHexForRoom(player.BeaconLat.Value, player.BeaconLng.Value,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var currentPlayerHex = HexService.LatLngToHexForRoom(lat, lng,
-                    room.State.MapLat!.Value, room.State.MapLng!.Value, room.State.TileSizeMeters);
-                var dist = HexService.HexDistance(beaconHex.q - currentPlayerHex.q, beaconHex.r - currentPlayerHex.r);
-                if (dist > 1)
-                {
-                    player.IsBeacon = false;
-                    player.BeaconLat = null;
-                    player.BeaconLng = null;
-                }
+                GameStateCommon.SyncBeaconStateForRole(room.State, player);
             }
 
-            winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
+            winConditionService.ApplyWinConditionAndLog(room.State, now);
             var snapshot = SnapshotState(room.State);
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
             gridChanged |= snapshot.Phase != previousPhase;
+            logger.LogDebug(
+                "Player {UserId} moved to ({Lat:F6},{Lng:F6}) hex ({HexQ},{HexR}) in {RoomCode}; gridChanged={GridChanged}",
+                userId, lat, lng,
+                player.CurrentHexQ, player.CurrentHexR,
+                roomCode, gridChanged);
             return (snapshot, null, gridChanged);
         }
     }
@@ -190,7 +188,10 @@ public class GameplayService(
 
         var room = GetRoom(roomCode);
         if (room == null)
+        {
+            logger.LogWarning("PickUpTroops: room {RoomCode} not found for user {UserId}", roomCode, userId);
             return (null, "Room not found.");
+        }
 
         if (room.State.IsPaused)
             return (null, "Game is paused.");
@@ -200,7 +201,10 @@ public class GameplayService(
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
+            {
+                logger.LogWarning("PickUpTroops rejected for {UserId} in {RoomCode} at ({Q},{R}): {Error}", userId, roomCode, q, r, validationError);
                 return (null, validationError);
+            }
             if (cell.IsMasterTile)
                 return (null, "The master tile cannot be used for troop pick-up.");
 
@@ -217,6 +221,7 @@ public class GameplayService(
             winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
+            logger.LogDebug("Player {UserId} picked up {Count} troops from ({Q},{R}) in {RoomCode}", userId, count, q, r, roomCode);
             return (snapshot, null);
         }
     }
@@ -270,11 +275,17 @@ public class GameplayService(
     {
         var error = ValidateCoordinates(playerLat, playerLng);
         if (error != null)
+        {
+            logger.LogWarning("PlaceTroops rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
             return (null, error, null, null);
+        }
 
         var room = GetRoom(roomCode);
         if (room == null)
+        {
+            logger.LogWarning("PlaceTroops: room {RoomCode} not found for user {UserId}", roomCode, userId);
             return (null, "Room not found.", null, null);
+        }
 
         if (room.State.IsPaused)
             return (null, "Game is paused.", null, null);
@@ -284,21 +295,16 @@ public class GameplayService(
             var validationError = ValidateRealtimeAction(room.State, userId, q, r, playerLat, playerLng,
                 out var player, out var cell);
             if (validationError != null)
+            {
+                logger.LogWarning("PlaceTroops rejected for {UserId} in {RoomCode} at ({Q},{R}): {Error}", userId, roomCode, q, r, validationError);
                 return (null, validationError, null, null);
+            }
             if (cell.IsMasterTile)
                 return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
             SetPlayerLocation(room.State, player, playerLat, playerLng);
 
             var sameAllianceHex = player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId;
-
-            // ── Dynamics: Water blocking (non-own/non-allied hexes only) ──
-            if (cell.OwnerId != userId && !sameAllianceHex)
-            {
-                // Water terrain is impassable
-                if (room.State.Dynamics.TerrainEnabled && cell.TerrainType == TerrainType.Water)
-                    return (null, "Water terrain is impassable.", null, null);
-            }
 
             if (cell.OwnerId == userId || sameAllianceHex)
             {
@@ -323,6 +329,7 @@ public class GameplayService(
                 winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
+                logger.LogDebug("Player {UserId} reinforced ({Q},{R}) with {Troops} troops in {RoomCode}", userId, q, r, reinforcedTroops, roomCode);
                 return (reinforceSnapshot, null, null, null);
             }
 
@@ -336,6 +343,7 @@ public class GameplayService(
                 winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
+                logger.LogDebug("Player {UserId} claimed neutral hex ({Q},{R}) in {RoomCode}", userId, q, r, roomCode);
                 return (neutralClaimSnapshot, null, null, null);
             }
 
@@ -376,6 +384,7 @@ public class GameplayService(
             if (combatResolution.AttackerWon)
             {
                 SetCellOwner(cell, player);
+                InvalidateEngineerMissionsForHex(room.State, cell);
 
                 // The winner carries all surviving troops and chooses later how many to drop.
                 cell.Troops = 0;
@@ -412,6 +421,8 @@ public class GameplayService(
             {
                 player.TacticalStrikeActive = false;
                 player.TacticalStrikeExpiry = null;
+                player.TacticalStrikeTargetQ = null;
+                player.TacticalStrikeTargetR = null;
             }
 
             // Phase 4: HQ capture check
@@ -453,7 +464,6 @@ public class GameplayService(
                 NewState = attackSnapshot,
                 AttackerBonus = combatStats.AttackerBonuses.Sum(bonus => bonus.Value),
                 DefenderBonus = combatStats.DefenderBonuses.Sum(bonus => bonus.Value),
-                DefenderTerrainType = combatStats.DefenderTerrainType,
                 EffectiveAttack = combatStats.EffectiveAttack,
                 EffectiveDefence = combatStats.EffectiveDefence,
                 AttackerTroopsLost = combatResolution.AttackerTroopsLost,
@@ -465,6 +475,11 @@ public class GameplayService(
                 AttackerBonuses = combatStats.AttackerBonuses.Select(CloneBonusDetail).ToList(),
                 DefenderBonuses = combatStats.DefenderBonuses.Select(CloneBonusDetail).ToList()
             };
+            logger.LogDebug(
+                "Combat at ({Q},{R}) in {RoomCode}: {UserId} {Outcome} (attackerLost={ALost}, defenderLost={DLost})",
+                q, r, roomCode, userId,
+                combatResolution.AttackerWon ? "won" : "repelled",
+                combatResolution.AttackerTroopsLost, combatResolution.DefenderTroopsLost);
             return (attackSnapshot, null, previousOwnerId, combatResult);
         }
     }
@@ -510,18 +525,10 @@ public class GameplayService(
         var combatMode = NormalizeCombatMode(state.Dynamics.CombatMode);
         var attackerBonuses = new List<CombatBonusDetail>();
         var defenderBonuses = new List<CombatBonusDetail>();
-        var tacticalStrikeUsed = state.Dynamics.PlayerRolesEnabled && player.TacticalStrikeActive;
-
-        if (state.Dynamics.TerrainEnabled)
-        {
-            var terrainBonus = cell.TerrainType switch
-            {
-                TerrainType.Building or TerrainType.Hills => 1,
-                TerrainType.Steep => 2,
-                _ => 0
-            };
-            AddBonus(defenderBonuses, "Terrain", terrainBonus);
-        }
+        var tacticalStrikeUsed = state.Dynamics.PlayerRolesEnabled
+            && player.TacticalStrikeActive
+            && player.TacticalStrikeTargetQ == q
+            && player.TacticalStrikeTargetR == r;
 
         if (cell.IsFortified && !tacticalStrikeUsed)
             AddBonus(defenderBonuses, "Rally", 1);
@@ -539,26 +546,14 @@ public class GameplayService(
 
         }
 
-        if (state.Dynamics.UnderdogPactEnabled && cell.OwnerAllianceId != null)
-        {
-            var totalOwnedHexes = state.Grid.Values.Count(candidate => candidate.OwnerId != null);
-            if (totalOwnedHexes > 0)
-            {
-                var targetAllianceHexes = state.Grid.Values.Count(candidate => candidate.OwnerAllianceId == cell.OwnerAllianceId);
-                if ((double)targetAllianceHexes / totalOwnedHexes > 0.6)
-                    AddBonus(attackerBonuses, "Underdog Pact", 2);
-            }
-        }
-
         var effectiveAttack = deployedTroops + attackerBonuses.Sum(bonus => bonus.Value);
-        var baseDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
+        var effectiveDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
         if (combatMode == CombatMode.Siege)
         {
-            var siegeBonus = (int)Math.Ceiling(baseDefence * 0.25);
+            var siegeBonus = (int)Math.Ceiling(effectiveDefence * 0.25);
             AddBonus(defenderBonuses, "Siege Defender Advantage", siegeBonus);
+            effectiveDefence += siegeBonus;
         }
-
-        var effectiveDefence = cell.Troops + defenderBonuses.Sum(bonus => bonus.Value);
         var attackerWinProbability = CalculateAttackerWinProbability(effectiveAttack, effectiveDefence, combatMode);
         var defenderAllianceName = cell.OwnerAllianceId == null
             ? null
@@ -575,8 +570,7 @@ public class GameplayService(
             attackerBonuses,
             defenderBonuses,
             cell.OwnerName ?? "Unknown defender",
-            defenderAllianceName,
-            cell.TerrainType.ToString());
+            defenderAllianceName);
     }
 
     private static CombatResolution ResolveCombat(CombatStats combatStats)
@@ -728,12 +722,9 @@ public class GameplayService(
         var key = HexService.Key(raid.TargetQ, raid.TargetR);
         if (!state.Grid.TryGetValue(key, out var cell)) return;
 
-        var attackers = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
-            .Where(p => p.AllianceId == raid.InitiatorAllianceId)
-            .ToList();
-        var defenders = GetPlayersInHex(state, raid.TargetQ, raid.TargetR)
-            .Where(p => p.AllianceId != raid.InitiatorAllianceId)
-            .ToList();
+        var playersInHex = GetPlayersInHex(state, raid.TargetQ, raid.TargetR);
+        var attackers = playersInHex.Where(p => p.AllianceId == raid.InitiatorAllianceId).ToList();
+        var defenders = playersInHex.Where(p => p.AllianceId != raid.InitiatorAllianceId).ToList();
 
         var attackerWins = attackers.Count >= 2 && attackers.Count > defenders.Count;
 
@@ -747,6 +738,7 @@ public class GameplayService(
             cell.OwnerAllianceId = raid.InitiatorAllianceId;
             cell.OwnerColor = newOwner.AllianceColor ?? newOwner.Color;
             cell.Troops = spoils;
+            InvalidateEngineerMissionsForHex(state, cell);
 
             if (raid.IsHQRaid)
             {
@@ -779,55 +771,7 @@ public class GameplayService(
 
     public void ResolveActiveSabotages(string roomCode)
     {
-        var room = GetRoom(roomCode);
-        if (room == null) return;
-
-        lock (room.SyncRoot)
-        {
-            var now = DateTime.UtcNow;
-            var engineers = room.State.Players
-                .Where(p => p.SabotageActive && p.SabotageTargetQ.HasValue)
-                .ToList();
-
-            foreach (var engineer in engineers)
-            {
-                var key = HexService.Key(engineer.SabotageTargetQ!.Value, engineer.SabotageTargetR!.Value);
-                if (!room.State.Grid.TryGetValue(key, out var cell)) { engineer.SabotageActive = false; continue; }
-
-                var stillPresent = TryGetCurrentHex(room.State, engineer, out var eq, out var er)
-                    && eq == engineer.SabotageTargetQ && er == engineer.SabotageTargetR;
-
-                if (!stillPresent)
-                {
-                    engineer.SabotageActive = false;
-                    engineer.SabotageStartedAt = null;
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "SabotageCancelled",
-                        Message = $"{engineer.Name}'s sabotage was interrupted.",
-                        Q = engineer.SabotageTargetQ, R = engineer.SabotageTargetR
-                    });
-                    continue;
-                }
-
-                if (engineer.SabotageStartedAt.HasValue &&
-                    (now - engineer.SabotageStartedAt.Value).TotalMinutes >= 1)
-                {
-                    cell.SabotagedUntil = now.AddMinutes(10);
-                    engineer.SabotageActive = false;
-                    engineer.SabotageStartedAt = null;
-                    engineer.SabotageTargetQ = null;
-                    engineer.SabotageTargetR = null;
-
-                    AppendEventLog(room.State, new GameEventLogEntry
-                    {
-                        Type = "SabotageComplete",
-                        Message = $"Sabotage complete! ({cell.Q}, {cell.R}) will not regenerate troops for 10 minutes.",
-                        Q = cell.Q, R = cell.R
-                    });
-                }
-            }
-        }
+        _ = roomCode;
     }
 
     public void ResolveExpiredRallyPoints(string roomCode)
@@ -887,24 +831,15 @@ public class GameplayService(
 
             ExpireTimedAbilities(room.State, DateTime.UtcNow);
 
-            var terrainEnabled = room.State.Dynamics.TerrainEnabled;
-
-            // Phase 8: Timed Escalation — increase regen after time thresholds
-            var escalationBonus = 0;
-            if (room.State.Dynamics.TimedEscalationEnabled && room.State.GameStartedAt.HasValue)
-            {
-                var elapsed = DateTime.UtcNow - room.State.GameStartedAt.Value;
-                escalationBonus = (int)(elapsed.TotalMinutes / 30); // +1 per 30 min
-            }
-
             var drainTicks = new List<DrainTickNotification>();
 
             foreach (var cell in room.State.Grid.Values.Where(cell => cell.OwnerId != null || cell.IsMasterTile))
             {
+                var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
+
                 // Drain: skip regen if hostile player physically present
                 if (cell.OwnerId != null && !cell.IsMasterTile)
                 {
-                    var playersInHex = GetPlayersInHex(room.State, cell.Q, cell.R);
                     var hostilePresent = playersInHex.Any(p => p.Id != cell.OwnerId
                         && (cell.OwnerAllianceId == null || p.AllianceId != cell.OwnerAllianceId));
                     if (hostilePresent)
@@ -949,17 +884,9 @@ public class GameplayService(
                 }
 
                 // Presence bonus: 3× regen if a friendly player is physically on this hex
-                var friendlyPresent = GetPlayersInHex(room.State, cell.Q, cell.R)
-                    .Any(p => IsFriendlyCell(p, cell));
+                var friendlyPresent = playersInHex.Any(p => IsFriendlyCell(p, cell));
                 var presenceMultiplier = friendlyPresent ? 3 : 1;
                 cell.Troops += presenceMultiplier;
-
-                // Phase 8: Timed Escalation bonus
-                cell.Troops += escalationBonus;
-
-                // Building terrain bonus: +1 extra regen
-                if (terrainEnabled && cell.TerrainType == TerrainType.Building)
-                    cell.Troops++;
 
             }
 
@@ -999,18 +926,17 @@ public class GameplayService(
             case ClaimMode.AdjacencyRequired:
                 var isAdjacent = HexService.IsAdjacentToOwned(state.Grid, q, r, player.Id, player.AllianceId);
                 // Phase 5: Beacon — teammate beacon within 2 hexes extends adjacency
-                if (!isAdjacent && state.Dynamics.BeaconEnabled)
+                if (!isAdjacent && state.Dynamics.BeaconEnabled && state.MapLat.HasValue && state.MapLng.HasValue)
                 {
-                    isAdjacent = state.Players.Any(p => p.IsBeacon
-                        && p.Id != player.Id
-                        && p.AllianceId == player.AllianceId
-                        && p.BeaconLat.HasValue && p.BeaconLng.HasValue
-                        && state.MapLat.HasValue && state.MapLng.HasValue
-                        && HexService.HexDistance(
-                            HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
-                                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).q - q,
-                            HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
-                                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters).r - r) <= 2);
+                    isAdjacent = state.Players.Any(p =>
+                    {
+                        if (!p.IsBeacon || p.Id == player.Id || p.AllianceId != player.AllianceId
+                            || !p.BeaconLat.HasValue || !p.BeaconLng.HasValue)
+                            return false;
+                        var beaconHex = HexService.LatLngToHexForRoom(p.BeaconLat.Value, p.BeaconLng.Value,
+                            state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters);
+                        return HexService.HexDistance(beaconHex.q - q, beaconHex.r - r) <= 2;
+                    });
                 }
                 if (!isAdjacent)
                     return "This room requires neutral claims to border your territory.";
@@ -1106,6 +1032,10 @@ public class GameplayService(
 
     internal static void SetPlayerLocation(GameState state, PlayerDto player, double? lat, double? lng)
     {
+        player.PreviousHexKey = TryGetCurrentHex(state, player, out var previousQ, out var previousR)
+            ? HexService.Key(previousQ, previousR)
+            : null;
+
         player.CurrentLat = lat;
         player.CurrentLng = lng;
 
@@ -1127,44 +1057,150 @@ public class GameplayService(
         player.CurrentHexR = currentHex.r;
     }
 
-    private static bool UpdateDemolishProgress(GameState state, PlayerDto player)
+    internal static bool ClearDemolishFacingLock(PlayerDto player)
     {
-        if (!player.DemolishActive || player.DemolishTargetKey == null || player.DemolishStartedAt == null)
+        if (player.DemolishFacingLockStartAt is null && string.IsNullOrEmpty(player.DemolishFacingHexKey))
             return false;
 
-        if (!TryGetCurrentHex(state, player, out var currentQ, out var currentR))
-            return false;
+        player.DemolishFacingLockStartAt = null;
+        player.DemolishFacingHexKey = null;
+        return true;
+    }
 
-        var currentHexKey = HexService.Key(currentQ, currentR);
-        if (currentHexKey != player.DemolishTargetKey)
+    private static void CleanupExpiredSabotageBlockedTiles(GameState state, DateTime now)
+    {
+        foreach (var player in state.Players)
         {
-            player.DemolishActive = false;
-            player.DemolishTargetKey = null;
-            player.DemolishStartedAt = null;
-            return false;
+            if (player.SabotageBlockedTiles.Count == 0)
+                continue;
+
+            var expiredKeys = player.SabotageBlockedTiles
+                .Where(entry => entry.Value <= now)
+                .Select(entry => entry.Key)
+                .ToList();
+
+            foreach (var expiredKey in expiredKeys)
+                player.SabotageBlockedTiles.Remove(expiredKey);
+        }
+    }
+
+    private static void UpdateScoutSabotageAlert(GameState state, PlayerDto player)
+    {
+        if (player.Role != PlayerRole.Scout || !TryGetCurrentHex(state, player, out var scoutQ, out var scoutR))
+        {
+            player.SabotageAlertNearby = false;
+            return;
         }
 
-        if ((DateTime.UtcNow - player.DemolishStartedAt.Value).TotalMinutes < 2)
-            return false;
+        player.SabotageAlertNearby = state.Players.Any(other =>
+            other.Id != player.Id
+            && IsHostileToPlayer(player, other)
+            && other.SabotageTargetQ.HasValue
+            && other.SabotageTargetR.HasValue
+            && HexService.HexDistance(scoutQ, scoutR, other.SabotageTargetQ.Value, other.SabotageTargetR.Value) <= 3);
+    }
 
-        if (state.Grid.TryGetValue(player.DemolishTargetKey, out var targetCell) && targetCell.IsFort)
+    internal static void InvalidateEngineerMissionsForHex(GameState state, HexCell cell)
+    {
+        foreach (var player in state.Players.Where(candidate => candidate.Role == PlayerRole.Engineer))
         {
-            targetCell.IsFort = false;
+            if (player.FortTargetQ == cell.Q && player.FortTargetR == cell.R && cell.OwnerId != player.Id)
+            {
+                var fortInvalidatedQ = player.FortTargetQ;
+                var fortInvalidatedR = player.FortTargetR;
+                ClearFortConstructionTracking(player);
+                AppendEventLog(state, new GameEventLogEntry
+                {
+                    Type = "FortConstructionInvalidated",
+                    Message = $"{player.Name}'s fort construction was invalidated.",
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    Q = fortInvalidatedQ,
+                    R = fortInvalidatedR
+                });
+            }
+
+            if (player.SabotageTargetQ == cell.Q && player.SabotageTargetR == cell.R
+                && (cell.OwnerId == null || IsFriendlyCell(player, cell)))
+            {
+                var sabotageInvalidatedQ = player.SabotageTargetQ;
+                var sabotageInvalidatedR = player.SabotageTargetR;
+                ClearSabotageTracking(player);
+                AppendEventLog(state, new GameEventLogEntry
+                {
+                    Type = "SabotageInvalidated",
+                    Message = $"{player.Name}'s sabotage was invalidated.",
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    Q = sabotageInvalidatedQ,
+                    R = sabotageInvalidatedR
+                });
+            }
+
+            if (!string.Equals(player.DemolishTargetKey, HexService.Key(cell.Q, cell.R), StringComparison.Ordinal))
+                continue;
+            if (cell.IsFort && cell.OwnerId != null && !IsFriendlyCell(player, cell))
+                continue;
+
+            var (demolishInvalidatedQ, demolishInvalidatedR) = GetHexCoordinatesFromKey(state, player.DemolishTargetKey);
+            ClearDemolishTracking(player);
             AppendEventLog(state, new GameEventLogEntry
             {
-                Type = "DemolishCompleted",
-                Message = $"{player.Name} demolished the fort at ({targetCell.Q}, {targetCell.R}).",
+                Type = "DemolishInvalidated",
+                Message = $"{player.Name}'s demolish mission was invalidated.",
                 PlayerId = player.Id,
                 PlayerName = player.Name,
-                Q = targetCell.Q,
-                R = targetCell.R
+                Q = demolishInvalidatedQ,
+                R = demolishInvalidatedR
             });
         }
+    }
 
-        player.DemolishActive = false;
+    internal static (int? q, int? r) GetHexCoordinatesFromKey(GameState state, string? key)
+    {
+        if (string.IsNullOrEmpty(key))
+            return (null, null);
+
+        if (state.Grid.TryGetValue(key, out var cell))
+            return (cell.Q, cell.R);
+
+        var parts = key.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 2
+            && int.TryParse(parts[0], out var q)
+            && int.TryParse(parts[1], out var r))
+        {
+            return (q, r);
+        }
+
+        return (null, null);
+    }
+
+    internal static void ClearFortConstructionTracking(PlayerDto player)
+    {
+        player.FortTargetQ = null;
+        player.FortTargetR = null;
+        player.FortPerimeterVisited.Clear();
+    }
+
+    internal static void ClearSabotageTracking(PlayerDto player)
+    {
+        player.SabotageTargetQ = null;
+        player.SabotageTargetR = null;
+        player.SabotagePerimeterVisited.Clear();
+    }
+
+    internal static void ClearDemolishTracking(PlayerDto player)
+    {
         player.DemolishTargetKey = null;
-        player.DemolishStartedAt = null;
-        return true;
+        player.DemolishApproachDirectionsMade.Clear();
+        player.DemolishFacingLockStartAt = null;
+        player.DemolishFacingHexKey = null;
+    }
+
+    private static bool IsHostileToPlayer(PlayerDto player, PlayerDto other)
+    {
+        return other.Id != player.Id
+            && (player.AllianceId == null || other.AllianceId != player.AllianceId);
     }
 
     private static void ExpireTimedAbilities(GameState state, DateTime now)
@@ -1175,6 +1211,8 @@ public class GameplayService(
             {
                 player.TacticalStrikeActive = false;
                 player.TacticalStrikeExpiry = null;
+                player.TacticalStrikeTargetQ = null;
+                player.TacticalStrikeTargetR = null;
             }
 
         }

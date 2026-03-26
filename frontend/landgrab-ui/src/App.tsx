@@ -6,12 +6,14 @@ import { useGameActions } from './hooks/useGameActions';
 import { useSignalR } from './hooks/useSignalR';
 import { useSignalRHandlers } from './hooks/useSignalRHandlers';
 import { useGeolocation } from './hooks/useGeolocation';
+import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import { usePlayerPreferences } from './hooks/usePlayerPreferences';
 import { useSound } from './hooks/useSound';
 import { AuthPage } from './components/auth/AuthPage';
 import { MapEditorPage } from './components/editor/MapEditorPage';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { DebugLocationPanel } from './components/game/DebugLocationPanel';
+import { DebugSensorPanel } from './components/game/DebugSensorPanel';
 import { GameOver } from './components/game/GameOver';
 import { GameView } from './components/GameView';
 import type { GameViewActions } from './components/GameView';
@@ -21,7 +23,7 @@ import { latLngToRoomHex, roomHexToLatLng } from './components/map/HexMath';
 import type { GameState, RoomSummary } from './types/game';
 import { useGameStore } from './stores/gameStore';
 import type { SavedSession } from './stores/gameStore';
-import { useGameplayStore } from './stores/gameplayStore';
+import { useGameplayStore } from './stores';
 import { useInfoLedgeStore } from './stores/infoLedgeStore';
 import { useUiStore } from './stores/uiStore';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
@@ -30,16 +32,13 @@ import {
   persistDebugLocation,
   readPersistedDebugLocation,
 } from './utils/debugLocationSession';
+import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
+import './styles/tricorder-v2.css';
 
-const DEBUG_GPS_AVAILABLE = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG_GPS === 'true';
+import type { SignalRInvoke, LocationPoint } from './types/common';
 
-type SignalRInvoke = <T = void>(method: string, ...args: unknown[]) => Promise<T>;
-
-interface LocationPoint {
-  lat: number;
-  lng: number;
-}
+const DEBUG_GPS_AVAILABLE = import.meta.env.DEV;
 
 export default function App() {
   const { t } = useTranslation();
@@ -90,6 +89,7 @@ export default function App() {
     || isHostOnLocationSetupStep
   );
   const location = useGeolocation(shouldEnableGeolocation);
+  const { headingRef } = useDeviceOrientation(shouldEnableGeolocation);
   const { playSound } = useSound();
 
   // ── SignalR wiring ───────────────────────────────────────────────────────
@@ -163,17 +163,14 @@ export default function App() {
   });
 
   // ── Location ─────────────────────────────────────────────────────────────
-  const liveLocation = useMemo<LocationPoint | null>(() => {
-    if (location.lat == null || location.lng == null) return null;
-    return { lat: location.lat, lng: location.lng };
-  }, [location.lat, location.lng]);
-
   const usingDebugLocation = DEBUG_GPS_AVAILABLE && debugLocationEnabled && debugLocation !== null;
 
   const currentLocation = useMemo<LocationPoint | null>(() => {
     if (usingDebugLocation) return debugLocation;
-    return liveLocation;
-  }, [debugLocation, liveLocation, usingDebugLocation]);
+    if (location.lat != null && location.lng != null) return { lat: location.lat, lng: location.lng };
+    if (myPlayer?.currentLat == null || myPlayer.currentLng == null) return null;
+    return { lat: myPlayer.currentLat, lng: myPlayer.currentLng };
+  }, [usingDebugLocation, debugLocation, location.lat, location.lng, myPlayer]);
 
   const mapCenterLocation = useMemo<LocationPoint | null>(() => {
     if (!gameState || gameState.mapLat == null || gameState.mapLng == null) return null;
@@ -227,7 +224,16 @@ export default function App() {
   const effectiveLocationError = usingDebugLocation || isHostBypass ? null : location.error;
   const effectiveLocationLoading = usingDebugLocation || isHostBypass ? false : location.loading;
 
+  const serverCurrentHex = useMemo<[number, number] | null>(() => {
+    if (myPlayer?.currentHexQ == null || myPlayer.currentHexR == null) return null;
+    return [myPlayer.currentHexQ, myPlayer.currentHexR];
+  }, [myPlayer]);
+
   const currentHex = useMemo(() => {
+    if (serverCurrentHex) {
+      return serverCurrentHex;
+    }
+
     if (!gameState || !currentLocation || gameState.mapLat == null || gameState.mapLng == null) {
       return null;
     }
@@ -238,7 +244,7 @@ export default function App() {
       gameState.mapLng,
       gameState.tileSizeMeters,
     );
-  }, [currentLocation, gameState]);
+  }, [currentLocation, gameState, serverCurrentHex]);
 
   const currentPlayerName = myPlayer?.name ?? auth?.username ?? '';
 
@@ -258,15 +264,10 @@ export default function App() {
     handleSetWinCondition,
     handleSetBeaconEnabled,
     handleSetTileDecayEnabled,
+    handleSetEnemySightingMemory,
     handleSetGameDynamics,
     handleSetPlayerRole,
     handleSetAllianceHQ,
-    handleActivateBeacon,
-    handleDeactivateBeacon,
-    handleActivateTacticalStrike,
-    handleActivateReinforce,
-    handleActivateEmergencyRepair,
-    handleStartDemolish,
     handleSetMasterTile,
     handleSetMasterTileByHex,
     handleAssignStartingTile,
@@ -297,6 +298,7 @@ export default function App() {
     pendingResumeRef,
     gameState,
     currentLocation,
+    currentHeadingRef: headingRef,
     currentHex,
     myPlayer,
     isHostBypass,
@@ -368,6 +370,48 @@ export default function App() {
     return nextLocation;
   }, [applyDebugLocation, currentLocation, gameState, mapCenterLocation]);
 
+  useEffect(() => {
+    const ARROW_MAP: Record<string, [number, number]> = {
+      ArrowUp:    [0,  1],
+      ArrowDown:  [0, -1],
+      ArrowLeft:  [-1, 0],
+      ArrowRight: [1,  0],
+    };
+    function handleKeyDown(e: KeyboardEvent) {
+      const delta = ARROW_MAP[e.key];
+      if (!delta || !canStepDebugByHex) return;
+      e.preventDefault();
+      stepDebugLocationByHex(delta[0], delta[1]);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canStepDebugByHex, stepDebugLocationByHex]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const { pickupPrompt, reinforcePrompt, combatPreview } = useGameplayStore.getState();
+        if (pickupPrompt) {
+          handleConfirmPickup();
+        } else if (reinforcePrompt) {
+          void handleConfirmReinforce();
+        } else if (combatPreview) {
+          void handleConfirmAttack();
+        } else {
+          const primary = currentHexActions.find(a => a.enabled);
+          if (primary) handleCurrentHexAction(primary.type);
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleDismissTileActions();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentHexActions, handleConfirmAttack, handleConfirmPickup, handleConfirmReinforce, handleCurrentHexAction, handleDismissTileActions]);
+
   // ── Connection / session banner ──────────────────────────────────────────
   const savedRoomCode = savedSession?.roomCode ?? '';
   const connectionBanner = autoResuming
@@ -405,6 +449,7 @@ export default function App() {
     setGameState(null);
     setPickupPrompt(null);
     clearGameplayUi();
+    useGameplayStore.getState().setSelectedHexKey(null);
     setView('lobby');
   }, [
     clearGameplayUi,
@@ -422,22 +467,25 @@ export default function App() {
   const visibleRecentRooms = auth && connected ? myRooms : [];
 
   const debugGpsPanel = auth && DEBUG_GPS_AVAILABLE && showDebugTools && view !== 'gameover' ? (
-    <DebugLocationPanel
-      enabled={usingDebugLocation}
-      mapCenter={mapCenterLocation}
-      canStepByHex={canStepDebugByHex}
-      onApply={applyDebugLocation}
-      onDisable={disableDebugLocation}
-      onStepByHex={stepDebugLocationByHex}
-    />
+    <div className="debug-panels-container">
+      <DebugLocationPanel
+        enabled={usingDebugLocation}
+        mapCenter={mapCenterLocation}
+        canStepByHex={canStepDebugByHex}
+        onApply={applyDebugLocation}
+        onDisable={disableDebugLocation}
+        onStepByHex={stepDebugLocationByHex}
+      />
+      <DebugSensorPanel />
+    </div>
   ) : null;
 
   const debugToggleButton = auth && DEBUG_GPS_AVAILABLE && view !== 'gameover' ? (
     <button
       type="button"
+      data-testid="dev-section-toggle"
       className={view === 'game' ? 'btn-secondary debug-toggle-ingame' : 'debug-tools-toggle'}
       onClick={() => setShowDebugTools(!showDebugTools)}
-      aria-pressed={showDebugTools}
     >
       {showDebugTools ? t('debugGps.hideTools') : t('debugGps.showTools')}
     </button>
@@ -453,12 +501,6 @@ export default function App() {
     onCurrentHexAction: handleCurrentHexAction,
     onDismissTileActions: handleDismissTileActions,
     onConfirmAttack: handleConfirmAttack,
-    onActivateBeacon: handleActivateBeacon,
-    onDeactivateBeacon: handleDeactivateBeacon,
-    onActivateTacticalStrike: handleActivateTacticalStrike,
-    onActivateReinforce: handleActivateReinforce,
-    onActivateEmergencyRepair: handleActivateEmergencyRepair,
-    onStartDemolish: handleStartDemolish,
     onSetObserverMode: handleSetObserverMode,
     onUpdateDynamicsLive: handleUpdateDynamicsLive,
     onSendHostMessage: handleSendHostMessage,
@@ -468,11 +510,8 @@ export default function App() {
   }), [
     handleHexClick, handleConfirmPickup, handleConfirmReinforce, handleReturnToLobby, currentHexActions,
     handleCurrentHexAction, handleDismissTileActions, handleConfirmAttack,
-    handleActivateBeacon, handleDeactivateBeacon, handleActivateTacticalStrike,
-    handleActivateReinforce, handleActivateEmergencyRepair,
-    handleStartDemolish, handleSetObserverMode,
-    handleUpdateDynamicsLive, handleSendHostMessage, handlePauseGame, handleDeployCombatTroops,
-    handleDeployNeutralClaimTroops,
+    handleSetObserverMode, handleUpdateDynamicsLive, handleSendHostMessage,
+    handlePauseGame, handleDeployCombatTroops, handleDeployNeutralClaimTroops,
   ]);
 
   const lobbyViewActions = useMemo<LobbyViewActions>(() => ({
@@ -490,6 +529,7 @@ export default function App() {
     onSetWinCondition: handleSetWinCondition,
     onSetBeaconEnabled: handleSetBeaconEnabled,
     onSetTileDecayEnabled: handleSetTileDecayEnabled,
+    onSetEnemySightingMemory: handleSetEnemySightingMemory,
     onSetGameDynamics: handleSetGameDynamics,
     onSetPlayerRole: handleSetPlayerRole,
     onSetAllianceHQ: handleSetAllianceHQ,
@@ -508,10 +548,68 @@ export default function App() {
     handleSetTileSize, handleUseCenteredGameArea, handleSetPatternGameArea,
     handleSetCustomGameArea, handleSetClaimMode,
     handleSetWinCondition, handleSetBeaconEnabled, handleSetTileDecayEnabled,
+    handleSetEnemySightingMemory,
     handleSetGameDynamics, handleSetPlayerRole, handleSetAllianceHQ,
     handleSetMasterTile, handleSetMasterTileByHex, handleAssignStartingTile,
     handleConfigureAlliances, handleDistributePlayers, handleAssignAllianceStartingTile,
     handleStartGame, handleReturnToLobby, handleSetObserverMode,
+  ]);
+
+  useEffect(() => {
+    installAgentBridge({
+      auth,
+      connected,
+      reconnecting,
+      currentLocation,
+      currentHex,
+      currentPlayerName,
+      isHostBypass,
+      invoke,
+      mapNavigate: (lat, lng) => {
+        mapNavigateRef.current?.(lat, lng);
+      },
+      applyDebugLocation,
+      disableDebugLocation,
+      stepDebugLocationByHex,
+      handleHexClick,
+      handleSetAlliance,
+      handleSetMapLocation,
+      handleSetTileSize,
+      handleUseCenteredGameArea,
+      handleSetClaimMode,
+      handleSetWinCondition,
+      handleSetGameDynamics,
+      handleConfigureAlliances,
+      handleDistributePlayers,
+      handleUpdateDynamicsLive,
+    });
+
+    return () => {
+      uninstallAgentBridge();
+    };
+  }, [
+    auth,
+    connected,
+    reconnecting,
+    currentLocation,
+    currentHex,
+    currentPlayerName,
+    isHostBypass,
+    invoke,
+    applyDebugLocation,
+    disableDebugLocation,
+    stepDebugLocationByHex,
+    handleHexClick,
+    handleSetAlliance,
+    handleSetMapLocation,
+    handleSetTileSize,
+    handleUseCenteredGameArea,
+    handleSetClaimMode,
+    handleSetWinCondition,
+    handleSetGameDynamics,
+    handleConfigureAlliances,
+    handleDistributePlayers,
+    handleUpdateDynamicsLive,
   ]);
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -549,6 +647,7 @@ export default function App() {
         onNavigateMap={handleMiniMapNavigate}
         debugToggle={debugToggleButton}
         debugPanel={debugGpsPanel}
+        invoke={invoke}
         actions={gameViewActions}
       />
     );

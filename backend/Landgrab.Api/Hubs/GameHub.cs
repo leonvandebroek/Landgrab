@@ -19,7 +19,10 @@ public partial class GameHub : Hub
 {
     private readonly GameService gameService;
     private readonly GlobalMapService globalMap;
-    private readonly TerrainFetchService terrainFetchService;
+    private readonly DerivedMapStateService derivedMapStateService;
+    private readonly VisibilityService visibilityService;
+    private readonly VisibilityBroadcastHelper visibilityBroadcastHelper;
+    private readonly IHubContext<GameHub> hubContext;
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
 
@@ -35,6 +38,7 @@ public partial class GameHub : Hub
     private const int MaxDescriptionLength = 500;
     private const int MaxCustomAreaCoordinates = 500;
     private const int MaxTargetAllianceIdsCount = 20;
+    private const int MaxBeaconIntelHexKeys = 500;
     private static readonly ConcurrentDictionary<string, DateTime> _lastLocationUpdate = new();
     private static readonly TimeSpan UpdatePlayerLocationInterval = TimeSpan.FromMilliseconds(500);
     private static readonly HashSet<string> RemovedPlayerRoles = new(StringComparer.OrdinalIgnoreCase)
@@ -45,13 +49,19 @@ public partial class GameHub : Hub
     public GameHub(
         GameService gameService,
         GlobalMapService globalMap,
-        TerrainFetchService terrainFetchService,
+        DerivedMapStateService derivedMapStateService,
+        VisibilityService visibilityService,
+        VisibilityBroadcastHelper visibilityBroadcastHelper,
+        IHubContext<GameHub> hubContext,
         IServiceScopeFactory scopeFactory,
         ILogger<GameHub> logger)
     {
         this.gameService = gameService;
         this.globalMap = globalMap;
-        this.terrainFetchService = terrainFetchService;
+        this.derivedMapStateService = derivedMapStateService;
+        this.visibilityService = visibilityService;
+        this.visibilityBroadcastHelper = visibilityBroadcastHelper;
+        this.hubContext = hubContext;
         this.scopeFactory = scopeFactory;
         this.logger = logger;
     }
@@ -83,55 +93,66 @@ public partial class GameHub : Hub
 
     private async Task BroadcastState(string roomCode, GameState state, string? aliasEvent = null)
     {
-        if (!string.IsNullOrWhiteSpace(aliasEvent))
+        var room = gameService.GetRoom(roomCode);
+        if (room is null)
         {
-            await Clients.Group(roomCode).SendAsync(aliasEvent, state);
-        }
-
-        if (state.Dynamics.FogOfWarEnabled && state.Phase == GamePhase.Playing)
-        {
-            var room = gameService.GetRoom(roomCode);
-            if (room != null)
+            var sharedState = GameStateCommon.SnapshotState(state);
+            derivedMapStateService.ComputeAndAttach(sharedState);
+            if (!string.IsNullOrWhiteSpace(aliasEvent))
             {
-                var hostObserverUserId = state.HostObserverMode
-                    ? room.HostUserId.ToString()
-                    : null;
-                var hiddenFogCells = gameService.CreateHiddenFogCellsForBroadcast(state);
-
-                foreach (var (connectionId, userId) in room.ConnectionMap)
-                {
-                    var playerSnapshot = hostObserverUserId == userId
-                        ? state
-                        : gameService.GetPlayerSnapshot(state, userId, hiddenFogCells);
-                    await Clients.Client(connectionId).SendAsync("StateUpdated", playerSnapshot);
-                }
-
-                return;
+                await Clients.Group(roomCode).SendAsync(aliasEvent, sharedState);
             }
+
+            await Clients.Group(roomCode).SendAsync("StateUpdated", sharedState);
+            if (sharedState.Phase == GamePhase.GameOver)
+            {
+                await Clients.Group(roomCode).SendAsync("GameOver", new
+                {
+                    sharedState.WinnerId,
+                    sharedState.WinnerName,
+                    sharedState.IsAllianceVictory
+                });
+            }
+
+            return;
         }
 
-        await Clients.Group(roomCode).SendAsync("StateUpdated", state);
-        if (state.Phase == GamePhase.GameOver)
-        {
-            await Clients.Group(roomCode).SendAsync("GameOver", new
-            {
-                state.WinnerId,
-                state.WinnerName,
-                state.IsAllianceVictory
-            });
-        }
+        await visibilityBroadcastHelper.BroadcastPerViewer(
+            room,
+            state,
+            Clients.Group(roomCode),
+            connectionId => Clients.Client(connectionId),
+            derivedMapStateService,
+            aliasEvent);
     }
 
     private async Task SendStateToCaller(GameState state)
     {
-        await Clients.Caller.SendAsync("StateUpdated", state);
-        if (state.Phase == GamePhase.GameOver)
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        GameState callerState;
+
+        if (room is not null)
+        {
+            callerState = visibilityBroadcastHelper.CreateStateForViewer(
+                room,
+                state,
+                UserId,
+                derivedMapStateService);
+        }
+        else
+        {
+            callerState = GameStateCommon.SnapshotState(state);
+            derivedMapStateService.ComputeAndAttach(callerState);
+        }
+
+        await Clients.Caller.SendAsync("StateUpdated", callerState);
+        if (callerState.Phase == GamePhase.GameOver)
         {
             await Clients.Caller.SendAsync("GameOver", new
             {
-                state.WinnerId,
-                state.WinnerName,
-                state.IsAllianceVictory
+                callerState.WinnerId,
+                callerState.WinnerName,
+                callerState.IsAllianceVictory
             });
         }
     }
@@ -148,6 +169,9 @@ public partial class GameHub : Hub
         lat >= -90 && lat <= 90 &&
         lng >= -180 && lng <= 180;
 
+    private static bool ValidateHeading(double heading) =>
+        double.IsFinite(heading);
+
     private static bool ValidateRoomCode(string? roomCode) =>
         !string.IsNullOrWhiteSpace(roomCode) && ValidateStringLength(roomCode, MaxRoomCodeLength);
 
@@ -161,6 +185,70 @@ public partial class GameHub : Hub
 
     private static bool ValidateGameDynamics(GameDynamics? dynamics) => dynamics != null;
 
+    private static bool ValidateHexKeyPayload(
+        string[]? hexKeys,
+        out List<string> normalizedHexKeys,
+        out string? error)
+    {
+        normalizedHexKeys = [];
+        error = null;
+
+        if (hexKeys is null)
+        {
+            error = "Hex keys are required.";
+            return false;
+        }
+
+        if (hexKeys.Length > MaxBeaconIntelHexKeys)
+        {
+            error = $"You can share at most {MaxBeaconIntelHexKeys} hexes at once.";
+            return false;
+        }
+
+        foreach (var rawHexKey in hexKeys)
+        {
+            var hexKey = rawHexKey?.Trim();
+            if (string.IsNullOrWhiteSpace(hexKey))
+            {
+                continue;
+            }
+
+            if (!TryParseHexKey(hexKey, out var q, out var r))
+            {
+                error = $"Invalid hex key '{hexKey}'.";
+                return false;
+            }
+
+            if (!ValidateCoordRange(q, r))
+            {
+                error = $"Hex key '{hexKey}' is out of range.";
+                return false;
+            }
+
+            normalizedHexKeys.Add(HexService.Key(q, r));
+        }
+
+        normalizedHexKeys = normalizedHexKeys
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return true;
+    }
+
+    private static bool TryParseHexKey(string hexKey, out int q, out int r)
+    {
+        q = 0;
+        r = 0;
+
+        var parts = hexKey.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        return int.TryParse(parts[0], out q) && int.TryParse(parts[1], out r);
+    }
+
     private static bool IsSupportedPlayerRole(string? role) =>
         ValidateEnumString<PlayerRole>(role) && !RemovedPlayerRoles.Contains(role!);
 
@@ -169,15 +257,16 @@ public partial class GameHub : Hub
         return new GameDynamics
         {
             BeaconEnabled = dynamics.BeaconEnabled,
+            BeaconSectorAngle = Math.Clamp(dynamics.BeaconSectorAngle, 1, 360),
             TileDecayEnabled = dynamics.TileDecayEnabled,
-            TerrainEnabled = dynamics.TerrainEnabled,
             CombatMode = Enum.IsDefined(dynamics.CombatMode) ? dynamics.CombatMode : CombatMode.Balanced,
             PlayerRolesEnabled = dynamics.PlayerRolesEnabled,
-            FogOfWarEnabled = dynamics.FogOfWarEnabled,
             HQEnabled = dynamics.HQEnabled,
             HQAutoAssign = dynamics.HQAutoAssign,
-            TimedEscalationEnabled = dynamics.TimedEscalationEnabled,
-            UnderdogPactEnabled = dynamics.UnderdogPactEnabled,
+            EnemySightingMemorySeconds = Math.Max(0, dynamics.EnemySightingMemorySeconds),
+            FieldBattleResolutionMode = Enum.IsDefined(dynamics.FieldBattleResolutionMode)
+                ? dynamics.FieldBattleResolutionMode
+                : FieldBattleResolutionMode.InitiatorVsSumOfJoined,
         };
     }
 

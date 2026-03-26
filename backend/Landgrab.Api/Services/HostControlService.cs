@@ -3,11 +3,8 @@ using Landgrab.Api.Models;
 namespace Landgrab.Api.Services;
 
 public class HostControlService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private static bool IsHost(GameRoom room, string userId) => GameStateCommon.IsHost(room, userId);
 
     public (GameState? state, string? error) SetHostObserverMode(string roomCode, string userId, bool enabled)
@@ -50,15 +47,12 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                 return (null, "Live dynamics changes require an active game.");
 
             room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
+            room.State.Dynamics.BeaconSectorAngle = dynamics.BeaconSectorAngle;
             room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
-            room.State.Dynamics.TerrainEnabled = dynamics.TerrainEnabled;
             room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
-            room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
-            room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
-            room.State.Dynamics.UnderdogPactEnabled = dynamics.UnderdogPactEnabled;
 
             AppendEventLog(room.State, new GameEventLogEntry
             {

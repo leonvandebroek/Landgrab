@@ -8,10 +8,7 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
   const lobbyActions = useGameActionsLobby(options);
   const abilityActions = useGameActionsAbilities(options);
   const hostActions = useGameActionsHost(options);
-  const gameplayActions = useGameActionsGameplay({
-    ...options,
-    handleActivateCommandoRaid: abilityActions.handleActivateCommandoRaid,
-  });
+  const gameplayActions = useGameActionsGameplay(options);
 
   return {
     refreshMyRooms: lobbyActions.refreshMyRooms,
@@ -29,16 +26,30 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleSetWinCondition: lobbyActions.handleSetWinCondition,
     handleSetBeaconEnabled: lobbyActions.handleSetBeaconEnabled,
     handleSetTileDecayEnabled: lobbyActions.handleSetTileDecayEnabled,
+    handleSetEnemySightingMemory: lobbyActions.handleSetEnemySightingMemory,
     handleSetGameDynamics: lobbyActions.handleSetGameDynamics,
     handleSetPlayerRole: lobbyActions.handleSetPlayerRole,
     handleSetAllianceHQ: lobbyActions.handleSetAllianceHQ,
     handleActivateBeacon: abilityActions.handleActivateBeacon,
     handleDeactivateBeacon: abilityActions.handleDeactivateBeacon,
+    handleShareBeaconIntel: abilityActions.handleShareBeaconIntel,
     handleActivateCommandoRaid: abilityActions.handleActivateCommandoRaid,
     handleActivateTacticalStrike: abilityActions.handleActivateTacticalStrike,
-    handleActivateReinforce: abilityActions.handleActivateReinforce,
-    handleActivateEmergencyRepair: abilityActions.handleActivateEmergencyRepair,
+    handleActivateRallyPoint: abilityActions.handleActivateRallyPoint,
+    handleActivateSabotage: abilityActions.handleActivateSabotage,
+    handleCancelFortConstruction: abilityActions.handleCancelFortConstruction,
+    handleCancelSabotage: abilityActions.handleCancelSabotage,
+    handleCancelDemolish: abilityActions.handleCancelDemolish,
     handleStartDemolish: abilityActions.handleStartDemolish,
+    handleStartFortConstruction: abilityActions.handleStartFortConstruction,
+    attemptIntercept: abilityActions.attemptIntercept,
+    resolveRaidTarget: abilityActions.resolveRaidTarget,
+    resolveTacticalStrikeTarget: abilityActions.resolveTacticalStrikeTarget,
+    resolveTroopTransferTarget: abilityActions.resolveTroopTransferTarget,
+    handleInitiateTroopTransfer: abilityActions.handleInitiateTroopTransfer,
+    handleRespondToTroopTransfer: abilityActions.handleRespondToTroopTransfer,
+    handleInitiateFieldBattle: abilityActions.handleInitiateFieldBattle,
+    handleJoinFieldBattle: abilityActions.handleJoinFieldBattle,
     handleSetMasterTile: lobbyActions.handleSetMasterTile,
     handleSetMasterTileByHex: lobbyActions.handleSetMasterTileByHex,
     handleAssignStartingTile: lobbyActions.handleAssignStartingTile,

@@ -2,16 +2,12 @@ import type { TFunction } from 'i18next';
 import type { GameDynamics, GameState } from '../types/game';
 
 const DEFAULT_GAME_DYNAMICS: GameDynamics = {
-  terrainEnabled: false,
   playerRolesEnabled: false,
-  fogOfWarEnabled: false,
   beaconEnabled: false,
-  supplyLinesEnabled: false,
   hqEnabled: false,
   hqAutoAssign: true,
   tileDecayEnabled: false,
-  timedEscalationEnabled: false,
-  underdogPactEnabled: false,
+  enemySightingMemorySeconds: 0,
 };
 
 export function getErrorMessage(error: unknown): string {
@@ -54,8 +50,19 @@ export function normalizeGameState(state: GameState, previousState?: GameState |
     ? previousState.eventLog
     : undefined;
 
+  let normalizedGrid = state.grid;
+  if (normalizedGrid) {
+    normalizedGrid = Object.fromEntries(
+      Object.entries(normalizedGrid).map(([key, cell]) => [
+        key,
+        { ...cell, visibilityTier: cell.visibilityTier ?? 'Visible' }
+      ])
+    );
+  }
+
   return {
     ...state,
+    grid: normalizedGrid,
     eventLog: Array.isArray(state.eventLog) ? state.eventLog : previousEventLog,
     dynamics: state.dynamics ?? DEFAULT_GAME_DYNAMICS,
   };
@@ -86,7 +93,7 @@ export function isMissingHubMethodFailure(message: string): boolean {
 }
 
 export function localizeLobbyError(message: unknown, t: TFunction): string {
-  const text = typeof message === 'string' ? message : JSON.stringify(message);
+  const text = typeof message === 'string' ? message : getErrorMessage(message);
   const normalized = text.toLowerCase();
 
   if (normalized.includes('room not found')) {

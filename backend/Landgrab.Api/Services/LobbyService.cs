@@ -3,6 +3,7 @@ using Landgrab.Api.Models;
 namespace Landgrab.Api.Services;
 
 public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
     private const int StartingTroopCount = 3;
 
@@ -13,10 +14,6 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
     internal static string[] Colors => GameStateCommon.Colors;
     internal static string[] AllianceColors => GameStateCommon.AllianceColors;
 
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private static void AppendEventLog(GameState state, GameEventLogEntry entry) => GameStateCommon.AppendEventLog(state, entry);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
     private static void SetCellOwner(HexCell cell, PlayerDto player) => GameplayService.SetCellOwner(cell, player);
     private static void RefreshTerritoryCount(GameState state) => GameplayService.RefreshTerritoryCount(state);
 
@@ -41,6 +38,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Invalid role.");
 
             player.Role = parsedRole;
+            GameStateCommon.SyncBeaconStateForRole(room.State, player);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -70,6 +68,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Invalid role.");
 
             player.Role = parsedRole;
+            GameStateCommon.SyncBeaconStateForRole(room.State, player);
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);
             return (snapshot, null);
@@ -94,6 +93,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             foreach (var player in room.State.Players)
             {
                 player.Role = PlayerRole.None;
+                GameStateCommon.SyncBeaconStateForRole(room.State, player);
             }
 
             var shuffledRoles = new List<PlayerRole>
@@ -118,6 +118,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 connectedPlayers[index].Role = index < shuffledRoles.Count
                     ? shuffledRoles[index]
                     : PlayerRole.None;
+                GameStateCommon.SyncBeaconStateForRole(room.State, connectedPlayers[index]);
             }
 
             var snapshot = SnapshotState(room.State);
@@ -242,6 +243,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             if (startingAccessError != null)
                 return (null, startingAccessError);
 
+            InitializePlayerStartingPositions(room.State);
             room.State.Phase = GamePhase.Playing;
             room.State.GameStartedAt = DateTime.UtcNow;
 
@@ -274,7 +276,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
         if (room.State.MasterTileQ is null || room.State.MasterTileR is null)
         {
             var centerCell = room.State.Grid.Values
-                .Where(cell => cell.OwnerId == null && cell.TerrainType != TerrainType.Water)
+                .Where(cell => cell.OwnerId == null)
                 .OrderBy(cell => HexService.HexDistance(cell.Q, cell.R))
                 .ThenBy(cell => cell.Q)
                 .ThenBy(cell => cell.R)
@@ -427,8 +429,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 var key = HexService.Key(pos.q, pos.r);
                 return state.Grid.TryGetValue(key, out var cell)
                        && cell.OwnerId == null
-                       && !cell.IsMasterTile
-                       && cell.TerrainType != TerrainType.Water;
+                       && !cell.IsMasterTile;
             })
             .ToList();
 
@@ -436,7 +437,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             return available;
 
         return state.Grid.Values
-            .Where(cell => cell.OwnerId == null && !cell.IsMasterTile && cell.TerrainType != TerrainType.Water)
+            .Where(cell => cell.OwnerId == null && !cell.IsMasterTile)
             .OrderByDescending(cell => HexService.HexDistance(cell.Q, cell.R))
             .ThenBy(cell => Math.Atan2(cell.R + cell.Q / 2d, cell.Q))
             .Select(cell => (cell.Q, cell.R))
@@ -457,6 +458,87 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
             if (player.TerritoryCount > 0 || allianceTerritoryCount > 0)
                 player.CarriedTroops = StartingTroopCount;
         }
+    }
+
+    private static void InitializePlayerStartingPositions(GameState state)
+    {
+        if (state.MapLat is null || state.MapLng is null)
+            return;
+
+        var mapLat = state.MapLat.Value;
+        var mapLng = state.MapLng.Value;
+
+        foreach (var player in state.Players)
+        {
+            var spawnCell = ResolveSpawnCell(state, player);
+            if (spawnCell == null)
+            {
+                player.CurrentLat = null;
+                player.CurrentLng = null;
+                player.CurrentHexQ = null;
+                player.CurrentHexR = null;
+                player.PreviousHexKey = null;
+                continue;
+            }
+
+            var (spawnLat, spawnLng) = HexService.HexToLatLng(
+                spawnCell.Q,
+                spawnCell.R,
+                mapLat,
+                mapLng,
+                state.TileSizeMeters);
+            player.CurrentLat = spawnLat;
+            player.CurrentLng = spawnLng;
+            player.CurrentHexQ = spawnCell.Q;
+            player.CurrentHexR = spawnCell.R;
+            player.PreviousHexKey = null;
+            GameStateCommon.SyncBeaconStateForRole(state, player);
+        }
+    }
+
+    private static HexCell? ResolveSpawnCell(GameState state, PlayerDto player)
+    {
+        var ownCell = state.Grid.Values
+            .Where(cell => cell.OwnerId == player.Id)
+            .OrderBy(cell => DistanceToMaster(state, cell))
+            .ThenBy(cell => cell.Q)
+            .ThenBy(cell => cell.R)
+            .FirstOrDefault();
+        if (ownCell != null)
+            return ownCell;
+
+        if (!string.IsNullOrWhiteSpace(player.AllianceId))
+        {
+            var allianceCell = state.Grid.Values
+                .Where(cell => cell.OwnerAllianceId == player.AllianceId)
+                .OrderBy(cell => DistanceToMaster(state, cell))
+                .ThenBy(cell => cell.Q)
+                .ThenBy(cell => cell.R)
+                .FirstOrDefault();
+            if (allianceCell != null)
+                return allianceCell;
+        }
+
+        if (state.MasterTileQ is int masterQ &&
+            state.MasterTileR is int masterR &&
+            state.Grid.TryGetValue(HexService.Key(masterQ, masterR), out var masterCell))
+        {
+            return masterCell;
+        }
+
+        return state.Grid.Values
+            .OrderBy(cell => DistanceToMaster(state, cell))
+            .ThenBy(cell => cell.Q)
+            .ThenBy(cell => cell.R)
+            .FirstOrDefault();
+    }
+
+    private static int DistanceToMaster(GameState state, HexCell cell)
+    {
+        if (state.MasterTileQ is int masterQ && state.MasterTileR is int masterR)
+            return HexService.HexDistance(cell.Q - masterQ, cell.R - masterR);
+
+        return HexService.HexDistance(cell.Q, cell.R);
     }
 
     private static string? ValidateStartingAccess(GameState state)

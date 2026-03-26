@@ -1,31 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameIcon } from '../common/GameIcon';
-import { hexAreAdjacent } from '../map/HexMath';
 import { useGameStore } from '../../stores/gameStore';
-import { useGameplayStore } from '../../stores/gameplayStore';
+import { useInfoLedgeStore } from '../../stores/infoLedgeStore';
 
-interface GuidanceBannerProps {
+const isDesktop = typeof navigator !== 'undefined' && navigator.maxTouchPoints === 0;
+
+interface GuidanceBannerStateProps {
   carriedTroops: number;
   isInOwnHex: boolean;
   hasLocation: boolean;
+  currentHex: [number, number] | null;
 }
 
-export function GuidanceBanner({
+export function useGuidanceBannerState({
   carriedTroops,
   isInOwnHex,
-  hasLocation
-}: GuidanceBannerProps) {
+  hasLocation,
+  currentHex,
+}: GuidanceBannerStateProps) {
   const { t } = useTranslation();
   const gameState = useGameStore((state) => state.gameState);
   const currentUserId = useGameStore((state) => state.savedSession?.userId);
-  const selectedHexKey = useGameplayStore((state) => state.selectedHexKey);
+  const hasLedgeLocationError = useInfoLedgeStore((state) => state.items.some((item) => item.source === 'locationError'));
   const isCarryingTroops = carriedTroops > 0;
-  const selectedHexCell = useMemo(
-    () => (gameState && selectedHexKey ? gameState.grid[selectedHexKey] : undefined),
-    [gameState, selectedHexKey]
-  );
-  const selectedHexExists = Boolean(selectedHexCell);
   const currentPlayer = useMemo(
     () => gameState?.players.find((player) => player.id === currentUserId) ?? null,
     [currentUserId, gameState]
@@ -43,21 +40,8 @@ export function GuidanceBanner({
     }
 
     const isStandingOnUnclaimedHex = Boolean(currentHexCell && !currentHexCell.ownerId);
-    const isSelectedUnclaimedHexNearby = Boolean(
-      selectedHexCell
-      && !selectedHexCell.ownerId
-      && (
-        (selectedHexCell.q === currentPlayer.currentHexQ && selectedHexCell.r === currentPlayer.currentHexR)
-        || hexAreAdjacent(
-          currentPlayer.currentHexQ,
-          currentPlayer.currentHexR,
-          selectedHexCell.q,
-          selectedHexCell.r,
-        )
-      )
-    );
 
-    if (!isStandingOnUnclaimedHex && !isSelectedUnclaimedHexNearby) {
+    if (!isStandingOnUnclaimedHex) {
       return null;
     }
 
@@ -76,10 +60,16 @@ export function GuidanceBanner({
     return t('guidance.claimMode.adjacencyRequired' as never, {
       defaultValue: 'You can only claim hexes that border your existing territory. Teammate beacons can extend your reach!',
     });
-  }, [currentHexCell, currentPlayer, gameState, selectedHexCell, t]);
+  }, [currentHexCell, currentPlayer, gameState, t]);
   const computedHint = useMemo(() => {
-    if (!hasLocation) {
+    if (!hasLocation && !hasLedgeLocationError) {
       return t('guidance.enableLocation');
+    }
+
+    if (!currentHex) {
+      return isDesktop
+        ? t('guidance.noPositionYetDesktop')
+        : t('guidance.noPositionYet');
     }
 
     if (claimModeHint) {
@@ -96,12 +86,8 @@ export function GuidanceBanner({
       return t('guidance.pickupTroops');
     }
 
-    if (!selectedHexExists) {
-      return t('guidance.tapHex');
-    }
-
     return t('guidance.walkToClaim');
-  }, [carriedTroops, claimModeHint, hasLocation, isCarryingTroops, isInOwnHex, selectedHexExists, t]);
+  }, [carriedTroops, claimModeHint, currentHex, hasLedgeLocationError, hasLocation, isCarryingTroops, isInOwnHex, t]);
   const [hint, setHint] = useState<string>(computedHint);
   const [isVisible, setIsVisible] = useState<boolean>(true);
 
@@ -109,6 +95,8 @@ export function GuidanceBanner({
     let swapTimeout: number | undefined;
     let showTimeout: number | undefined;
     let hideTimeout: number | undefined;
+
+    const shouldPersist = isCarryingTroops || currentHex === null;
 
     if (computedHint !== hint) {
       showTimeout = window.setTimeout(() => {
@@ -120,20 +108,20 @@ export function GuidanceBanner({
         setIsVisible(true);
       }, 300);
 
-      if (!isCarryingTroops) {
+      if (!shouldPersist) {
         hideTimeout = window.setTimeout(() => {
           setIsVisible(false);
-        }, 5300);
+        }, 12300);
       }
     } else {
       showTimeout = window.setTimeout(() => {
         setIsVisible(true);
       }, 0);
 
-      if (!isCarryingTroops) {
+      if (!shouldPersist) {
         hideTimeout = window.setTimeout(() => {
           setIsVisible(false);
-        }, 5000);
+        }, 12000);
       }
     }
 
@@ -150,12 +138,7 @@ export function GuidanceBanner({
         window.clearTimeout(hideTimeout);
       }
     };
-  }, [computedHint, hint, isCarryingTroops]);
+  }, [computedHint, currentHex, hint, isCarryingTroops]);
 
-  return (
-    <div className={`context-item guidance-tip ${isVisible ? 'enter-active' : ''}`}>
-      <span className="context-icon" aria-hidden="true"><GameIcon name="lightning" size="sm" /></span>
-      <span>{hint}</span>
-    </div>
-  );
+  return { hint, isVisible };
 }

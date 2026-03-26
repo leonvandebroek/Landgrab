@@ -23,6 +23,16 @@ Use this skill when the playtester needs to:
 - A browser session created for the guest player (separate from the host session)
 - The host has already created a room and has a valid 6-character room code
 
+## Preferred MCP shortcuts
+
+Use these bridge-backed tools to speed up guest verification:
+
+- `state_wait_for` — wait for lobby phase, room code, player count, and game start
+- `state_wait_for_event` / `state_last_events` — confirm `PlayerJoined`, `StateUpdated`, and `GameStarted`
+- `assert_sessions_in_sync` — compare host and guest snapshots after join and after start
+- `assert_player_state` — verify that the guest player is present, connected, and placed correctly
+- `evidence_compare_sessions` — capture host/guest lobby or gameplay state side by side
+
 ## Workflow
 
 ### Step 1 — Register or log in the guest
@@ -46,6 +56,8 @@ Use this skill when the playtester needs to:
 5. **Verify**: The setup wizard is visible (`data-testid="setup-wizard"`) and the room code shown in `data-testid="wizard-room-code"` matches the entered code.
 6. **Evidence**: Screenshot the joined state showing the guest wizard view.
 
+Fast path: after clicking Join, prefer `state_wait_for` with `roomCode`, `view: 'lobby'`, and `phase: 'Lobby'` instead of using fixed sleeps.
+
 ### Step 3 — Verify lobby synchronization
 
 1. Check that the guest's player name appears in the host's lobby player list.
@@ -53,6 +65,12 @@ Use this skill when the playtester needs to:
 3. Verify the player count matches expectations across all browser sessions.
 4. **Verify**: All expected players are visible in both host and guest sessions.
 5. **Evidence**: Screenshot both the host and guest views showing the synchronized player list.
+
+Recommended verification:
+
+- `assert_sessions_in_sync` with `scope: 'players'`
+- `assert_player_state` for the guest session
+- `evidence_compare_sessions` for host + guest if the UI appears inconsistent
 
 ### Step 4 — Wait for game configuration (guest wizard)
 
@@ -63,12 +81,20 @@ Use this skill when the playtester needs to:
 2. The guest cannot advance wizard steps independently; progression is driven by the host.
 3. **Verify**: The guest wizard step updates as the host progresses through configuration.
 
+Use `state_wait_for` with `currentWizardStep` and `state_wait_for_event` for `StateUpdated` instead of relying on arbitrary delays.
+
 ### Step 5 — Wait for game start
 
 1. Wait for the `GameStarted` SignalR event or the game phase to transition to `Playing`.
 2. The game view should appear with the hex map and player state.
 3. **Verify**: The game phase is `Playing` and the guest can see the game grid.
 4. **Evidence**: Screenshot the game-started state from the guest's perspective.
+
+Recommended verification after start:
+
+- `state_wait_for` with `phase: 'Playing'`
+- `assert_sessions_in_sync` with `scope: 'phase'` or `scope: 'full'`
+- `evidence_checkpoint` to capture the guest's first in-game state
 
 ## Key SignalR Methods
 

@@ -45,7 +45,7 @@ export function hslToCSS(h: number, s: number, l: number): string {
  * - troops ≈ 0  → clearly team-colored but lighter
  * - troops ≥ maxTroops → deep, rich, fully saturated
  *
- * Intensity floor is 0.60 so even fresh claims are unmistakably team-colored.
+ * Intensity floor is 0.72 so even fresh captures are unmistakably team-colored.
  */
 export function scaleTroopColor(
   baseColor: string,
@@ -55,7 +55,7 @@ export function scaleTroopColor(
   const clampedTroops = Math.max(0, troops);
   const safeDivisor = Math.max(1, maxTroops);
 
-  const intensity = Math.min(1, 0.60 + 0.40 * (clampedTroops / safeDivisor));
+  const intensity = Math.min(1, 0.72 + 0.28 * (clampedTroops / safeDivisor));
   const { h, s, l } = hexToHSL(baseColor);
 
   // High saturation floor — team color always clearly visible
@@ -74,6 +74,6 @@ export function scaleTroopColor(
  */
 export function scaleTroopOpacity(troops: number, isOwned: boolean): number {
   if (!isOwned) return 0.40;
-  // Owned: 0.72 (fresh claim) → 0.92 (heavy troops)
-  return Math.min(0.92, 0.72 + 0.20 * Math.min(1, troops / 30));
+  // Owned: 0.80 (fresh claim) → 0.92 (heavy troops)
+  return Math.min(0.92, 0.80 + 0.12 * Math.min(1, troops / 30));
 }

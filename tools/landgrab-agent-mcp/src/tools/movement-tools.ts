@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { getSession } from '../lib/browser-registry.js';
+import { getAgentSnapshot, pollAgentBridge } from '../lib/agent-bridge.js';
+
+function jsonResult(payload: unknown) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
+}
 
 // Default map seed location (Brussels) used when no location has been set yet.
 const DEFAULT_LAT = 50.8503;
@@ -21,10 +26,10 @@ export function registerMovementTools(server: McpServer): void {
       const panel = page.locator('[data-testid="debug-gps-panel"]');
 
       // ── Step 1: open the dev-tools panel ──────────────────────────────────
-      // Class is debug-tools-toggle in wizard/lobby, debug-toggle-ingame in game view.
+      // Prefer the stable data-testid; fall back to CSS classes for older builds.
       const panelVisible = await panel.isVisible().catch(() => false);
       if (!panelVisible) {
-        const devToggle = page.locator('.debug-tools-toggle, .debug-toggle-ingame').first();
+        const devToggle = page.locator('[data-testid="dev-section-toggle"], .debug-tools-toggle, .debug-toggle-ingame').first();
         await devToggle.waitFor({ state: 'visible', timeout: 10_000 });
         await devToggle.dispatchEvent('click');
         await panel.waitFor({ state: 'visible', timeout: 5_000 });
@@ -124,6 +129,78 @@ export function registerMovementTools(server: McpServer): void {
       return {
         content: [{ type: 'text', text: JSON.stringify({ direction, count, status: 'moved' }) }],
       };
+    },
+  );
+
+  server.tool(
+    'player_navigate_to_hex',
+    [
+      'Navigate the player to a target hex (q, r) by automatically computing and executing the required step sequence.',
+      'Derives the current hex from the bridge, calculates delta_q/delta_r, moves east/west then north/south,',
+      'and waits until the bridge confirms arrival. Call player_enable_debug_gps first.',
+    ].join(' '),
+    {
+      sessionId: z.string(),
+      q: z.number().int(),
+      r: z.number().int(),
+    },
+    async ({ sessionId, q: targetQ, r: targetR }) => {
+      const { page } = getSession(sessionId);
+
+      const initialSnapshot = await getAgentSnapshot<any>(page);
+      const currentHex = initialSnapshot?.currentHex;
+      if (!Array.isArray(currentHex) || currentHex.length !== 2) {
+        throw new Error('Current player hex is not available. Call player_enable_debug_gps first.');
+      }
+
+      const [cq, cr] = currentHex.map(Number);
+      const dq = targetQ - cq;
+      const dr = targetR - cr;
+
+      if (dq === 0 && dr === 0) {
+        return jsonResult({ sessionId, from: [cq, cr], to: [targetQ, targetR], steps: [], status: 'already_there' });
+      }
+
+      const stepsExecuted: Array<{ direction: string; count: number }> = [];
+
+      const moveAxis = async (direction: 'north' | 'south' | 'east' | 'west', count: number) => {
+        if (count <= 0) return;
+        stepsExecuted.push({ direction, count });
+        const btn = page.locator(`[data-testid="debug-gps-step-${direction}"]`);
+        await page.waitForFunction(
+          (sel: string) => !(document.querySelector(sel) as HTMLButtonElement | null)?.disabled,
+          `[data-testid="debug-gps-step-${direction}"]`,
+          { timeout: 5_000 },
+        );
+        for (let i = 0; i < count; i++) {
+          await btn.click();
+          await page.waitForTimeout(300);
+        }
+      };
+
+      // Axial mapping: east = +q, west = -q, north = +r, south = -r
+      if (dq > 0) await moveAxis('east', dq);
+      else if (dq < 0) await moveAxis('west', -dq);
+      if (dr > 0) await moveAxis('north', dr);
+      else if (dr < 0) await moveAxis('south', -dr);
+
+      // Wait for bridge to confirm arrival
+      const finalSnapshot = await pollAgentBridge<any>(
+        page,
+        () => getAgentSnapshot(page),
+        (snap) => snap?.currentHex?.[0] === targetQ && snap?.currentHex?.[1] === targetR,
+        { timeoutMs: 8_000, intervalMs: 300 },
+      ).catch((err: Error) => ({ error: err.message, currentHex: null }));
+
+      const arrivedAt = finalSnapshot?.currentHex ?? null;
+      return jsonResult({
+        sessionId,
+        from: [cq, cr],
+        to: [targetQ, targetR],
+        steps: stepsExecuted,
+        arrivedAt,
+        success: Array.isArray(arrivedAt) && arrivedAt[0] === targetQ && arrivedAt[1] === targetR,
+      });
     },
   );
 }

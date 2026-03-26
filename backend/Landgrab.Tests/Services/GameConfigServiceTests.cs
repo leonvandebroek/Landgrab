@@ -185,33 +185,21 @@ public sealed class GameConfigServiceTests
 
         var dynamics = new GameDynamics
         {
-            TerrainEnabled = true,
             PlayerRolesEnabled = false,
-            FogOfWarEnabled = true,
             HQEnabled = true,
-            HQAutoAssign = true,
-            TimedEscalationEnabled = false,
-            UnderdogPactEnabled = true
+            HQAutoAssign = true
         };
 
         var result = sut.SetGameDynamics(ServiceTestContext.RoomCode, HostUserId, dynamics);
 
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
-        result.state!.Dynamics.TerrainEnabled.Should().BeTrue();
-        result.state.Dynamics.PlayerRolesEnabled.Should().BeFalse();
-        result.state.Dynamics.FogOfWarEnabled.Should().BeTrue();
+        result.state!.Dynamics.PlayerRolesEnabled.Should().BeFalse();
         result.state.Dynamics.HQEnabled.Should().BeTrue();
         result.state.Dynamics.HQAutoAssign.Should().BeTrue();
-        result.state.Dynamics.TimedEscalationEnabled.Should().BeFalse();
-        result.state.Dynamics.UnderdogPactEnabled.Should().BeTrue();
-        context.State.Dynamics.TerrainEnabled.Should().BeTrue();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
-        context.State.Dynamics.FogOfWarEnabled.Should().BeTrue();
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.HQAutoAssign.Should().BeTrue();
-        context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
-        context.State.Dynamics.UnderdogPactEnabled.Should().BeTrue();
     }
 
     [Fact]
@@ -221,22 +209,14 @@ public sealed class GameConfigServiceTests
 
         var result = sut.SetGameDynamics(ServiceTestContext.RoomCode, GuestUserId, new GameDynamics
         {
-            TerrainEnabled = true,
             PlayerRolesEnabled = true,
-            FogOfWarEnabled = true,
-            HQEnabled = true,
-            TimedEscalationEnabled = true,
-            UnderdogPactEnabled = true
+            HQEnabled = true
         });
 
         result.state.Should().BeNull();
         result.error.Should().Be("Only the host can change game dynamics.");
-        context.State.Dynamics.TerrainEnabled.Should().BeFalse();
         context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
-        context.State.Dynamics.FogOfWarEnabled.Should().BeFalse();
         context.State.Dynamics.HQEnabled.Should().BeFalse();
-        context.State.Dynamics.TimedEscalationEnabled.Should().BeFalse();
-        context.State.Dynamics.UnderdogPactEnabled.Should().BeFalse();
     }
 
     [Fact]
@@ -246,12 +226,12 @@ public sealed class GameConfigServiceTests
 
         var result = sut.SetGameDynamics(ServiceTestContext.RoomCode, HostUserId, new GameDynamics
         {
-            TerrainEnabled = true
+            PlayerRolesEnabled = true
         });
 
         result.state.Should().BeNull();
         result.error.Should().Be("Game dynamics can only be changed in the lobby.");
-        context.State.Dynamics.TerrainEnabled.Should().BeFalse();
+        context.State.Dynamics.PlayerRolesEnabled.Should().BeFalse();
     }
 
     private static (ServiceTestContext context, GameConfigService sut) CreateContext(

@@ -3,10 +3,8 @@ using Landgrab.Api.Models;
 namespace Landgrab.Api.Services;
 
 public class GameConfigService(IGameRoomProvider roomProvider, GameStateService gameStateService)
+    : RoomScopedServiceBase(roomProvider, gameStateService)
 {
-    private GameRoom? GetRoom(string code) => roomProvider.GetRoom(code);
-    private static GameState SnapshotState(GameState state) => GameStateCommon.SnapshotState(state);
-    private void QueuePersistence(GameRoom room, GameState stateSnapshot) => gameStateService.QueuePersistence(room, stateSnapshot);
 
     public (GameState? state, string? error) SetClaimMode(string roomCode, string userId, string claimMode)
     {
@@ -75,6 +73,26 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         }
     }
 
+    public (GameState? state, string? error) SetFieldBattleResolutionMode(string roomCode, string userId, string mode)
+    {
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, userId))
+                return (null, "Only the host can configure this.");
+            if (!Enum.TryParse<FieldBattleResolutionMode>(mode, out var parsed))
+                return (null, "Invalid resolution mode.");
+
+            room.State.Dynamics.FieldBattleResolutionMode = parsed;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) SetBeaconEnabled(string roomCode, string userId, bool enabled)
     {
         var room = GetRoom(roomCode);
@@ -115,6 +133,29 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         }
     }
 
+    public (GameState? state, string? error) SetEnemySightingMemory(string roomCode, string userId, int seconds)
+    {
+        if (seconds < 0 || seconds > 300)
+            return (null, "Enemy sighting memory must be between 0 and 300 seconds.");
+
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (!GameStateCommon.IsHost(room, userId))
+                return (null, "Only the host can change enemy sighting memory.");
+            if (room.State.Phase != GamePhase.Lobby)
+                return (null, "Enemy sighting memory can only be changed in the lobby.");
+
+            room.State.Dynamics.EnemySightingMemorySeconds = seconds;
+            var snapshot = SnapshotState(room.State);
+            QueuePersistence(room, snapshot);
+            return (snapshot, null);
+        }
+    }
+
     public (GameState? state, string? error) SetGameDynamics(string roomCode, string userId, GameDynamics dynamics)
     {
         var room = GetRoom(roomCode);
@@ -129,15 +170,13 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
                 return (null, "Game dynamics can only be changed in the lobby.");
 
             room.State.Dynamics.BeaconEnabled = dynamics.BeaconEnabled;
+            room.State.Dynamics.BeaconSectorAngle = dynamics.BeaconSectorAngle;
             room.State.Dynamics.TileDecayEnabled = dynamics.TileDecayEnabled;
-            room.State.Dynamics.TerrainEnabled = dynamics.TerrainEnabled;
             room.State.Dynamics.CombatMode = dynamics.CombatMode;
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
-            room.State.Dynamics.FogOfWarEnabled = dynamics.FogOfWarEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
-            room.State.Dynamics.TimedEscalationEnabled = dynamics.TimedEscalationEnabled;
-            room.State.Dynamics.UnderdogPactEnabled = dynamics.UnderdogPactEnabled;
+            room.State.Dynamics.FieldBattleResolutionMode = dynamics.FieldBattleResolutionMode;
 
             var snapshot = SnapshotState(room.State);
             QueuePersistence(room, snapshot);

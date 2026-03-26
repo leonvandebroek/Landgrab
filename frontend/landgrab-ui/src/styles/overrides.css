@@ -1,0 +1,309 @@
+
+/* --- CRITICAL VISIBILITY OVERRIDES --- */
+
+/* Kept for backwards compatibility — no longer used */
+@keyframes current-player-hex-pulse {}
+
+.hex-active-player,
+.hex-selected-overlay,
+.hex-active-player.is-current-player-hex {
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke fill;
+}
+
+.hex-active-player,
+.hex-active-player.is-current-player-hex {
+  animation: none !important;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 170, 0.8)) drop-shadow(0 0 14px rgba(0, 255, 170, 0.4));
+  stroke: #2ecc71 !important;
+}
+
+.hex-selected-overlay {
+  animation: PulseSlow 2s ease-in-out infinite !important;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+  stroke: #ffffff !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-active-player,
+  .hex-active-player.is-current-player-hex {
+    animation: none !important;
+  }
+  .hex-selected-overlay {
+    animation: none !important;
+  }
+}
+
+.hex-polygon.is-strobe {
+  animation: StrobeCritical 0.5s ease-in-out infinite;
+}
+
+.hex-polygon.is-pulse {
+  animation: PulseSlow 2s ease-in-out infinite;
+}
+
+.hex-polygon.is-march {
+  animation: MarchingAnts 1.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-polygon.is-strobe,
+  .hex-polygon.is-pulse,
+  .hex-polygon.is-march {
+    animation: none !important;
+  }
+}
+
+/* Contested edge animations */
+.hex-threat-breathe {
+  animation: threat-breathe 3s ease-in-out infinite;
+}
+
+.contested-edge-heat {
+  animation: heat-pulse 2s ease-in-out infinite;
+  will-change: opacity, filter;
+}
+
+.contested-edge-march {
+  animation: friction-march linear infinite;
+}
+
+.contested-edge-spark {
+  animation: spark-strobe 2s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hex-threat-breathe,
+  .contested-edge-heat,
+  .contested-edge-march,
+  .contested-edge-spark {
+    animation: none !important;
+  }
+}
+
+@keyframes ability-overlay-pulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    filter: drop-shadow(0 0 6px rgba(255, 96, 96, 0.35));
+  }
+
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(255, 96, 96, 0.62));
+  }
+}
+
+@keyframes ability-overlay-ring-pulse {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.92);
+  }
+
+  70% {
+    opacity: 0.32;
+    transform: scale(1.16);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.24);
+  }
+}
+
+.ability-overlay__polygon,
+.ability-overlay__target-ring,
+.ability-overlay__target-crosshair,
+.ability-overlay__segment-line,
+.ability-overlay__rally-ring,
+.ability-overlay__rally-core {
+  vector-effect: non-scaling-stroke;
+  paint-order: stroke fill;
+}
+
+.ability-overlay__commando-invalid {
+  fill: rgba(5, 10, 18, 0.28);
+  stroke: rgba(45, 58, 82, 0.32);
+  stroke-width: 1.1;
+}
+
+.ability-overlay__commando-valid {
+  fill: rgba(255, 84, 112, 0.14);
+  stroke: rgba(255, 241, 244, 0.92);
+  stroke-width: 1.7;
+  animation: ability-overlay-pulse 1.8s ease-in-out infinite;
+}
+
+.ability-overlay__commando-selected {
+  fill: rgba(255, 255, 255, 0.08);
+  stroke: rgba(255, 255, 255, 0.98);
+  stroke-width: 2.8;
+  stroke-dasharray: 8 6;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.45));
+}
+
+.ability-overlay__target-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 2.4;
+  animation: ability-overlay-ring-pulse 1.35s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ability-overlay__target-crosshair {
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.ability-overlay__mission-target {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke-width: 2.2;
+  stroke-dasharray: 7 6;
+}
+
+.ability-overlay__mission-target--friendly {
+  stroke: rgba(55, 224, 171, 0.92);
+  filter: drop-shadow(0 0 10px rgba(55, 224, 171, 0.32));
+}
+
+.ability-overlay__mission-target--hostile {
+  stroke: rgba(255, 110, 110, 0.95);
+  filter: drop-shadow(0 0 10px rgba(255, 110, 110, 0.32));
+}
+
+.ability-overlay__mission-target--breach {
+  stroke: rgba(255, 180, 76, 0.95);
+  filter: drop-shadow(0 0 10px rgba(255, 180, 76, 0.36));
+}
+
+.ability-overlay__segment-line {
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.ability-overlay__segment-line--friendly.ability-overlay__segment-line--visited {
+  stroke: rgba(61, 234, 181, 0.88);
+}
+
+.ability-overlay__segment-line--friendly.ability-overlay__segment-line--remaining {
+  stroke: rgba(255, 214, 102, 0.8);
+  stroke-dasharray: 5 6;
+}
+
+.ability-overlay__segment-line--hostile.ability-overlay__segment-line--visited {
+  stroke: rgba(255, 105, 105, 0.9);
+}
+
+.ability-overlay__segment-line--hostile.ability-overlay__segment-line--remaining {
+  stroke: rgba(255, 174, 92, 0.84);
+  stroke-dasharray: 5 6;
+}
+
+.ability-overlay__segment-line--breach.ability-overlay__segment-line--visited {
+  stroke: rgba(255, 191, 92, 0.92);
+}
+
+.ability-overlay__segment-line--breach.ability-overlay__segment-line--remaining {
+  stroke: rgba(255, 233, 173, 0.82);
+  stroke-dasharray: 5 6;
+}
+
+.ability-overlay__segment {
+  stroke-width: 1.6;
+}
+
+.ability-overlay__segment--friendly.ability-overlay__segment--visited {
+  fill: rgba(61, 234, 181, 0.2);
+  stroke: rgba(61, 234, 181, 0.92);
+}
+
+.ability-overlay__segment--friendly.ability-overlay__segment--remaining {
+  fill: rgba(255, 214, 102, 0.1);
+  stroke: rgba(255, 214, 102, 0.88);
+}
+
+.ability-overlay__segment--hostile.ability-overlay__segment--visited {
+  fill: rgba(255, 105, 105, 0.22);
+  stroke: rgba(255, 105, 105, 0.92);
+}
+
+.ability-overlay__segment--hostile.ability-overlay__segment--remaining {
+  fill: rgba(255, 170, 92, 0.1);
+  stroke: rgba(255, 170, 92, 0.9);
+}
+
+.ability-overlay__segment--breach.ability-overlay__segment--visited {
+  fill: rgba(255, 191, 92, 0.24);
+  stroke: rgba(255, 191, 92, 0.95);
+}
+
+.ability-overlay__segment--breach.ability-overlay__segment--remaining {
+  fill: rgba(255, 233, 173, 0.12);
+  stroke: rgba(255, 233, 173, 0.9);
+}
+
+.ability-overlay__rally-hex {
+  fill: rgba(91, 205, 255, 0.16);
+  stroke: rgba(180, 237, 255, 0.95);
+  stroke-width: 2.1;
+  filter: drop-shadow(0 0 10px rgba(91, 205, 255, 0.42));
+}
+
+.ability-overlay__rally-ring {
+  fill: none;
+  stroke: rgba(180, 237, 255, 0.95);
+  stroke-width: 2.4;
+  animation: ability-overlay-ring-pulse 1.6s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ability-overlay__rally-core {
+  fill: rgba(91, 205, 255, 0.92);
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 2;
+}
+
+.ability-overlay__rally-label {
+  fill: rgba(255, 255, 255, 0.96);
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* Beacon scan hex overlay — cyan pulse on the 3-hex scan zone */
+.ability-overlay__beacon-scan-hex {
+  fill: rgba(0, 243, 255, 0.15);
+  stroke: #00f3ff;
+  stroke-width: 1.8;
+  animation: beacon-scan-hex-pulse 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 6px rgba(0, 243, 255, 0.4));
+}
+
+@keyframes beacon-scan-hex-pulse {
+  0%,
+  100% {
+    fill-opacity: 0.12;
+    stroke-opacity: 0.7;
+    filter: drop-shadow(0 0 5px rgba(0, 243, 255, 0.35));
+  }
+
+  50% {
+    fill-opacity: 0.25;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 12px rgba(0, 243, 255, 0.75));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ability-overlay__commando-valid,
+  .ability-overlay__target-ring,
+  .ability-overlay__rally-ring,
+  .ability-overlay__beacon-scan-hex {
+    animation: none !important;
+  }
+}
