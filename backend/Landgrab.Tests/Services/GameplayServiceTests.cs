@@ -787,7 +787,7 @@ public sealed class GameplayServiceTests
         var context = new ServiceTestContext(state);
         var (lat, lng) = ServiceTestContext.HexCenter(1, 0);
 
-        var (result, error, _, _, _) = context.GameplayService.PlaceTroops(
+        var (result, error, _, _) = context.GameplayService.PlaceTroops(
             ServiceTestContext.RoomCode, "p1", 1, 0, lat, lng);
 
         error.Should().Contain("CommandoRaid");

@@ -4891,6 +4891,25 @@ input:checked+.display-settings-slider:before {
 \n
 
 /* ── Game Rules ────────────────────────────────────────────────────────── */
+/* Rules gate overlay — wraps the backdrop + sheet so the sheet positions
+   relative to the fixed viewport rather than a deeply-nested ancestor. */
+.rules-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2998; /* sits just below the hud-modal-backdrop (2999) and sheet (3000) */
+  pointer-events: none; /* children re-enable as needed */
+}
+
+.rules-gate-overlay .hud-modal-backdrop {
+  pointer-events: auto;
+}
+
+/* Override sheet to use fixed positioning so it always pins to viewport bottom */
+.rules-gate-overlay .hud-modal-sheet {
+  position: fixed;
+  pointer-events: auto;
+}
+
 .rules-page-container {
   position: absolute;
   top: 0;
@@ -5103,6 +5122,15 @@ input:checked+.display-settings-slider:before {
   padding: 1rem;
   overflow-y: auto;
   flex: 1;
+}
+
+/* Sticky "Let's Play" footer inside the rules modal sheet */
+.rules-sheet-footer {
+  padding: 0.75rem 0 0;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  border-top: 1px solid rgba(120, 190, 255, 0.10);
 }
 
 /* ── UI Game Enhancements ──────────────────────────────────────────────────────── */

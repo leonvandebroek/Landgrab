@@ -55,6 +55,8 @@ export function DynamicsStep({
                 return dynamics.hqEnabled;
             case 'tileDecayEnabled':
                 return dynamics.tileDecayEnabled;
+            case 'fieldBattleEnabled':
+                return dynamics.fieldBattleEnabled ?? true;
         }
     };
 
@@ -70,6 +72,11 @@ export function DynamicsStep({
 
         if (key === 'tileDecayEnabled') {
             onSetTileDecayEnabled(checked);
+            return;
+        }
+
+        if (key === 'fieldBattleEnabled') {
+            updateDynamics({ fieldBattleEnabled: checked });
             return;
         }
 

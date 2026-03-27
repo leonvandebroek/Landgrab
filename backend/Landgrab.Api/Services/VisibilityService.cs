@@ -463,9 +463,7 @@ public class VisibilityService
 
     private static bool HasValidCurrentHexForVisibility(PlayerDto player)
     {
-        return player.CurrentHexQ.HasValue
-            && player.CurrentHexR.HasValue
-            && !(player.CurrentHexQ.Value == 0 && player.CurrentHexR.Value == 0);
+        return player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue;
     }
 
     private static void AddAllianceBorderHostileKeys(

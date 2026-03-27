@@ -176,6 +176,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
+            room.State.Dynamics.FieldBattleEnabled = dynamics.FieldBattleEnabled;
             room.State.Dynamics.FieldBattleResolutionMode = dynamics.FieldBattleResolutionMode;
 
             var snapshot = SnapshotState(room.State);

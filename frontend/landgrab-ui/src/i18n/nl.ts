@@ -422,6 +422,7 @@ const nl = {
       troopTransferAccepted: '{{name}} accepteerde {{count}} troepen',
       troopTransferDeclined: '{{name}} weigerde je overdracht',
       fieldBattleInvite: '{{name}} heeft een veldslag gestart — doe nu mee!',
+      fieldBattleDetected: 'Vijand gedetecteerd op uw positie — kies een doelwit om de veldslag te starten!',
       fieldBattleWon: 'Veldslag gewonnen bij ({{q}}, {{r}})',
       fieldBattleLost: 'Veldslag verloren bij ({{q}}, {{r}})',
       achievementUnlocked: '🏹 Prestatie behaald: {{name}}',
@@ -964,6 +965,8 @@ const nl = {
       hqAutoAssignDesc: 'Wijs automatisch het hoofdkwartier van elke alliantie toe aan hun starttegel bij aanvang van het spel.',
       tileDecayEnabled: 'Tegelverval',
       tileDecayEnabledDesc: 'Onbezette tegels verliezen geleidelijk troepen over de tijd.',
+      fieldBattleEnabled: 'Veldslag',
+      fieldBattleEnabledDesc: 'Spelers die troepen dragen kunnen vijanden op hetzelfde neutrale veld uitdagen.',
     },
   },
   phase3: {

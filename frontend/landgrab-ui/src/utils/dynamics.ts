@@ -2,7 +2,7 @@ import type { GameDynamics } from '../types/game';
 
 export const FEATURE_KEYS = [
   'playerRoles', 'beaconEnabled', 'hq',
-  'tileDecayEnabled',
+  'tileDecayEnabled', 'fieldBattleEnabled',
 ] as const;
 
 export type FeatureKey = typeof FEATURE_KEYS[number];

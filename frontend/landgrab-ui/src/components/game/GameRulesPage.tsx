@@ -168,10 +168,15 @@ export function GameRulesPage({ gameState, onContinue, isModal = false }: GameRu
       <div className="hud-modal-sheet open rules-sheet" data-testid="game-rules-gate" onClick={(event) => event.stopPropagation()}>
         <div className="hud-modal-header">
           <h3>{t('rules.title')}</h3>
-          <button className="hud-modal-close" onClick={onContinue}>×</button>
+          <button className="hud-modal-close" onClick={onContinue} aria-label={t('rules.letsPlay')}>×</button>
         </div>
         <div className="hud-modal-content rules-scroll-area">
           {content}
+        </div>
+        <div className="rules-sheet-footer">
+          <button className="btn-primary big rules-play-btn" onClick={onContinue}>
+            {t('rules.letsPlay')}
+          </button>
         </div>
       </div>
     );

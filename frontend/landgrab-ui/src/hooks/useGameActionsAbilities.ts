@@ -17,6 +17,7 @@ interface UseGameActionsAbilitiesResult {
   handleInitiateFieldBattle: () => Promise<{ battleId: string } | null>;
   handleJoinFieldBattle: (battleId: string) => Promise<boolean>;
   handleSelectFieldBattleTarget: (battleId: string, targetId: string) => Promise<boolean>;
+  handleChallengePlayer: (enemyId: string) => Promise<boolean>;
   handleFleeBattle: (battleId: string) => Promise<boolean>;
   handleActivateRallyPoint: () => Promise<boolean>;
   handleActivateSabotage: () => Promise<boolean>;
@@ -82,6 +83,7 @@ export function useGameActionsAbilities({
     ),
     handleJoinFieldBattle:        makeHandler(invokeFn, setError, 'JoinFieldBattle',             false as boolean),
     handleSelectFieldBattleTarget: makeHandler(invokeFn, setError, 'SelectFieldBattleTarget',    false as boolean),
+    handleChallengePlayer:        makeHandler(invokeFn, setError, 'ChallengePlayer',             false as boolean),
     handleFleeBattle:             makeHandler(invokeFn, setError, 'FleeBattle',                  false as boolean),
     handleActivateRallyPoint:     makeHandler(invokeFn, setError, 'ActivateRallyPoint',          false as boolean),
     handleActivateSabotage:       makeHandler(invokeFn, setError, 'ActivateSabotage',            false as boolean),

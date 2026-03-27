@@ -596,6 +596,21 @@ export function PlayerHUD({
           </div>
         )}
 
+        {!isStrategicZoom && carriedTroops > 0 && (
+          <div className="player-hud__carried-row">
+            <span
+              className="player-hud__carried"
+              aria-label={t('game.carriedTroops')}
+              title={t('game.carriedTroops')}
+            >
+              <span className="player-hud__carried-icon" aria-hidden="true">
+                <GameIcon name="chest" size="sm" />
+              </span>
+              <span className="player-hud__carried-count">{formattedCarriedTroops}</span>
+            </span>
+          </div>
+        )}
+
         {!isCollapsedForZoom && hasVisibleAbilities && (
           <div className="player-hud__modules-row player-hud__abilities">
             {visibleAbilityButtons.map((ability) => (

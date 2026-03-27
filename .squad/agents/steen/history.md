@@ -104,3 +104,36 @@ All findings documented in `.squad/log/20260322T135050Z-keyboard-playtest-sessio
 - Retry `session_list` → `MCP server 'landgrab': Error: Not connected`
 - Frontend/backend service probes during incident: frontend `http://localhost:5173` = 200, backend `http://localhost:5001/api/auth/me` = 401 (expected pre-auth).
 - Outcome: Scout ability validation blocked by Landgrab MCP connectivity (no browser sessions, no room/game flow, no ability activation/sync/evidence execution).
+
+## Session 4 — 2026-03-27 (FieldBattle Feature Validation)
+
+### Scope
+Full playtest of the FieldBattle feature: auto-trigger, target selection, flee, movement-flee, invite panel, toast.
+
+### Execution
+- Landgrab MCP session tools unavailable in runtime; code-level + automated test fallback used.
+- `dotnet test --filter FieldBattle` → 8/8 passed.
+- Services healthy: frontend 200, backend 200.
+
+### Findings — 3 confirmed bugs
+
+#### 🔴 Bug 1 (High) — Auto-trigger broadcast to all enemies before target selection
+- `PlaceTroops` and `UpdatePlayerPosition` hub methods sent `FieldBattleInvite` to every enemy on the tile immediately on auto-trigger.
+- Design: only initiator should be notified at this stage. Enemies notified only after `SelectFieldBattleTarget`.
+- **Fixed by De Ruyter**: removed `enemyIds` broadcast loops from both hub methods. Only `Clients.Caller` with `isInitiator=true` remains.
+
+#### 🔴 Bug 2 (High) — Movement flee missing from `UpdatePlayerPosition` path
+- Service method `UpdatePlayerPosition` (GameplayService.cs:663) only triggered battles; no fled-battle detection when player moved off hex.
+- `UpdatePlayerLocation` had the logic; `UpdatePlayerPosition` didn't.
+- **Fixed by De Ruyter**: added flee detection to service method, extended return tuple to `(battle, fledBattle, error)`, added hub-side `fledBattle` resolution + `FieldBattleResolved` broadcast.
+
+#### 🟡 Bug 3 (Medium) — Wrong toast shown to initiator
+- `onFieldBattleInvite` used `game.toast.fieldBattleInvite` for all players; initiator saw "{{name}} started a field battle — join now!" about themselves.
+- **Fixed by Vermeer**: branched on `data.isInitiator`; added `fieldBattleDetected` toast key (EN + NL).
+
+### Validation (post-fix)
+- `dotnet test` → 348 total, 347 passed, 1 skipped, 0 failed ✅
+- `npm run build` → 302 modules bundled, 0 errors ✅
+
+### Report
+Full report: `.squad/log/steen-fieldbattle-playtest.md`

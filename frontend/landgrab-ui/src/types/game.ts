@@ -17,6 +17,7 @@ export interface GameDynamics {
   hqAutoAssign: boolean;
   tileDecayEnabled: boolean;
   enemySightingMemorySeconds?: number;
+  fieldBattleEnabled: boolean;
   fieldBattleResolutionMode?: 'InitiatorVsSumOfJoined' | 'InitiatorVsHighestOfJoined'
     | 'InitiatorPlusRandomVsSumPlusRandom' | 'InitiatorPlusRandomVsHighestPlusRandom';
 }

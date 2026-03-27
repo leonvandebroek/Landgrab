@@ -422,6 +422,7 @@ const en = {
       troopTransferAccepted: '{{name}} accepted {{count}} troops',
       troopTransferDeclined: '{{name}} declined your transfer',
       fieldBattleInvite: '{{name}} started a field battle — join now!',
+      fieldBattleDetected: 'Enemy detected on your position — select a target to start the field battle!',
       fieldBattleWon: 'Field battle won at ({{q}}, {{r}})',
       fieldBattleLost: 'Field battle lost at ({{q}}, {{r}})',
       achievementUnlocked: '🏹 Achievement unlocked: {{name}}',
@@ -964,6 +965,8 @@ const en = {
       hqAutoAssignDesc: "Automatically place each alliance's headquarters on their starting tile when the game begins.",
       tileDecayEnabled: 'Tile decay',
       tileDecayEnabledDesc: 'Unoccupied tiles gradually lose troops over time.',
+      fieldBattleEnabled: 'Field Battle',
+      fieldBattleEnabledDesc: 'Players carrying troops can challenge enemies on the same neutral hex.',
     },
   },
   phase3: {

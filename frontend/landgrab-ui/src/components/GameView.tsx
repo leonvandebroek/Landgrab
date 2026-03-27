@@ -142,15 +142,6 @@ export function GameView({
   // ── All hooks must fire before any conditional return ───────────────────
   if (!gameState) return null;
 
-  // ── Rules gate ──────────────────────────────────────────────────────────
-  if (shouldShowRulesGate) {
-    return (
-      <>
-        <GameRulesPage gameState={gameState} onContinue={handleAcknowledgeRules} />
-      </>
-    );
-  }
-
   // ── Observer / host-control mode ────────────────────────────────────────
   const isObserverMode = Boolean(myPlayer?.isHost && gameState.hostObserverMode);
 
@@ -242,6 +233,20 @@ export function GameView({
           onDeploy={(count) => void actions.onDeployNeutralClaimTroops(count)}
           onClose={() => setNeutralClaimResult(null)}
         />
+      )}
+      {shouldShowRulesGate && (
+        <div className="rules-gate-overlay">
+          <div
+            className="hud-modal-backdrop"
+            onClick={handleAcknowledgeRules}
+            aria-hidden="true"
+          />
+          <GameRulesPage
+            gameState={gameState}
+            onContinue={handleAcknowledgeRules}
+            isModal
+          />
+        </div>
       )}
     </>
   );

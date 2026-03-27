@@ -25,6 +25,7 @@ const DEFAULT_DYNAMICS: GameDynamics = {
   hqEnabled: false,
   hqAutoAssign: false,
   tileDecayEnabled: false,
+  fieldBattleEnabled: true,
   enemySightingMemorySeconds: 0,
 };
 const TILE_INFO_CARD_TOKEN_STYLES = `

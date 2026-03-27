@@ -342,6 +342,42 @@ export function useSignalRHandlers({
           syncAbilityUiFromServerState(normalizedState, currentUserId);
         }
 
+        // Auto-open FieldBattleCard when the server creates a new field battle for this player, OR
+        // when local conditions are met (same neutral tile, both sides have troops, no cooldown).
+        // syncAbilityUiFromServerState only runs on resume, so we handle this transition explicitly.
+        const activeBattleForPlayer = normalizedState.activeFieldBattles?.find(
+          (b) => b.initiatorId === currentUserId && !b.resolved,
+        ) ?? null;
+
+        // Local eligibility check — shows the card instantly without a backend round-trip.
+        // Mirrors the server-side preconditions for InitiateFieldBattle / ChallengePlayer.
+        const localBattleEligible = (() => {
+          if (!currentUserId) return false;
+          const me = normalizedState.players.find((p) => p.id === currentUserId);
+          if (!me || (me.carriedTroops ?? 0) <= 0) return false;
+          if (normalizedState.dynamics?.fieldBattleEnabled === false) return false;
+          if (me.fieldBattleCooldownUntil != null && new Date(me.fieldBattleCooldownUntil) > new Date()) return false;
+          if (me.currentHexQ == null || me.currentHexR == null) return false;
+          const cell = normalizedState.grid[`${me.currentHexQ},${me.currentHexR}`];
+          if (!cell || cell.ownerId != null) return false;
+          // Enemy troop count is sanitized to 0 in Alliances mode — don't gate on it.
+          // The backend ChallengePlayer validates actual troop counts server-side.
+          return normalizedState.players.some(
+            (p) => p.id !== currentUserId
+              && (me.allianceId == null || p.allianceId !== me.allianceId)
+              && p.currentHexQ === me.currentHexQ
+              && p.currentHexR === me.currentHexR,
+          );
+        })();
+
+        const shouldShowFieldBattle = activeBattleForPlayer != null || localBattleEligible;
+        const currentAbilityUiState = useGameplayStore.getState().abilityUi;
+        if (shouldShowFieldBattle && currentAbilityUiState.activeAbility !== 'fieldBattle') {
+          useGameplayStore.getState().enterAbilityMode('fieldBattle', 'active', 'none', { cardVisible: true });
+        } else if (!shouldShowFieldBattle && currentAbilityUiState.activeAbility === 'fieldBattle') {
+          useGameplayStore.getState().exitAbilityMode();
+        }
+
         const updatedGameplayState = useGameplayStore.getState();
         const updatedAbilityUi = updatedGameplayState.abilityUi;
         const updatedPlayer = currentUserId
@@ -387,14 +423,55 @@ export function useSignalRHandlers({
         const newEntries = newLog.slice(prevLog.length);
         const myUserId = savedSessionRef.current?.userId ?? useGameStore.getState().savedSession?.userId;
         for (const entry of newEntries) {
-          if (entry.type === 'CommandoRaidStarted' || entry.type === 'CommandoRaidSuccess' || entry.type === 'CommandoRaidFailed' || entry.type === 'RallyPointActivated' || entry.type === 'RallyPointResolved' || entry.type === 'SabotageStarted' || entry.type === 'SabotageComplete' || entry.type === 'FortConstructionStarted' || entry.type === 'FortBuilt' || entry.type === 'DemolishStarted' || entry.type === 'DemolishCompleted') {
-            useInfoLedgeStore.getState().push({
-              severity: 'gameEvent',
-              source: 'gameToast',
-              persistent: false,
-              icon: 'archeryTarget',
-              message: entry.message,
-            });
+          // Translate each structured event type with its own i18n key and typed
+          // interpolation params — never use the raw server-authored entry.message,
+          // which is always English regardless of the UI locale.
+          {
+            let localizedMessage: string | undefined;
+            switch (entry.type) {
+              case 'CommandoRaidStarted':
+                localizedMessage = t('game.events.CommandoRaidStarted' as never, { playerName: entry.playerName ?? '', q: entry.q, r: entry.r });
+                break;
+              case 'CommandoRaidSuccess':
+                localizedMessage = t('game.events.CommandoRaidSuccess' as never, { allianceName: entry.allianceName ?? '', q: entry.q, r: entry.r });
+                break;
+              case 'CommandoRaidFailed':
+                localizedMessage = t('game.events.CommandoRaidFailed' as never, { q: entry.q, r: entry.r });
+                break;
+              case 'RallyPointActivated':
+                localizedMessage = t('game.events.RallyPointActivated' as never, { playerName: entry.playerName ?? '', q: entry.q, r: entry.r });
+                break;
+              case 'RallyPointResolved':
+                localizedMessage = t('game.events.RallyPointResolved' as never, { q: entry.q, r: entry.r });
+                break;
+              case 'SabotageStarted':
+                localizedMessage = t('game.events.SabotageStarted' as never, { playerName: entry.playerName ?? '', q: entry.q, r: entry.r });
+                break;
+              case 'SabotageComplete':
+                localizedMessage = t('game.events.SabotageComplete' as never, { q: entry.q, r: entry.r });
+                break;
+              case 'FortConstructionStarted':
+                localizedMessage = t('game.events.FortConstructionStarted' as never, { q: entry.q, r: entry.r });
+                break;
+              case 'FortBuilt':
+                localizedMessage = t('game.events.FortBuilt' as never, { playerName: entry.playerName ?? '', q: entry.q, r: entry.r });
+                break;
+              case 'DemolishStarted':
+                localizedMessage = t('game.events.DemolishStarted' as never, { playerName: entry.playerName ?? '', q: entry.q, r: entry.r });
+                break;
+              case 'DemolishCompleted':
+                localizedMessage = t('game.events.DemolishCompleted' as never, { playerName: entry.playerName ?? '', q: entry.q, r: entry.r });
+                break;
+            }
+            if (localizedMessage !== undefined) {
+              useInfoLedgeStore.getState().push({
+                severity: 'gameEvent',
+                source: 'gameToast',
+                persistent: false,
+                icon: 'archeryTarget',
+                message: localizedMessage,
+              });
+            }
           }
           if (entry.type === 'CombatRepelled' && myUserId && entry.targetPlayerId === myUserId) {
             useInfoLedgeStore.getState().push({
@@ -626,7 +703,11 @@ export function useSignalRHandlers({
       useInfoLedgeStore.getState().push({
         severity: 'gameEvent', source: 'gameToast', persistent: false,
         icon: 'contested',
-        message: t('game.toast.fieldBattleInvite' as never, { name: data.initiatorName }),
+        // Initiators already know they started the battle — show a targeting prompt
+        // instead of the "join now" invite that is meant for the defending enemy.
+        message: data.isInitiator
+          ? t('game.toast.fieldBattleDetected' as never)
+          : t('game.toast.fieldBattleInvite' as never, { name: data.initiatorName }),
       });
     },
     onFieldBattleResolved: (data: FieldBattleResult) => {

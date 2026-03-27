@@ -206,62 +206,113 @@ public sealed class SharedAbilityService(
 
         lock (room.SyncRoot)
         {
-            if (room.State.Phase != GamePhase.Playing)
-                return (null, "Field battle only works during gameplay.");
+            return CreateFieldBattleLocked(room, userId, targetPlayerId: null);
+        }
+    }
 
-            var initiator = room.State.Players.FirstOrDefault(player => player.Id == userId);
-            if (initiator == null)
-                return (null, "Player not in room.");
-            if (!GameplayService.TryGetCurrentHex(room.State, initiator, out var currentQ, out var currentR))
-                return (null, "Your location is required to initiate a field battle.");
-            if (initiator.CarriedTroops <= 0)
-                return (null, "You need carried troops to initiate a field battle.");
-            if (initiator.FieldBattleCooldownUntil.HasValue && initiator.FieldBattleCooldownUntil > DateTime.UtcNow)
-                return (null, "Field battle is on cooldown.");
-            if (room.State.ActiveFieldBattles.Any(battle => battle.InitiatorId == userId))
-                return (null, "You already have an active field battle.");
+    public (ActiveFieldBattle? battle, string? error) ChallengePlayer(string roomCode, string initiatorId, string targetPlayerId)
+    {
+        if (string.IsNullOrWhiteSpace(targetPlayerId))
+            return (null, "Target player is required.");
 
-            var currentKey = HexService.Key(currentQ, currentR);
-            if (!room.State.Grid.TryGetValue(currentKey, out var currentCell))
-                return (null, "Invalid current hex.");
-            if (currentCell.OwnerId != null)
-                return (null, "Field battles can only be initiated on neutral hexes.");
+        var room = GetRoom(roomCode);
+        if (room == null)
+            return (null, "Room not found.");
 
-            var hasActiveTacticalStrike = room.State.Players.Any(player =>
-                player.TacticalStrikeActive
-                && player.TacticalStrikeTargetQ == currentQ
-                && player.TacticalStrikeTargetR == currentR);
-            if (hasActiveTacticalStrike)
-                return (null, "Cannot initiate a field battle on an active Tactical Strike hex.");
+        lock (room.SyncRoot)
+        {
+            return CreateFieldBattleLocked(room, initiatorId, targetPlayerId);
+        }
+    }
 
-            var hasActiveCommandoRaid = room.State.ActiveRaids.Any(raid => raid.TargetQ == currentQ && raid.TargetR == currentR);
-            if (hasActiveCommandoRaid)
-                return (null, "Cannot initiate a field battle on an active Commando Raid hex.");
+    private (ActiveFieldBattle? battle, string? error) CreateFieldBattleLocked(
+        GameRoom room,
+        string initiatorId,
+        string? targetPlayerId)
+    {
+        if (room.State.Phase != GamePhase.Playing)
+            return (null, "Field battle only works during gameplay.");
+        if (!room.State.Dynamics.FieldBattleEnabled)
+            return (null, "Field battle is disabled for this game.");
 
-            var hasEnemyOnHex = room.State.Players.Any(player =>
+        var initiator = room.State.Players.FirstOrDefault(player => player.Id == initiatorId);
+        if (initiator == null)
+            return (null, "Player not in room.");
+        if (!GameplayService.TryGetCurrentHex(room.State, initiator, out var currentQ, out var currentR))
+            return (null, "Your location is required to initiate a field battle.");
+        if (initiator.CarriedTroops <= 0)
+            return (null, "You need carried troops to initiate a field battle.");
+        if (initiator.FieldBattleCooldownUntil.HasValue && initiator.FieldBattleCooldownUntil > DateTime.UtcNow)
+            return (null, "Field battle is on cooldown.");
+        if (room.State.ActiveFieldBattles.Any(battle => !battle.Resolved && battle.InitiatorId == initiatorId))
+            return (null, "You already have an active field battle.");
+
+        var currentKey = HexService.Key(currentQ, currentR);
+        if (!room.State.Grid.TryGetValue(currentKey, out var currentCell))
+            return (null, "Invalid current hex.");
+        if (currentCell.OwnerId != null)
+            return (null, "Field battles can only be initiated on neutral hexes.");
+
+        var hasActiveTacticalStrike = room.State.Players.Any(player =>
+            player.TacticalStrikeActive
+            && player.TacticalStrikeTargetQ == currentQ
+            && player.TacticalStrikeTargetR == currentR);
+        if (hasActiveTacticalStrike)
+            return (null, "Cannot initiate a field battle on an active Tactical Strike hex.");
+
+        var hasActiveCommandoRaid = room.State.ActiveRaids.Any(raid => raid.TargetQ == currentQ && raid.TargetR == currentR);
+        if (hasActiveCommandoRaid)
+            return (null, "Cannot initiate a field battle on an active Commando Raid hex.");
+
+        if (room.State.ActiveFieldBattles.Any(battle => !battle.Resolved && battle.Q == currentQ && battle.R == currentR))
+            return (null, "A field battle is already active on this hex.");
+
+        var enemiesOnHex = room.State.Players
+            .Where(player =>
                 player.Id != initiator.Id
                 && player.CarriedTroops > 0
                 && GameplayService.TryGetCurrentHex(room.State, player, out var playerQ, out var playerR)
                 && playerQ == currentQ
                 && playerR == currentR
-                && player.AllianceId != initiator.AllianceId);
-            if (!hasEnemyOnHex)
-                return (null, "No enemy with troops is present on this hex.");
+                && (player.AllianceId == null || player.AllianceId != initiator.AllianceId))
+            .ToList();
+        if (enemiesOnHex.Count == 0)
+            return (null, "No enemy with troops is present on this hex.");
 
-            var battle = new ActiveFieldBattle
+        PlayerDto? targetPlayer = null;
+        if (!string.IsNullOrWhiteSpace(targetPlayerId))
+        {
+            targetPlayer = room.State.Players.FirstOrDefault(player => player.Id == targetPlayerId);
+            if (targetPlayer == null)
+                return (null, "Target player not in room.");
+            if (targetPlayer.AllianceId == initiator.AllianceId)
+                return (null, "Target must be an enemy player.");
+            if (targetPlayer.CarriedTroops <= 0)
+                return (null, "Target has no carried troops.");
+            if (!GameplayService.TryGetCurrentHex(room.State, targetPlayer, out var targetQ, out var targetR)
+                || targetQ != currentQ
+                || targetR != currentR)
             {
-                InitiatorId = initiator.Id,
-                InitiatorName = initiator.Name,
-                InitiatorAllianceId = initiator.AllianceId ?? "",
-                Q = currentQ,
-                R = currentR,
-                InitiatorTroops = initiator.CarriedTroops,
-                JoinDeadline = DateTime.UtcNow.AddSeconds(30)
-            };
-
-            room.State.ActiveFieldBattles.Add(battle);
-            return (battle, null);
+                return (null, "Target must be on the battle hex.");
+            }
         }
+
+        var battle = new ActiveFieldBattle
+        {
+            InitiatorId = initiator.Id,
+            InitiatorName = initiator.Name,
+            InitiatorAllianceId = initiator.AllianceId ?? "",
+            Q = currentQ,
+            R = currentR,
+            InitiatorTroops = initiator.CarriedTroops,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(30),
+            TargetEnemyId = targetPlayer?.Id
+        };
+
+        room.State.ActiveFieldBattles.Add(battle);
+        var snapshot = SnapshotState(room.State);
+        QueuePersistence(room, snapshot);
+        return (battle, null);
     }
 
     /// <summary>Joins an existing field battle as an enemy combatant.</summary>

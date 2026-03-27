@@ -7,6 +7,7 @@ const DEFAULT_GAME_DYNAMICS: GameDynamics = {
   hqEnabled: false,
   hqAutoAssign: true,
   tileDecayEnabled: false,
+  fieldBattleEnabled: true,
   enemySightingMemorySeconds: 0,
 };
 

@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
+import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import { usePlayerLayerStore } from '../../../stores/playerLayerStore';
@@ -50,14 +51,18 @@ interface ActiveBeacon {
   color: string;
   label: string;
   revealRadiusMeters: number;
+  beaconHeading: number | null;
+  beaconSectorAngleDeg: number;
 }
 
 const DEFAULT_PLAYER_COLOR = '#4f8cff';
 const OVERLAY_PANE = 'overlayPane';
 const PLAYER_PANE = 'game-map-player-pane';
 const BEACON_RADIUS_PANE = 'game-map-beacon-radius-pane';
-const DEFAULT_BEACON_REVEAL_RADIUS_METERS = 200;
-const BEACON_RADIUS_STYLE: Omit<L.CircleOptions, 'radius'> = {
+// BeaconRange = 3 hexes. Euclidean distance to ring-3 hex centres = 3 × √3 × tileSizeMeters.
+const BEACON_RANGE_HEXES = 3;
+const BEACON_RANGE_EUCLIDEAN_FACTOR = BEACON_RANGE_HEXES * Math.sqrt(3); // ≈ 5.196
+const BEACON_SECTOR_STYLE: L.PathOptions = {
   color: 'rgba(0, 243, 255, 0.4)',
   fillColor: 'rgba(0, 243, 255, 0.08)',
   fillOpacity: 1,
@@ -65,6 +70,36 @@ const BEACON_RADIUS_STYLE: Omit<L.CircleOptions, 'radius'> = {
   dashArray: '8 4',
   interactive: false,
 };
+
+/**
+ * Build a closed polygon (sector arc) representing the beacon's illuminated cone.
+ * headingDeg: 0 = North, 90 = East, clockwise (standard map bearing).
+ * Returns a Leaflet polygon from center → arc → back to center.
+ */
+function createSectorPolygon(
+  center: L.LatLng,
+  headingDeg: number,
+  sectorAngleDeg: number,
+  radiusMeters: number,
+  numPoints = 24,
+): L.LatLng[] {
+  const halfAngle = sectorAngleDeg / 2;
+  const centerLatRad = center.lat * Math.PI / 180;
+  const metersPerDegLat = 111320;
+  const metersPerDegLng = 111320 * Math.cos(centerLatRad);
+
+  const points: L.LatLng[] = [center];
+  for (let i = 0; i <= numPoints; i++) {
+    const bearingDeg = headingDeg - halfAngle + (i / numPoints) * sectorAngleDeg;
+    const bearingRad = bearingDeg * Math.PI / 180;
+    // bearing: 0=N(+lat), 90=E(+lng), 180=S(-lat), 270=W(-lng)
+    const dLat = radiusMeters * Math.cos(bearingRad) / metersPerDegLat;
+    const dLng = radiusMeters * Math.sin(bearingRad) / metersPerDegLng;
+    points.push(L.latLng(center.lat + dLat, center.lng + dLng));
+  }
+  points.push(center);
+  return points;
+}
 
 function getOrbitalOffset(
   index: number,
@@ -104,6 +139,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   const myUserId = usePlayerLayerStore((state) => state.myUserId);
   const currentLocation = usePlayerLayerStore((state) => state.currentLocation);
   const gameState = useGameStore((state) => state.gameState);
+  // Compass heading for the local player's beacon sector — instant, no server round-trip
+  const { heading: compassHeading } = useDeviceOrientation(true);
 
   useEffect(() => {
     if (!map.getPane(BEACON_RADIUS_PANE)) {
@@ -149,10 +186,8 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   }, [map]);
 
   const defaultBeaconRevealRadiusMeters = useMemo(() => {
-    return Math.max(
-      DEFAULT_BEACON_REVEAL_RADIUS_METERS,
-      (gameState?.tileSizeMeters ?? 0) * 3,
-    );
+    // Radius that reaches the centres of ring-3 hexes (Euclidean = 3 × √3 × tileSizeMeters)
+    return (gameState?.tileSizeMeters ?? 25) * BEACON_RANGE_EUCLIDEAN_FACTOR;
   }, [gameState?.tileSizeMeters]);
 
   const projectedPlayers = useMemo<ProjectedPlayer[]>(() => {
@@ -231,6 +266,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
   }, [projectedPlayers, gameState]);
 
   const activeBeacons = useMemo<ActiveBeacon[]>(() => {
+    const sectorAngleDeg = gameState?.dynamics?.beaconSectorAngle ?? 45;
     return players.flatMap((player) => {
       if (!player.isBeacon) {
         return [];
@@ -243,15 +279,23 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
 
       const revealRadiusMeters = getBeaconRevealRadiusMeters(player, defaultBeaconRevealRadiusMeters);
 
+      // Local player: use live compass heading for zero-latency sector arc updates.
+      // Remote players: fall back to server-provided heading.
+      const beaconHeading = player.id === myUserId
+        ? (compassHeading ?? player.beaconHeading ?? null)
+        : (player.beaconHeading ?? null);
+
       return [{
         key: `${player.id}-beacon`,
         location,
         color: player.allianceColor ?? player.color ?? DEFAULT_PLAYER_COLOR,
         label: `${player.name} beacon`,
         revealRadiusMeters,
+        beaconHeading,
+        beaconSectorAngleDeg: sectorAngleDeg,
       }];
     });
-  }, [defaultBeaconRevealRadiusMeters, players]);
+  }, [compassHeading, defaultBeaconRevealRadiusMeters, gameState?.dynamics?.beaconSectorAngle, myUserId, players]);
 
   const projectedBeacons = useMemo<ProjectedBeacon[]>(() => {
     void projectionTick;
@@ -268,10 +312,25 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
     }
 
     const beaconRadiusLayers = activeBeacons.map((beacon) => {
+      if (beacon.beaconHeading != null) {
+        // Draw sector arc matching the beacon's illuminated cone
+        const center = L.latLng(beacon.location[0], beacon.location[1]);
+        const sectorPoints = createSectorPolygon(
+          center,
+          beacon.beaconHeading,
+          beacon.beaconSectorAngleDeg,
+          beacon.revealRadiusMeters,
+        );
+        return L.polygon(sectorPoints, {
+          ...BEACON_SECTOR_STYLE,
+          pane: BEACON_RADIUS_PANE,
+        }).addTo(map);
+      }
+      // No heading yet — show a small circle around the beacon hex as a fallback
       return L.circle(beacon.location, {
-        ...BEACON_RADIUS_STYLE,
+        ...BEACON_SECTOR_STYLE,
         pane: BEACON_RADIUS_PANE,
-        radius: beacon.revealRadiusMeters,
+        radius: beacon.revealRadiusMeters / BEACON_RANGE_HEXES,
       }).addTo(map);
     });
 

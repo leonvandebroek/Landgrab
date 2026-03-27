@@ -148,7 +148,10 @@ export const GameMap = memo(function GameMap({
   const savedCameraStateRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
   const invalidateDebounceRef = useRef<number | null>(null);
   const repanDebounceRef = useRef<number | null>(null);
-  const panToOffsetLocationRef = useRef<(lat: number, lng: number, zoom?: number, animate?: boolean) => void>(() => {});
+  const panToOffsetLocationRef = useRef<(lat: number, lng: number, zoom?: number, animate?: boolean, bearing?: number) => void>(() => {});
+  // Ref kept in sync with isFollowingMe so the bearing lerp loop can read it
+  // without capturing stale closure state.
+  const isFollowingMeRef = useRef(false);
   const [isCompassRotationEnabled, setIsCompassRotationEnabled] = useState(false);
   const [debugCompassHeading, setDebugCompassHeading] = useState<number | null>(null);
   const debugCompassHeadingRef = useRef<number | null>(null);
@@ -181,8 +184,9 @@ export const GameMap = memo(function GameMap({
 
   const visibilityHexes = useMemo(() => {
     if (!myPlayer) return 1;
-    // Scout has permanent beacon, or any player with active beacon gets 3-hex visibility
-    return myPlayer.isBeacon || myPlayer.role === 'Scout' ? 3 : 1;
+    // Scout/beacon: sweep radius = 3 × √3 × tileSizeMeters, matching Euclidean distance
+    // to ring-3 hex centres — same formula used for the beacon sector arc in PlayerLayer.
+    return myPlayer.isBeacon || myPlayer.role === 'Scout' ? 3 * Math.sqrt(3) : 1;
   }, [myPlayer]);
   const layerPanelDisclosureProps = isLayerPanelOpen
     ? { 'aria-expanded': 'true' as const }
@@ -213,14 +217,23 @@ export const GameMap = memo(function GameMap({
     setBasemapDismissed(nextValue);
   }, []);
 
-  const panToOffsetLocation = useCallback((lat: number, lng: number, zoom?: number, animate = true) => {
+  const panToOffsetLocation = useCallback((lat: number, lng: number, zoom?: number, animate = true, bearing = 0) => {
     const map = mapRef.current;
     if (!map) return;
     const targetZoom = zoom ?? map.getZoom();
     const containerHeight = map.getSize().y;
     const offsetPxY = containerHeight * 0.12;
     const targetPoint = map.project([lat, lng], targetZoom);
-    const offsetPoint = targetPoint.subtract([0, offsetPxY]);
+    // When the map is rotated by `bearing` degrees, the screen "down" direction
+    // is no longer aligned with the tile-space Y axis. To keep the player at the
+    // same visual position (offsetPxY px below the viewport centre on screen) we
+    // must rotate the pixel offset vector by the current bearing.
+    //   screen-down (0, offsetPxY) → tile-space: (offsetPxY·sin B, offsetPxY·cos B)
+    const bearingRad = (bearing * Math.PI) / 180;
+    const offsetPoint = targetPoint.subtract([
+      offsetPxY * Math.sin(bearingRad),
+      offsetPxY * Math.cos(bearingRad),
+    ]);
     const offsetLatLng = map.unproject(offsetPoint, targetZoom);
 
     if (animate) {
@@ -249,7 +262,7 @@ export const GameMap = memo(function GameMap({
   const handleZoomToLocation = useCallback(() => {
     const map = mapRef.current;
     if (map && currentLocation) {
-      panToOffsetLocation(currentLocation.lat, currentLocation.lng, Math.max(map.getZoom(), 17));
+      panToOffsetLocation(currentLocation.lat, currentLocation.lng, Math.max(map.getZoom(), 17), true, currentBearingRef.current);
     }
   }, [currentLocation, panToOffsetLocation]);
 
@@ -576,7 +589,7 @@ export const GameMap = memo(function GameMap({
           repanDebounceRef.current = null;
           if (isFollowingMe && currentLocation) {
             followedLocationKeyRef.current = '';
-            panToOffsetLocation(currentLocation.lat, currentLocation.lng);
+            panToOffsetLocation(currentLocation.lat, currentLocation.lng, undefined, true, currentBearingRef.current);
           }
         }, 350);
       }, 150);
@@ -667,7 +680,7 @@ export const GameMap = memo(function GameMap({
       setFollowingMeDeferred(true);
       const loc = currentLocationRef.current;
       if (loc) {
-        panToOffsetLocation(loc.lat, loc.lng, undefined, true);
+        panToOffsetLocation(loc.lat, loc.lng, undefined, true, currentBearingRef.current);
       }
     } else if (mapFocusPreset === 'localTracking') {
       if (!savedCameraStateRef.current) {
@@ -677,7 +690,7 @@ export const GameMap = memo(function GameMap({
       setFollowingMeDeferred(true);
       const loc = currentLocationRef.current;
       if (loc) {
-        panToOffsetLocation(loc.lat, loc.lng, 16.25, false);
+        panToOffsetLocation(loc.lat, loc.lng, 16.25, false, currentBearingRef.current);
       } else {
         map.setZoom(16.25, { animate: true });
       }
@@ -759,7 +772,7 @@ export const GameMap = memo(function GameMap({
     }
 
     followedLocationKeyRef.current = locationKey;
-    panToOffsetLocation(currentLocation.lat, currentLocation.lng, undefined, true);
+    panToOffsetLocation(currentLocation.lat, currentLocation.lng, undefined, true, currentBearingRef.current);
   }, [currentLocation, isFollowingMe, panToOffsetLocation]);
 
   useEffect(() => {
@@ -826,6 +839,12 @@ export const GameMap = memo(function GameMap({
   // after it exits on convergence, without creating a circular dependency.
   const lerpBearingRef = useRef<(() => void) | null>(null);
 
+  // Keep isFollowingMeRef in sync so the bearing lerp loop can read it
+  // without capturing stale closure state.
+  useEffect(() => {
+    isFollowingMeRef.current = isFollowingMe;
+  }, [isFollowingMe]);
+
   // Sync target bearing from heading state into ref (must be in an effect, not render).
   // Also restarts the lerp loop if it has already exited on convergence.
   useEffect(() => {
@@ -854,8 +873,26 @@ export const GameMap = memo(function GameMap({
       if (container) {
         container.style.setProperty('--map-bearing', '0deg');
       }
+      // Re-centre on the player so the viewport is consistent after rotation reset.
+      if (isFollowingMeRef.current) {
+        const loc = currentLocationRef.current;
+        if (loc) {
+          panToOffsetLocationRef.current(loc.lat, loc.lng, undefined, false, 0);
+        }
+      }
       return;
     }
+
+    // Helper: re-centre on the player at the given bearing so setBearing always
+    // pivots around the player's position rather than the (offset) viewport centre.
+    const recenterOnPlayer = (bearing: number) => {
+      if (!isFollowingMeRef.current) return;
+      const loc = currentLocationRef.current;
+      if (!loc) return;
+      // Calling setView (animate:false) inside the same RAF tick means Leaflet
+      // batches the centre + bearing change into one paint — no visible jitter.
+      panToOffsetLocationRef.current(loc.lat, loc.lng, undefined, false, bearing);
+    };
 
     // Start lerp loop — exits on convergence; restarted by the effectiveHeading effect
     const lerpBearing = () => {
@@ -877,6 +914,8 @@ export const GameMap = memo(function GameMap({
         if (container) {
           container.style.setProperty('--map-bearing', `${current}deg`);
         }
+        // Re-centre AFTER setBearing so the pivot is the player, not offsetLatLng.
+        recenterOnPlayer(current);
         bearingRafRef.current = 0;
         return;
       }
@@ -891,6 +930,8 @@ export const GameMap = memo(function GameMap({
       if (container) {
         container.style.setProperty('--map-bearing', `${current}deg`);
       }
+      // Re-centre AFTER setBearing so the pivot is the player, not offsetLatLng.
+      recenterOnPlayer(current);
 
       bearingRafRef.current = requestAnimationFrame(lerpBearing);
     };
@@ -942,7 +983,7 @@ export const GameMap = memo(function GameMap({
             map={mapInstance}
             isActive={state.phase === 'Playing' && currentLocation != null && layerPrefs.radarSweep}
             visibilityHexes={visibilityHexes}
-            hexSizeMeters={state.tileSizeMeters ?? 50}
+            hexSizeMeters={state.tileSizeMeters ?? 25}
           />
           <HexTooltipOverlay map={mapInstance} />
         </>

@@ -56,21 +56,21 @@ public class GameplayService(
 
     private void QueuePersistenceIfGameOver(GameRoom room, GameState stateSnapshot, GamePhase previousPhase) => gameStateService.QueuePersistenceIfGameOver(room, stateSnapshot, previousPhase);
 
-    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? autoTriggeredBattle, ActiveFieldBattle? fledBattle) UpdatePlayerLocation(string roomCode, string userId,
+    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? fledBattle) UpdatePlayerLocation(string roomCode, string userId,
         double lat, double lng, double? heading)
     {
         var error = ValidateCoordinates(lat, lng);
         if (error != null)
         {
             logger.LogWarning("UpdatePlayerLocation rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
-            return (null, error, false, false, null, null);
+            return (null, error, false, false, null);
         }
 
         var room = GetRoom(roomCode);
         if (room == null)
         {
             logger.LogWarning("UpdatePlayerLocation: room {RoomCode} not found for user {UserId}", roomCode, userId);
-            return (null, "Room not found.", false, false, null, null);
+            return (null, "Room not found.", false, false, null);
         }
 
         lock (room.SyncRoot)
@@ -78,14 +78,14 @@ public class GameplayService(
             if (room.State.Phase != GamePhase.Playing)
             {
                 logger.LogWarning("UpdatePlayerLocation: room {RoomCode} is in phase {Phase}, not Playing", roomCode, room.State.Phase);
-                return (null, "Player locations are only tracked while the game is playing.", false, false, null, null);
+                return (null, "Player locations are only tracked while the game is playing.", false, false, null);
             }
 
             var player = room.State.Players.FirstOrDefault(p => p.Id == userId);
             if (player == null)
             {
                 logger.LogWarning("UpdatePlayerLocation: player {UserId} not found in room {RoomCode}", userId, roomCode);
-                return (null, "Player not in room.", false, false, null, null);
+                return (null, "Player not in room.", false, false, null);
             }
 
             var now = DateTime.UtcNow;
@@ -203,29 +203,12 @@ public class GameplayService(
             QueuePersistenceIfGameOver(room, snapshot, previousPhase);
             gridChanged |= snapshot.Phase != previousPhase;
 
-            // Check for FieldBattle when player moves to a new hex
-            ActiveFieldBattle? autoTriggeredBattle = null;
-            if (playerHexChanged && player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue)
-            {
-                var hexQ = player.CurrentHexQ.Value;
-                var hexR = player.CurrentHexR.Value;
-                var hexKey2 = HexService.Key(hexQ, hexR);
-                if (room.State.Grid.TryGetValue(hexKey2, out var cell))
-                {
-                    autoTriggeredBattle = cell.OwnerId == null
-                        ? CheckAndAutoTriggerFieldBattle(room.State, player, hexQ, hexR)
-                        : CheckAndAutoTriggerFieldBattleOnEnemyTile(room.State, player, hexQ, hexR);
-                }
-                if (autoTriggeredBattle != null)
-                    gridChanged = true;
-            }
-
             logger.LogDebug(
                 "Player {UserId} moved to ({Lat:F6},{Lng:F6}) hex ({HexQ},{HexR}) in {RoomCode}; gridChanged={GridChanged}",
                 userId, lat, lng,
                 player.CurrentHexQ, player.CurrentHexR,
                 roomCode, gridChanged);
-            return (snapshot, null, gridChanged, playerHexChanged, autoTriggeredBattle, fledBattle);
+            return (snapshot, null, gridChanged, playerHexChanged, fledBattle);
         }
     }
 
@@ -322,7 +305,7 @@ public class GameplayService(
         }
     }
 
-    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult, ActiveFieldBattle? autoTriggeredBattle) PlaceTroops(
+    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(
         string roomCode, string userId, int q, int r, double playerLat, double playerLng,
         int? troopCount = null)
     {
@@ -330,18 +313,18 @@ public class GameplayService(
         if (error != null)
         {
             logger.LogWarning("PlaceTroops rejected for {UserId} in {RoomCode}: {Error}", userId, roomCode, error);
-            return (null, error, null, null, null);
+            return (null, error, null, null);
         }
 
         var room = GetRoom(roomCode);
         if (room == null)
         {
             logger.LogWarning("PlaceTroops: room {RoomCode} not found for user {UserId}", roomCode, userId);
-            return (null, "Room not found.", null, null, null);
+            return (null, "Room not found.", null, null);
         }
 
         if (room.State.IsPaused)
-            return (null, "Game is paused.", null, null, null);
+            return (null, "Game is paused.", null, null);
 
         lock (room.SyncRoot)
         {
@@ -350,10 +333,10 @@ public class GameplayService(
             if (validationError != null)
             {
                 logger.LogWarning("PlaceTroops rejected for {UserId} in {RoomCode} at ({Q},{R}): {Error}", userId, roomCode, q, r, validationError);
-                return (null, validationError, null, null, null);
+                return (null, validationError, null, null);
             }
             if (cell.IsMasterTile)
-                return (null, "The master tile is invincible and cannot be conquered.", null, null, null);
+                return (null, "The master tile is invincible and cannot be conquered.", null, null);
 
             SetPlayerLocation(room.State, player, playerLat, playerLng);
 
@@ -362,18 +345,18 @@ public class GameplayService(
             if (cell.OwnerId == userId || sameAllianceHex)
             {
                 if (player.CarriedTroops <= 0)
-                    return (null, "You are not carrying any troops.", null, null, null);
+                    return (null, "You are not carrying any troops.", null, null);
 
                 if (troopCount == 0)
                 {
                     var zeroDeploySnapshot = SnapshotState(room.State);
                     QueuePersistence(room, zeroDeploySnapshot);
-                    return (zeroDeploySnapshot, null, null, null, null);
+                    return (zeroDeploySnapshot, null, null, null);
                 }
 
                 var reinforcedTroops = troopCount ?? player.CarriedTroops;
                 if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
-                    return (null, "Troop count must be between 1 and your carried troops.", null, null, null);
+                    return (null, "Troop count must be between 1 and your carried troops.", null, null);
 
                 cell.Troops += reinforcedTroops;
                 player.CarriedTroops -= reinforcedTroops;
@@ -383,29 +366,14 @@ public class GameplayService(
                 var reinforceSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, reinforceSnapshot);
                 logger.LogDebug("Player {UserId} reinforced ({Q},{R}) with {Troops} troops in {RoomCode}", userId, q, r, reinforcedTroops, roomCode);
-                return (reinforceSnapshot, null, null, null, null);
+                return (reinforceSnapshot, null, null, null);
             }
 
             if (cell.OwnerId == null)
             {
-                // Check for auto-trigger FieldBattle BEFORE claiming
-                var autoTriggeredBattle = CheckAndAutoTriggerFieldBattle(room.State, player, q, r);
-                
-                if (autoTriggeredBattle != null)
-                {
-                    // FieldBattle triggered - do NOT claim the hex yet
-                    logger.LogInformation("Auto-triggered FieldBattle {BattleId} at ({Q},{R}) for {UserId} - claim deferred", 
-                        autoTriggeredBattle.Id, q, r, userId);
-                    
-                    var battleSnapshot = SnapshotState(room.State);
-                    QueuePersistence(room, battleSnapshot);
-                    return (battleSnapshot, null, null, null, autoTriggeredBattle);
-                }
-                
-                // No FieldBattle - proceed with normal claim
                 var neutralClaimError = ClaimNeutralHex(room.State, player, cell, q, r);
                 if (neutralClaimError != null)
-                    return (null, neutralClaimError, null, null, null);
+                    return (null, neutralClaimError, null, null);
 
                 winConditionService.RefreshTerritoryCount(room.State);
                 winConditionService.ApplyWinConditionAndLog(room.State, DateTime.UtcNow);
@@ -413,44 +381,23 @@ public class GameplayService(
                 var neutralClaimSnapshot = SnapshotState(room.State);
                 QueuePersistence(room, neutralClaimSnapshot);
                 logger.LogDebug("Player {UserId} claimed neutral hex ({Q},{R}) in {RoomCode}", userId, q, r, roomCode);
-                return (neutralClaimSnapshot, null, null, null, null);
+                return (neutralClaimSnapshot, null, null, null);
             }
 
             if (player.AllianceId != null && cell.OwnerAllianceId == player.AllianceId)
-                return (null, "You cannot attack an allied hex.", null, null, null);
-
-            // Check if an enemy player is physically standing on this tile
-            var enemyOnTile = room.State.Players.Any(p =>
-                IsHostileToPlayer(player, p)
-                && p.CarriedTroops > 0
-                && TryGetCurrentHex(room.State, p, out var pq, out var pr)
-                && pq == q && pr == r);
-
-            if (enemyOnTile)
-            {
-                var autoTriggeredBattle = CheckAndAutoTriggerFieldBattleOnEnemyTile(room.State, player, q, r);
-                if (autoTriggeredBattle != null)
-                {
-                    logger.LogInformation("Auto-triggered FieldBattle {BattleId} on enemy-owned tile at ({Q},{R}) for {UserId}",
-                        autoTriggeredBattle.Id, q, r, userId);
-                    
-                    var battleSnapshot = SnapshotState(room.State);
-                    QueuePersistence(room, battleSnapshot);
-                    return (battleSnapshot, null, null, null, autoTriggeredBattle);
-                }
-            }
+                return (null, "You cannot attack an allied hex.", null, null);
 
             // HQ tiles are immune to normal combat — must be captured via CommandoRaid
             if (room.State.Dynamics.HQEnabled)
             {
                 var isHQHex = room.State.Alliances.Any(a => a.HQHexQ == q && a.HQHexR == r);
                 if (isHQHex)
-                    return (null, "This is an HQ hex — it can only be captured via a CommandoRaid.", null, null, null);
+                    return (null, "This is an HQ hex — it can only be captured via a CommandoRaid.", null, null);
             }
 
             var deployedTroops = troopCount ?? player.CarriedTroops;
             if (troopCount.HasValue && (troopCount.Value < 1 || troopCount.Value > player.CarriedTroops))
-                return (null, "Troop count must be between 1 and your carried troops.", null, null, null);
+                return (null, "Troop count must be between 1 and your carried troops.", null, null);
             var combatStats = CalculateCombatStats(room.State, player, cell, q, r, deployedTroops);
             var combatResolution = ResolveCombat(combatStats);
             var previousOwnerId = cell.OwnerId;
@@ -570,97 +517,15 @@ public class GameplayService(
                 q, r, roomCode, userId,
                 combatResolution.AttackerWon ? "won" : "repelled",
                 combatResolution.AttackerTroopsLost, combatResolution.DefenderTroopsLost);
-            return (attackSnapshot, null, previousOwnerId, combatResult, null);
+            return (attackSnapshot, null, previousOwnerId, combatResult);
         }
     }
 
     /// <summary>
-    /// Checks if a FieldBattle should be auto-triggered after a player moves to a neutral hex.
-    /// Returns the created battle if conditions are met, null otherwise.
+    /// Updates the player's authoritative hex position (and optionally lat/lng).
+    /// Also detects when a targeted defender flees by moving off the battle hex.
     /// </summary>
-    /// <summary>
-    /// Core FieldBattle trigger logic. Checks all guards and creates an <see cref="ActiveFieldBattle"/>
-    /// when the attacker shares a hex with hostile players who are also carrying troops.
-    /// Does NOT enforce a neutral-tile constraint — callers that need it must check beforehand.
-    /// </summary>
-    public ActiveFieldBattle? TryTriggerFieldBattle(GameState state, PlayerDto attacker, int q, int r)
-    {
-        if (attacker.CarriedTroops <= 0)
-            return null;
-
-        if (attacker.FieldBattleCooldownUntil.HasValue && attacker.FieldBattleCooldownUntil > DateTime.UtcNow)
-            return null;
-
-        if (state.ActiveFieldBattles.Any(battle => battle.InitiatorId == attacker.Id))
-            return null;
-
-        if (!state.Grid.ContainsKey(HexService.Key(q, r)))
-            return null;
-
-        var hasActiveTacticalStrike = state.Players.Any(player =>
-            player.TacticalStrikeActive
-            && player.TacticalStrikeTargetQ == q
-            && player.TacticalStrikeTargetR == r);
-        if (hasActiveTacticalStrike)
-            return null;
-
-        if (state.ActiveRaids.Any(raid => raid.TargetQ == q && raid.TargetR == r))
-            return null;
-
-        if (state.ActiveFieldBattles.Any(b => b.Q == q && b.R == r && !b.Resolved))
-            return null;
-
-        var enemiesOnHex = state.Players
-            .Where(player =>
-                IsHostileToPlayer(attacker, player)
-                && player.CarriedTroops > 0
-                && TryGetCurrentHex(state, player, out var playerQ, out var playerR)
-                && playerQ == q
-                && playerR == r)
-            .ToList();
-
-        if (enemiesOnHex.Count == 0)
-            return null;
-
-        var battle = new ActiveFieldBattle
-        {
-            InitiatorId = attacker.Id,
-            InitiatorName = attacker.Name,
-            InitiatorAllianceId = attacker.AllianceId ?? "",
-            Q = q,
-            R = r,
-            InitiatorTroops = attacker.CarriedTroops,
-            JoinDeadline = DateTime.UtcNow.AddSeconds(30)
-        };
-
-        state.ActiveFieldBattles.Add(battle);
-        return battle;
-    }
-
-    private ActiveFieldBattle? CheckAndAutoTriggerFieldBattle(GameState state, PlayerDto mover, int q, int r)
-    {
-        var hexKey = HexService.Key(q, r);
-        if (!state.Grid.TryGetValue(hexKey, out var cell))
-            return null;
-
-        // Guard: Hex must be neutral (no owner after claim)
-        if (cell.OwnerId != null)
-            return null;
-
-        return TryTriggerFieldBattle(state, mover, q, r);
-    }
-
-    private ActiveFieldBattle? CheckAndAutoTriggerFieldBattleOnEnemyTile(GameState state, PlayerDto mover, int q, int r)
-    {
-        // No neutral-tile constraint — enemy-owned tile with owner physically present is valid
-        return TryTriggerFieldBattle(state, mover, q, r);
-    }
-
-    /// <summary>
-    /// Updates the player's authoritative hex position (and optionally lat/lng) and auto-triggers
-    /// a FieldBattle if an enemy carrying troops is already on that hex.
-    /// </summary>
-    public (ActiveFieldBattle? battle, string? error) UpdatePlayerPosition(
+    public (ActiveFieldBattle? fledBattle, string? error) UpdatePlayerPosition(
         string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
     {
         var room = GetRoom(roomCode);
@@ -676,6 +541,9 @@ public class GameplayService(
             if (player == null)
                 return (null, "Player not in room.");
 
+            var previousHexQ = player.CurrentHexQ;
+            var previousHexR = player.CurrentHexR;
+
             player.CurrentHexQ = q;
             player.CurrentHexR = r;
 
@@ -685,8 +553,25 @@ public class GameplayService(
                 player.CurrentLng = playerLng.Value;
             }
 
-            var battle = TryTriggerFieldBattle(room.State, player, q, r);
-            return (battle, null);
+            var playerHexChanged = previousHexQ != q || previousHexR != r;
+            ActiveFieldBattle? fledBattle = null;
+            if (playerHexChanged && player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue)
+            {
+                var targetedBattle = room.State.ActiveFieldBattles
+                    .FirstOrDefault(b => b.TargetEnemyId == userId && !b.Resolved);
+
+                if (targetedBattle != null
+                    && (targetedBattle.Q != player.CurrentHexQ.Value || targetedBattle.R != player.CurrentHexR.Value))
+                {
+                    if (!targetedBattle.FledEnemyIds.Contains(userId, StringComparer.Ordinal))
+                    {
+                        targetedBattle.FledEnemyIds.Add(userId);
+                        fledBattle = targetedBattle;
+                    }
+                }
+            }
+
+            return (fledBattle, null);
         }
     }
 

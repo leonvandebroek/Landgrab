@@ -1124,6 +1124,12 @@
   padding-inline: 0.7rem;
 }
 
+.player-hud__carried-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
 .player-hud__carried-icon {
   display: inline-flex;
   align-items: center;

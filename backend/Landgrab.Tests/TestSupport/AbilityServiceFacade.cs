@@ -79,6 +79,9 @@ internal sealed class AbilityServiceFacade(
     public (ActiveFieldBattle? battle, string? error) InitiateFieldBattle(string roomCode, string userId)
         => shared.InitiateFieldBattle(roomCode, userId);
 
+    public (ActiveFieldBattle? battle, string? error) ChallengePlayer(string roomCode, string initiatorId, string targetPlayerId)
+        => shared.ChallengePlayer(roomCode, initiatorId, targetPlayerId);
+
     public string? JoinFieldBattle(string roomCode, string userId, Guid battleId)
         => shared.JoinFieldBattle(roomCode, userId, battleId);
 

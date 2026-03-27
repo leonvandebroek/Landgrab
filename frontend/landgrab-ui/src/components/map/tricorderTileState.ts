@@ -283,7 +283,7 @@ export function deriveTileState(params: DeriveTileStateParams): TricorderTileSta
       visibilityTier,
       isRemembered,
       stalenessTier,
-      strengthUnknown: true, // Hide enemy strength gradients
+      strengthUnknown: false,
       presenceBoosted: false,
       relationState,
       urgencyState: { isContested: false, hasActiveRaid: false, rallyObjective: false },

@@ -96,6 +96,8 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         => sharedAbilityService.RespondToTroopTransfer(roomCode, userId, transferId, accepted);
     public (ActiveFieldBattle? battle, string? error) InitiateFieldBattle(string roomCode, string userId)
         => sharedAbilityService.InitiateFieldBattle(roomCode, userId);
+    public (ActiveFieldBattle? battle, string? error) ChallengePlayer(string roomCode, string initiatorId, string targetPlayerId)
+        => sharedAbilityService.ChallengePlayer(roomCode, initiatorId, targetPlayerId);
     public string? JoinFieldBattle(string roomCode, string userId, Guid battleId)
         => sharedAbilityService.JoinFieldBattle(roomCode, userId, battleId);
     public (GameState? state, string? error) SelectFieldBattleTarget(
@@ -117,7 +119,7 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
     public (GameState? state, string? error) StartDemolish(string roomCode, string userId) => engineerAbilityService.StartDemolish(roomCode, userId);
     public (GameState? state, string? error) CancelDemolish(string roomCode, string userId) => engineerAbilityService.CancelDemolish(roomCode, userId);
     public (InterceptAttemptResult? result, string? error) AttemptIntercept(string roomCode, string userId, double heading) => scoutAbilityService.AttemptIntercept(roomCode, userId, heading);
-    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? autoTriggeredBattle, ActiveFieldBattle? fledBattle) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng, double? heading)
+    public (GameState? state, string? error, bool gridChanged, bool playerHexChanged, ActiveFieldBattle? fledBattle) UpdatePlayerLocation(string roomCode, string userId, double lat, double lng, double? heading)
         => gameplayService.UpdatePlayerLocation(roomCode, userId, lat, lng, heading);
 
     public (GameState? state, string? error) PickUpTroops(string roomCode, string userId, int q, int r, int count, double playerLat, double playerLng)
@@ -130,8 +132,8 @@ public (GameState? state, string? error) SetWinCondition(string roomCode, string
         return gameplayService.GetCombatPreview(roomCode, userId, q, r, playerLat, playerLng);
     }
 
-    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult, ActiveFieldBattle? autoTriggeredBattle) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount);
-    public (ActiveFieldBattle? battle, string? error) UpdatePlayerPosition(string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
+    public (GameState? state, string? error, string? previousOwnerId, CombatResult? combatResult) PlaceTroops(string roomCode, string userId, int q, int r, double playerLat, double playerLng, int? troopCount = null) => gameplayService.PlaceTroops(roomCode, userId, q, r, playerLat, playerLng, troopCount);
+    public (ActiveFieldBattle? fledBattle, string? error) UpdatePlayerPosition(string roomCode, string userId, int q, int r, double? playerLat = null, double? playerLng = null)
         => gameplayService.UpdatePlayerPosition(roomCode, userId, q, r, playerLat, playerLng);
     public GameplayService.ReinforcementTickResult AddReinforcementsToAllHexes(string roomCode) => gameplayService.AddReinforcementsToAllHexes(roomCode);
     public (GameState? state, string? error) ResolveExpiredCommandoRaids(string roomCode) => gameplayService.ResolveExpiredCommandoRaids(roomCode);
