@@ -60,13 +60,11 @@ internal sealed class TestServiceFactory
     public AbilityServiceFacade CreateAbilityServiceFacade()
     {
         var gameStateService = CreateGameStateService();
-        var roleProgressService = new RoleProgressService();
-        var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<Landgrab.Api.Hubs.GameHub>>();
         return new AbilityServiceFacade(
             new CommanderAbilityService(RoomProvider, gameStateService),
             new ScoutAbilityService(RoomProvider, gameStateService, new VisibilityService()),
-            new EngineerAbilityService(RoomProvider, gameStateService, roleProgressService),
-            new SharedAbilityService(RoomProvider, gameStateService, hubContextMock.Object));
+            new EngineerAbilityService(RoomProvider, gameStateService),
+            new SharedAbilityService(RoomProvider, gameStateService));
     }
 
     public GameplayService CreateGameplayService()

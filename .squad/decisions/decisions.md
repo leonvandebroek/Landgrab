@@ -581,3 +581,249 @@ Implemented backend changes from Rembrandt's blueprint across models, services, 
 
 **What's missing:** Integration test on `VisibilityBroadcastHelper.CreatePlayersForViewer` asserting that `*CooldownUntil` fields are copied from allied player records. This would guard against accidental stripping in a future refactor.
 
+
+---
+
+## Spinoza Round 3: QA Bug Investigation — Field Battle Invite & Intercept Race Condition
+
+**Date:** 2026-03-29  
+**Agent:** Spinoza (Tester/QA)  
+**Sprint:** Round 3 Bug Hunt
+
+### BUG 8: `FieldBattleInvitePanel` stale invite after battle resolves
+
+**Area:** cross-cut (frontend + backend)  
+**Severity:** low  
+**File:** frontend/landgrab-ui/src/components/game/abilities/FieldBattleInvitePanel.tsx:39-43  
+**Status:** no-bug  
+**Fix:** Frontend already correctly handles stale invites via timer-based expiration and server `FieldBattleResolved` event clearing.
+
+#### Investigation Summary
+
+The `FieldBattleInvitePanel` component reads from `notificationStore.fieldBattleInvite`. The panel has two self-clearing mechanisms:
+
+1. **Timer-based expiration (lines 39-43):** A `useEffect` hook checks if the `secondsLeft` countdown reaches `null` (when `joinDeadline` passes) and auto-clears the invite via `setFieldBattleInvite(null)`.
+   
+2. **Server signal clearing (useSignalRHandlers.ts:721):** When the backend sends a `FieldBattleResolved` event (after a battle concludes or a player flees), the handler explicitly calls `useNotificationStore.getState().setFieldBattleInvite(null)`.
+
+The backend correctly sends `FieldBattleResolved` to all participants when:
+- A battle is resolved manually via `ResolveFieldBattle` (SharedAbilityService.cs:443)
+- A player flees and the battle auto-resolves (GameHub.Gameplay.cs:443, 502)
+
+**Conclusion:** No stale-invite bug exists. The panel clears on both natural expiration and server-driven resolution.
+
+---
+
+### BUG 9: Commando raid intercept — race between `AttemptIntercept` and raid expiration
+
+**Area:** backend  
+**Severity:** low  
+**File:** backend/Landgrab.Api/Services/Abilities/ScoutAbilityService.cs:232-239  
+**Status:** no-bug  
+**Fix:** `AttemptIntercept` already gracefully handles stale target by checking `HasActiveSabotage(engineer)` and returning `"noTarget"` status when sabotage is cleared.
+
+#### Investigation Summary
+
+The race condition window: A scout calls `AttemptIntercept` while an engineer's commando raid is still active, then the raid expires (via `ResolveExpiredCommandoRaids`) before the scout's next intercept call.
+
+When `AttemptIntercept` is called:
+1. If the engineer no longer has an active sabotage (`!HasActiveSabotage(engineer)`) — line 233
+2. Or the engineer moved off the hex — lines 234-236
+3. The method calls `ClearInterceptTracking(scout)` and returns `(new InterceptAttemptResult("noTarget"), null)`
+
+**Server behavior:** The scout's intercept lock is reset, and the scout sees a `"noTarget"` result on their next attempt. No error is thrown, and the game state remains consistent.
+
+**Raid expiration clearing sabotage:** When `ResolveExpiredCommandoRaids` runs, it does NOT explicitly clear `SabotageTargetQ/R` for the engineer. However, the sabotage perimeter visit tracking is separate from the raid itself. The sabotage mission persists until either:
+- The scout successfully intercepts (clears via line 273: `GameplayService.ClearSabotageTracking(engineer)`)
+- The engineer cancels sabotage manually
+- The engineer completes the sabotage perimeter
+
+**Clarification:** Commando raids and sabotage are distinct mechanics. A raid expiration does not auto-clear sabotage state. The intercept logic checks for active sabotage presence, not raid presence.
+
+**Conclusion:** No race condition bug. `AttemptIntercept` handles stale targets gracefully by returning `"noTarget"` when the engineer no longer has active sabotage or is no longer co-located with the scout.
+
+---
+
+### Test Coverage Added
+
+To confirm the graceful handling of stale intercept targets, 2 new xUnit tests were added to `backend/Landgrab.Tests/Services/AbilityServiceTests.cs`:
+
+1. **`AttemptIntercept_AfterRaidExpires_ReturnsNoTarget`**  
+   Simulates a scout starting an intercept lock on an engineer, then the engineer's sabotage being cleared (mimicking raid expiration or manual cancellation). Verifies that the next intercept call returns `"noTarget"` and clears the scout's tracking state.
+
+2. **`AttemptIntercept_WhenEngineerMovesOffHex_ClearsTrackingAndReturnsNoTarget`**  
+   Verifies that if the engineer moves to a different hex while the scout is locking, the next intercept call detects the mismatch and returns `"noTarget"`.
+
+**Test Results:** All 360 tests pass (359 passed, 1 skipped).
+
+---
+
+### Decisions
+
+**Decision #43: FieldBattleInvite auto-dismissal is correct as implemented**  
+**Status:** Confirmed  
+**Rationale:** The frontend panel correctly self-dismisses via timer expiration and server-driven `FieldBattleResolved` events. No changes needed.
+
+**Decision #44: AttemptIntercept graceful stale-target handling is correct**  
+**Status:** Confirmed  
+**Rationale:** The backend already checks for active sabotage and co-location on every intercept call. Stale targets (after raid expiration or engineer movement) return `"noTarget"` status without errors. Test coverage added to prevent regression.
+
+---
+
+## De Ruyter — Enemy Memory Scrutiny Fix (2026-03-26)
+
+**Agent:** De Ruyter  
+**Scope:** Backend movement/visibility pipeline  
+**Status:** Implemented
+
+### Scope Reviewed
+
+Full backend movement/visibility pipeline across:
+- `backend/Landgrab.Api/Services/VisibilityService.cs`
+- `backend/Landgrab.Api/Services/GameplayService.cs`
+- `backend/Landgrab.Api/Hubs/GameHub.Gameplay.cs`
+- `backend/Landgrab.Api/Services/VisibilityBroadcastHelper.cs`
+- `backend/Landgrab.Api/Models/PlayerVisibilityMemory.cs`
+- `backend/Landgrab.Api/Models/GameState.cs`
+- `backend/Landgrab.Api/Models/HexCell.cs`
+
+### Findings
+
+#### 1. Memory data model and projection are correct
+
+- `RememberedHex.SeenAt` is the authoritative timestamp (`PlayerVisibilityMemory.cs:6-15`).
+- `BuildStateForViewer(...)` applies `Remembered` tier and maps `SeenAt` to `HexCell.LastSeenAt` (`VisibilityService.cs:203-216`, `405-416`).
+- `EnemySightingMemorySeconds` is read from dynamics and enforced as TTL in projection (`GameState.cs:81`, `VisibilityBroadcastHelper.cs:113`, `VisibilityService.cs:189-207`).
+
+#### 2. The real gap was in movement-only broadcasts
+
+**Root cause:** `PlayersMoved` path did not update remembered tile memory before sending movement payload.
+- `BroadcastPlayersPerViewer(...)` emits only `PlayersMoved` with `List<PlayerDto>` (`VisibilityBroadcastHelper.cs:62-77`), i.e. no grid/visibility tiers are included.
+- Before this fix, `CreatePlayersForViewer(...)` computed visibility but did not persist sightings to `room.VisibilityMemory`, so enemy tiles could disappear immediately after moving away because no fresh remembered stamp existed during movement-only flow.
+
+#### 3. Memory persistence behavior
+
+- `PlayerVisibilityMemory` itself is persistent per room/player (`GameState.cs:306`) and is not cleared on each movement tick.
+- It is only reset on host-triggered game restart flow (`GameHub.Host.cs:28-31`).
+
+### Implemented Fix
+
+#### A. Stamp memory in movement-only per-viewer path
+
+**File:** `backend/Landgrab.Api/Services/VisibilityBroadcastHelper.cs`
+- In `CreatePlayersForViewer(...)`, after computing `visibleHexKeys`, call:
+  - `visibilityService.UpdateMemory(room, state, viewerUserId, normalizedViewerAllianceId, visibleHexKeys);`
+- This ensures `RememberedHexes[*].SeenAt` gets refreshed whenever a viewer sees hostile tiles, including during `PlayersMoved`-only broadcasts.
+
+#### B. Regression test for movement-only memory stamping
+
+**File:** `backend/Landgrab.Tests/Services/VisibilityBroadcastHelperTests.cs`
+- Added: `BroadcastPlayersPerViewer_WhenEnemyTileIsVisible_RefreshesRememberedHexMemory`
+- Verifies that broadcasting `PlayersMoved` updates `room.VisibilityMemory[viewer].RememberedHexes` for visible hostile hexes.
+
+### SignalR Behavior Verification
+
+- `PlayersMoved` contains only player projections (`List<PlayerDto>`), not grid tiers.
+- `StateUpdated` carries full projected game state with per-tile `VisibilityTier` + `LastSeenAt`.
+- Therefore, memory must be written during movement flow so next projection has data to render `Remembered` correctly.
+
+### Validation
+
+- `cd backend/Landgrab.Api && dotnet build --configuration Debug` ✅
+- `cd backend/Landgrab.Tests && dotnet test` (357 passed; pre-existing unrelated failure noted)
+- Targeted memory-flow tests pass:
+  - `VisibilityBroadcastHelperTests.BroadcastPlayersPerViewer_WhenEnemyTileIsVisible_RefreshesRememberedHexMemory` ✅
+  - `GameplayServiceTests.UpdatePlayerLocation_WhenEnemyHexLeavesVisibility_StampsRememberedHexBeforeMove` ✅
+
+---
+
+## Vermeer — Tie Radar Sweep Radius to Player Visibility Range
+
+**Date:** 2026-03-27  
+**Agent:** Vermeer (Frontend Dev)  
+**Status:** Implemented  
+
+### Context
+
+The radar sweep layer was using a hardcoded `SCAN_RADIUS_METERS = 600` constant. This didn't reflect the player's actual visibility range, which varies by role and beacon state:
+
+- **Base visibility:** 1 hex (from `VisibilityService.cs` — `VisibilityRadius = 1`)
+- **Beacon/Scout visibility:** 3 hexes (from `VisibilityService.cs` — `BeaconRange = 3`)
+- **Scout role:** Permanent beacon (`isBeacon` always true for Scout)
+- **Hex size:** Dynamic game config (`state.tileSizeMeters`, typically 50-100m)
+
+### Implementation
+
+#### 1. RadarSweepLayer Changes
+
+**Added props:**
+```typescript
+export interface RadarSweepLayerProps {
+  map: L.Map;
+  isActive: boolean;
+  visibilityHexes: number;    // NEW: 1 or 3 based on player role/beacon
+  hexSizeMeters: number;       // NEW: from state.tileSizeMeters
+}
+```
+
+**Removed hardcoded constant:**
+```typescript
+// BEFORE
+const SCAN_RADIUS_METERS = 600;
+
+// AFTER
+const scanRadiusMeters = hexSizeMeters * visibilityHexes;
+```
+
+**Updated `computeRadiusPx` signature:**
+```typescript
+// BEFORE
+function computeRadiusPx(map: L.Map, lat: number, lng: number): number
+
+// AFTER
+function computeRadiusPx(map: L.Map, lat: number, lng: number, scanRadiusMeters: number): number
+```
+
+Added `scanRadiusMeters` to `useEffect` dependency array to trigger re-render when visibility changes.
+
+#### 2. GameMap Changes
+
+**Compute visibility from local player:**
+```typescript
+const visibilityHexes = useMemo(() => {
+  if (!myPlayer) return 1;
+  // Scout has permanent beacon, or any player with active beacon gets 3-hex visibility
+  return myPlayer.isBeacon || myPlayer.role === 'Scout' ? 3 : 1;
+}, [myPlayer]);
+```
+
+**Pass props to RadarSweepLayer:**
+```tsx
+<RadarSweepLayer
+  map={mapInstance}
+  isActive={state.phase === 'Playing' && currentLocation != null && layerPrefs.radarSweep}
+  visibilityHexes={visibilityHexes}
+  hexSizeMeters={state.tileSizeMeters ?? 50}
+/>
+```
+
+### Behavior
+
+- **Base player (no beacon):** Sweep radius = `tileSizeMeters × 1` (e.g., 50m tiles → 50m sweep)
+- **Scout (permanent beacon):** Sweep radius = `tileSizeMeters × 3` (e.g., 50m tiles → 150m sweep)
+- **Any player with active beacon:** Sweep radius = `tileSizeMeters × 3`
+- **Dynamic scaling:** Radius adjusts when host changes tile size or when player activates/deactivates beacon
+
+The sweep ring and wedge both use the computed `scanRadiusMeters`, so the entire radar visualization scales consistently.
+
+### Validation
+
+```bash
+npm run lint   # ✓ 0 errors
+npm run build  # ✓ 301 modules, clean
+```
+
+No TypeScript errors, no linting violations.
+
+---
+

@@ -15,6 +15,8 @@ Coverage areas: auth (JWT, bcrypt), hex math/geometry, game mechanics, abilities
 - 2026-03-28: `ConfigureAlliances` has a strict `Phase != GamePhase.Lobby` guard in `AllianceConfigService.cs` — calling it after game start returns an error and leaves state unchanged. All lobby-config methods share this pattern.
 - 2026-03-28: `PlayersMoved` broadcasts full `PlayerDto` objects (via `ClonePlayer` in `VisibilityBroadcastHelper`) including all `*CooldownUntil` fields. The frontend correctly replaces the player array in `updateGameState`; ability card components use `useSecondTick()` + client-side ISO date comparison for live countdowns. No stale-cooldown bug exists.
 - 2026-03-28: Test count after Round 2: 353 total (352 passed, 1 skipped). The fix to `UpdatePlayerPosition` is in service code; a dedicated test for the off-grid nulling behaviour is a gap to fill.
+- 2026-03-29 (Round 3 Bug Hunt): Investigated BUG 8 (FieldBattleInvitePanel stale invite) and BUG 9 (AttemptIntercept race condition). Both are **not bugs** — frontend panel correctly self-dismisses via timer expiration and `FieldBattleResolved` server event; backend `AttemptIntercept` gracefully handles stale targets (after raid expiration or engineer movement) by checking `HasActiveSabotage(engineer)` and returning `"noTarget"` status. Added 2 new xUnit tests to cover intercept stale-target scenarios. Test count: 360 total (359 passed, 1 skipped).
+- 2026-03-29: Fixed test support constructors in `ServiceTestContext.cs` and `TestServiceFactory.cs` — removed obsolete parameters (roleProgressService from EngineerAbilityService, hubContext from SharedAbilityService) to match updated service signatures.
 
 ## 2026-03-27 Visibility Bug Hunt & Hub Testing Sprint
 

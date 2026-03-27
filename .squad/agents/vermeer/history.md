@@ -378,3 +378,35 @@ const cy = lp.y - pixelOrigin.y;
 - Exit ability mode on SignalR reconnect to avoid stuck targeting/confirming UI after recovery.
 - Schedule notification expiry in the store based on server deadlines (with a fallback) to avoid stale panels.
 - Hide field battle invite UI once the join window expires to prevent stale battleId actions.
+
+## 2026-03-27 Frontend Bug Hunt Round 3 (4 specific areas)
+
+**Charter:** Investigate 4 specific frontend bug areas with surgical focus.
+
+**BUG 1: Ability mode stuck in targeting/confirming on disconnect**
+- **Status:** ✅ ALREADY FIXED
+- **File:** `useSignalRHandlers.ts:724-727`
+- **Finding:** The `onReconnected` handler calls `useGameplayStore.getState().exitAbilityMode()`, resetting ability state to idle on reconnection.
+- **No action needed.**
+
+**BUG 2: newlyClaimedKeys / newlyRevealedKeys animation sets never cleared**
+- **Status:** ✅ CONFIRMED NON-BUG (vestigial feature)
+- **Files:** `HexTile.tsx:305-306`, `hexRendering.ts:319-320`
+- **Finding:** These sets are permanently `EMPTY_KEYS` (empty ReadonlySet). Animation classes `is-just-claimed` and `is-revealing` are never applied. Git history (commit 0ccad2ea, 2026-03-18) shows this was intentionally removed during a refactor that eliminated `HexGridLayer` and the old grid-diff detection logic. The CSS animations still exist (`hex-claim-pulse` at 0.6s) but the feature is dormant.
+- **No action needed.** Feature was intentionally removed; CSS can be cleaned up in future if desired.
+
+**BUG 3: troopTransferRequest has no auto-clear TTL**
+- **Status:** ✅ ALREADY FIXED
+- **File:** `notificationStore.ts:49-60, 74-87, 89-102`
+- **Finding:** The store already has a `resolveNotificationTimeout` helper that computes TTL from `expiresAt`/`joinDeadline` timestamps. Both `setTroopTransferRequest` and `setFieldBattleInvite` schedule automatic notification clearing via `scheduleNotificationClear`.
+- **No action needed.**
+
+**BUG 4: Session recovery for ended games**
+- **Status:** ✅ ALREADY CORRECT
+- **File:** `useAutoResume.ts:250-260`
+- **Finding:** Error handling calls `clearSession()` for stale rejoin/join failures. Error codes checked by `isClearlyStaleRejoinFailure` include: "no active room", "room not found", "room no longer". The hook correctly clears saved session and navigates to lobby with error message.
+- **No action needed.**
+
+**Build verification:** `npm run lint` (0 errors) and `npm run build` (clean) both pass.
+
+**Summary:** All 4 bugs are either already fixed or non-bugs (vestigial feature). No code changes required. Frontend is in good health.

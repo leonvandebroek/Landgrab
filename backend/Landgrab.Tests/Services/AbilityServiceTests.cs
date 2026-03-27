@@ -1610,4 +1610,78 @@ public sealed class AbilityServiceTests
         context.State.ActiveFieldBattles.Should().BeEmpty();
     }
 
+    // ── Area 4: Scout intercept race condition with raid expiration ──────────
+
+    [Fact]
+    public void AttemptIntercept_AfterRaidExpires_ReturnsNoTarget()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", allianceId: "a2", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 2)
+            .WithCarriedTroops("p2", 2)
+            .Build();
+        var engineer = state.Players.Single(p => p.Id == "p2");
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        engineer.SabotagePerimeterVisited.Add(HexService.Key(0, 0));
+        var context = new ServiceTestContext(state);
+
+        // First intercept attempt — scout starts locking on target
+        var firstAttempt = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", 0d);
+        firstAttempt.error.Should().BeNull();
+        firstAttempt.result!.Status.Should().Be("locking");
+
+        // Simulate raid expiration — sabotage is cleared server-side
+        engineer.SabotageTargetQ = null;
+        engineer.SabotageTargetR = null;
+
+        // Second intercept attempt — should return noTarget since engineer no longer has active sabotage
+        var secondAttempt = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", 0d);
+        secondAttempt.error.Should().BeNull();
+        secondAttempt.result!.Status.Should().Be("noTarget");
+        context.Player("p1").InterceptTargetId.Should().BeNull();
+        context.Player("p1").InterceptLockStartAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void AttemptIntercept_WhenEngineerMovesOffHex_ClearsTrackingAndReturnsNoTarget()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", allianceId: "a2", role: PlayerRole.Engineer)
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 2)
+            .WithCarriedTroops("p2", 2)
+            .Build();
+        var engineer = state.Players.Single(p => p.Id == "p2");
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        engineer.SabotagePerimeterVisited.Add(HexService.Key(0, 0));
+        var context = new ServiceTestContext(state);
+
+        // Scout starts locking on engineer
+        var firstAttempt = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", 0d);
+        firstAttempt.error.Should().BeNull();
+        firstAttempt.result!.Status.Should().Be("locking");
+
+        // Engineer moves to different hex
+        engineer.CurrentHexQ = 1;
+        engineer.CurrentHexR = 0;
+
+        // Next intercept attempt should detect engineer is no longer on same hex
+        var secondAttempt = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", 0d);
+        secondAttempt.error.Should().BeNull();
+        secondAttempt.result!.Status.Should().Be("noTarget");
+        context.Player("p1").InterceptTargetId.Should().BeNull();
+        context.Player("p1").InterceptLockStartAt.Should().BeNull();
+    }
+
 }

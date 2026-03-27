@@ -48,12 +48,11 @@ internal sealed class ServiceTestContext
         GameStateService = new GameStateService(RoomProvider.Object, roomPersistenceService, GameStateLogger.Object);
         var roleProgressService = new RoleProgressService();
         GameplayService = new GameplayService(RoomProvider.Object, GameStateService, WinConditionService, roleProgressService, VisibilityService, NullLogger<GameplayService>.Instance);
-        var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<Landgrab.Api.Hubs.GameHub>>();
         AbilityService = new AbilityServiceFacade(
             new CommanderAbilityService(RoomProvider.Object, GameStateService),
             new ScoutAbilityService(RoomProvider.Object, GameStateService, VisibilityService),
-            new EngineerAbilityService(RoomProvider.Object, GameStateService, roleProgressService),
-            new SharedAbilityService(RoomProvider.Object, GameStateService, hubContextMock.Object));
+            new EngineerAbilityService(RoomProvider.Object, GameStateService),
+            new SharedAbilityService(RoomProvider.Object, GameStateService));
         HostControlService = new HostControlService(RoomProvider.Object, GameStateService);
     }
 
