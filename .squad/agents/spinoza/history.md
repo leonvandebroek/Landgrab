@@ -41,3 +41,41 @@ Coverage areas: auth (JWT, bcrypt), hex math/geometry, game mechanics, abilities
 **Team Coordination:**
 - Complements de-ruyter's backend bug fixes with automated test coverage
 - Provides regression safety for future changes to GameDynamics sanitization
+
+## 2026-03-29 — Bug Hunt Round 4 (Win Conditions & Lobby Capacity)
+
+**Scope:** Win condition evaluation at 30-player scale, lobby capacity, game start initialization
+
+**Key Findings:**
+- All systems pass stress testing — **NO critical bugs found**
+- Added 9 new tests in `LargeScaleGameTests.cs` covering 30-player scenarios
+- Test count increased from 360 → 369 (all passing)
+
+**Performance Validated:**
+- `RefreshTerritoryCount` with 721 hexes (radius 15) completes in <2ms
+- `StartGame` with 30 players completes in ~40-50ms
+- Win condition evaluation is O(N) but performant at current scale
+
+**Key Architectural Findings:**
+- 30-player hard cap enforced correctly in `RoomService.JoinRoom` (line 325-326)
+- `ValidateStartingAccess` (LobbyService.cs:544-564) prevents unplayable game starts by blocking when any player would have 0 troops + 0 territory access
+- Win condition simultaneous threshold: first alliance in `state.Alliances` list wins (deterministic)
+- No alliance seat limits exist, but `ValidateStartingAccess` prevents 30-in-1-alliance scenarios from starting
+
+**Test Coverage Added:**
+1. `JoinRoom_31stPlayer_IsRejectedWithMaxCapacityError` — validates hard cap
+2. `StartGame_With30Players_SuccessfullyInitializesAllPlayers` — verifies all players get starting positions
+3. `StartGame_With30PlayersIn5Alliances_DistributesStartingTilesEvenly` — multi-alliance distribution
+4. `StartGame_AllPlayersInOneAlliance_FailsValidationDueToLackOfTerritory` — validates protection logic
+5. `ApplyTerritoryPercentWinCondition_30Players10Alliances_ScansAllHexesCorrectly` — large-scale win eval
+6. `RefreshTerritoryCount_30PlayersOnLargeGrid_CompletesWithinReasonableTime` — performance test
+7. `ApplyEliminationWinCondition_30Players_FindsSoleAllianceSurvivor` — elimination at scale
+8. `ApplyWinCondition_MultipleAlliancesHitThresholdSimultaneously_AwardsFirstInList` — race condition
+9. `ComputeAchievements_With30Players_CalculatesCorrectLeaders` — achievement calculation at scale
+
+**Recommendations:**
+- Document first-wins-on-tie behavior in `ApplyTerritoryPercentWinCondition` XML comments
+- Consider lobby UI warning when 20+ players join one alliance (UX improvement, not bug)
+- Current O(N) scan performance is acceptable; optimization not needed unless grid exceeds 1000 hexes
+
+**Decisions:** All findings documented in `.squad/decisions/inbox/spinoza-r4-findings.md`

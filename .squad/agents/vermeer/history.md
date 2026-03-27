@@ -410,3 +410,60 @@ const cy = lp.y - pixelOrigin.y;
 **Build verification:** `npm run lint` (0 errors) and `npm run build` (clean) both pass.
 
 **Summary:** All 4 bugs are either already fixed or non-bugs (vestigial feature). No code changes required. Frontend is in good health.
+
+## 2026-03-23 Bug Hunt Round 4 — Frontend 30-player/3-alliance scalability
+
+**Charter:** Investigate frontend performance bottlenecks for 30-player, 3-alliance games focusing on broadcast flooding, HUD rendering, and memory usage.
+
+**Scope:** 
+- Area 1b: Frontend broadcast flooding (StateUpdated handler)
+- Area 5: Visibility broadcast memory (frontend side)
+- Area 9: 30-player HUD rendering
+- Bonus: Alliance display with 3 alliances × 10 players
+
+**Key Findings:**
+- ✅ **NO CRITICAL BUGS** — Architecture is generally well-designed for scale
+- ⚠️ **3 Performance Risks** identified that could impact extreme-scale scenarios
+
+### Performance Risks Identified
+
+**R4-01: Full grid normalization on every StateUpdated** (perf-risk)
+- **File:** `gameHelpers.ts:49-70`
+- **Issue:** `normalizeGameState()` does `Object.fromEntries(Object.entries(grid).map(...))` on every broadcast, creating new objects even if grid unchanged
+- **Impact:** O(grid_size) allocations per update. 200 hexes × 30-60 actions/min = 6,000-12,000 hex allocations/min
+- **Mitigation:** `gameStore.normalizeGrid()` does proper diffing afterward, reusing unchanged hex objects
+- **Recommendation:** Move `visibilityTier` defaulting into `gameStore.normalizeGrid()` to avoid double pass
+
+**R4-02: No throttling on StateUpdated handler** (perf-risk)
+- **File:** `useSignalRHandlers.ts:284-420`
+- **Issue:** Handler runs immediately on every broadcast (5-10× per second in 30-player games), doing full state normalization, prompt checks, field battle eligibility, etc.
+- **Impact:** 5-20ms per update × 10 updates/sec = 50-200ms/sec main thread overhead
+- **Mitigation:** Grid diffing prevents React re-renders when grid unchanged
+- **Recommendation:** Consider batching updates over 100-200ms windows or use `requestIdleCallback` for non-critical sync
+
+**R4-03: Event log renders all events without virtualization** (low priority)
+- **File:** `GameEventLog.tsx:40`
+- **Issue:** 500-1000 events in 30-minute game = 1,500+ DOM nodes
+- **Mitigation:** Events memoized, log only visible when modal open
+- **Recommendation:** Add virtualization (react-window) or pagination
+
+### Architecture Strengths Confirmed
+
+1. **Grid diffing works correctly** — `gameStore.normalizeGrid()` reuses unchanged hex objects via `hasHexChanged()` field-level comparison
+2. **Stale closure prevention** — Event handlers in `useSignalRHandlers` use `useMemo` with proper dependencies
+3. **Alliance rendering** — No hardcoded assumptions; `state.alliances.map()` handles N alliances dynamically
+4. **Player list memoization** — `sortedPlayers` properly memoized to avoid unnecessary sorts
+5. **Full state broadcast acceptable** — Grid diffing makes receiving full GameState on every action viable
+
+### Learnings
+
+- **Grid normalization has two passes:** `normalizeGameState()` in `gameHelpers.ts` creates new objects for `visibilityTier` defaults, then `gameStore.normalizeGrid()` diffs them. This is redundant work that could be optimized.
+- **Zustand granular selectors are critical:** Components using `useGameStore(state => state.gameState?.phase)` prevent re-renders when unrelated fields change. Full state selectors cause all components to evaluate on every action.
+- **Modal-rendered lists don't need virtualization urgently:** Event log and player list are only rendered when modal is open, so 30 players × 3 DOM nodes is acceptable cost.
+- **React.memo on list items is free perf win:** `ScoreRow` component renders 30× per player list update but isn't memoized. Adding `React.memo` would prevent re-renders when other players change.
+
+**Build verification:** `npm run lint` passed (0 errors)
+
+**Output:** Created `.squad/decisions/inbox/vermeer-r4-findings.md` with detailed analysis and recommendations
+
+**Status:** Investigation complete. No critical bugs found. 3 performance optimizations identified for future consideration.
