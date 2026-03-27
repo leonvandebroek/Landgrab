@@ -372,3 +372,9 @@ const cy = lp.y - pixelOrigin.y;
 - Complements de-ruyter's backend fixes with frontend validation
 - i18n cleanup improves Dutch UI polish
 - Combat logic alignment confirmed; no frontend/backend desync found
+
+## Learnings
+- Treat "room not found" rejoin errors as stale session signals so auto-resume clears saved sessions.
+- Exit ability mode on SignalR reconnect to avoid stuck targeting/confirming UI after recovery.
+- Schedule notification expiry in the store based on server deadlines (with a fallback) to avoid stale panels.
+- Hide field battle invite UI once the join window expires to prevent stale battleId actions.

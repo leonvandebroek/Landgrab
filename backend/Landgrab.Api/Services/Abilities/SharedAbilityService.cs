@@ -1,6 +1,4 @@
-using Landgrab.Api.Hubs;
 using Landgrab.Api.Models;
-using Microsoft.AspNetCore.SignalR;
 
 namespace Landgrab.Api.Services.Abilities;
 
@@ -10,8 +8,7 @@ namespace Landgrab.Api.Services.Abilities;
 /// </summary>
 public sealed class SharedAbilityService(
     IGameRoomProvider roomProvider,
-    GameStateService gameStateService,
-    IHubContext<GameHub> hubContext)
+    GameStateService gameStateService)
     : RoleAbilityServiceBase(roomProvider, gameStateService)
 {
     /// <summary>

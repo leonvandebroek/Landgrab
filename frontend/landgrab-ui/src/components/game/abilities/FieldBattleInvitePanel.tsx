@@ -42,7 +42,7 @@ export function FieldBattleInvitePanel({ invoke, onFleeBattle }: FieldBattleInvi
     }
   }, [fieldBattleInvite, secondsLeft, setFieldBattleInvite]);
 
-  if (!fieldBattleInvite) return null;
+  if (!fieldBattleInvite || secondsLeft == null) return null;
 
   const isInitiator = fieldBattleInvite.isInitiator === true;
 

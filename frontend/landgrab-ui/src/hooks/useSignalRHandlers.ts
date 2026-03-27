@@ -724,6 +724,7 @@ export function useSignalRHandlers({
     onReconnected: () => {
       recordAgentEvent('Reconnected');
       useUiStore.getState().clearError();
+      useGameplayStore.getState().exitAbilityMode();
       const session = savedSessionRef.current;
       const invoke = getInvoke();
       if (!invoke || !session?.roomCode) {

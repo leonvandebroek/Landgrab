@@ -7,8 +7,7 @@ namespace Landgrab.Api.Services.Abilities;
 /// </summary>
 public sealed class EngineerAbilityService(
     IGameRoomProvider roomProvider,
-    GameStateService gameStateService,
-    RoleProgressService roleProgressService)
+    GameStateService gameStateService)
     : RoleAbilityServiceBase(roomProvider, gameStateService)
 {
     /// <summary>Starts fort construction on the Engineer's current owned hex.</summary>

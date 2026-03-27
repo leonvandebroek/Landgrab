@@ -419,3 +419,165 @@ Implemented backend changes from Rembrandt's blueprint across models, services, 
 
 ---
 
+
+---
+
+## Round 2 Bug Hunt Decisions
+
+### FB-01: Field Battle — Enforce Participant Integrity (De Ruyter, Backend)
+
+**Date:** 2026-03-27  
+**Agent:** De Ruyter  
+**Scope:** Backend field battle lifecycle  
+**Status:** Fixed
+
+**Problem:** Field battle join/target-selection boundaries lacked strict guards, allowing role confusion and cross-battle targeting inconsistencies.
+
+**Decision:** Restrict `JoinFieldBattle` and `SelectFieldBattleTarget` with stricter participant guards:
+- Initiator cannot join as enemy
+- If battle has `TargetEnemyId` (challenge flow), only that exact target may join
+- `SelectFieldBattleTarget` requires `targetId` to already be in `JoinedEnemyIds`
+
+**Rationale:** Prevent role confusion and cross-battle targeting inconsistencies where an initiator could select a player who never opted into that battle.
+
+**Validation:** Backend build clean, tests pass (357/358).
+
+---
+
+### FB-02: Field Battle — Cleanup Unresolved Initiator Battles (De Ruyter, Backend)
+
+**Date:** 2026-03-27  
+**Agent:** De Ruyter  
+**Scope:** Backend field battle cleanup  
+**Status:** Fixed
+
+**Decision:** In `RoomService.RemoveConnection`, remove unresolved active field battles initiated by the disconnecting user when it is their last active connection.
+
+**Rationale:** Avoid orphaned unresolved battles with disconnected initiator and stale state/invites.
+
+**Validation:** Backend tests pass.
+
+---
+
+### TT-01: Troop Transfer — Expire-on-Access Pruning (De Ruyter, Backend)
+
+**Date:** 2026-03-27  
+**Agent:** De Ruyter  
+**Scope:** Backend troop transfer validation  
+**Status:** Fixed
+
+**Decision:** Prune expired transfers at the start of both `InitiateTroopTransfer` and `RespondToTroopTransfer` under room lock. Treat missing/expired transfer IDs uniformly as "not found".
+
+**Rationale:** Removes stale transfer buildup and prevents edge behavior where expired entries remain in state. Preserves TOCTOU safety because transfer acceptance still rechecks initiator troops at response time.
+
+**Validation:** Backend tests pass.
+
+---
+
+### FRNT-01: RejoinRoom — Stale Detection (Vermeer, Frontend)
+
+**Date:** 2026-03-27  
+**Agent:** Vermeer  
+**Scope:** Frontend auto-resume  
+**Status:** Fixed
+
+**Decision:** Treat "room not found" / "room no longer exists" as stale RejoinRoom failures. Clear saved session during auto-resume.
+
+**Rationale:** Prevents repeated auto-resume attempts when the room has been deleted, avoiding reconnect loops that trap the user in a stale session.
+
+**Validation:** Frontend lint passes.
+
+---
+
+### FRNT-02: Reconnect — Ability UI Reset (Vermeer, Frontend)
+
+**Date:** 2026-03-27  
+**Agent:** Vermeer  
+**Scope:** Frontend reconnection handling  
+**Status:** Fixed
+
+**Decision:** Exit ability mode on SignalR reconnected events.
+
+**Rationale:** Ensures targeting/confirming UI does not remain stuck after reconnecting to the room.
+
+**Validation:** Frontend lint passes.
+
+---
+
+### FRNT-03: Notifications — Expiry Safety (Vermeer, Frontend)
+
+**Date:** 2026-03-27  
+**Agent:** Vermeer  
+**Scope:** Frontend notification lifecycle  
+**Status:** Fixed
+
+**Decision:** Schedule auto-clear for troop transfer requests and field battle invites using their expiry timestamps, with a 10s fallback.
+
+**Rationale:** Avoids stale notifications lingering if panels are unmounted or timers are missed.
+
+**Validation:** Frontend lint passes.
+
+---
+
+### FRNT-04: Field Battle — Invite Expiry Guard (Vermeer, Frontend)
+
+**Date:** 2026-03-27  
+**Agent:** Vermeer  
+**Scope:** Frontend field battle UX  
+**Status:** Fixed
+
+**Decision:** Hide the invite panel when the join window has elapsed.
+
+**Rationale:** Prevents users from acting on expired battle IDs.
+
+**Validation:** Frontend lint passes.
+
+---
+
+### CC-01: UpdatePlayerPosition — Off-Grid Coordinate Validation (Spinoza, Cross-cutting)
+
+**Date:** 2026-03-27  
+**Agent:** Spinoza  
+**Scope:** Backend coordinate validation  
+**Status:** Fixed
+
+**Problem:** `UpdatePlayerPosition` accepted off-grid coordinates without validation, risking game state corruption.
+
+**Decision:** Add grid existence check; off-grid q,r coordinates now null the player's position. Flee detection updated to handle both in-grid movement and off-grid steps.
+
+**File:** `backend/Landgrab.Api/Services/GameplayService.cs` ~line 547
+
+**Rationale:** Prevents invalid coordinate acceptance that could break game state integrity.
+
+**Validation:** Full build/test/lint verification passing (352/353 tests).
+
+---
+
+## Test Gaps Identified (Spinoza)
+
+**Date:** 2026-03-27
+
+### GAP-1: UpdatePlayerPosition with Off-Grid Coordinates (Medium Priority)
+
+**What's missing:** Unit test calling `GameplayService.UpdatePlayerPosition` with q,r coordinates not present in the game grid, asserting that `player.CurrentHexQ` and `player.CurrentHexR` are set to `null`.
+
+**Why it matters:** The bug was undetected because no test exercised this path.
+
+**Suggested cases:**
+- `UpdatePlayerPosition_WhenCoordNotInGrid_NullsPlayerPosition`
+- `UpdatePlayerPosition_WhenCoordInGrid_SetsPlayerPosition`
+- `UpdatePlayerPosition_WhenPlayerMovesOffGrid_TriggersFlee`
+- `UpdatePlayerPosition_WhenPlayerRemainsAtBattleHex_DoesNotTriggerFlee`
+
+---
+
+### GAP-2: UpdatePlayerPosition Flee Detection (Low Priority)
+
+**What's missing:** Tests for the field battle flee path — moving from battle hex to another in-grid hex triggers flee, while staying at the battle hex does not.
+
+---
+
+### GAP-3: PlayersMoved Cooldown Fields (Low Priority)
+
+**What's missing:** Integration test on `VisibilityBroadcastHelper.CreatePlayersForViewer` asserting that `*CooldownUntil` fields are copied from allied player records. This would guard against accidental stripping in a future refactor.
+

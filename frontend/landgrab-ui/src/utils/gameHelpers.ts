@@ -74,7 +74,10 @@ export function isClearlyStaleJoinFailure(message: string): boolean {
 }
 
 export function isClearlyStaleRejoinFailure(message: string): boolean {
-  return message.toLowerCase().includes('no active room');
+  const normalized = message.toLowerCase();
+  return normalized.includes('no active room')
+    || normalized.includes('room not found')
+    || normalized.includes('room no longer');
 }
 
 export function isMissingRejoinMethodFailure(message: string): boolean {
