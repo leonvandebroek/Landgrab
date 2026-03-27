@@ -236,6 +236,7 @@ internal static class GameStateCommon
             ActiveFieldBattles = state.ActiveFieldBattles.Select(battle => new ActiveFieldBattle
             {
                 Id = battle.Id,
+                CreatedAt = battle.CreatedAt,
                 InitiatorId = battle.InitiatorId,
                 InitiatorName = battle.InitiatorName,
                 InitiatorAllianceId = battle.InitiatorAllianceId,
@@ -243,7 +244,9 @@ internal static class GameStateCommon
                 R = battle.R,
                 InitiatorTroops = battle.InitiatorTroops,
                 JoinDeadline = battle.JoinDeadline,
+                TargetEnemyId = battle.TargetEnemyId,
                 JoinedEnemyIds = [.. battle.JoinedEnemyIds],
+                FledEnemyIds = [.. battle.FledEnemyIds],
                 Resolved = battle.Resolved
             }).ToList(),
             ContestedEdges = state.ContestedEdges?.Select(edge => new ContestedEdgeDto

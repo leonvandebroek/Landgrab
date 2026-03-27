@@ -38,22 +38,46 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
             return;
         }
 
-        foreach (var (connectionId, viewerUserId) in room.ConnectionMap)
+        var viewerGroups = room.ConnectionMap
+            .GroupBy(entry => entry.Value, entry => entry.Key)
+            .Select(group =>
+            {
+                var viewerUserId = group.Key;
+                var connectionIds = group.ToArray();
+                var visibleHexKeys = visibilityService.ComputeVisibleHexKeys(state, viewerUserId);
+                var viewerAllianceId = state.Players.FirstOrDefault(player => player.Id == viewerUserId)?.AllianceId ?? string.Empty;
+                visibilityService.UpdateMemory(room, state, viewerUserId, viewerAllianceId, visibleHexKeys);
+                var memory = room.VisibilityMemory.GetOrAdd(viewerUserId, _ => new PlayerVisibilityMemory());
+
+                return (viewerUserId, connectionIds, memory, visibleHexKeys);
+            })
+            .ToArray();
+
+        await Task.WhenAll(viewerGroups.Select(async viewerGroup =>
         {
-            var viewerState = CreateStateForViewer(room, state, viewerUserId, derivedMapStateService);
-            var proxy = clientProxy(connectionId);
+            var viewerState = CreateStateFromProjection(
+                room,
+                state,
+                viewerGroup.viewerUserId,
+                viewerGroup.memory,
+                viewerGroup.visibleHexKeys,
+                derivedMapStateService);
 
-            if (!string.IsNullOrWhiteSpace(aliasEvent))
+            foreach (var connectionId in viewerGroup.connectionIds)
             {
-                await proxy.SendAsync(aliasEvent, viewerState);
-            }
+                var proxy = clientProxy(connectionId);
+                if (!string.IsNullOrWhiteSpace(aliasEvent))
+                {
+                    await proxy.SendAsync(aliasEvent, viewerState);
+                }
 
-            await proxy.SendAsync("StateUpdated", viewerState);
-            if (viewerState.Phase == GamePhase.GameOver)
-            {
-                await proxy.SendAsync("GameOver", BuildGameOverPayload(viewerState));
+                await proxy.SendAsync("StateUpdated", viewerState);
+                if (viewerState.Phase == GamePhase.GameOver)
+                {
+                    await proxy.SendAsync("GameOver", BuildGameOverPayload(viewerState));
+                }
             }
-        }
+        }));
     }
 
     /// <summary>
@@ -101,7 +125,17 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
         var viewerAllianceId = state.Players.FirstOrDefault(player => player.Id == viewerUserId)?.AllianceId ?? string.Empty;
 
         visibilityService.UpdateMemory(room, state, viewerUserId, viewerAllianceId, visibleHexKeys);
+        return CreateStateFromProjection(room, state, viewerUserId, memory, visibleHexKeys, derivedMapStateService);
+    }
 
+    private GameState CreateStateFromProjection(
+        GameRoom room,
+        GameState state,
+        string viewerUserId,
+        PlayerVisibilityMemory memory,
+        HashSet<string> visibleHexKeys,
+        DerivedMapStateService derivedMapStateService)
+    {
         var viewerState = GameStateCommon.SnapshotState(state);
         var isHostObserver = room.State.HostObserverMode && GameStateCommon.IsHost(room, viewerUserId);
         visibilityService.BuildStateForViewer(

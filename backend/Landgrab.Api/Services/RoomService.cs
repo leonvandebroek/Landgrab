@@ -490,6 +490,11 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
         return roomCodes;
     }
 
+    public IReadOnlyList<GameRoom> GetRoomsSnapshot()
+    {
+        return _rooms.Values.ToList();
+    }
+
     public void RemoveConnection(GameRoom room, string connectionId, bool returnedToLobby = false)
     {
         if (!room.ConnectionMap.TryRemove(connectionId, out var userId))

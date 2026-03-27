@@ -53,6 +53,7 @@ builder.Services.AddSingleton<PasswordService>();
 builder.Services.AddSingleton<TokenBlocklist>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
+builder.Services.AddHostedService<FieldBattleCleanupService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 
@@ -112,6 +113,10 @@ var signalRBuilder = builder.Services.AddSignalR(options =>
     {
         options.AddFilter<HubExceptionFilter>();
     })
+    // Client opt-in note:
+    // To use MessagePack, frontend must install @microsoft/signalr-protocol-msgpack and
+    // call .withHubProtocol(new MessagePackHubProtocol()) on HubConnectionBuilder.
+    .AddMessagePackProtocol()
     .AddJsonProtocol(options =>
         options.PayloadSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter()));

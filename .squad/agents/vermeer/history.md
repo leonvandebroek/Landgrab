@@ -11,6 +11,10 @@ Key patterns:
 
 ## Learnings
 
+- **2026-07-xx (vermeer-perf-sprint):** Performance sprint — two OPTs reviewed.
+  - **OPT-06 (skipped):** `normalizeGameState` in `gameHelpers.ts` already performs `visibilityTier` defaulting and grid normalization in a single `Object.entries().map()` pass. The described double-pass does not exist; no change needed.
+  - **OPT-08 (implemented):** Added `const visibleEvents = sortedEvents.slice(0, 200)` in `GameEventLog.tsx` and swapped render loop to use `visibleEvents`. Count badge still shows total `sortedEvents.length`. `sortedEvents` is sorted newest-first (descending), so `slice(0, 200)` retains the 200 most recent entries. Prevents unbounded DOM growth in long games.
+
 - **2026-03-27 (vermeer-combat-perspective):** Fixed `CombatResultModal` always rendering from attacker's perspective. Added `isAttacker: boolean` and `attackerName: string | null` to `CombatResult` interface in `types/game.ts`. In `CombatResultModal.tsx`, replaced `const won = result.attackerWon` with perspective-aware derived values: `won`, `myTroopsLost`, `theirTroopsLost`, `myTroopsRemaining`, `theirTroopsRemaining`, `opponentName`, `myWinProbability`, `myBonuses`, `theirBonuses`. Deploy slider now only renders when `won && result.isAttacker`. Stats grid, versus section combatant names, win probability bar, and defeat subtitle all use the derived perspective values. i18n role-label keys (attackerLosses, defenderLosses, etc.) intentionally left unchanged — they describe combat roles, not the viewer's perspective.
 
 - **2026-03-23 (vermeer-compass-crash & vermeer-proximity-reveal finalized):** Two critical frontend fixes deployed.

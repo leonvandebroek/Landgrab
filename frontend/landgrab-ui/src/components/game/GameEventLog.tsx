@@ -24,6 +24,8 @@ export function GameEventLog({ events, players }: Props) {
     [events]
   );
 
+  const visibleEvents = sortedEvents.slice(0, 200);
+
   return (
     <section className="game-log" aria-labelledby="game-log-title">
       <div className="game-log-header">
@@ -37,7 +39,7 @@ export function GameEventLog({ events, players }: Props) {
         <p className="game-log-empty">{t('gameLog.empty')}</p>
       ) : (
         <div className="game-log-list">
-          {sortedEvents.map(event => {
+          {visibleEvents.map(event => {
             const tone = getGameLogTone(event.type);
             const playerName = formatPlayerLabel(
               resolvePlayer(playerDirectory, event.playerId, event.playerName),

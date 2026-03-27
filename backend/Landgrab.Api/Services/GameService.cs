@@ -35,6 +35,7 @@ public class GameService(
     public int RestoreRooms(IEnumerable<GameRoom> rooms) => roomService.RestoreRooms(rooms);
     public IReadOnlyList<RoomSummaryDto> GetRoomsForUser(string userId) => roomService.GetRoomsForUser(userId);
     public IReadOnlyList<string> GetPlayingRoomCodes() => roomService.GetPlayingRoomCodes();
+    public IReadOnlyList<GameRoom> GetRoomsSnapshot() => roomService.GetRoomsSnapshot();
     public void RemoveConnection(GameRoom room, string connectionId, bool returnedToLobby = false) => roomService.RemoveConnection(room, connectionId, returnedToLobby);
 
     public (GameState? state, string? error) SetAlliance(string roomCode, string userId, string allianceName) => allianceConfigService.SetAlliance(roomCode, userId, allianceName);

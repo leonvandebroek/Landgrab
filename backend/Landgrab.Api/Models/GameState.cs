@@ -229,6 +229,7 @@ public class TroopTransferResultDto
 public class ActiveFieldBattle
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string InitiatorId { get; set; } = "";
     public string InitiatorName { get; set; } = "";
     public string InitiatorAllianceId { get; set; } = "";
