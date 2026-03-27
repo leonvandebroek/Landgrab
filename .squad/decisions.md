@@ -527,3 +527,83 @@
 **Backward Compatibility:** Yes. Pre-existing game saves unaffected; config-driven behavior applies prospectively.
 
 **SignalR Impact:** None — no message format changes.
+
+### 36. CombatResult fan-out mutation risk (2026-03-27)
+**Status:** Implemented  
+**Agent:** de-ruyter-bug-hunt  
+**Change:** `GameHub.Gameplay.PlaceTroops` now uses `CloneCombatResultForRecipient(...)` to create dedicated attacker/defender payload objects rather than reusing a single mutable `CombatResult`.  
+**Rationale:** Mutable object reuse across recipient sends is fragile; although sends are awaited, future async/serialization behavior changes could leak incorrect role context. Per-recipient clones guarantee deterministic `IsAttacker` value per recipient.  
+**Impact:** Defender receives `IsAttacker=false` and attacker receives `IsAttacker=true` with absolute certainty.  
+**Files Changed:** `backend/Landgrab.Api/Hubs/GameHub.Gameplay.cs`  
+**SignalR Impact:** None — no message format changes.
+
+### 37. Hub methods must send explicit errors on failure paths (2026-03-27)
+**Status:** Implemented  
+**Agent:** de-ruyter-bug-hunt  
+**Change:** `UpdatePlayerPosition`, `JoinFieldBattle`, and `FleeBattle` now send explicit `SendError(...)` responses instead of silent early returns on error/null state paths.  
+**Rationale:** Silent failures create client desync and no actionable error telemetry. Explicit error signals enable better client feedback and easier ops debugging.  
+**Impact:** Better visibility into why actions fail; clients receive diagnostic information rather than false success silence.  
+**Files Changed:** `backend/Landgrab.Api/Hubs/GameHub.Gameplay.cs`  
+**SignalR Impact:** Error responses are advisory; no schema changes.
+
+### 38. GameDynamics end-to-end handling verified correct (2026-03-27)
+**Status:** Verified (no change)  
+**Agent:** de-ruyter-bug-hunt  
+**Finding:** `GameDynamics` fields in model, `SanitizeGameDynamics`, and `GameStateCommon.SnapshotState` are aligned; `FieldBattleEnabled` and `FieldBattleResolutionMode` are copied/sanitized/snapshotted correctly across all code paths.  
+**Decision:** No fix required; implementation is consistent.  
+**Files Analyzed:** `Models/GameDynamics.cs`, `Services/GameStateService.cs`, `Hubs/GameHub.cs`  
+**SignalR Impact:** None — validation only.
+
+### 39. GlobalHex Owner shadow-FK bug already resolved (2026-03-27)
+**Status:** Verified (historical)  
+**Agent:** de-ruyter-bug-hunt  
+**Finding:** Migration `20260325103854_FixGlobalHexOwnerFK` already fixed the shadow-FK issue. Current model uses concrete `OwnerUserId` FK (`HexCell.cs` + `AppDbContext`). Reads include `.Include(h => h.Owner)` in `GlobalMapService`.  
+**Decision:** No additional backend fix needed; issue is historical and already resolved.  
+**Files Analyzed:** `Models/HexCell.cs`, `Data/AppDbContext.cs`, `Services/GlobalMapService.cs`, `Migrations/`  
+**SignalR Impact:** None — issue resolved.
+
+### 40. Token blocklist persistence remains a known security gap (2026-03-27)
+**Status:** Documented, Deferred  
+**Agent:** de-ruyter-bug-hunt  
+**Issue:** `TokenBlocklist` is in-memory singleton; revocations are cleared on restart. JWT middleware checks revoked `jti`, but only within process lifetime.  
+**Risk:** Restart re-validates previously logged-out tokens until `exp` claim expires.  
+**Decision:** Keep as-is for this pass and treat as backlog security item. Requires architecture change (e.g., Redis/distributed cache) to fix properly.  
+**Impact:** Security gap acknowledged; mitigation deferred to future sprint.  
+**SignalR Impact:** None — affects token validation, not messaging.
+
+### 41. VisibilityService test fixture corrected (2026-03-27)
+**Status:** Implemented  
+**Agent:** spinoza-visibility-bug  
+**Change:** `VisibilityServiceTests.BuildStateForViewer_WhenBeaconSectorSeesHostile_SetsLastSeenAndKnownFields` moved player from (0,0) to (-4,0) in second scenario to ensure hex (1,0) is truly out of normal sight range (VisibilityRadius=1).  
+**Root Cause:** Test expected `Remembered` tier but received `Visible` because player remained at (0,0), keeping hex (1,0) in visibility range.  
+**Rationale:** Test fixture must place viewer outside normal range to properly validate memory-based visibility.  
+**Impact:** Test now correctly validates visibility tier transitions and memory persistence.  
+**Files Changed:** `backend/Landgrab.Tests/Services/VisibilityServiceTests.cs`  
+**Backward Compatibility:** Yes — test fix only.
+
+### 42. GameHub validation test suite added (2026-03-27)
+**Status:** Implemented  
+**Agent:** spinoza-visibility-bug  
+**Change:** Created new test file `GameHubTests.cs` with 5 comprehensive tests for `SanitizeGameDynamics` private method: field preservation, beacon sector angle clamping [1,360], enemy sighting memory minimum (15s), invalid combat mode reset, and invalid field-battle resolution mode reset.  
+**Rationale:** Private method validation using reflection ensures configuration constraints are enforced and future changes are caught by tests.  
+**Impact:** Hub validation logic is now testable and verified. New tests pass; total test count: 353 (352 passed, 1 skipped).  
+**Files Changed:** `backend/Landgrab.Tests/Hubs/GameHubTests.cs` (new file)  
+**Backward Compatibility:** Yes — tests only.
+
+### 43. Frontend combat calculations and closure patterns verified correct (2026-03-27)
+**Status:** Verified (no change)  
+**Agent:** vermeer-bug-hunt-2  
+**Finding:** (1) Combat probability clamping aligned between frontend `combatCalculations.ts` [0.2, 0.8] and backend `GameplayService.cs` [Min/MaxCombatHitProbability]. (2) `CombatResult` type definition includes `isAttacker` and `attackerName`; `CombatResultModal.tsx` uses both for perspective-aware rendering. (3) All `invoke` callbacks use parameters, `useRef.current` values, or `useGameStore.getState()` for fresh state; no stale closure patterns detected. (4) Tricorder `getStrengthUnknownState()` correctly returns true only when `baseState === 'enemy'` AND `visibilityTier === 'Hidden'`.  
+**Decision:** All core combat and closure logic is correctly implemented; no code changes needed.  
+**Files Analyzed:** `combatCalculations.ts`, `CombatResultModal.tsx`, `useGameActionsGameplay.ts`, `useGameActionsAbilities.ts`, `tricorderTileState.ts`  
+**SignalR Impact:** None — verification only.
+
+### 44. Dutch i18n duplicate key removed (2026-03-27)
+**Status:** Implemented  
+**Agent:** vermeer-bug-hunt-2  
+**Change:** Removed duplicate `disconnected` key in `nl.ts` (line 1466: "Afgesneden" — incorrect). Kept original at line 1367: "Niet verbonden" (correct translation for "Disconnected").  
+**Root Cause:** Wrong key added during map legend localization; introduced duplicate with different translation.  
+**Rationale:** i18n must have one authoritative key per message; duplicates cause unpredictable rendering and hamper maintenance.  
+**Impact:** Dutch i18n cleaned up; no missing translations found. Build passes lint and vite compilation cleanly.  
+**Files Changed:** `frontend/landgrab-ui/src/i18n/nl.ts`  
+**Backward Compatibility:** Yes — translation content unchanged; only duplicate removed.

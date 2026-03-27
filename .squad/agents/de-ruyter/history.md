@@ -46,3 +46,25 @@ Key patterns:
 - 2026-03-27: Added FieldBattle targeting + flee hub flow. SharedAbilityService now supports SelectFieldBattleTarget (initiator-only, hostile target on battle hex, not fled) and FleeBattle, with GameService forwards. GameHub adds SelectFieldBattleTarget/FleeBattle methods, UpdatePlayerLocation now deconstructs 6-tuple (including fledBattle), resolves fled battles immediately, and auto-trigger invites go only to initiator. Validation: `dotnet build` ✅ (2 pre-existing warnings), `dotnet test` ✅ (348 total, 347 passed, 1 skipped).
 - 2026-03-27: Fixed field battle toggle always reverting to true. Root cause was backend dropping `FieldBattleEnabled` during dynamics sanitization and state snapshot cloning: `GameHub.SanitizeGameDynamics` did not copy the incoming flag, and `GameStateCommon.SnapshotState` omitted it from cloned `Dynamics`, so outbound state/default serialization reintroduced `true`. Added `FieldBattleEnabled` mapping in both paths and aligned `HostControlService.UpdateGameDynamicsLive` to persist both `FieldBattleEnabled` and `FieldBattleResolutionMode` during live host updates. Validation pending build+test.
 - 2026-03-27: Fixed CombatResult perspective payloading for attacker/defender parity. Added `CombatResult.IsAttacker` and `CombatResult.AttackerName` in `backend/Landgrab.Api/Models/GameState.cs`. In `GameHub.Gameplay.PlaceTroops`, set `combatResult.AttackerName = Username` before recipient sends, set `combatResult.IsAttacker = false` before sending to defender connections, and set `combatResult.IsAttacker = true` before sending to caller. This preserves existing visibility checks/TileLost flow while allowing frontend to render correct perspective copy for both players.
+- 2026-03-27 (backend bug hunt): Confirmed and fixed four real hub-layer bugs in `GameHub.Gameplay`: (1) `CombatResult` payload mutation during defender/attacker fan-out reused the same DTO instance and could leak wrong `IsAttacker`; fixed by cloning per recipient before `SendAsync`. (2) `UpdatePlayerPosition` returned silently when room state lookup failed; now emits `ROOM_STATE_UNAVAILABLE` to caller. (3) `JoinFieldBattle` swallowed `ResolveFieldBattle` errors; now returns explicit hub error. (4) `FleeBattle` swallowed resolve failures; now returns explicit hub error. Verified with `dotnet build` and `dotnet test` (352 passed, 1 skipped).
+- 2026-03-27 (backend bug hunt): Verified `GameDynamics` defaults/sanitization/snapshot parity is complete (including `FieldBattleEnabled` + `FieldBattleResolutionMode`), and verified `GlobalHex.Owner` shadow-FK issue is already resolved by migration `20260325103854_FixGlobalHexOwnerFK` + `OwnerUserId` mapping in `AppDbContext`; no live null-deref usage of `GlobalHex.Owner` found.
+- 2026-03-27 (backend bug hunt): Confirmed token revocation blocklist is intentionally in-memory only (`TokenBlocklist`), so restart clears revocations and pre-revoked JWTs become valid again until `exp`; documented as a real residual security limitation (no persistent revocation store yet).
+
+## 2026-03-27 Bug Hunt Sprint Orchestration
+
+**Scope:** Backend-only audit/fix pass across SignalR hub methods, gameplay/combat broadcast flow, GameDynamics propagation, EF Core GlobalHex owner mapping, and JWT token blocklist behavior.
+
+**Results:** 5 bugs identified, 4 fixed, 1 documented-wontfix.
+
+**Decisions merged to decisions.md:**
+- Decision #36: CombatResult fan-out mutation risk (fixed)
+- Decision #37: Hub methods must send explicit errors (fixed)
+- Decision #38: GameDynamics end-to-end handling verified correct
+- Decision #39: GlobalHex Owner shadow-FK already resolved
+- Decision #40: Token blocklist persistence deferred (known security gap)
+
+**Orchestration Log:** `.squad/orchestration-log/2026-03-27T15:55:33Z-de-ruyter-bug-hunt.md`
+
+**Team Coordination:**
+- Spinoza added 5 new GameHub validation tests to complement backend fixes
+- Vermeer verified frontend combat calculations and closure patterns are correct

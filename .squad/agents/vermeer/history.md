@@ -51,6 +51,8 @@ Updated description copy: replaced hardcoded string with `sectorExplanation` i18
 Added new i18n keys: `shareIntel`, `shareIntelDone` (interpolated `{{count}}`), `shareIntelNone`, `shareIntelDescription` in both EN + NL.  
 **Build:** lint + tsc -b + vite build all clean.
 
+- **2026-01-25 (vermeer-bug-hunt-2):** Investigated 5 areas for bugs after previous fixes for local visibility and null positioning. Key findings: (1) Combat calculations: frontend and backend both correctly clamp probability to `[0.2, 0.8]` — no mismatch. (2) SignalR handlers: `CombatResultModal` properly uses `result.isAttacker` and `result.attackerName` for perspective-aware rendering. (3) Stale closures: `useGameActionsGameplay` and `useGameActionsAbilities` are clean — no stale closure patterns found. (4) i18n completeness: Fixed duplicate `disconnected` key in `nl.ts` (removed the wrong duplicate under map legend section). (5) `tricorderTileState.ts`: `getStrengthUnknownState()` is correct — only returns `true` for enemy Hidden tiles. Build: `npm run lint && npm run build` passed cleanly. All investigated bugs are either already fixed or non-existent.
+
 ### 23. Amber Archive — staleness visual for enemy hex tiles (2026-07-xx)
 **Status:** Implemented  
 **Design:** Hals spec "Amber Archive" — remembered/stale enemy tiles shift from cool cyan → warm amber. Three tiers: live (no treatment), fading (0–120s), stale (120s+).
@@ -341,3 +343,32 @@ const cy = lp.y - pixelOrigin.y;
 - Used `makeHandler` factory for both new methods (consistent with existing ability handlers)
 - Both return `Promise<boolean>` (success/failure)
 - No changes to SignalR handlers needed — backend will broadcast state updates as usual
+
+## 2026-03-27 Frontend Bug Hunt Sprint (partial + comprehensive)
+
+**Scope Phase 1 (partial, rate-limited):**
+- Fixed localVisibility stale-map issue in GameMap.tsx
+- Resolved ESLint error in GameMap component
+- Verified map re-initialization on gameState changes
+
+**Scope Phase 2 (comprehensive audit):**
+- Verified combat probability clamping [0.2, 0.8] aligned between frontend & backend
+- Verified CombatResult type definition and perspective-aware rendering in CombatResultModal
+- Verified all action hooks use safe closure patterns (useRef, useGameStore.getState, useMemo)
+- Verified tricorder edge-case logic (strength unknown only when enemy + Hidden)
+- Fixed Dutch i18n duplicate `disconnected` key (removed duplicate "Afgesneden", kept "Niet verbonden")
+
+**Results:** 1 i18n duplicate fixed. 4 areas verified as correct (no bugs found).
+
+**Decisions merged to decisions.md:**
+- Decision #43: Frontend combat calculations and closure patterns verified correct
+- Decision #44: Dutch i18n duplicate key removed
+
+**Orchestration Logs:**
+- `.squad/orchestration-log/2026-03-27T15:55:33Z-vermeer-bug-hunt.md` (phase 1)
+- `.squad/orchestration-log/2026-03-27T15:55:33Z-vermeer-bug-hunt-2.md` (phase 2)
+
+**Team Coordination:**
+- Complements de-ruyter's backend fixes with frontend validation
+- i18n cleanup improves Dutch UI polish
+- Combat logic alignment confirmed; no frontend/backend desync found
