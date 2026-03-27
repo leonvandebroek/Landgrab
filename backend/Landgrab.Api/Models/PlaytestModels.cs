@@ -22,6 +22,20 @@ public class ScenarioHexOverride
     public bool IsMasterTile { get; set; }
 }
 
+public class PlayerStateOverride
+{
+    public string UserId { get; set; } = "";
+    public int? CarriedTroops { get; set; }
+    public int? CurrentHexQ { get; set; }
+    public int? CurrentHexR { get; set; }
+}
+
+public class PopulateBoardRequest
+{
+    public List<ScenarioHexOverride>? HexOverrides { get; set; }
+    public List<PlayerStateOverride>? PlayerOverrides { get; set; }
+}
+
 public class InjectScenarioRequest
 {
     public double MapLat { get; set; } = 52.0;

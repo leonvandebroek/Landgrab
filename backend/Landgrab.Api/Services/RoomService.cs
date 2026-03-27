@@ -207,6 +207,87 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
         return room;
     }
 
+    public (GameState? state, string? error) PopulateBoard(string roomCode, PopulateBoardRequest req)
+    {
+        if (!_rooms.TryGetValue(roomCode.ToUpperInvariant(), out var room))
+            return (null, "Room not found.");
+
+        lock (room.SyncRoot)
+        {
+            if (room.State.Phase != GamePhase.Playing)
+                return (null, "Room is not in Playing phase.");
+
+            if (req.HexOverrides != null)
+            {
+                foreach (var ovr in req.HexOverrides)
+                {
+                    var key = HexService.Key(ovr.Q, ovr.R);
+                    if (!room.State.Grid.TryGetValue(key, out var cell))
+                        continue;
+
+                    if (ovr.IsMasterTile)
+                    {
+                        cell.IsMasterTile = true;
+                        room.State.MasterTileQ = ovr.Q;
+                        room.State.MasterTileR = ovr.R;
+                    }
+
+                    if (ovr.OwnerPlayerId != null)
+                    {
+                        var owner = room.State.Players.FirstOrDefault(p => p.Id == ovr.OwnerPlayerId);
+                        if (owner != null)
+                        {
+                            var ownerAlliance = room.State.Alliances.FirstOrDefault(a => a.Id == owner.AllianceId);
+                            cell.OwnerId = owner.Id;
+                            cell.OwnerAllianceId = owner.AllianceId;
+                            cell.OwnerName = owner.Name;
+                            cell.OwnerColor = ownerAlliance?.Color ?? owner.Color;
+                        }
+                    }
+                    else
+                    {
+                        cell.OwnerId = null;
+                        cell.OwnerAllianceId = null;
+                        cell.OwnerName = null;
+                        cell.OwnerColor = null;
+                    }
+
+                    cell.Troops = ovr.Troops;
+                    cell.IsFort = ovr.IsFort;
+                }
+            }
+
+            if (req.PlayerOverrides != null)
+            {
+                foreach (var po in req.PlayerOverrides)
+                {
+                    var player = room.State.Players.FirstOrDefault(p => p.Id == po.UserId);
+                    if (player == null) continue;
+
+                    if (po.CarriedTroops.HasValue)
+                        player.CarriedTroops = po.CarriedTroops.Value;
+
+                    if (po.CurrentHexQ.HasValue && po.CurrentHexR.HasValue
+                        && room.State.MapLat.HasValue && room.State.MapLng.HasValue)
+                    {
+                        player.CurrentHexQ = po.CurrentHexQ.Value;
+                        player.CurrentHexR = po.CurrentHexR.Value;
+                        var (lat, lng) = HexService.HexToLatLng(
+                            po.CurrentHexQ.Value, po.CurrentHexR.Value,
+                            room.State.MapLat.Value, room.State.MapLng.Value,
+                            room.State.TileSizeMeters);
+                        player.CurrentLat = lat;
+                        player.CurrentLng = lng;
+                    }
+                }
+            }
+
+            GameplayService.RefreshTerritoryCount(room.State);
+            QueuePersistence(room, SnapshotState(room.State));
+            return (SnapshotState(room.State), null);
+        }
+    }
+
     public (GameRoom? room, string? error) JoinRoom(string roomCode, string userId,
         string username, string connectionId)
     {

@@ -15,6 +15,19 @@ public static class PlaytestEndpoints
         var group = app.MapGroup("/api/playtest").RequireAuthorization();
 
         group.MapPost("/inject-scenario", InjectScenario);
+        group.MapPost("/{roomCode}/populate-board", PopulateBoard);
+    }
+
+    private static IResult PopulateBoard(
+        string roomCode,
+        PopulateBoardRequest req,
+        GameService gameService)
+    {
+        var (state, error) = gameService.PopulateBoard(roomCode, req);
+        if (error != null)
+            return Results.BadRequest(new { error });
+
+        return Results.Ok(new { roomCode, state });
     }
 
     private static IResult InjectScenario(

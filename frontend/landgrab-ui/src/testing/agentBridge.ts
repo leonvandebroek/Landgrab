@@ -92,6 +92,13 @@ interface AgentPlayerQuery {
   self?: boolean;
 }
 
+interface AgentBatchAction {
+  type: 'move' | 'claim' | 'attack' | 'pickup';
+  q: number;
+  r: number;
+  troopCount?: number;
+}
+
 interface AgentBridgeApi {
   isEnabled: () => boolean;
   getSnapshot: () => unknown;
@@ -112,6 +119,8 @@ interface AgentBridgeApi {
   setDynamics: (input: AgentDynamicsInput) => Promise<unknown>;
   assignPlayers: (input?: AgentAssignPlayersInput) => Promise<unknown>;
   configureDefaults: (input?: AgentConfigureDefaultsInput) => Promise<unknown>;
+  moveToHex: (q: number, r: number) => Promise<unknown>;
+  batchActions: (actions: AgentBatchAction[]) => Promise<unknown>;
 }
 
 declare global {
@@ -649,6 +658,93 @@ const bridgeApi: AgentBridgeApi = {
       preset,
       allianceNames,
       snapshot: getBridgeSnapshot(),
+    });
+  },
+  moveToHex: async (q, r) => {
+    const currentRuntime = ensureRuntime();
+    if (!currentRuntime.invoke) {
+      throw new Error('SignalR invoke is not available.');
+    }
+
+    const state = getGameState();
+    if (!state || state.mapLat == null || state.mapLng == null) {
+      throw new Error('Map center is not configured.');
+    }
+
+    const [lat, lng] = roomHexToLatLng(q, r, state.mapLat, state.mapLng, state.tileSizeMeters);
+    currentRuntime.applyDebugLocation(lat, lng);
+    await currentRuntime.invoke('UpdatePlayerLocation', lat, lng);
+    await new Promise<void>((resolve) => setTimeout(resolve, 150));
+    return cloneForAgent(getBridgeSnapshot());
+  },
+  batchActions: async (actions) => {
+    const currentRuntime = ensureRuntime();
+    if (!currentRuntime.invoke) {
+      throw new Error('SignalR invoke is not available.');
+    }
+
+    const state = getGameState();
+    if (!state || state.mapLat == null || state.mapLng == null) {
+      throw new Error('Map center is not configured.');
+    }
+
+    const results: Array<{ type: string; q: number; r: number; success: boolean; error?: string; detail?: unknown }> = [];
+
+    for (const action of actions) {
+      try {
+        const [lat, lng] = roomHexToLatLng(action.q, action.r, state.mapLat!, state.mapLng!, state.tileSizeMeters);
+
+        if (action.type === 'move') {
+          currentRuntime.applyDebugLocation(lat, lng);
+          await currentRuntime.invoke('UpdatePlayerLocation', lat, lng);
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          results.push({ type: 'move', q: action.q, r: action.r, success: true });
+        } else if (action.type === 'claim') {
+          currentRuntime.applyDebugLocation(lat, lng);
+          await currentRuntime.invoke('UpdatePlayerLocation', lat, lng);
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          await currentRuntime.invoke('PlaceTroops', action.q, action.r, lat, lng, action.troopCount ?? null);
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          results.push({ type: 'claim', q: action.q, r: action.r, success: true });
+        } else if (action.type === 'attack') {
+          currentRuntime.applyDebugLocation(lat, lng);
+          await currentRuntime.invoke('UpdatePlayerLocation', lat, lng);
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          useGameplayStore.getState().setCombatResult(null);
+          await currentRuntime.invoke('PlaceTroops', action.q, action.r, lat, lng, action.troopCount ?? null);
+          let combatResult: unknown = null;
+          const deadline = Date.now() + 3_000;
+          while (Date.now() < deadline) {
+            combatResult = useGameplayStore.getState().combatResult;
+            if (combatResult) break;
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          }
+          results.push({ type: 'attack', q: action.q, r: action.r, success: true, detail: combatResult });
+        } else if (action.type === 'pickup') {
+          currentRuntime.applyDebugLocation(lat, lng);
+          await currentRuntime.invoke('UpdatePlayerLocation', lat, lng);
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          await currentRuntime.invoke('PickUpTroops', action.q, action.r, action.troopCount ?? 1, lat, lng);
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          results.push({ type: 'pickup', q: action.q, r: action.r, success: true });
+        }
+      } catch (error) {
+        results.push({
+          type: action.type,
+          q: action.q,
+          r: action.r,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    const myPlayer = getMyPlayer(getGameState(), currentRuntime.auth);
+    return cloneForAgent({
+      results,
+      carriedTroops: myPlayer?.carriedTroops ?? null,
+      territoryCount: myPlayer?.territoryCount ?? null,
+      currentHex: currentRuntime.currentHex ?? resolveCurrentHex(currentRuntime.currentLocation, getGameState()),
     });
   },
 };

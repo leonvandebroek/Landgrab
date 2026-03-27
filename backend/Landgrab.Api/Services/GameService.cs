@@ -26,6 +26,7 @@ public class GameService(
 
     public GameRoom CreateRoom(string hostUserId, string hostUsername, string connectionId) => roomService.CreateRoom(hostUserId, hostUsername, connectionId);
     public GameRoom CreateScenarioRoom(string hostUserId, InjectScenarioRequest req) => roomService.CreateScenarioRoom(hostUserId, req);
+    public (GameState? state, string? error) PopulateBoard(string roomCode, PopulateBoardRequest req) => roomService.PopulateBoard(roomCode, req);
     public (GameRoom? room, string? error) JoinRoom(string roomCode, string userId, string username, string connectionId) => roomService.JoinRoom(roomCode, userId, username, connectionId);
     public GameRoom? GetRoom(string code) => roomService.GetRoom(code);
     public GameState? GetStateSnapshot(string roomCode) => gameStateService.GetStateSnapshot(roomCode);
