@@ -506,6 +506,9 @@ public class RoomService(RoomPersistenceService roomPersistenceService, ILogger<
             if (player == null)
                 return;
 
+            room.State.ActiveFieldBattles.RemoveAll(battle =>
+                !battle.Resolved && string.Equals(battle.InitiatorId, userId, StringComparison.Ordinal));
+
             player.IsConnected = false;
             player.CurrentLat = null;
             player.CurrentLng = null;

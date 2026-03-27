@@ -1061,6 +1061,35 @@ public sealed class AbilityServiceTests
         result.error.Should().Be("Troop transfer not found.");
     }
 
+    [Fact]
+    public void RespondToTroopTransfer_WhenTransferExpired_RemovesTransferAndReturnsNotFound()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .Build();
+        state.ActiveTroopTransfers.Add(new ActiveTroopTransfer
+        {
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            RecipientId = "p2",
+            RecipientName = "Bob",
+            Amount = 2,
+            ExpiresAt = DateTime.UtcNow.AddSeconds(-1)
+        });
+        var context = new ServiceTestContext(state);
+        var transferId = state.ActiveTroopTransfers[0].Id;
+
+        var result = context.AbilityService.RespondToTroopTransfer(ServiceTestContext.RoomCode, "p2", transferId, accepted: true);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Troop transfer not found.");
+        context.State.ActiveTroopTransfers.Should().BeEmpty();
+    }
+
     // ── Area 3: Field battle ─────────────────────────────────────────────────
 
     [Fact]
@@ -1158,6 +1187,110 @@ public sealed class AbilityServiceTests
         var error = context.AbilityService.JoinFieldBattle(ServiceTestContext.RoomCode, "p2", unknownBattleId);
 
         error.Should().Be("Field battle not found.");
+    }
+
+    [Fact]
+    public void JoinFieldBattle_WhenCallerIsInitiator_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .Build();
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 4,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(10)
+        });
+        var context = new ServiceTestContext(state);
+
+        var error = context.AbilityService.JoinFieldBattle(ServiceTestContext.RoomCode, "p1", battleId);
+
+        error.Should().Be("Battle initiator cannot join as an enemy.");
+    }
+
+    [Fact]
+    public void JoinFieldBattle_WhenBattleHasTargetAndCallerIsDifferentEnemy_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddPlayer("p3", "Cara", allianceId: "a3")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .AddAlliance("a3", "Gamma", "p3")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithPlayerPosition("p3", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .WithCarriedTroops("p2", 3)
+            .WithCarriedTroops("p3", 2)
+            .Build();
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 4,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(10),
+            TargetEnemyId = "p2"
+        });
+        var context = new ServiceTestContext(state);
+
+        var error = context.AbilityService.JoinFieldBattle(ServiceTestContext.RoomCode, "p3", battleId);
+
+        error.Should().Be("Only the challenged target can join this field battle.");
+    }
+
+    [Fact]
+    public void SelectFieldBattleTarget_WhenTargetDidNotJoinBattle_ReturnsError()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .WithCarriedTroops("p2", 3)
+            .Build();
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 4,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(10)
+        });
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.SelectFieldBattleTarget(ServiceTestContext.RoomCode, "p1", battleId, "p2");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Target must have joined this field battle.");
     }
 
 

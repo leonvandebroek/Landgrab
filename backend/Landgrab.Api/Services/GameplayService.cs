@@ -544,8 +544,20 @@ public class GameplayService(
             var previousHexQ = player.CurrentHexQ;
             var previousHexR = player.CurrentHexR;
 
-            player.CurrentHexQ = q;
-            player.CurrentHexR = r;
+            // Only accept coordinates that exist within the game grid; off-grid coordinates
+            // (e.g. player walking outside the play area) are stored as null so fog-of-war
+            // and field-battle logic operate on valid state only.
+            var hexKey = HexService.Key(q, r);
+            if (room.State.Grid.ContainsKey(hexKey))
+            {
+                player.CurrentHexQ = q;
+                player.CurrentHexR = r;
+            }
+            else
+            {
+                player.CurrentHexQ = null;
+                player.CurrentHexR = null;
+            }
 
             if (playerLat.HasValue && playerLng.HasValue)
             {
@@ -553,17 +565,20 @@ public class GameplayService(
                 player.CurrentLng = playerLng.Value;
             }
 
-            var playerHexChanged = previousHexQ != q || previousHexR != r;
+            var playerHexChanged = previousHexQ != player.CurrentHexQ || previousHexR != player.CurrentHexR;
             ActiveFieldBattle? fledBattle = null;
-            if (playerHexChanged && player.CurrentHexQ.HasValue && player.CurrentHexR.HasValue)
+            if (playerHexChanged)
             {
                 var targetedBattle = room.State.ActiveFieldBattles
                     .FirstOrDefault(b => b.TargetEnemyId == userId && !b.Resolved);
 
-                if (targetedBattle != null
-                    && (targetedBattle.Q != player.CurrentHexQ.Value || targetedBattle.R != player.CurrentHexR.Value))
+                if (targetedBattle != null)
                 {
-                    if (!targetedBattle.FledEnemyIds.Contains(userId, StringComparer.Ordinal))
+                    // Player has left the battle hex (moved in-grid or stepped off-grid entirely).
+                    var stillAtBattleHex = player.CurrentHexQ == targetedBattle.Q
+                        && player.CurrentHexR == targetedBattle.R;
+                    if (!stillAtBattleHex
+                        && !targetedBattle.FledEnemyIds.Contains(userId, StringComparer.Ordinal))
                     {
                         targetedBattle.FledEnemyIds.Add(userId);
                         fledBattle = targetedBattle;

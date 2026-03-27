@@ -91,6 +91,9 @@ public sealed class SharedAbilityService(
 
         lock (room.SyncRoot)
         {
+            var now = DateTime.UtcNow;
+            room.State.ActiveTroopTransfers.RemoveAll(transfer => transfer.ExpiresAt <= now);
+
             if (room.State.Phase != GamePhase.Playing)
                 return (null, "Troop transfers only work during gameplay.");
             if (amount < 1)
@@ -124,7 +127,6 @@ public sealed class SharedAbilityService(
                 return (null, "A transfer to this player is already pending.");
             }
 
-            var now = DateTime.UtcNow;
             if (initiator.TroopTransferCooldownUntil.HasValue
                 && initiator.TroopTransferCooldownUntil.Value > now)
             {
@@ -156,13 +158,14 @@ public sealed class SharedAbilityService(
 
         lock (room.SyncRoot)
         {
+            var now = DateTime.UtcNow;
+            room.State.ActiveTroopTransfers.RemoveAll(item => item.ExpiresAt <= now);
+
             var transfer = room.State.ActiveTroopTransfers.FirstOrDefault(item => item.Id == transferId);
             if (transfer == null)
                 return (null, "Troop transfer not found.");
             if (transfer.RecipientId != userId)
                 return (null, "Only the recipient can respond to this troop transfer.");
-            if (transfer.ExpiresAt <= DateTime.UtcNow)
-                return (null, "Troop transfer has expired.");
 
             var initiator = room.State.Players.FirstOrDefault(player => player.Id == transfer.InitiatorId);
             var recipient = room.State.Players.FirstOrDefault(player => player.Id == transfer.RecipientId);
@@ -331,10 +334,17 @@ public sealed class SharedAbilityService(
                 return "Battle already resolved.";
             if (battle.JoinDeadline <= DateTime.UtcNow)
                 return "Field battle join window has closed.";
+            if (string.Equals(battle.InitiatorId, userId, StringComparison.Ordinal))
+                return "Battle initiator cannot join as an enemy.";
 
             var player = room.State.Players.FirstOrDefault(candidate => candidate.Id == userId);
             if (player == null)
                 return "Player not in room.";
+            if (!string.IsNullOrWhiteSpace(battle.TargetEnemyId)
+                && !string.Equals(battle.TargetEnemyId, userId, StringComparison.Ordinal))
+            {
+                return "Only the challenged target can join this field battle.";
+            }
             if (player.AllianceId == battle.InitiatorAllianceId)
                 return "Only enemy alliances can join this field battle.";
             if (player.CarriedTroops <= 0)
@@ -377,6 +387,8 @@ public sealed class SharedAbilityService(
                 return (null, "Only the battle initiator can select a target.");
             if (!string.IsNullOrWhiteSpace(battle.TargetEnemyId))
                 return (null, "Field battle target already selected.");
+            if (!battle.JoinedEnemyIds.Contains(targetId, StringComparer.Ordinal))
+                return (null, "Target must have joined this field battle.");
 
             var target = room.State.Players.FirstOrDefault(player => player.Id == targetId);
             if (target == null)

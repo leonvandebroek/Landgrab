@@ -352,6 +352,32 @@ public sealed class RoomServiceTests
     }
 
     [Fact]
+    public void RemoveConnection_LastInitiatorConnection_RemovesUnresolvedInitiatedFieldBattles()
+    {
+        var roomService = CreateRoomService();
+        var room = roomService.CreateRoom(Guid.NewGuid().ToString(), "Host", "host-conn");
+        roomService.JoinRoom(room.Code, "player-1", "Alice", "conn-1");
+        var player = room.State.Players.Single(existingPlayer => existingPlayer.Id == "player-1");
+        player.AllianceId = "a1";
+
+        room.State.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            InitiatorId = "player-1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 3,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(20),
+            Resolved = false
+        });
+
+        roomService.RemoveConnection(room, "conn-1");
+
+        room.State.ActiveFieldBattles.Should().BeEmpty();
+    }
+
+    [Fact]
     public void GetRoomsForUser_ReturnsEmptyWhenUserHasNoActiveRooms()
     {
         var roomService = CreateRoomService();
