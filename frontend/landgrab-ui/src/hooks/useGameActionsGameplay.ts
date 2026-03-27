@@ -9,6 +9,7 @@ import type { CombatPreviewDto, HexCell } from '../types/game';
 import { vibrate, HAPTIC } from '../utils/haptics';
 import { haversineDistanceM } from '../utils/geo';
 import { getErrorMessage, getPlaceSuccessMessage } from '../utils/gameHelpers';
+import { calculateCombatPreview } from '../utils/combatCalculations';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 import { resolveActionCoordinates } from './useGameActions.shared';
 
@@ -52,6 +53,7 @@ export function useGameActionsGameplay({
   t,
   playSound,
 }: UseGameActionsGameplayOptions): UseGameActionsGameplayResult {
+  const currentUserId = useGameStore((state) => state.savedSession?.userId ?? null);
   const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
   const abilityUi = useGameplayStore(state => state.abilityUi);
   const combatResult = useGameplayStore(state => state.combatResult);
@@ -198,13 +200,25 @@ export function useGameActionsGameplay({
   }, [currentHex, gameState?.phase, setAttackPrompt, setCombatPreview, setMapFeedback, setPickupPrompt, setReinforcePrompt]);
 
   const getCombatPreview = useCallback(async (q: number, r: number): Promise<CombatPreviewDto> => {
-    if (!invoke) {
-      throw new Error('SignalR connection is not available.');
+    if (!gameState) {
+      throw new Error('Game state is not available.');
+    }
+    if (!currentUserId) {
+      throw new Error('Current player is not available.');
     }
 
-    const coords = resolveActionCoordinates([q, r], gameState, currentLocation, isHostBypass);
-    return invoke<CombatPreviewDto>('GetCombatPreview', q, r, coords?.lat ?? null, coords?.lng ?? null);
-  }, [invoke, gameState, currentLocation, isHostBypass]);
+    const player = gameState.players.find((candidate) => candidate.id === currentUserId);
+    if (!player) {
+      throw new Error('Current player is not in the game state.');
+    }
+
+    const targetCell = gameState.grid[`${q},${r}`];
+    if (!targetCell) {
+      throw new Error(`Target hex ${q},${r} does not exist.`);
+    }
+
+    return calculateCombatPreview(player, targetCell, q, r, gameState.players, gameState);
+  }, [currentUserId, gameState]);
 
   const placeTroopsAction = useCallback((targetHex: [number, number], actionType: ClaimTileActionType): void => {
     if (!invoke) {

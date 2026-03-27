@@ -264,6 +264,7 @@ public partial class GameHub : Hub
             HQEnabled = dynamics.HQEnabled,
             HQAutoAssign = dynamics.HQAutoAssign,
             EnemySightingMemorySeconds = Math.Max(15, dynamics.EnemySightingMemorySeconds),
+            FieldBattleEnabled = dynamics.FieldBattleEnabled,
             FieldBattleResolutionMode = Enum.IsDefined(dynamics.FieldBattleResolutionMode)
                 ? dynamics.FieldBattleResolutionMode
                 : FieldBattleResolutionMode.InitiatorVsSumOfJoined,

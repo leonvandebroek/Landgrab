@@ -7,6 +7,7 @@ import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { useSecondTick } from '../../../hooks/useSecondTick';
 import type { AbilityCardProps } from '../../../types/abilities';
+import { resolveTroopTransferTarget } from '../../../utils/combatCalculations';
 
 function formatTimeRemaining(until: string | undefined, now: number): string | null {
   if (!until) return null;
@@ -47,16 +48,18 @@ export function TroopTransferCard({ myUserId, invoke }: AbilityCardProps) {
   const displayedTransferAmount = maxTroops > 0 ? Math.min(transferAmount, maxTroops) : transferAmount;
 
   useEffect(() => {
-    if (isActive || cooldownCountdown || !invoke) return undefined;
+    if (isActive || cooldownCountdown) return undefined;
 
     const handle = window.setInterval(() => {
       const nextHeading = heading ?? 0;
-      void invoke<{ recipientId: string; recipientName: string } | null>('ResolveTroopTransferTarget', nextHeading)
-        .then((result) => { setResolvedRecipient(result ?? null); });
+      const result = player && gameState
+        ? resolveTroopTransferTarget(player, gameState.players, nextHeading)
+        : null;
+      setResolvedRecipient(result ?? null);
     }, 500);
 
     return () => window.clearInterval(handle);
-  }, [isActive, cooldownCountdown, heading, invoke]);
+  }, [cooldownCountdown, gameState, heading, isActive, player]);
 
   const handleBackToHud = useCallback(() => {
     if (isActive || cooldownCountdown) {

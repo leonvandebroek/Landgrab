@@ -273,6 +273,8 @@ export interface CombatResult {
   q: number;
   r: number;
   previousOwnerName: string | null;
+  isAttacker: boolean;
+  attackerName: string | null;
   attackerBonus: number;
   defenderBonus: number;
   effectiveAttack: number;

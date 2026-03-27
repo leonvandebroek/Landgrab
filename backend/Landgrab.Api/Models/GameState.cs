@@ -356,6 +356,8 @@ public class CombatResult
     public int Q { get; set; }
     public int R { get; set; }
     public string? PreviousOwnerName { get; set; }
+    public bool IsAttacker { get; set; }
+    public string? AttackerName { get; set; }
     public int AttackerBonus { get; set; }
     public int DefenderBonus { get; set; }
     public int EffectiveAttack { get; set; }

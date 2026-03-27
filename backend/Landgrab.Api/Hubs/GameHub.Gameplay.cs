@@ -566,6 +566,11 @@ public partial class GameHub
 
         await BroadcastState(room.Code, state!);
 
+        if (combatResult != null)
+        {
+            combatResult.AttackerName = Username;
+        }
+
         if (previousOwnerId != null)
         {
             var lostConnections = room.ConnectionMap
@@ -591,6 +596,7 @@ public partial class GameHub
 
                 if (combatResult != null)
                 {
+                    combatResult.IsAttacker = false;
                     await Clients.Client(connId).SendAsync("CombatResult", combatResult);
                 }
             }
@@ -598,6 +604,7 @@ public partial class GameHub
 
         if (combatResult != null)
         {
+            combatResult.IsAttacker = true;
             await Clients.Caller.SendAsync("CombatResult", combatResult);
         }
 

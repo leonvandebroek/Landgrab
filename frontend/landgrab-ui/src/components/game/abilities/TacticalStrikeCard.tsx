@@ -6,6 +6,7 @@ import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import type { AbilityCardProps } from '../../../types/abilities';
+import { resolveTacticalStrikeTarget } from '../../../utils/combatCalculations';
 
 function formatTimeRemaining(until: string | undefined): string | null {
   if (!until) return null;
@@ -18,6 +19,7 @@ function formatTimeRemaining(until: string | undefined): string | null {
 
 export function TacticalStrikeCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
+  const gameState = useGameStore((store) => store.gameState);
   const player = useGameStore((store) =>
     store.gameState?.players.find((candidate) => candidate.id === myUserId) ?? null,
   );
@@ -33,18 +35,18 @@ export function TacticalStrikeCard({ myUserId, invoke }: AbilityCardProps) {
   const isArmed = Boolean(player?.tacticalStrikeActive) || abilityUi.mode === 'active';
 
   useEffect(() => {
-    if (isArmed || !invoke) return undefined;
+    if (isArmed) return undefined;
 
     const handle = window.setInterval(() => {
       const nextHeading = heading ?? 0;
-      void invoke<{ targetQ: number; targetR: number } | null>('ResolveTacticalStrikeTarget', nextHeading)
-        .then((result) => {
-          setResolvedTarget(result ? [result.targetQ, result.targetR] : null);
-        });
+      const result = player && gameState
+        ? resolveTacticalStrikeTarget(player, gameState, nextHeading)
+        : null;
+      setResolvedTarget(result ? [result.targetQ, result.targetR] : null);
     }, 500);
 
     return () => window.clearInterval(handle);
-  }, [isArmed, heading, invoke]);
+  }, [gameState, heading, isArmed, player]);
 
   const handleBackToHud = () => {
     if (isArmed) {

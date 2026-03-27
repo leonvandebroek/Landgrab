@@ -38,9 +38,19 @@ function BonusList({ bonuses }: { bonuses: CombatBonusDetail[] }) {
 
 export function CombatResultModal({ result, onDeployTroops, onClose }: CombatResultModalProps) {
     const { t } = useTranslation();
-    const [deployCount, setDeployCount] = useState(() => result.attackerTroopsRemaining);
+    const [deployCount, setDeployCount] = useState(() => result.isAttacker ? result.attackerTroopsRemaining : 0);
 
-    const won = result.attackerWon;
+    const won = result.isAttacker ? result.attackerWon : !result.attackerWon;
+    const myTroopsLost = result.isAttacker ? result.attackerTroopsLost : result.defenderTroopsLost;
+    const theirTroopsLost = result.isAttacker ? result.defenderTroopsLost : result.attackerTroopsLost;
+    const myTroopsRemaining = result.isAttacker ? result.attackerTroopsRemaining : result.defenderTroopsRemaining;
+    const theirTroopsRemaining = result.isAttacker ? result.defenderTroopsRemaining : result.attackerTroopsRemaining;
+    const opponentName = result.isAttacker
+        ? (result.previousOwnerName ?? t('combat.enemy'))
+        : (result.attackerName ?? t('combat.enemy'));
+    const myWinProbability = result.isAttacker ? result.attackerWinProbability : 1 - result.attackerWinProbability;
+    const myBonuses = result.isAttacker ? result.attackerBonuses : result.defenderBonuses;
+    const theirBonuses = result.isAttacker ? result.defenderBonuses : result.attackerBonuses;
 
     return (
         <div className={styles.overlay} role="presentation">
@@ -61,8 +71,8 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                         <p className={styles.subtitle}>
                             {won
                                 ? t('combat.victorySubtitle')
-                                : result.attackerTroopsRemaining > 0
-                                    ? t('combat.defeatSubtitleWithSurvivors', { count: result.attackerTroopsRemaining })
+                                : myTroopsRemaining > 0
+                                    ? t('combat.defeatSubtitleWithSurvivors', { count: myTroopsRemaining })
                                     : t('combat.defeatSubtitle')}
                         </p>
                     </div>
@@ -70,10 +80,10 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                     <section className={styles.recapCard}>
                         <div className={styles.summaryRow}>
                             <span>{t('combat.winProbability')}</span>
-                            <span className={styles.recapValueStrong}>{formatProbability(result.attackerWinProbability)}</span>
+                            <span className={styles.recapValueStrong}>{formatProbability(myWinProbability)}</span>
                         </div>
                         <div className={styles.barTrack}>
-                            <div className={styles.barFill} style={{ width: getProbabilityWidth(result.attackerWinProbability) }} />
+                            <div className={styles.barFill} style={{ width: getProbabilityWidth(myWinProbability) }} />
                             <div className={styles.barThreshold} />
                         </div>
 
@@ -88,19 +98,19 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                             </div>
                             <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.attackerLosses')}</span>
-                                <span className={styles.statValueCasualty}>{result.attackerTroopsLost}</span>
+                                <span className={styles.statValueCasualty}>{myTroopsLost}</span>
                             </div>
                             <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.defenderLosses')}</span>
-                                <span className={styles.statValueCasualty}>{result.defenderTroopsLost}</span>
+                                <span className={styles.statValueCasualty}>{theirTroopsLost}</span>
                             </div>
                             <div className={`${styles.recapRow} ${styles.recapRowDivider}`}>
                                 <span>{t('combat.attackerRemaining')}</span>
-                                <span className={styles.statValueCasualty}>{result.attackerTroopsRemaining}</span>
+                                <span className={styles.statValueCasualty}>{myTroopsRemaining}</span>
                             </div>
                             <div className={styles.recapRow}>
                                 <span>{t('combat.defenderRemaining')}</span>
-                                <span className={`${styles.statValueCasualty} ${result.defenderTroopsRemaining === 0 ? styles.statValueDanger : ''}`}>{result.defenderTroopsRemaining}</span>
+                                <span className={`${styles.statValueCasualty} ${theirTroopsRemaining === 0 ? styles.statValueDanger : ''}`}>{theirTroopsRemaining}</span>
                             </div>
                         </div>
                     </section>
@@ -109,9 +119,9 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                         <section className={`${styles.combatant} ${styles.attacker}`}>
                             <div className={styles.combatantHeader}>
                                 <span className={styles.combatantLabel}>{t('combat.attackerSide')}</span>
-                                <p className={styles.combatantName}>{t('combat.you')}</p>
+                                <p className={styles.combatantName}>{result.isAttacker ? t('combat.you') : opponentName}</p>
                             </div>
-                            <BonusList bonuses={result.attackerBonuses} />
+                            <BonusList bonuses={result.isAttacker ? myBonuses : theirBonuses} />
                         </section>
 
                         <div className={styles.versusContainer}>
@@ -121,13 +131,13 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                         <section className={`${styles.combatant} ${styles.defender}`}>
                             <div className={styles.combatantHeader}>
                                 <span className={styles.combatantLabel}>{t('combat.defenderSide')}</span>
-                                <p className={styles.combatantName}>{result.previousOwnerName ?? t('combat.enemy')}</p>
+                                <p className={styles.combatantName}>{result.isAttacker ? opponentName : t('combat.you')}</p>
                             </div>
-                            <BonusList bonuses={result.defenderBonuses} />
+                            <BonusList bonuses={result.isAttacker ? theirBonuses : myBonuses} />
                         </section>
                     </div>
 
-                    {won ? (
+                    {won && result.isAttacker ? (
                         <section className={styles.sliderCard}>
                             <div className={styles.sliderHeader}>
                                 <span>{t('combat.deployPrompt')}</span>
@@ -136,7 +146,7 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                             <input
                                 aria-label={t('combat.deployPrompt')}
                                 className={styles.deploySlider}
-                                max={result.attackerTroopsRemaining}
+                                max={myTroopsRemaining}
                                 min={0}
                                 onChange={(event) => setDeployCount(Number(event.target.value))}
                                 type="range"
@@ -144,7 +154,7 @@ export function CombatResultModal({ result, onDeployTroops, onClose }: CombatRes
                             />
                             <div className={styles.summaryRow}>
                                 <span className={styles.sliderHint}>0 {t('combat.leaveCarried')}</span>
-                                <span className={styles.sliderHint}>{result.attackerTroopsRemaining - deployCount} {t('combat.stillCarried')}</span>
+                                <span className={styles.sliderHint}>{myTroopsRemaining - deployCount} {t('combat.stillCarried')}</span>
                             </div>
                         </section>
                     ) : null}

@@ -53,6 +53,8 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
             room.State.Dynamics.PlayerRolesEnabled = dynamics.PlayerRolesEnabled;
             room.State.Dynamics.HQEnabled = dynamics.HQEnabled;
             room.State.Dynamics.HQAutoAssign = dynamics.HQAutoAssign;
+            room.State.Dynamics.FieldBattleEnabled = dynamics.FieldBattleEnabled;
+            room.State.Dynamics.FieldBattleResolutionMode = dynamics.FieldBattleResolutionMode;
 
             AppendEventLog(room.State, new GameEventLogEntry
             {

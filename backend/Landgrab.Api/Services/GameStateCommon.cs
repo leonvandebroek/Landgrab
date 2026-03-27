@@ -190,6 +190,7 @@ internal static class GameStateCommon
                 HQEnabled = state.Dynamics.HQEnabled,
                 HQAutoAssign = state.Dynamics.HQAutoAssign,
                 EnemySightingMemorySeconds = state.Dynamics.EnemySightingMemorySeconds,
+                FieldBattleEnabled = state.Dynamics.FieldBattleEnabled,
                 FieldBattleResolutionMode = state.Dynamics.FieldBattleResolutionMode,
             },
             GameDurationMinutes = state.GameDurationMinutes,

@@ -1,6 +1,12 @@
 import { useMemo } from 'react';
+import { useGameStore } from '../stores/gameStore';
 import { useUiStore } from '../stores/uiStore';
 import type { InvokeFn } from '../types/abilities';
+import {
+  resolveRaidTarget as resolveRaidTargetLocal,
+  resolveTacticalStrikeTarget as resolveTacticalStrikeTargetLocal,
+  resolveTroopTransferTarget as resolveTroopTransferTargetLocal,
+} from '../utils/combatCalculations';
 import type { UseGameActionsOptions } from './useGameActions.shared';
 
 interface UseGameActionsAbilitiesResult {
@@ -54,6 +60,8 @@ export function useGameActionsAbilities({
   invoke,
 }: Pick<UseGameActionsOptions, 'invoke'>): UseGameActionsAbilitiesResult {
   const setError = useUiStore((state) => state.setError);
+  const gameState = useGameStore((state) => state.gameState);
+  const currentUserId = useGameStore((state) => state.savedSession?.userId ?? null);
 
   // Cast invoke to InvokeFn — SignalRInvoke and InvokeFn are compatible at runtime;
   // InvokeFn allows undefined return which is the safer superset.
@@ -64,16 +72,48 @@ export function useGameActionsAbilities({
     handleDeactivateBeacon:       makeHandler(invokeFn, setError, 'DeactivateBeacon',            false as boolean),
     handleShareBeaconIntel:       makeHandler(invokeFn, setError, 'ShareBeaconIntel',            0 as number),
     handleActivateCommandoRaid:   makeHandler(invokeFn, setError, 'ActivateCommandoRaid',        false as boolean),
-    resolveRaidTarget:            makeHandler<[number], { targetQ: number; targetR: number } | null>(
-      invokeFn, setError, 'ResolveRaidTarget', null,
-    ),
+    resolveRaidTarget: async (_heading: number) => {
+      try {
+        const player = currentUserId
+          ? gameState?.players.find((candidate) => candidate.id === currentUserId) ?? null
+          : null;
+        return Promise.resolve(player && gameState ? resolveRaidTargetLocal(player, gameState) : null);
+      } catch (error) {
+        setError(String(error));
+        return Promise.resolve(null);
+      }
+    },
     handleActivateTacticalStrike: makeHandler(invokeFn, setError, 'ActivateTacticalStrike',      false as boolean),
-    resolveTacticalStrikeTarget:  makeHandler<[number], { targetQ: number; targetR: number } | null>(
-      invokeFn, setError, 'ResolveTacticalStrikeTarget', null,
-    ),
-    resolveTroopTransferTarget:   makeHandler<[number], { recipientId: string; recipientName: string } | null>(
-      invokeFn, setError, 'ResolveTroopTransferTarget', null,
-    ),
+    resolveTacticalStrikeTarget: async (heading: number) => {
+      try {
+        const player = currentUserId
+          ? gameState?.players.find((candidate) => candidate.id === currentUserId) ?? null
+          : null;
+        return Promise.resolve(
+          player && gameState
+            ? resolveTacticalStrikeTargetLocal(player, gameState, heading)
+            : null,
+        );
+      } catch (error) {
+        setError(String(error));
+        return Promise.resolve(null);
+      }
+    },
+    resolveTroopTransferTarget: async (heading: number) => {
+      try {
+        const player = currentUserId
+          ? gameState?.players.find((candidate) => candidate.id === currentUserId) ?? null
+          : null;
+        return Promise.resolve(
+          player && gameState
+            ? resolveTroopTransferTargetLocal(player, gameState.players, heading)
+            : null,
+        );
+      } catch (error) {
+        setError(String(error));
+        return Promise.resolve(null);
+      }
+    },
     handleInitiateTroopTransfer:  makeHandler<[number, string], { transferId: string } | null>(
       invokeFn, setError, 'InitiateTroopTransfer', null,
     ),
@@ -96,5 +136,5 @@ export function useGameActionsAbilities({
     attemptIntercept: makeHandler<[number], { status: string; seconds?: number }>(
       invokeFn, setError, 'AttemptIntercept', { status: 'noTarget' },
     ),
-  }), [invokeFn, setError]);
+  }), [currentUserId, gameState, invokeFn, setError]);
 }
