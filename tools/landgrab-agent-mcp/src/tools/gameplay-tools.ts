@@ -139,4 +139,44 @@ export function registerGameplayTools(server: McpServer): void {
       return jsonResult({ sessionId, origin: currentHex, dq, dr, target: [q, r], result });
     },
   );
+
+  server.tool(
+    'player_teleport_to_hex',
+    'Instantly teleport a player to a specific hex by calling UpdatePlayerLocation via SignalR. Much faster than step-by-step navigation. Requires hostBypassGps to be enabled.',
+    {
+      sessionId: z.string(),
+      q: z.number().int(),
+      r: z.number().int(),
+    },
+    async ({ sessionId, q, r }) => {
+      const { page } = getSession(sessionId);
+      const result = await callAgentBridge(page, 'moveToHex', q, r);
+      return jsonResult({ sessionId, q, r, result });
+    },
+  );
+
+  server.tool(
+    'gameplay_batch_actions',
+    `Execute a sequence of gameplay actions in a single call. Each action automatically teleports the player to the target hex first.
+Supported action types:
+- "move": Teleport to hex (q, r)
+- "claim": Move to hex and place troops (claim neutral or reinforce allied hex)
+- "attack": Move to hex and attack enemy hex with combat resolution
+- "pickup": Move to hex and pick up troops (troopCount = number to pick up)
+This is much faster than calling individual tools for each action.`,
+    {
+      sessionId: z.string(),
+      actions: z.array(z.object({
+        type: z.enum(['move', 'claim', 'attack', 'pickup']),
+        q: z.number().int(),
+        r: z.number().int(),
+        troopCount: z.number().int().min(1).optional(),
+      })).min(1).max(50),
+    },
+    async ({ sessionId, actions }) => {
+      const { page } = getSession(sessionId);
+      const result = await callAgentBridge(page, 'batchActions', actions);
+      return jsonResult({ sessionId, actionCount: actions.length, result });
+    },
+  );
 }

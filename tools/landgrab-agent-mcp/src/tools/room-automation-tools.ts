@@ -933,4 +933,85 @@ Use this instead of scenario_create_*_game when you want to evaluate a specific 
       }
     },
   );
+
+  server.tool(
+    'scenario_populate_board',
+    `Modify hex ownership, troop counts, forts, and player state on a running game via the backend playtest endpoint.
+Use this to set up specific mid-game board states for testing without having to play through to reach them.
+All player sessions must already be in the Playing phase. Hex overrides use ownerSessionId (mapped to real userId internally).`,
+    {
+      hostSessionId: z.string().describe('Session ID of the host (used for auth token).'),
+      roomCode: z.string().describe('Room code of the running game.'),
+      hexOverrides: z.array(z.object({
+        q: z.number().int(),
+        r: z.number().int(),
+        ownerSessionId: z.string().optional().describe('Session ID of owning player, or omit for neutral.'),
+        troops: z.number().int().min(0).default(0),
+        isFort: z.boolean().default(false),
+        isMasterTile: z.boolean().default(false),
+      })).optional(),
+      playerOverrides: z.array(z.object({
+        sessionId: z.string(),
+        carriedTroops: z.number().int().min(0).optional(),
+        currentHexQ: z.number().int().optional(),
+        currentHexR: z.number().int().optional(),
+      })).optional(),
+    },
+    async ({ hostSessionId, roomCode, hexOverrides, playerOverrides }) => {
+      const hostSession = getSession(hostSessionId);
+      if (!hostSession.token) {
+        throw new Error(`Host session "${hostSessionId}" is not authenticated.`);
+      }
+
+      const hexOverrideSpecs = hexOverrides?.map((h) => ({
+        q: h.q,
+        r: h.r,
+        ownerPlayerId: h.ownerSessionId ? getSession(h.ownerSessionId).userId : undefined,
+        troops: h.troops,
+        isFort: h.isFort,
+        isMasterTile: h.isMasterTile,
+      }));
+
+      const playerOverrideSpecs = playerOverrides?.map((p) => ({
+        userId: getSession(p.sessionId).userId,
+        carriedTroops: p.carriedTroops,
+        currentHexQ: p.currentHexQ,
+        currentHexR: p.currentHexR,
+      }));
+
+      const res = await fetch(`${API_BASE}/api/playtest/${roomCode}/populate-board`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${hostSession.token}`,
+        },
+        body: JSON.stringify({
+          hexOverrides: hexOverrideSpecs,
+          playerOverrides: playerOverrideSpecs,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`populate-board failed (${res.status}): ${err}`);
+      }
+
+      const payload = await res.json();
+
+      // Reload all involved sessions so their frontend state picks up the changes
+      const allSessionIds = new Set<string>([hostSessionId]);
+      hexOverrides?.forEach((h) => { if (h.ownerSessionId) allSessionIds.add(h.ownerSessionId); });
+      playerOverrides?.forEach((p) => allSessionIds.add(p.sessionId));
+
+      for (const sessionId of allSessionIds) {
+        try {
+          const { page } = getSession(sessionId);
+          await page.reload();
+          await waitForAgentBridge(page);
+        } catch { /* best-effort reload */ }
+      }
+
+      return jsonResult({ status: 'populated', roomCode, payload });
+    },
+  );
 }
