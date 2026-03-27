@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { hasHexChanged } from '../utils/gridDiff';
+import { clearLocalHexSightings } from '../utils/localVisibility';
 import type { GameState, HexCell, RoomSummary } from '../types/game';
 
 const SESSION_STORAGE_KEY = 'landgrab_session';
@@ -178,6 +179,7 @@ export const useGameStore = create<GameStore>()((set) => ({
   },
   clearSession: () => {
     persistSavedSession(null);
+    clearLocalHexSightings();
     set({ savedSession: null });
   },
   loadSession: () => {

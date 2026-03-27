@@ -32,6 +32,7 @@ import {
   persistDebugLocation,
   readPersistedDebugLocation,
 } from './utils/debugLocationSession';
+import { clearLocalHexSightings } from './utils/localVisibility';
 import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
 import './styles/tricorder-v2.css';
@@ -443,6 +444,7 @@ export default function App() {
   // ── Logout handler ───────────────────────────────────────────────────────
   const handleLogout = useCallback(() => {
     clearSession();
+    clearLocalHexSightings();
     disableDebugLocation();
     setShowDebugTools(false);
     setMyRooms([]);

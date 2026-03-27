@@ -1463,7 +1463,6 @@ const nl = {
     contestedTile: 'Betwist veld — grenst aan vijand',
     contested: 'Betwiste grens — contactlijn met vijand',
     troops: 'Troepen',
-    disconnected: 'Afgesneden',
     expandLegend: 'Toon legenda',
     collapseLegend: 'Verberg legenda',
     beaconRadius: 'Baken onthullingsradius',

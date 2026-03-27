@@ -169,10 +169,13 @@ public sealed class VisibilityServiceTests
         seenCell.Troops.Should().Be(6);
 
         var hiddenSource = state;
-        hiddenSource.Players.Single(player => player.Id == "p1").IsBeacon = false;
-        hiddenSource.Players.Single(player => player.Id == "p1").BeaconLat = null;
-        hiddenSource.Players.Single(player => player.Id == "p1").BeaconLng = null;
-        hiddenSource.Players.Single(player => player.Id == "p1").BeaconHeading = null;
+        var p1 = hiddenSource.Players.Single(player => player.Id == "p1");
+        p1.IsBeacon = false;
+        p1.BeaconLat = null;
+        p1.BeaconLng = null;
+        p1.BeaconHeading = null;
+        p1.CurrentHexQ = -4;
+        p1.CurrentHexR = 0;
         var hiddenVisibleKeys = service.ComputeVisibleHexKeys(hiddenSource, "p1");
         var rememberedState = service.BuildStateForViewer(
             GameStateCommon.SnapshotState(hiddenSource),

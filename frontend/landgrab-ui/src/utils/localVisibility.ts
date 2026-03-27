@@ -23,6 +23,15 @@ export function getLocalHexSightingMs(hexKey: string): number {
 }
 
 /**
+ * Clears all local hex sighting timestamps.
+ * Call this when leaving a game room or starting a new game to prevent stale data
+ * from previous sessions appearing as recently-seen in the new game.
+ */
+export function clearLocalHexSightings(): void {
+  _localHexSightingTimestamps.clear();
+}
+
+/**
  * Hex neighbor offsets for flat-top orientation.
  * Use these to find the 6 adjacent hexes.
  */

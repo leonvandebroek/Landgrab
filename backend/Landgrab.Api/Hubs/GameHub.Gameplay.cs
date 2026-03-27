@@ -489,7 +489,10 @@ public partial class GameHub
 
         var state = gameService.GetRoom(room.Code)?.State;
         if (state == null)
+        {
+            await SendError("ROOM_STATE_UNAVAILABLE", "Unable to load the current room state.");
             return;
+        }
 
         if (fledBattle != null)
         {
@@ -596,16 +599,16 @@ public partial class GameHub
 
                 if (combatResult != null)
                 {
-                    combatResult.IsAttacker = false;
-                    await Clients.Client(connId).SendAsync("CombatResult", combatResult);
+                    var defenderCombatResult = CloneCombatResultForRecipient(combatResult, false, Username);
+                    await Clients.Client(connId).SendAsync("CombatResult", defenderCombatResult);
                 }
             }
         }
 
         if (combatResult != null)
         {
-            combatResult.IsAttacker = true;
-            await Clients.Caller.SendAsync("CombatResult", combatResult);
+            var attackerCombatResult = CloneCombatResultForRecipient(combatResult, true, Username);
+            await Clients.Caller.SendAsync("CombatResult", attackerCombatResult);
         }
 
         if (wasNeutralHex)
@@ -995,7 +998,10 @@ public partial class GameHub
 
         var (state, result, resolveError) = gameService.ResolveFieldBattle(room.Code, parsedBattleId);
         if (resolveError != null || state == null)
+        {
+            await SendError(resolveError ?? "Unable to resolve field battle.");
             return;
+        }
 
         await BroadcastState(room.Code, state);
         if (result != null)
@@ -1051,6 +1057,10 @@ public partial class GameHub
                 await Clients.User(pid).SendAsync("FieldBattleResolved", result);
             await Clients.Group(room.Code).SendAsync("StateUpdated", resolvedState);
         }
+        else if (resolveError is not null)
+        {
+            await SendError(resolveError);
+        }
     }
 
     public async Task JoinGlobalMap(double lat, double lng)
@@ -1065,5 +1075,44 @@ public partial class GameHub
         await globalMap.EnsurePlayerHasStartingHex(Guid.Parse(UserId), lat, lng);
         var hexes = await globalMap.GetHexesNearAsync(lat, lng);
         await Clients.Caller.SendAsync("GlobalMapLoaded", hexes);
+    }
+
+    private static CombatResult CloneCombatResultForRecipient(CombatResult source, bool isAttacker, string? attackerName)
+    {
+        return new CombatResult
+        {
+            AttackDice = [.. source.AttackDice],
+            DefendDice = [.. source.DefendDice],
+            AttackerWon = source.AttackerWon,
+            AttackerLost = source.AttackerLost,
+            DefenderLost = source.DefenderLost,
+            HexCaptured = source.HexCaptured,
+            NewState = source.NewState,
+            Q = source.Q,
+            R = source.R,
+            PreviousOwnerName = source.PreviousOwnerName,
+            IsAttacker = isAttacker,
+            AttackerName = attackerName,
+            AttackerBonus = source.AttackerBonus,
+            DefenderBonus = source.DefenderBonus,
+            EffectiveAttack = source.EffectiveAttack,
+            EffectiveDefence = source.EffectiveDefence,
+            AttackerTroopsLost = source.AttackerTroopsLost,
+            DefenderTroopsLost = source.DefenderTroopsLost,
+            AttackerTroopsRemaining = source.AttackerTroopsRemaining,
+            DefenderTroopsRemaining = source.DefenderTroopsRemaining,
+            AttackerWinProbability = source.AttackerWinProbability,
+            CombatModeUsed = source.CombatModeUsed,
+            AttackerBonuses = source.AttackerBonuses.Select(b => new CombatBonusDetail
+            {
+                Source = b.Source,
+                Value = b.Value
+            }).ToList(),
+            DefenderBonuses = source.DefenderBonuses.Select(b => new CombatBonusDetail
+            {
+                Source = b.Source,
+                Value = b.Value
+            }).ToList()
+        };
     }
 }

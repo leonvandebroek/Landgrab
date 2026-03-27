@@ -868,6 +868,7 @@ export const GameMap = memo(function GameMap({
         bearingRafRef.current = 0;
       }
       targetBearingRef.current = 0;
+      // eslint-disable-next-line react-hooks/immutability -- intentionally reset bearing ref when compass disabled
       currentBearingRef.current = 0;
       map?.setBearing(0);
       if (container) {
