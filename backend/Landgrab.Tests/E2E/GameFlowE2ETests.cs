@@ -307,7 +307,7 @@ public sealed class GameFlowE2ETests : IClassFixture<E2EFixture>
         // Without alliances, target will be null (no ally found)
         // This validates the SignalR round-trip works
         // For a full transfer test, would need alliance-mode game setup
-        if (target == null || !target.Value.TryGetProperty("recipientId", out _))
+        if (target == null || !target.Value.TryGetProperty("recipientId", out var _rid))
         {
             // Expected in FreeForAll — transfer requires alliance
             return;
