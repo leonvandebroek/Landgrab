@@ -28,6 +28,8 @@ public partial class GameHub
             return;
         }
 
+        roomCode = roomCode.Trim().ToUpperInvariant();
+
         if (!ValidateRoomCode(roomCode))
         {
             await SendError(InvalidRequestCode, "Invalid room code.");
@@ -57,6 +59,8 @@ public partial class GameHub
             await Clients.Caller.SendAsync("Error", message);
             throw new HubException(message);
         }
+
+        roomCode = roomCode.Trim().ToUpperInvariant();
 
         if (!ValidateRoomCode(roomCode))
         {

@@ -23,6 +23,7 @@ public static class PlaytestEndpoints
         PopulateBoardRequest req,
         GameService gameService)
     {
+        roomCode = roomCode?.Trim().ToUpperInvariant() ?? string.Empty;
         var (state, error) = gameService.PopulateBoard(roomCode, req);
         if (error != null)
             return Results.BadRequest(new { error });

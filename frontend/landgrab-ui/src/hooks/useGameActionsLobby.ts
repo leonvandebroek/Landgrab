@@ -112,7 +112,8 @@ export function useGameActionsLobby({
       return;
     }
 
-    invoke('JoinRoom', code).catch(cause => setError(localizeLobbyError(getErrorMessage(cause), t)));
+    const normalizedCode = code.trim().toUpperCase();
+    invoke('JoinRoom', normalizedCode).catch(cause => setError(localizeLobbyError(getErrorMessage(cause), t)));
   }, [autoResuming, invoke, pendingResumeRef, setError, t]);
 
   const handleSetAlliance = useCallback((name: string): void => {

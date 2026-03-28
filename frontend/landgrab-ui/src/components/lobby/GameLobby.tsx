@@ -164,15 +164,18 @@ export function GameLobby({
                     type="text"
                     data-testid="lobby-join-code-input"
                     value={joinCode}
-                    onChange={event => setJoinCode(event.target.value.toUpperCase())}
+                    onChange={event => setJoinCode(event.target.value.trim().toUpperCase())}
                     placeholder={t('lobby.roomCodePlaceholder')}
                     maxLength={6}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
                   <button
                     type="button"
                     className="btn-secondary"
                     data-testid="lobby-join-btn"
-                    onClick={() => onJoinRoom(joinCode)}
+                    onClick={() => onJoinRoom(joinCode.trim().toUpperCase())}
                     disabled={!canSubmitJoinCode}
                     title={getJoinDisabledReason(joinCode, connected, t) ?? undefined}
                   >
@@ -201,7 +204,7 @@ export function GameLobby({
                         key={room.code}
                         type="button"
                         className="recent-room-button"
-                        onClick={() => onJoinRoom(room.code)}
+                        onClick={() => onJoinRoom(room.code.trim().toUpperCase())}
                       >
                         <div className="recent-room-copy">
                           <div className="recent-room-heading">

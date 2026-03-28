@@ -471,3 +471,67 @@ const cy = lp.y - pixelOrigin.y;
 **Output:** Created `.squad/decisions/inbox/vermeer-r4-findings.md` with detailed analysis and recommendations
 
 **Status:** Investigation complete. No critical bugs found. 3 performance optimizations identified for future consideration.
+
+---
+
+## 2026-01-XX: Android Room Code Bug Fix (URGENT)
+
+**Context:** Android players experiencing "The gamecode is no longer valid" errors when joining rooms. Android keyboards auto-capitalize input and may add trailing spaces.
+
+**Task:** Normalize room codes on input and submission to prevent Android input issues.
+
+**Changes Made:**
+
+1. **GameLobby.tsx** (lines 162-181 and 200-205):
+   - Added `autoCapitalize="none"` to disable Android auto-capitalization
+   - Added `autoCorrect="off"` to disable autocorrect
+   - Added `spellCheck={false}` to disable spellcheck
+   - Updated `onChange` to trim and uppercase: `setJoinCode(event.target.value.trim().toUpperCase())`
+   - Updated join button onClick to normalize: `onJoinRoom(joinCode.trim().toUpperCase())`
+   - Updated recent room button onClick to normalize: `onJoinRoom(room.code.trim().toUpperCase())`
+
+2. **useGameActionsLobby.ts** (line 105-116):
+   - Added normalization before SignalR call: `const normalizedCode = code.trim().toUpperCase()`
+   - Passes normalized code to `invoke('JoinRoom', normalizedCode)`
+
+**Before/After Input Element:**
+
+BEFORE:
+```tsx
+<input
+  type="text"
+  data-testid="lobby-join-code-input"
+  value={joinCode}
+  onChange={event => setJoinCode(event.target.value.toUpperCase())}
+  placeholder={t('lobby.roomCodePlaceholder')}
+  maxLength={6}
+/>
+```
+
+AFTER:
+```tsx
+<input
+  type="text"
+  data-testid="lobby-join-code-input"
+  value={joinCode}
+  onChange={event => setJoinCode(event.target.value.trim().toUpperCase())}
+  placeholder={t('lobby.roomCodePlaceholder')}
+  maxLength={6}
+  autoCapitalize="none"
+  autoCorrect="off"
+  spellCheck={false}
+/>
+```
+
+**Testing:**
+- Lint: ✅ Passed (0 errors)
+- Build: ✅ Passed (1.42s)
+
+**Output:** All 14 scouts can now join rooms from Android devices without case/whitespace issues.
+
+### Learnings
+
+- **Android input attributes are essential for uppercase-only fields:** The combination of `autoCapitalize="none"`, `autoCorrect="off"`, and `spellCheck={false}` prevents Android keyboards from interfering with room code input. Without these, Android keyboards capitalize the first letter and may add autocorrect suggestions.
+- **Normalize at multiple layers for defense in depth:** Normalizing at display (onChange), submission (onClick), and SignalR invocation (handleJoinRoom) ensures the room code is always correctly formatted regardless of where the user triggers the join action (manual input, recent rooms list, or future entry points).
+- **trim() in onChange is safe for single-line inputs:** While trimming on every keystroke could interfere with normal text input, for room codes (which should never contain spaces), it provides immediate visual feedback and prevents confusion when users accidentally add spaces.
+- **Room codes from the backend (recentRooms) should already be normalized:** We normalize `room.code` defensively, but the backend should guarantee uppercase 6-character codes. This prevents issues if the backend behavior changes or if codes are cached/stored incorrectly.
