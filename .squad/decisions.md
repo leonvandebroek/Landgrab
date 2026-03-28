@@ -672,3 +672,48 @@
 **Verdict:** No blockers. All edge cases covered. Architecture validated for 30-player multiplayer.  
 **Files:** `.squad/decisions/inbox/spinoza-r4-findings.md`, `backend/Landgrab.Tests/Services/LargeScaleGameTests.cs` (new file, 9 tests)  
 **SignalR Impact:** None.
+
+### 52. Performance sprint — OPT-01 parallel broadcasts, OPT-03 MessagePack, OPT-05 cleanup (2026-03-27)
+**Status:** Complete  
+**Agents:** De Ruyter, Vermeer, Spinoza, Rembrandt  
+**Sprint:** Backend performance optimization across parallel visibility broadcasts, MessagePack protocol support, and field battle cleanup.
+
+#### OPT-01 — Parallelize per-viewer visibility broadcasts
+**Decision:** Parallelize `VisibilityBroadcastHelper.BroadcastPerViewer` with `Task.WhenAll`, but precompute per-viewer visibility/memory updates before entering parallel send tasks.
+**Why:** Raw parallelization risks concurrent writes to shared `room.VisibilityMemory` dictionaries. `BuildStateForViewer` is safe when fed a per-task snapshot because mutations are snapshot-local. `IClientProxy.SendAsync` is thread-safe, so concurrent sends are appropriate.
+**Implementation:** Grouped `room.ConnectionMap` by `viewerUserId`. For each viewer: compute `visibleHexKeys`, update memory once, capture viewer memory. In `Task.WhenAll`, build one viewer state per viewer and fan out to all connection IDs. Preserves alias event + `StateUpdated` + `GameOver` behavior.
+**Files:** `backend/Landgrab.Api/Services/VisibilityBroadcastHelper.cs`
+**Impact:** Reduces broadcast wall-clock time by parallelizing per-viewer projection/send work while avoiding race conditions.
+
+#### OPT-03 — Enable SignalR MessagePack on server
+**Decision:** Add server-side MessagePack protocol support while keeping JSON compatibility.
+**Why:** MessagePack is opt-in per client; enabling server support now allows staged client adoption without breaking existing clients.
+**Implementation:** Added `Microsoft.AspNetCore.SignalR.Protocols.MessagePack` (aligned to `8.*`). Updated SignalR registration: `.AddMessagePackProtocol()` chained before `.AddJsonProtocol(...)`. Added code comment documenting required frontend opt-in: install `@microsoft/signalr-protocol-msgpack`, set `.withHubProtocol(new MessagePackHubProtocol())`.
+**Frontend Assessment:** `package.json` contains `@microsoft/signalr` but not `@microsoft/signalr-protocol-msgpack`. `useSignalR.ts` builds default JSON connection without `withHubProtocol(...)`.
+**Files:** `backend/Landgrab.Api/Landgrab.Api.csproj`, `backend/Landgrab.Api/Program.cs`
+**Impact:** No behavior change for existing clients. Unlocks lower-bandwidth mode when frontend opts in.
+
+#### OPT-05 — Background cleanup for stale field battles
+**Decision:** Add hosted background cleanup service for orphaned/stale field battles.
+**Why:** Long-lived unresolved battles accumulate and degrade state quality over time.
+**Implementation:** Added `ActiveFieldBattle.CreatedAt` timestamp (`DateTime.UtcNow` default). Added `FieldBattleCleanupService : BackgroundService` with 5-minute tick interval and 10-minute stale threshold. Iterates all rooms via `GameService.GetRoomsSnapshot()`, mutates `ActiveFieldBattles` under `lock(room.SyncRoot)`, logs removed stale battles as warnings. Registered with `AddHostedService<FieldBattleCleanupService>()`. Corrected snapshot fidelity in `GameStateCommon.SnapshotState` by copying `CreatedAt`, `TargetEnemyId`, `FledEnemyIds`.
+**Files:** `backend/Landgrab.Api/Models/GameState.cs`, `backend/Landgrab.Api/Services/FieldBattleCleanupService.cs` (new), `backend/Landgrab.Api/Services/RoomService.cs`, `backend/Landgrab.Api/Services/GameService.cs`, `backend/Landgrab.Api/Services/GameStateCommon.cs`, `backend/Landgrab.Api/Program.cs`
+**Impact:** Prevents stale battle buildup. Keeps in-memory room state healthier during prolonged uptime.
+
+#### OPT-06 — Merge double-pass grid normalization
+**Status:** Skipped — already single-pass
+**Finding:** `normalizeGameState` in `frontend/landgrab-ui/src/utils/gameHelpers.ts` already performs both `visibilityTier` defaulting and grid normalization in a single `Object.entries(...).map(...)` pass. No change required.
+
+#### OPT-08 — Cap GameEventLog DOM nodes
+**Status:** Implemented
+**File Changed:** `frontend/landgrab-ui/src/components/game/GameEventLog.tsx`
+**Change:** After computing `sortedEvents` (newest-first), added `const visibleEvents = sortedEvents.slice(0, 200)`. Render loop maps over `visibleEvents` instead of `sortedEvents`. Count badge still shows total event count.
+**Rationale:** Long games accumulate hundreds to thousands of event log entries. Rendering all creates unbounded DOM growth degrading performance. Capping at 200 visible entries (most recent) is imperceptible to players and prevents degradation.
+**Build:** `npm run lint && npm run build` — 0 errors, clean.
+
+#### Validation
+**Build:** `cd backend/Landgrab.Api && dotnet build --configuration Debug` ✅
+**Tests:** `cd backend/Landgrab.Tests && dotnet test` ✅ (369 total, 368 passed, 1 skipped)
+**Lint:** `cd frontend/landgrab-ui && npm run lint` ✅
+**Frontend Build:** `cd frontend/landgrab-ui && npm run build` ✅
+**Commit:** baef557f (amend message to sprint spec)
