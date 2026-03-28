@@ -590,6 +590,7 @@ input:focus {
 }
 
 .entry-join-form {
+  flex-direction: column;
   align-items: stretch;
 }
 
