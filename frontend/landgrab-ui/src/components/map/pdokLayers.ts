@@ -35,7 +35,6 @@ function createPdokWmtsLayer(style: 'standaard' | 'grijs'): L.TileLayer {
         {
             attribution: PDOK_ATTRIBUTION,
             className: `pdok-layer pdok-layer--${style === 'standaard' ? 'standard' : 'gray'}`,
-            crossOrigin: true,
             maxNativeZoom: WMTS_NATIVE_MAX_ZOOM,
             maxZoom: MAP_MAX_ZOOM,
             minZoom: 6,
@@ -47,7 +46,6 @@ function createOpenStreetMapLayer(): L.TileLayer {
     return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: OSM_ATTRIBUTION,
         className: 'pdok-layer pdok-layer--osm',
-        crossOrigin: true,
         maxNativeZoom: WMTS_NATIVE_MAX_ZOOM,
         maxZoom: MAP_MAX_ZOOM,
         minZoom: 3,
@@ -58,7 +56,6 @@ function createTerrainLayer(): L.TileLayer {
     return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
         attribution: ESRI_ATTRIBUTION,
         className: 'pdok-layer pdok-layer--terrain',
-        crossOrigin: true,
         maxNativeZoom: ESRI_TOPO_NATIVE_MAX_ZOOM,
         maxZoom: MAP_MAX_ZOOM,
         minZoom: 3,
@@ -71,7 +68,6 @@ function createWorldHillshadeLayer(): L.TileLayer {
         {
             attribution: ESRI_ATTRIBUTION,
             className: 'pdok-layer pdok-layer--elevation',
-            crossOrigin: true,
             maxNativeZoom: HILLSHADE_NATIVE_MAX_ZOOM,
             maxZoom: MAP_MAX_ZOOM,
             minZoom: 3,
@@ -90,7 +86,6 @@ export function createPdokBaseLayers(): {
         top25: L.tileLayer.wms('https://service.pdok.nl/brt/topraster/wms/v1_0?', {
             attribution: PDOK_ATTRIBUTION,
             className: 'pdok-layer pdok-layer--top25',
-            crossOrigin: true,
             format: 'image/png',
             layers: 'top25raster',
             maxNativeZoom: TOP25_NATIVE_MAX_ZOOM,

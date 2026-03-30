@@ -53,6 +53,8 @@ body {
 
 .game-map-container .leaflet-tile-pane {
   transition: filter 0.24s ease;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .game-map-container.map-look--nightVision .leaflet-tile-pane {
