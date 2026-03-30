@@ -6,6 +6,18 @@ Tester/QA on Landgrab. xUnit test suite with 353 tests (352 passing, 1 skipped) 
 Coverage areas: auth (JWT, bcrypt), hex math/geometry, game mechanics, abilities, duels, win conditions, rooms, lobbies, host controls, visibility, troop regeneration, alliance config, map areas, hub validation (SanitizeGameDynamics).
 
 ## Learnings
+
+- 2026-03-30: Added `HexServiceGpsToleranceTests.cs` for the post-fix GPS rule.
+  `0.65 * tileSizeMeters` from hex center passes; `0.70 * tileSizeMeters`
+  and `1.0 * tileSizeMeters` fail. Rewrote pickup validation coverage in
+  `GameplayServicePickupValidationTests.cs` around explicit own-hex-only,
+  single-source, zero-troops, enemy-hex, and GPS-proximity outcomes.
+  Also updated conflicting legacy assertions in `GameplayServiceTests.cs`
+  and `Hubs/GameHubTests.cs`. Validation:
+  `cd backend/Landgrab.Tests && dotnet build --configuration Debug`
+  succeeded.
+
+- 2026-03-30: Added `GameplayServicePickupValidationTests.cs` to cover GPS boundary tolerance, host GPS bypass, allied tile pickup, and pickup error-message specificity. Current `dotnet test` result: 380 total, 375 passed, 4 failed, 1 skipped. The four expected failures map exactly to the in-flight GameplayService gaps: slight over-boundary GPS still rejected, allied pickup still blocked, and enemy/unclaimed pickup errors are still generic.
 - Team hired 2026-03-22 by Léon van de Broek
 - 2026-03-27: Fixed VisibilityService test failure. Root cause: test expected Remembered tier for hex (1,0) but player was still at (0,0) keeping it in normal visibility radius. Fixed by moving player to (-4,0) in second scenario.
 - 2026-03-27: Created new test suite for GameHub.SanitizeGameDynamics validation logic. Ensures all fields including FieldBattleEnabled are preserved, and invalid enum values are reset to defaults.

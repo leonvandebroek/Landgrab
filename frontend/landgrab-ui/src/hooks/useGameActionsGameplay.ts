@@ -516,6 +516,12 @@ export function useGameActionsGameplay({
       return;
     }
 
+    const { gameState: preGameState, savedSession: preSavedSession } = useGameStore.getState();
+    const myId = preSavedSession?.userId;
+    const previousCarried = myId
+      ? (preGameState?.players.find(p => p.id === myId)?.carriedTroops ?? 0)
+      : 0;
+
     const targetHex: [number, number] = [currentPickupPrompt.q, currentPickupPrompt.r];
     const coordinates = resolveActionCoordinates(targetHex, gameState, currentLocation, isHostBypass);
     if (!coordinates) {
@@ -527,30 +533,36 @@ export function useGameActionsGameplay({
     useGameplayStore.getState().setSelectedHexKey(`${targetHex[0]},${targetHex[1]}`);
     invoke('PickUpTroops', currentPickupPrompt.q, currentPickupPrompt.r, currentPickupCount, coordinates.lat, coordinates.lng)
       .then(() => {
-        const { gameState: currentGameState, savedSession } = useGameStore.getState();
-        const myId = savedSession?.userId;
-        const previousCarried = myId
+        const { gameState: currentGameState } = useGameStore.getState();
+        const newCarried = myId
           ? (currentGameState?.players.find(p => p.id === myId)?.carriedTroops ?? 0)
           : 0;
-        const newCarried = previousCarried + currentPickupCount;
+          
         setPickupPrompt(null);
-        playSound('pickup');
-        setMapFeedback({
-          tone: 'success',
-          message: t('game.mapFeedback.pickedUp', {
-            count: currentPickupCount,
-            carrying: newCarried,
-            q: currentPickupPrompt.q,
-            r: currentPickupPrompt.r,
-          }),
-          targetHex,
-        });
+        
+        if (newCarried > previousCarried) {
+          const actualPickedUp = newCarried - previousCarried;
+          playSound('pickup');
+          setMapFeedback({
+            tone: 'success',
+            message: t('game.mapFeedback.pickedUp', {
+              count: actualPickedUp,
+              carrying: newCarried,
+              q: currentPickupPrompt.q,
+              r: currentPickupPrompt.r,
+            }),
+            targetHex,
+          });
+        }
       })
-      .catch(cause => {
-        setMapFeedback({
-          tone: 'error',
-          message: getErrorMessage(cause),
-          targetHex,
+      .catch((cause: unknown) => {
+        setPickupPrompt(null);
+        useInfoLedgeStore.getState().push({
+          severity: 'error',
+          source: 'interaction',
+          persistent: false,
+          icon: 'helmet',
+          message: getErrorMessage(cause) || t('errors.actionFailed'),
         });
       });
   }, [

@@ -317,6 +317,33 @@ public partial class GameHub : Hub
             return "HOST_REQUIRED";
         }
 
+        if (normalized.Contains("physically inside that hex")
+            || normalized.Contains("preview combat")
+            || normalized.Contains("move closer to this hex"))
+        {
+            return "OUT_OF_RANGE";
+        }
+
+        if (normalized.Contains("enough troops"))
+        {
+            return "INSUFFICIENT_TROOPS";
+        }
+
+        if (normalized.Contains("own or allied hexes") || normalized.Contains("own hexes") || normalized.Contains("allied hex"))
+        {
+            return "HEX_OWNERSHIP_INVALID";
+        }
+
+        if (normalized.Contains("game is paused"))
+        {
+            return "GAME_PAUSED";
+        }
+
+        if (normalized.Contains("invalid hex"))
+        {
+            return "INVALID_HEX";
+        }
+
         return "GENERAL";
     }
 }

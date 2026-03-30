@@ -52,6 +52,8 @@ interface HexBorderStyleOptions {
   isSelected: boolean;
   selectionType?: 'none' | 'selectedFriendly' | 'selectedHostile';
   ownerColor?: string;
+  isMine?: boolean;
+  isHostile?: boolean;
 }
 
 interface TroopBadgeDescriptorOptions {
@@ -184,6 +186,8 @@ export function getHexBorderStyle({
   isSelected,
   selectionType = 'none',
   ownerColor,
+  isMine,
+  isHostile,
 }: HexBorderStyleOptions): HexBorderStyle {
   if (isInactive) {
     return {
@@ -252,6 +256,7 @@ export function getHexBorderStyle({
       borderColor: ownerColor ?? '#fbbf24',
       borderWeight: 3,
       borderOpacity: 1,
+      dashArray: isHostile ? '4 3' : undefined,
     };
   }
 
@@ -260,6 +265,7 @@ export function getHexBorderStyle({
       borderColor: ownerColor ?? '#334155',
       borderWeight: 2.5,
       borderOpacity: 0.85,
+      dashArray: isHostile ? '4 3' : undefined,
     };
   }
 
@@ -268,6 +274,7 @@ export function getHexBorderStyle({
       borderColor: ownerColor ?? '#334155',
       borderWeight: 2.5,
       borderOpacity: 0.85,
+      dashArray: isHostile ? '4 3' : undefined,
     };
   }
 
@@ -276,13 +283,15 @@ export function getHexBorderStyle({
       borderColor: ownerColor ?? '#aaaaaa',
       borderWeight: 2.5,
       borderOpacity: 0.85,
+      dashArray: isHostile ? '4 3' : undefined,
     };
   }
 
   return {
     borderColor: ownerColor ?? '#334155',
-    borderWeight: 1,
-    borderOpacity: 0.05,
+    borderWeight: isMine ? 2 : isHostile ? 1.5 : 1.5,
+    borderOpacity: 0.8,
+    dashArray: isHostile ? '4 3' : undefined,
   };
 }
 

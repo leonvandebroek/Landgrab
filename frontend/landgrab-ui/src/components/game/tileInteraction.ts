@@ -249,16 +249,6 @@ export function getTileActions({
         enabled: true,
       });
     }
-    if (targetCell.troops > 0) {
-      actions.push({
-        type: 'pickup',
-        label: 'game.tileAction.pickupBtn',
-        shortLabel: 'game.tileAction.pickupBtnShort',
-        icon: 'helmet',
-        tone: 'primary',
-        enabled: true,
-      });
-    }
     return actions;
   }
 

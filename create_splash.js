@@ -1,0 +1,163 @@
+const fs = require('fs');
+
+const tsxContent = `import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import './TeamSplash.css';
+
+interface TeamSplashProps {
+  allianceName: string;
+  allianceColor: string;
+  roleName?: string;
+  onDismiss: () => void;
+}
+
+export function TeamSplash({ allianceName, allianceColor, roleName, onDismiss }: TeamSplashProps) {
+  const { t } = useTranslation();
+  const [exiting, setExiting] = useState(false);
+
+  useEffect(() => {
+    // Auto dismiss after 4 seconds total
+    const exitTimer = setTimeout(() => {
+      setExiting(true);
+    }, 3400);
+
+    const removeTimer = setTimeout(() => {
+      onDismiss();
+    }, 4000);
+
+    return () => {
+      clearTimeout(exitTimer);
+      clearTimeout(removeTimer);
+    };
+  }, [onDismiss]);
+
+  const handleDismiss = () => {
+    if (exiting) return;
+    setExiting(true);
+    setTimeout(() => {
+      onDismiss();
+    }, 600);
+  };
+
+  return (
+    <div
+      className={\`team-splash \${exiting ? 'team-splash--exiting' : ''}\`}
+      style={{
+        '--alliance-color': allianceColor,
+      } as React.CSSProperties}
+      onClick={handleDismiss}
+    >
+      <div className="team-splash-content">
+        <h1 className="team-splash-title">{t('game.teamSplash.title')}</h1>
+        <h2 className="team-splash-alliance">{allianceName}</h2>
+        {roleName && <p className="team-splash-role">{roleName}</p>}
+        <p className="team-splash-subtitle">{t('game.teamSplash.subtitle')}</p>
+      </div>
+    </div>
+  );
+}
+`;
+
+const cssContent = \`
+.team-splash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--alliance-color) 0%, color-mix(in srgb, var(--alliance-color), black 20%) 100%);
+  color: white;
+  text-align: center;
+  cursor: pointer;
+  animation: splashEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.team-splash::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 60%);
+  animation: spinSlow 30s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes splashEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.team-splash--exiting {
+  opacity: 0;
+  transform: scale(1.1);
+  transition: opacity 0.6s ease-in-out, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.team-splash-content {
+  position: relative;
+  z-index: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.team-splash-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.9;
+  margin: 0;
+}
+
+.team-splash-alliance {
+  font-size: 3.5rem;
+  font-weight: 900;
+  line-height: 1.1;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.team-splash-role {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: rgba(0,0,0,0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  display: inline-block;
+  align-self: center;
+  margin: 0.5rem 0;
+}
+
+.team-splash-subtitle {
+  font-size: 1.25rem;
+  opacity: 0.8;
+  margin-top: 2rem;
+}
+\`;
+
+fs.writeFileSync('frontend/landgrab-ui/src/components/game/TeamSplash.tsx', tsxContent);
+fs.writeFileSync('frontend/landgrab-ui/src/components/game/TeamSplash.css', cssContent);
+console.log('Files written.');

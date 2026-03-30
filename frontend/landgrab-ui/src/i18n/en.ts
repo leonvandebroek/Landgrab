@@ -207,6 +207,28 @@ const en = {
     TimedGame: 'Timed game',
   },
   game: {
+    tutorial: {
+      step1Title: 'This Is You',
+      step1Desc: 'The marker on the map is you. Walk around to move.',
+      step2Title: 'Claim Territory',
+      step2Desc: 'Walk onto a gray hex and tap Claim to take it for your team.',
+      step3Title: 'Build Your Army',
+      step3Desc: 'Tap your own hex and pick up troops. Carry them to battle.',
+      step4Title: 'Attack!',
+      step4Desc: 'Walk onto an enemy hex with troops to fight for it.',
+      gotIt: 'Got It',
+      letsGo: "Let's Go!",
+      skip: 'Skip Tutorial',
+      replay: 'Replay Tutorial',
+    },
+    teamSplash: {
+      title: 'YOU ARE ON TEAM',
+      subtitle: 'Conquer the grid.',
+    },
+    legend: {
+      yourTeam: 'Your team',
+      enemyTeam: 'Enemy',
+    },
     hudLands: 'Lands',
     hudTroops: 'Troops',
     hudPlayers: 'Players',
@@ -922,6 +944,7 @@ const en = {
     waterBlocked: 'Water terrain is impassable.',
     insufficientStrength: 'You need more troops to beat the defenders.',
     noPositionForAction: 'Move to a hex first',
+    actionFailed: 'Action failed: {{reason}}',
   },
   dynamics: {
     presetsLabel: 'Presets',

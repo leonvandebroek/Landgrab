@@ -460,7 +460,7 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
         return (
           <g
             key={projectedPlayer.player.id ?? projectedPlayer.player.name}
-            className="player-marker-reticle tricorder-chevron-marker"
+            className={`player-marker-reticle tricorder-chevron-marker ${projectedPlayer.isCurrentUser ? 'tricorder-chevron-marker--me' : ''}`}
             transform={`translate(${markerX + dx}, ${markerY + dy})`}
             pointerEvents="none"
             opacity={projectedPlayer.isStale ? 0.4 : 1.0}

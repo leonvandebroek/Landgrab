@@ -7,6 +7,8 @@ namespace Landgrab.Tests.Services;
 
 public sealed class GameplayServiceTests
 {
+    private const double MetersPerDegreeLat = 111_320d;
+
     [Fact]
     public void PickUpTroops_FromOwnHex_SucceedsAndCarriesTroops()
     {
@@ -44,6 +46,29 @@ public sealed class GameplayServiceTests
         var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
 
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 1, lat, lng);
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("You can only pick up troops from your own hexes.");
+        context.Cell(0, 0).Troops.Should().Be(5);
+        context.Player("p1").CarriedTroops.Should().Be(0);
+    }
+
+    [Fact]
+    public void PickUpTroops_FromAlliedHex_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer("p1", "Alice", "a1")
+            .AddPlayer("p2", "Bob", "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .OwnHex(0, 0, "p2", "a1")
+            .WithTroops(0, 0, 5)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 2, lat, lng);
 
         result.state.Should().BeNull();
         result.error.Should().Be("You can only pick up troops from your own hexes.");
@@ -90,7 +115,7 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PickUpTroops_WhenAlreadyCarryingFromDifferentHex_AccumulatesTroops()
+    public void PickUpTroops_WhenAlreadyCarryingFromDifferentHex_Fails()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -105,10 +130,11 @@ public sealed class GameplayServiceTests
 
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 1, lat, lng);
 
-        result.error.Should().BeNull();
-        context.Cell(0, 0).Troops.Should().Be(4);
-        context.Player("p1").CarriedTroops.Should().Be(3);
-        context.Player("p1").CarriedTroopsSourceQ.Should().Be(0);
+        result.state.Should().BeNull();
+        result.error.Should().Be("You are already carrying troops from another hex. Place them before picking up from a different hex.");
+        context.Cell(0, 0).Troops.Should().Be(5);
+        context.Player("p1").CarriedTroops.Should().Be(2);
+        context.Player("p1").CarriedTroopsSourceQ.Should().Be(1);
         context.Player("p1").CarriedTroopsSourceR.Should().Be(0);
     }
 
@@ -988,6 +1014,25 @@ public sealed class GameplayServiceTests
         context.GameplayService.AddReinforcementsToAllHexes(ServiceTestContext.RoomCode);
 
         context.Cell(0, 0).Troops.Should().Be(4); // base +1
+    }
+
+    private static (double lat, double lng) PointNearEastEdgeOfHex(
+        double mapLat,
+        double mapLng,
+        int tileSizeMeters,
+        double metersBeyondBorder)
+    {
+        var halfHeight = Math.Sqrt(3d) * tileSizeMeters / 2d;
+        var boundaryMidpointX = tileSizeMeters * 0.75d;
+        var boundaryMidpointY = halfHeight / 2d;
+        var outwardUnitNormalX = Math.Sqrt(3d) / 2d;
+        var outwardUnitNormalY = 0.5d;
+        var xMeters = boundaryMidpointX + (outwardUnitNormalX * metersBeyondBorder);
+        var yMeters = boundaryMidpointY + (outwardUnitNormalY * metersBeyondBorder);
+        var cosLat = Math.Cos(mapLat * Math.PI / 180d);
+        var lat = mapLat + yMeters / MetersPerDegreeLat;
+        var lng = mapLng + xMeters / (MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d));
+        return (lat, lng);
     }
 
 }
