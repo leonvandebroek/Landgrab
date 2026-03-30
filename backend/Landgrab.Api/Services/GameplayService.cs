@@ -16,9 +16,13 @@ public class GameplayService(
     ILogger<GameplayService> logger)
     : RoomScopedServiceBase(roomProvider, gameStateService)
 {
+    private const double HexInteractionDistanceRatio = 0.65d;
     private const int BalancedCombatRounds = 3;
     private const double MinCombatHitProbability = 0.2;
     private const double MaxCombatHitProbability = 0.8;
+    private const string MoveCloserToHexError = "Move closer to this hex.";
+    private const string PickUpOwnHexesOnlyError = "You can only pick up troops from your own hexes.";
+    private const string PickUpSingleSourceError = "You are already carrying troops from another hex. Place them before picking up from a different hex.";
 
     public sealed record DrainTickNotification(
         int q,
@@ -245,7 +249,15 @@ public class GameplayService(
                 return (null, "The master tile cannot be used for troop pick-up.");
 
             if (cell.OwnerId != userId)
-                return (null, "You can only pick up troops from your own hexes.");
+                return (null, PickUpOwnHexesOnlyError);
+
+            var carryingFromDifferentHex = player.CarriedTroops > 0
+                && player.CarriedTroopsSourceQ.HasValue
+                && player.CarriedTroopsSourceR.HasValue
+                && (player.CarriedTroopsSourceQ.Value != q || player.CarriedTroopsSourceR.Value != r);
+            if (carryingFromDifferentHex)
+                return (null, PickUpSingleSourceError);
+
             if (cell.Troops < count)
                 return (null, "That hex does not have enough troops.");
 
@@ -609,21 +621,18 @@ public class GameplayService(
         // Check coordinates passed by the client first (e.g. debug GPS position)
         if (playerLat.HasValue && playerLng.HasValue && state.HasMapLocation)
         {
-            if (HexService.IsPlayerInHex(playerLat.Value, playerLng.Value, q, r,
-                    state.MapLat!.Value, state.MapLng!.Value, state.TileSizeMeters))
+            if (IsPlayerWithinInteractionRange(state, playerLat.Value, playerLng.Value, q, r))
                 return null;
         }
 
         if (player.CurrentLat.HasValue && player.CurrentLng.HasValue)
         {
-            var isInHex = HexService.IsPlayerInHex(
+            var isInHex = IsPlayerWithinInteractionRange(
+                state,
                 player.CurrentLat.Value,
                 player.CurrentLng.Value,
                 q,
-                r,
-                state.MapLat!.Value,
-                state.MapLng!.Value,
-                state.TileSizeMeters);
+                r);
             if (isInHex)
                 return null;
         }
@@ -631,7 +640,7 @@ public class GameplayService(
         if (TryGetCurrentHex(state, player, out var currentQ, out var currentR) && currentQ == q && currentR == r)
             return null;
 
-        return "You must be physically inside that hex to preview combat.";
+        return GetInteractionRangeError(state, "preview combat");
     }
 
     private static CombatStats CalculateCombatStats(GameState state, PlayerDto player, HexCell cell, int q, int r, int deployedTroops)
@@ -1088,11 +1097,42 @@ public class GameplayService(
                 state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters);
             SetPlayerLocation(state, player, hexLat, hexLng);
         }
-        else if (!HexService.IsPlayerInHex(playerLat, playerLng, q, r,
-                state.MapLat.Value, state.MapLng.Value, state.TileSizeMeters))
-            return "You must be physically inside that hex to interact with it.";
+        else if (!IsPlayerWithinInteractionRange(state, playerLat, playerLng, q, r))
+            return MoveCloserToHexError;
 
         return null;
+    }
+
+    private static bool IsPlayerWithinInteractionRange(GameState state, double playerLat, double playerLng, int q, int r)
+    {
+        return HexService.IsPlayerInHex(
+            playerLat,
+            playerLng,
+            q,
+            r,
+            state.MapLat!.Value,
+            state.MapLng!.Value,
+            state.TileSizeMeters)
+            || HexService.IsPlayerNearHex(
+                playerLat,
+                playerLng,
+                q,
+                r,
+                state.MapLat.Value,
+                state.MapLng.Value,
+                state.TileSizeMeters,
+                GetHexInteractionDistanceThresholdMeters(state));
+    }
+
+    private static double GetHexInteractionDistanceThresholdMeters(GameState state)
+    {
+        return Math.Max(0d, state.TileSizeMeters * HexInteractionDistanceRatio);
+    }
+
+    private static string GetInteractionRangeError(GameState state, string action)
+    {
+        var threshold = GetHexInteractionDistanceThresholdMeters(state);
+        return $"Move closer to this hex to {action}. You must be within {threshold:0.#} meters of its center.";
     }
 
     internal static List<PlayerDto> GetPlayersInHex(GameState state, int q, int r) =>

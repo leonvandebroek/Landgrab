@@ -79,6 +79,17 @@ public sealed class GameHubTests
         sanitized.FieldBattleResolutionMode.Should().Be(FieldBattleResolutionMode.InitiatorVsSumOfJoined);
     }
 
+    [Theory]
+    [InlineData("You must be physically inside that hex or within 20 meters of its border to interact with it.", "OUT_OF_RANGE")]
+    [InlineData("That hex does not have enough troops.", "INSUFFICIENT_TROOPS")]
+    [InlineData("You can only pick up troops from your own hexes.", "HEX_OWNERSHIP_INVALID")]
+    public void MapErrorCode_ReturnsSpecificCodesForPickupFailures(string message, string expectedCode)
+    {
+        var code = InvokeMapErrorCode(message);
+
+        code.Should().Be(expectedCode);
+    }
+
     private static GameDynamics InvokeSanitizeGameDynamics(GameDynamics dynamics)
     {
         var sanitizeMethod = typeof(Api.Hubs.GameHub).GetMethod(
@@ -91,5 +102,19 @@ public sealed class GameHubTests
         }
 
         return (GameDynamics)sanitizeMethod.Invoke(null, [dynamics])!;
+    }
+
+    private static string InvokeMapErrorCode(string message)
+    {
+        var mapErrorCodeMethod = typeof(Api.Hubs.GameHub).GetMethod(
+            "MapErrorCode",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        if (mapErrorCodeMethod is null)
+        {
+            throw new InvalidOperationException("MapErrorCode method not found");
+        }
+
+        return (string)mapErrorCodeMethod.Invoke(null, [message])!;
     }
 }

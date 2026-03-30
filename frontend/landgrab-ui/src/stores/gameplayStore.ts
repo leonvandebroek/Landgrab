@@ -129,9 +129,9 @@ export const useGameplayStore = create<GameplayStore>()((set) => ({
       mapFeedbackTimer = null;
     }, MAP_FEEDBACK_TIMEOUT_MS);
   },
-  setPickupPrompt: (pickupPrompt) => set({ pickupPrompt }),
+  setPickupPrompt: (pickupPrompt) => set(pickupPrompt ? { pickupPrompt, reinforcePrompt: null } : { pickupPrompt }),
   setPickupCount: (pickupCount) => set({ pickupCount }),
-  setReinforcePrompt: (reinforcePrompt) => set({ reinforcePrompt }),
+  setReinforcePrompt: (reinforcePrompt) => set(reinforcePrompt ? { reinforcePrompt, pickupPrompt: null } : { reinforcePrompt }),
   setReinforceCount: (reinforceCount) => set({ reinforceCount }),
   setAttackPrompt: (attackPrompt) => set({ attackPrompt }),
   setAttackCount: (attackCount) => set({ attackCount }),

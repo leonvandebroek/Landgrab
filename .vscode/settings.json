@@ -3,7 +3,13 @@
     "chat.tools.terminal.autoApprove": {
         "npm run build": true,
         "npx eslint": true,
-        "EOF": true
+        "EOF": true,
+        "git rev-parse": true,
+        "/^python3 - <<'PY'\nfrom pathlib import Path\n\nroot = Path\\('/Users/leonvandebroek/Projects/Github/Landgrab'\\)\n\ndecision_path = root / '\\.squad/decisions/inbox/spinoza-pickup-tests\\.md'\ndecision_path\\.write_text\\(\n    \"# Spinoza — Pickup/GPS test assumption\\\\n\\\\n\"\n    \"## Context\\\\n\\\\n\"\n    \"While adding regression tests for `GameplayService` pickup validation, one behavior was underspecified: what should happen when a player is standing in the center of an adjacent hex and tries to interact with the original target hex\\?\\\\n\\\\n\"\n    \"## QA assumption encoded in tests\\\\n\\\\n\"\n    \"- A small GPS tolerance buffer should allow slight over-boundary drift\\.\\\\n\"\n    \"- A player standing at the center of an adjacent hex should still be rejected\\.\\\\n\"\n    \"- Tolerance is for drift, not for granting neighboring-hex interaction rights\\.\\\\n\\\\n\"\n    \"## Why\\\\n\\\\n\"\n    \"This keeps the fix narrowly aligned with the reported bug and avoids accidentally widening the interaction surface into a second gameplay rule change\\.\\\\n\\\\n\"\n    \"## Follow-up\\\\n\\\\n\"\n    \"If De Ruyter intentionally implements broader adjacent-hex interaction, update `GameplayServicePickupValidationTests\\.PickUpTroops_WhenPlayerIsAtAdjacentHexCenter_FailsValidation` to match the final product decision\\.\\\\n\",\n    encoding='utf-8'\n\\)\n\nhistory_path = root / '\\.squad/agents/spinoza/history\\.md'\ntext = history_path\\.read_text\\(encoding='utf-8'\\)\nmarker = '## Learnings\\\\n'\nentry = \\(\n    '- 2026-03-30: Added `GameplayServicePickupValidationTests\\.cs` to cover GPS boundary tolerance, host GPS bypass, allied tile pickup, and pickup error-message specificity\\. '\n    'Current `dotnet test` result: 380 total, 375 passed, 4 failed, 1 skipped\\. The four expected failures map exactly to the in-flight GameplayService gaps: slight over-boundary GPS still rejected, allied pickup still blocked, and enemy/unclaimed pickup errors are still generic\\.\\\\n'\n\\)\nif entry not in text:\n    if marker in text:\n        text = text\\.replace\\(marker, marker \\+ entry, 1\\)\n    else:\n        text \\+= '\\\\n' \\+ entry\n    history_path\\.write_text\\(text, encoding='utf-8'\\)\nPY$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        ".": true
     },
     "chat.mcp.serverSampling": {
         "Landgrab/.vscode/mcp.json: landgrab": {

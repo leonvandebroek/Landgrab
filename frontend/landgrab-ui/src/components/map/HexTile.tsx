@@ -289,6 +289,8 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
     isSelected,
     selectionType,
     ownerColor,
+    isMine,
+    isHostile,
   });
   const polygonClassName = [
     getHexPolygonClassName({
@@ -353,6 +355,22 @@ export const HexTile = memo(function HexTile({ hexId, geometry, isCurrent, isSel
         strokeDasharray={borderStyle.dashArray}
         style={polygonStyle}
       />
+
+      {isHostile && !isInactive && (
+        <>
+          <defs>
+            <pattern id={`enemy-hatch-${hexId}`} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(0,0,0,0.12)" strokeWidth="1.5" />
+            </pattern>
+          </defs>
+          <polygon
+            points={geometry.points}
+            fill={`url(#enemy-hatch-${hexId})`}
+            stroke="none"
+            pointerEvents="none"
+          />
+        </>
+      )}
 
       {showRallyObjective ? renderForeignObject({
         className: 'hex-fo-halo',

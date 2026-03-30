@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HexCell } from '../../types/game';
 import type { PlayerDisplayPreferences } from '../../types/playerPreferences';
@@ -12,9 +12,11 @@ import { GameEventLog } from './GameEventLog';
 import { GameRulesPage } from './GameRulesPage';
 import { useGuidanceBannerState } from './GuidanceBanner';
 import { HelpOverlay } from './HelpOverlay';
+import { TutorialOverlay } from './TutorialOverlay';
 import { InfoLedge } from './InfoLedge';
 import { PlayerDisplaySettings } from './PlayerDisplaySettings';
 import { ScoreRow } from './PlayerPanel';
+import { TeamLegend } from './TeamLegend';
 import { TileInfoCard } from './TileInfoCard';
 import { PlayerHUD } from './PlayerHUD';
 import { AbilityCard } from './AbilityCard';
@@ -104,10 +106,21 @@ export function PlayingHud({
   const hideAbilityCard = useGameplayStore((store) => store.hideAbilityCard);
   const error = useUiStore((store) => store.error);
   const mainMapBounds = useUiStore((store) => store.mainMapBounds);
-  const [activeModal, setActiveModal] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
+  const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('landgrab-tutorial-completed'));
+
+  const [activeModal, setActiveModalRaw] = useState<'players' | 'log' | 'menu' | 'help' | 'rules' | 'displaySettings' | null>(null);
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [showDevSection, setShowDevSection] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  /** Open a modal and dismiss any active action prompts to prevent UI stacking. */
+  const setActiveModal = useCallback((modal: typeof activeModal) => {
+    if (modal !== null) {
+      setPickupPrompt(null);
+      setReinforcePrompt(null);
+    }
+    setActiveModalRaw(modal);
+  }, [setPickupPrompt, setReinforcePrompt]);
 
   const layoutRef = useRef<HTMLDivElement>(null);
   const menuHeaderTapCountRef = useRef(0);
@@ -473,6 +486,33 @@ export function PlayingHud({
 
   return (
     <div className="game-layout hud-active playing-hud-layout" ref={layoutRef}>
+      <style>{`
+        .scanner-callsign__alliance {
+          margin-top: 2px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .alliance-badge {
+          padding: 2px 8px;
+          border-radius: 12px;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          background-color: var(--badge-bg);
+          font-size: 11px;
+          font-weight: bold;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #fff;
+          text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 1px rgba(0, 0, 0, 0.5);
+          display: inline-block;
+          box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.2);
+        }
+        .coord-display-wrapper {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+      `}</style>
       <div className="map-area-wrapper map-area-wrapper--with-player-hud">
         <div className="map-container">
           {children}
@@ -493,10 +533,23 @@ export function PlayingHud({
                 <span className="scanner-callsign__text" title={currentPlayerName}>{currentPlayerName}</span>
                 {roleTitle && <span className="scanner-callsign__role-badge">{roleTitle}</span>}
               </div>
+              {myAlliance && (
+                 <div className="scanner-callsign__alliance" role="status" aria-live="polite">
+                   <span 
+                     className="alliance-badge"
+                     style={{ '--badge-bg': myAlliance.color || playerColor || 'rgba(255,255,255,0.1)' } as React.CSSProperties}
+                   >
+                     {myAlliance.name}
+                   </span>
+                   <TeamLegend myAllianceId={myAlliance.id} />
+                 </div>
+              )}
               {hasAmbientCoordinates && (
-                <span className="coord-display">
-                  Q{me.currentHexQ} R{me.currentHexR}
-                </span>
+                <div className="coord-display-wrapper">
+                  <span className="coord-display">
+                    Q{me.currentHexQ} R{me.currentHexR}
+                  </span>
+                </div>
               )}
             </div>
           </div>
@@ -663,6 +716,11 @@ export function PlayingHud({
             <div className="menu-nav__group">
               <button className="btn-secondary menu-nav__btn" onClick={() => setActiveModal('rules')}>
                 <GameIcon name="treasureMap" size="sm" /> <span className="menu-item-label">{t('rules.title')}</span>
+              </button>
+            </div>
+            <div className="menu-nav__group">
+              <button className="btn-secondary menu-nav__btn" onClick={() => { setActiveModal(null); setShowTutorial(true); }}>
+                <GameIcon name="compass" size="sm" /> <span className="menu-item-label">{t('game.tutorial.replay' as never)}</span>
               </button>
             </div>
           </section>
@@ -898,6 +956,13 @@ export function PlayingHud({
           tileSizeMeters={state.tileSizeMeters}
           mainMapBounds={mainMapBounds ?? null}
           onNavigate={onNavigateMap}
+        />
+      )}
+      
+      {showTutorial && (
+        <TutorialOverlay 
+          onComplete={() => setShowTutorial(false)} 
+          forceShow={showTutorial} 
         />
       )}
     </div>

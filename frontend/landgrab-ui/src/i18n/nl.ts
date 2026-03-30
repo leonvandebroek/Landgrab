@@ -207,6 +207,28 @@ const nl = {
     TimedGame: 'Tijdsspel',
   },
   game: {
+    tutorial: {
+      step1Title: 'Dit Ben Jij',
+      step1Desc: 'De marker op de kaart ben jij. Loop rond om te bewegen.',
+      step2Title: 'Verover Gebied',
+      step2Desc: 'Loop naar een grijs veld en tik op Claim om het in te nemen.',
+      step3Title: 'Bouw Je Leger',
+      step3Desc: 'Tik op je eigen veld en pak troepen op. Draag ze mee voor de strijd.',
+      step4Title: 'Aanvallen!',
+      step4Desc: 'Loop met troepen op een vijandelijk veld om ervoor te vechten.',
+      gotIt: 'Begrepen',
+      letsGo: 'Aan de slag!',
+      skip: 'Tutorial overslaan',
+      replay: 'Tutorial opnieuw afspelen',
+    },
+    teamSplash: {
+      title: 'JE SPEELT VOOR TEAM',
+      subtitle: 'Verover het speelveld.',
+    },
+    legend: {
+      yourTeam: 'Jouw team',
+      enemyTeam: 'Vijand',
+    },
     hudLands: 'Gebieden',
     hudTroops: 'Troepen',
     hudPlayers: 'Spelers',
@@ -922,6 +944,7 @@ const nl = {
     waterBlocked: 'Water terrein is onbegaanbaar.',
     insufficientStrength: 'Je hebt meer troepen nodig om de verdedigers te verslaan.',
     noPositionForAction: 'Beweeg eerst naar een hex',
+    actionFailed: 'Actie mislukt: {{reason}}',
   },
   dynamics: {
     presetsLabel: 'Presets',

@@ -227,9 +227,7 @@ public static class HexService
     public static (int q, int r) LatLngToHexForRoom(double lat, double lng, double mapLat,
         double mapLng, int tileSizeMeters)
     {
-        var yMeters = (lat - mapLat) * MetersPerDegreeLat;
-        var cosLat = Math.Cos(mapLat * Math.PI / 180d);
-        var xMeters = (lng - mapLng) * MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d);
+        var (xMeters, yMeters) = LatLngToLocalMeters(lat, lng, mapLat, mapLng);
 
         var q = (2d / 3d * xMeters) / tileSizeMeters;
         var r = (-1d / 3d * xMeters + Math.Sqrt(3d) / 3d * yMeters) / tileSizeMeters;
@@ -239,8 +237,53 @@ public static class HexService
     public static bool IsPlayerInHex(double playerLat, double playerLng, int q, int r,
         double mapLat, double mapLng, int tileSizeMeters)
     {
-        var playerHex = LatLngToHexForRoom(playerLat, playerLng, mapLat, mapLng, tileSizeMeters);
-        return playerHex.q == q && playerHex.r == r;
+        return IsPlayerInHex(playerLat, playerLng, q, r, mapLat, mapLng, tileSizeMeters, 0d);
+    }
+
+    /// <summary>
+    /// Determines whether a player is close enough to the target hex center to allow
+    /// jitter-tolerant realtime interactions when GPS rounding lands them just outside.
+    /// </summary>
+    public static bool IsPlayerNearHex(double playerLat, double playerLng, int q, int r,
+        double mapLat, double mapLng, int tileSizeMeters, double maxDistanceMeters)
+    {
+        if (maxDistanceMeters <= 0d)
+            return false;
+
+        return DistanceToHexCenterMeters(playerLat, playerLng, q, r, mapLat, mapLng, tileSizeMeters) < maxDistanceMeters;
+    }
+
+    /// <summary>
+    /// Determines whether a player is inside the target hex or close enough to its boundary
+    /// to be treated as inside for jitter-tolerant realtime interactions.
+    /// </summary>
+    public static bool IsPlayerInHex(double playerLat, double playerLng, int q, int r,
+        double mapLat, double mapLng, int tileSizeMeters, double toleranceMeters)
+    {
+        var (playerX, playerY) = LatLngToLocalMeters(playerLat, playerLng, mapLat, mapLng);
+        var (hexCenterX, hexCenterY) = HexToLocalMeters(q, r, tileSizeMeters);
+        var relativeX = playerX - hexCenterX;
+        var relativeY = playerY - hexCenterY;
+
+        if (IsPointInsideFlatTopHex(relativeX, relativeY, tileSizeMeters))
+            return true;
+
+        var clampedTolerance = Math.Max(0d, toleranceMeters);
+        if (clampedTolerance <= 0d)
+            return false;
+
+        return DistanceToFlatTopHex(relativeX, relativeY, tileSizeMeters) <= clampedTolerance;
+    }
+
+    /// <summary>
+    /// Calculates the straight-line distance in meters between the player and the target hex center.
+    /// </summary>
+    public static double DistanceToHexCenterMeters(double playerLat, double playerLng, int q, int r,
+        double mapLat, double mapLng, int tileSizeMeters)
+    {
+        var (playerX, playerY) = LatLngToLocalMeters(playerLat, playerLng, mapLat, mapLng);
+        var (hexCenterX, hexCenterY) = HexToLocalMeters(q, r, tileSizeMeters);
+        return Math.Sqrt(Math.Pow(playerX - hexCenterX, 2d) + Math.Pow(playerY - hexCenterY, 2d));
     }
 
     /// <summary>
@@ -312,6 +355,83 @@ public static class HexService
             roundedR = -roundedQ - roundedS;
 
         return ((int)roundedQ, (int)roundedR);
+    }
+
+    private static (double xMeters, double yMeters) LatLngToLocalMeters(
+        double lat,
+        double lng,
+        double mapLat,
+        double mapLng)
+    {
+        var yMeters = (lat - mapLat) * MetersPerDegreeLat;
+        var cosLat = Math.Cos(mapLat * Math.PI / 180d);
+        var xMeters = (lng - mapLng) * MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d);
+        return (xMeters, yMeters);
+    }
+
+    private static (double xMeters, double yMeters) HexToLocalMeters(int q, int r, int tileSizeMeters)
+    {
+        var xMeters = tileSizeMeters * 1.5d * q;
+        var yMeters = tileSizeMeters * Math.Sqrt(3d) * (r + q / 2d);
+        return (xMeters, yMeters);
+    }
+
+    private static bool IsPointInsideFlatTopHex(double xMeters, double yMeters, double hexRadiusMeters)
+    {
+        var absoluteX = Math.Abs(xMeters);
+        var absoluteY = Math.Abs(yMeters);
+        var halfHeight = Sqrt3 * hexRadiusMeters / 2d;
+
+        if (absoluteX > hexRadiusMeters || absoluteY > halfHeight)
+            return false;
+
+        return Sqrt3 * absoluteX + absoluteY <= Sqrt3 * hexRadiusMeters;
+    }
+
+    private static double DistanceToFlatTopHex(double xMeters, double yMeters, double hexRadiusMeters)
+    {
+        var halfHeight = Sqrt3 * hexRadiusMeters / 2d;
+        var vertices = new (double x, double y)[]
+        {
+            (hexRadiusMeters, 0d),
+            (hexRadiusMeters / 2d, halfHeight),
+            (-hexRadiusMeters / 2d, halfHeight),
+            (-hexRadiusMeters, 0d),
+            (-hexRadiusMeters / 2d, -halfHeight),
+            (hexRadiusMeters / 2d, -halfHeight)
+        };
+
+        var minimumDistance = double.PositiveInfinity;
+        for (var index = 0; index < vertices.Length; index++)
+        {
+            var start = vertices[index];
+            var end = vertices[(index + 1) % vertices.Length];
+            var distance = DistanceToSegment(xMeters, yMeters, start.x, start.y, end.x, end.y);
+            minimumDistance = Math.Min(minimumDistance, distance);
+        }
+
+        return minimumDistance;
+    }
+
+    private static double DistanceToSegment(
+        double pointX,
+        double pointY,
+        double startX,
+        double startY,
+        double endX,
+        double endY)
+    {
+        var deltaX = endX - startX;
+        var deltaY = endY - startY;
+        var lengthSquared = deltaX * deltaX + deltaY * deltaY;
+        if (lengthSquared <= 0d)
+            return Math.Sqrt(Math.Pow(pointX - startX, 2d) + Math.Pow(pointY - startY, 2d));
+
+        var projection = ((pointX - startX) * deltaX + (pointY - startY) * deltaY) / lengthSquared;
+        var clampedProjection = Math.Clamp(projection, 0d, 1d);
+        var nearestX = startX + clampedProjection * deltaX;
+        var nearestY = startY + clampedProjection * deltaY;
+        return Math.Sqrt(Math.Pow(pointX - nearestX, 2d) + Math.Pow(pointY - nearestY, 2d));
     }
 
     /// <summary>

@@ -11,6 +11,19 @@ Key patterns:
 - AllianceDto (transient) ≠ Alliance EF entity (persistent)
 
 ## Learnings
+
+- 2026-03-30: Phase 1 backend pickup fix now lives in
+  `backend/Landgrab.Api/Services/HexService.cs`,
+  `backend/Landgrab.Api/Services/GameplayService.cs`, and
+  `backend/Landgrab.Api/Hubs/GameHub.cs`. Realtime hex actions now accept
+  either true in-hex geometry or a tile-scaled near-center fallback
+  (`tileSizeMeters * 0.65`) via `HexService.IsPlayerNearHex`. Troop pickup is
+  explicitly own-hex only and rejects mixed-source carrying with a readable
+  error instead of silent success. `GameHub` already propagated service errors
+  correctly; only `MapErrorCode` needed the new "Move closer to this hex"
+  wording.
+
+- 2026-03-30: Fixed pickup reliability issues from kid playtest in `GameplayService.cs`, `HexService.cs`, and `GameHub.cs`; added 20m GPS tolerance, allied pickup, and specific hub error codes with regression tests.
 - Team hired 2026-03-22 by Léon van de Broek
 - 2026-03-22: Setup wizard location gating can get stuck due to frontend-side race (SetWizardStep(1) sent optimistically before SetMapLocation state update lands). Backend accepted manual coordinates already (lat/lng only), but wizard progression depended on subsequent state timing. Added backend guard in MapAreaService.SetMapLocation: when map location is set while CurrentWizardStep == 0, auto-advance to step 1 in the same authoritative state snapshot. This keeps manual coordinate flow and GPS flow both deterministic without changing SignalR message shape.
 - **2026-03-22 (steen-continued-ux cross-reference):** Wizard fix was validated in 6-player playtest, but downstream gameplay reveals 4 critical/major blockers that require follow-up: null currentHex on game start, no debug movement fallback, false-success action feedback, no in-game location recovery. See .squad/decisions.md items 4–6.

@@ -1,4 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TeamSplash } from './game/TeamSplash';
+import { useTranslation } from 'react-i18next';
+
 import type { MutableRefObject, ReactNode } from 'react';
 import { CombatModal } from './game/CombatModal';
 import { CombatPreviewModal } from './game/CombatPreviewModal';
@@ -101,6 +104,42 @@ export function GameView({
   const error = useUiStore(state => state.error);
   const setMainMapBounds = useUiStore(state => state.setMainMapBounds);
   const setSelectedHexScreenPos = useUiStore(state => state.setSelectedHexScreenPos);
+
+  
+  // ── Team Splash logic ───────────────────────────────────────────────────
+  const [showTeamSplash, setShowTeamSplash] = useState(false);
+  const prevPhaseRef = useRef<string | undefined>(undefined);
+  const splashKey = gameState?.roomCode ? `lg-splash-ack-${gameState.roomCode}` : '';
+  const { t } = useTranslation();
+
+  // Re-evaluate on phase change
+  useEffect(() => {
+    const currentPhase = gameState?.phase;
+    
+    // Only trigger when explicitly transitioning to Playing from a different phase
+    if (
+      currentPhase === 'Playing' &&
+      prevPhaseRef.current &&
+      prevPhaseRef.current !== 'Playing' &&
+      splashKey &&
+      sessionStorage.getItem(splashKey) !== 'true'
+    ) {
+      if (gameState?.alliances && gameState.alliances.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setShowTeamSplash(true);
+      }
+      sessionStorage.setItem(splashKey, 'true');
+    }
+
+    prevPhaseRef.current = currentPhase;
+  }, [gameState?.phase, gameState?.alliances, splashKey]);
+
+  const splshMe = gameState?.players.find(p => p.id === userId);
+  const splshAlliance = gameState?.alliances?.find(a => a.id === splshMe?.allianceId);
+  
+  const handleDismissSplash = useCallback(() => {
+    setShowTeamSplash(false);
+  }, []);
 
   // ── Rules-acknowledgment logic ──────────────────────────────────────────
   // Scoped here because it is exclusively needed by the game view.
@@ -247,6 +286,15 @@ export function GameView({
             isModal
           />
         </div>
+      )}
+
+      {showTeamSplash && splshAlliance && (
+        <TeamSplash
+          allianceName={splshAlliance.name}
+          allianceColor={splshAlliance.color}
+          roleName={splshMe?.role && splshMe.role !== 'None' && gameState?.dynamics?.playerRolesEnabled ? t(`roles.${splshMe.role}.title` as never, { defaultValue: t(`phase4.role${splshMe.role}` as never) }) : undefined}
+          onDismiss={handleDismissSplash}
+        />
       )}
     </>
   );
