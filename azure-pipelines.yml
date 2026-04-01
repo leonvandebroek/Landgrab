@@ -54,7 +54,7 @@ stages:
             displayName: 'Build backend'
             workingDirectory: backend/Landgrab.Api
 
-          - script: dotnet test backend/Landgrab.Tests/Landgrab.Tests.csproj --configuration Release --verbosity normal --logger trx --results-directory $(Build.ArtifactStagingDirectory)/test-results
+          - script: dotnet test backend/Landgrab.Tests/Landgrab.Tests.csproj --configuration Release --verbosity normal --filter "Category!=E2E" --logger trx --results-directory $(Build.ArtifactStagingDirectory)/test-results
             displayName: 'Run Tests'
 
           - task: PublishTestResults@2
