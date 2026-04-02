@@ -11,6 +11,13 @@ Key patterns:
 
 ## Learnings
 
+- **2026-04-02 (vermeer-compass-stability):** Hardened compass-mode stability during prolonged movement by combining input damping and render-loop throttling.
+  - **Heading damping (`useCompassHeading.ts`):** Added quantized heading publish (`1°` step) + deadband (`1.2°`) before calling `setHeading`, with sync cadence at `50ms` (20Hz). Raw sensor smoothing remains angular-aware EMA; state updates now ignore tiny micro-jitter.
+  - **Bearing target damping (`GameMap.tsx`):** Added target quantization + deadband before mutating `targetBearingRef`, so tiny heading deltas no longer restart the lerp loop.
+  - **Rotation loop cap + clean termination:** Capped bearing updates to `30fps` max (`COMPASS_FRAME_MIN_INTERVAL_MS`) and retained convergence-based self-termination. Loop restarts only when target bearing changes meaningfully.
+  - **Recenter churn reduction:** Compass follow recenter now rate-limited (`>=120ms`) and gated by bearing delta (`>=2°`) or location-key change. This keeps player-follow pivot behavior while eliminating per-frame `setView` churn.
+  - **Pattern:** For rotation-heavy map UX, treat the pipeline as two filters: (1) sensor/state deadband at publish boundary; (2) animation-time deadband + fps cap at rendering boundary.
+
 - **2026-07-xx (vermeer-perf-sprint):** Performance sprint — two OPTs reviewed.
   - **OPT-06 (skipped):** `normalizeGameState` in `gameHelpers.ts` already performs `visibilityTier` defaulting and grid normalization in a single `Object.entries().map()` pass. The described double-pass does not exist; no change needed.
   - **OPT-08 (implemented):** Added `const visibleEvents = sortedEvents.slice(0, 200)` in `GameEventLog.tsx` and swapped render loop to use `visibleEvents`. Count badge still shows total `sortedEvents.length`. `sortedEvents` is sorted newest-first (descending), so `slice(0, 200)` retains the 200 most recent entries. Prevents unbounded DOM growth in long games.

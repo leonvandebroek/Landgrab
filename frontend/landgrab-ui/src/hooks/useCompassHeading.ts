@@ -18,7 +18,9 @@ export interface CompassHeadingState {
   requestPermission: () => Promise<void>;
 }
 
-const HEADING_SYNC_INTERVAL_MS = 60;
+const HEADING_SYNC_INTERVAL_MS = 50;
+const HEADING_DEADBAND_DEGREES = 1.2;
+const HEADING_QUANTIZATION_DEGREES = 1;
 
 /** Angular-aware EMA that handles 0/360° wraparound correctly. */
 function smoothAngle(prev: number, raw: number, alpha: number): number {
@@ -26,6 +28,23 @@ function smoothAngle(prev: number, raw: number, alpha: number): number {
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
   return ((prev + alpha * diff) % 360 + 360) % 360;
+}
+
+function angularDistance(a: number, b: number): number {
+  let diff = Math.abs(a - b) % 360;
+  if (diff > 180) {
+    diff = 360 - diff;
+  }
+  return diff;
+}
+
+function quantizeHeading(heading: number, step: number): number {
+  if (step <= 0) {
+    return ((heading % 360) + 360) % 360;
+  }
+
+  const normalized = ((heading % 360) + 360) % 360;
+  return (Math.round(normalized / step) * step) % 360;
 }
 
 function getInitialCompassState(): {
@@ -56,6 +75,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
   );
 
   const headingRef = useRef<number | null>(null);
+  const publishedHeadingRef = useRef<number | null>(null);
   const lastSyncRef = useRef<number>(0);
   const rafIdRef = useRef<number>(0);
 
@@ -109,7 +129,27 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         const now = performance.now();
         if (now - lastSyncRef.current >= HEADING_SYNC_INTERVAL_MS) {
           lastSyncRef.current = now;
-          setHeading(headingRef.current);
+          const nextHeading = headingRef.current;
+          if (nextHeading === null) {
+            if (publishedHeadingRef.current !== null) {
+              publishedHeadingRef.current = null;
+              setHeading(null);
+            }
+            return;
+          }
+
+          const quantizedHeading = quantizeHeading(nextHeading, HEADING_QUANTIZATION_DEGREES);
+          const previousHeading = publishedHeadingRef.current;
+
+          if (
+            previousHeading !== null
+            && angularDistance(previousHeading, quantizedHeading) < HEADING_DEADBAND_DEGREES
+          ) {
+            return;
+          }
+
+          publishedHeadingRef.current = quantizedHeading;
+          setHeading(quantizedHeading);
         } else {
           scheduleStateSync();
         }
@@ -182,6 +222,7 @@ export function useCompassHeading(enabled: boolean): CompassHeadingState {
         window.cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = 0;
       }
+      publishedHeadingRef.current = null;
     };
   }, [enabled, permissionState, supported]);
 

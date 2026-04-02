@@ -51,6 +51,14 @@ const PLAYER_LAYER_PANE = 'game-map-player-pane';
 const RADAR_LAYER_PANE = 'game-map-radar-pane';
 const MAP_BOUNDARY_PADDING_METERS = 500;
 const MAP_LOOK_PRESETS: MapLookPreset[] = ['nightVision', 'military', 'blackWhite', 'normal'];
+const COMPASS_TARGET_DEADBAND_DEGREES = 1.2;
+const COMPASS_TARGET_QUANTIZATION_DEGREES = 1;
+const COMPASS_SETTLE_EPSILON_DEGREES = 0.3;
+const COMPASS_LERP_FACTOR = 0.25;
+const COMPASS_MAX_FPS = 30;
+const COMPASS_FRAME_MIN_INTERVAL_MS = 1000 / COMPASS_MAX_FPS;
+const COMPASS_RECENTER_MIN_INTERVAL_MS = 120;
+const COMPASS_RECENTER_MIN_BEARING_DELTA_DEGREES = 2;
 
 function formatDebugCoordinate(value: number | null | undefined): string {
   return Number.isFinite(value ?? Number.NaN) ? Number(value).toFixed(6) : '—';
@@ -98,6 +106,28 @@ function padBoundsByMeters(bounds: L.LatLngBounds, meters: number): L.LatLngBoun
     [bounds.getSouth() - latPadding, bounds.getWest() - lngPadding],
     [bounds.getNorth() + latPadding, bounds.getEast() + lngPadding],
   );
+}
+
+function normalizeAngle(angle: number): number {
+  return ((angle % 360) + 360) % 360;
+}
+
+function shortestAngleDiff(target: number, current: number): number {
+  let diff = target - current;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return diff;
+}
+
+function angularDistance(a: number, b: number): number {
+  return Math.abs(shortestAngleDiff(a, b));
+}
+
+function quantizeAngle(angle: number, step: number): number {
+  if (step <= 0) {
+    return normalizeAngle(angle);
+  }
+  return normalizeAngle(Math.round(normalizeAngle(angle) / step) * step);
 }
 
 export const GameMap = memo(function GameMap({
@@ -835,9 +865,14 @@ export const GameMap = memo(function GameMap({
   const targetBearingRef = useRef<number>(0);
   const currentBearingRef = useRef<number>(0);
   const bearingRafRef = useRef<number>(0);
+  const lastBearingFrameMsRef = useRef<number>(0);
+  const lastAppliedBearingRef = useRef<number>(0);
+  const lastCompassRecenterMsRef = useRef<number>(0);
+  const lastCompassRecenterBearingRef = useRef<number>(0);
+  const lastCompassRecenterLocationRef = useRef<string>('');
   // Expose lerpBearing so the heading-sync effect can restart the loop
   // after it exits on convergence, without creating a circular dependency.
-  const lerpBearingRef = useRef<(() => void) | null>(null);
+  const lerpBearingRef = useRef<FrameRequestCallback | null>(null);
 
   // Keep isFollowingMeRef in sync so the bearing lerp loop can read it
   // without capturing stale closure state.
@@ -848,12 +883,21 @@ export const GameMap = memo(function GameMap({
   // Sync target bearing from heading state into ref (must be in an effect, not render).
   // Also restarts the lerp loop if it has already exited on convergence.
   useEffect(() => {
-    if (effectiveHeading !== null && isCompassRotationEnabled) {
-      targetBearingRef.current = (360 - effectiveHeading) % 360;
-      // Kick off a new lerp frame when the loop is idle (exited after converging).
-      if (bearingRafRef.current === 0 && lerpBearingRef.current) {
-        bearingRafRef.current = requestAnimationFrame(lerpBearingRef.current);
-      }
+    if (effectiveHeading === null || !isCompassRotationEnabled) {
+      return;
+    }
+
+    const nextTarget = quantizeAngle(360 - effectiveHeading, COMPASS_TARGET_QUANTIZATION_DEGREES);
+    const previousTarget = targetBearingRef.current;
+
+    if (angularDistance(nextTarget, previousTarget) < COMPASS_TARGET_DEADBAND_DEGREES) {
+      return;
+    }
+
+    targetBearingRef.current = nextTarget;
+    // Kick off a new lerp frame when the loop is idle (exited after converging).
+    if (bearingRafRef.current === 0 && lerpBearingRef.current) {
+      bearingRafRef.current = requestAnimationFrame(lerpBearingRef.current);
     }
   }, [effectiveHeading, isCompassRotationEnabled]);
 
@@ -868,6 +912,11 @@ export const GameMap = memo(function GameMap({
         bearingRafRef.current = 0;
       }
       targetBearingRef.current = 0;
+      lastBearingFrameMsRef.current = 0;
+      lastAppliedBearingRef.current = 0;
+      lastCompassRecenterMsRef.current = 0;
+      lastCompassRecenterBearingRef.current = 0;
+      lastCompassRecenterLocationRef.current = '';
       // eslint-disable-next-line react-hooks/immutability -- intentionally reset bearing ref when compass disabled
       currentBearingRef.current = 0;
       map?.setBearing(0);
@@ -890,47 +939,72 @@ export const GameMap = memo(function GameMap({
       if (!isFollowingMeRef.current) return;
       const loc = currentLocationRef.current;
       if (!loc) return;
+
+      const now = performance.now();
+      const locationKey = `${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
+      const locationChanged = locationKey !== lastCompassRecenterLocationRef.current;
+      const bearingChangedEnough = angularDistance(bearing, lastCompassRecenterBearingRef.current) >= COMPASS_RECENTER_MIN_BEARING_DELTA_DEGREES;
+      const intervalElapsed = (now - lastCompassRecenterMsRef.current) >= COMPASS_RECENTER_MIN_INTERVAL_MS;
+
+      if (!locationChanged && (!bearingChangedEnough || !intervalElapsed)) {
+        return;
+      }
+
       // Calling setView (animate:false) inside the same RAF tick means Leaflet
       // batches the centre + bearing change into one paint — no visible jitter.
       panToOffsetLocationRef.current(loc.lat, loc.lng, undefined, false, bearing);
+      lastCompassRecenterMsRef.current = now;
+      lastCompassRecenterLocationRef.current = locationKey;
+      lastCompassRecenterBearingRef.current = bearing;
     };
 
     // Start lerp loop — exits on convergence; restarted by the effectiveHeading effect
-    const lerpBearing = () => {
+    const lerpBearing = (timestamp: number) => {
+      if (timestamp - lastBearingFrameMsRef.current < COMPASS_FRAME_MIN_INTERVAL_MS) {
+        bearingRafRef.current = requestAnimationFrame(lerpBearing);
+        return;
+      }
+      lastBearingFrameMsRef.current = timestamp;
+
       const target = targetBearingRef.current;
       let current = currentBearingRef.current;
-
-      // Compute shortest-path angular difference
-      let diff = target - current;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
+      const diff = shortestAngleDiff(target, current);
 
       // Lerp toward target (0.25 factor per frame ≈ smooth convergence)
-      if (Math.abs(diff) < 0.3) {
+      if (Math.abs(diff) < COMPASS_SETTLE_EPSILON_DEGREES) {
         // Converged — snap exactly, apply final update, then STOP the loop.
         // The effectiveHeading effect will restart it when heading changes.
-        current = ((target % 360) + 360) % 360;
+        current = normalizeAngle(target);
         currentBearingRef.current = current;
-        map?.setBearing(current);
-        if (container) {
-          container.style.setProperty('--map-bearing', `${current}deg`);
+
+        if (angularDistance(current, lastAppliedBearingRef.current) >= 0.05) {
+          map?.setBearing(current);
+          if (container) {
+            container.style.setProperty('--map-bearing', `${current}deg`);
+          }
+          lastAppliedBearingRef.current = current;
         }
+
         // Re-centre AFTER setBearing so the pivot is the player, not offsetLatLng.
         recenterOnPlayer(current);
         bearingRafRef.current = 0;
         return;
       }
 
-      current = current + diff * 0.25;
+      current = current + diff * COMPASS_LERP_FACTOR;
 
       // Normalize to 0-360
-      current = ((current % 360) + 360) % 360;
+      current = normalizeAngle(current);
       currentBearingRef.current = current;
 
-      map?.setBearing(current);
-      if (container) {
-        container.style.setProperty('--map-bearing', `${current}deg`);
+      if (angularDistance(current, lastAppliedBearingRef.current) >= 0.05) {
+        map?.setBearing(current);
+        if (container) {
+          container.style.setProperty('--map-bearing', `${current}deg`);
+        }
+        lastAppliedBearingRef.current = current;
       }
+
       // Re-centre AFTER setBearing so the pivot is the player, not offsetLatLng.
       recenterOnPlayer(current);
 
