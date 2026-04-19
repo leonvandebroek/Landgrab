@@ -248,7 +248,8 @@ public class GameplayService(
             if (cell.IsMasterTile)
                 return (null, "The master tile cannot be used for troop pick-up.");
 
-            if (cell.OwnerId != userId)
+            var isSameAlliance = player.AllianceId is not null && cell.OwnerAllianceId == player.AllianceId;
+            if (cell.OwnerId != userId && !isSameAlliance)
                 return (null, PickUpOwnHexesOnlyError);
 
             var carryingFromDifferentHex = player.CarriedTroops > 0

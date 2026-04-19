@@ -26,8 +26,8 @@ public sealed class HostControlServiceTests
         context.State.HostObserverMode.Should().BeTrue();
         result.state!.HostObserverMode.Should().BeTrue();
         var entry = context.State.EventLog.Should().ContainSingle().Which;
-        entry.Type.Should().Be("HostAction");
-        entry.Message.Should().Be("Host entered observer mode.");
+        entry.Type.Should().Be("HostObserverModeEnabled");
+        entry.Message.Should().BeEmpty();
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class HostControlServiceTests
         result.error.Should().BeNull();
         result.state.Should().NotBeNull();
         context.State.HostObserverMode.Should().BeTrue();
-        context.State.EventLog.Should().ContainSingle(entry => entry.Message == "Host entered observer mode.");
+        context.State.EventLog.Should().ContainSingle(entry => entry.Type == "HostObserverModeEnabled");
     }
 
     [Fact]
@@ -96,8 +96,7 @@ public sealed class HostControlServiceTests
         context.State.Dynamics.HQEnabled.Should().BeTrue();
         context.State.Dynamics.HQAutoAssign.Should().BeTrue();
         context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "HostAction" &&
-            entry.Message == "Host updated game dynamics.");
+            entry.Type == "HostDynamicsUpdated");
     }
 
     [Fact]
@@ -278,8 +277,7 @@ public sealed class HostControlServiceTests
         context.State.IsPaused.Should().BeTrue();
         result.state!.IsPaused.Should().BeTrue();
         context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "HostAction" &&
-            entry.Message == "Host paused the game.");
+            entry.Type == "GamePaused");
     }
 
     [Fact]
@@ -301,8 +299,7 @@ public sealed class HostControlServiceTests
         context.State.IsPaused.Should().BeFalse();
         result.state!.IsPaused.Should().BeFalse();
         context.State.EventLog.Should().ContainSingle(entry =>
-            entry.Type == "HostAction" &&
-            entry.Message == "Host resumed the game.");
+            entry.Type == "GameResumed");
     }
 
     [Fact]

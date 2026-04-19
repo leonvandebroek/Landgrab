@@ -174,12 +174,39 @@ export function formatGameLogEntry(
       });
     case 'DemolishCancelled':
       return t('gameLog.events.DemolishCancelled', { playerName });
+    case 'GameStarted':
+      return t('gameLog.events.GameStarted');
+    case 'GamePaused':
+      return t('gameLog.events.GamePaused');
+    case 'GameResumed':
+      return t('gameLog.events.GameResumed');
+    case 'HostObserverModeEnabled':
+      return t('gameLog.events.HostSwitchedToObserver');
+    case 'HostObserverModeDisabled':
+      return t('gameLog.events.HostReturnedToPlay');
+    case 'HostDynamicsUpdated':
+      return t('gameLog.events.HostDynamicsUpdated');
+    case 'RandomEventCalamity':
+      return t('gameLog.events.RandomEventCalamity', {
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'RandomEventEpidemic':
+      return t('gameLog.events.RandomEventEpidemic', {
+        allianceName: event.allianceName || t('gameLog.unknownAlliance'),
+        q: event.q ?? '?',
+        r: event.r ?? '?'
+      });
+    case 'RandomEventBonusTroopsSingle':
+      return t('gameLog.events.RandomEventBonusTroopsSingle', {
+        allianceName: event.allianceName || t('gameLog.unknownAlliance')
+      });
+    case 'RandomEventBonusTroopsAll':
+      return t('gameLog.events.RandomEventBonusTroopsAll');
     case 'HostAction':
     case 'RandomEvent':
     case 'HostMessage':
       return event.message || t('gameLog.events.Unknown');
-    
-      return t('gameLog.events.GameStarted');
     case 'GameOver':
       if (winnerName) {
         return event.isAllianceVictory

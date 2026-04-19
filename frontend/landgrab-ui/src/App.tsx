@@ -164,7 +164,9 @@ export default function App() {
   });
 
   // ── Location ─────────────────────────────────────────────────────────────
-  const usingDebugLocation = DEBUG_GPS_AVAILABLE && debugLocationEnabled && debugLocation !== null;
+  // Allow arrow-key position override in production when GPS is denied (fallback path per Decision #7).
+  // In dev mode, the full debug GPS panel is available; in production, only GPS-denied players can use it.
+  const usingDebugLocation = (DEBUG_GPS_AVAILABLE || !!location.error) && debugLocationEnabled && debugLocation !== null;
 
   const currentLocation = useMemo<LocationPoint | null>(() => {
     if (usingDebugLocation) return debugLocation;

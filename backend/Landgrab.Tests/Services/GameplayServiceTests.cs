@@ -54,7 +54,7 @@ public sealed class GameplayServiceTests
     }
 
     [Fact]
-    public void PickUpTroops_FromAlliedHex_Fails()
+    public void PickUpTroops_FromAlliedHex_Succeeds()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -70,10 +70,10 @@ public sealed class GameplayServiceTests
 
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 2, lat, lng);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be("You can only pick up troops from your own hexes.");
-        context.Cell(0, 0).Troops.Should().Be(5);
-        context.Player("p1").CarriedTroops.Should().Be(0);
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.Cell(0, 0).Troops.Should().Be(3);
+        context.Player("p1").CarriedTroops.Should().Be(2);
     }
 
     [Fact]
@@ -1033,6 +1033,52 @@ public sealed class GameplayServiceTests
         var lat = mapLat + yMeters / MetersPerDegreeLat;
         var lng = mapLng + xMeters / (MetersPerDegreeLat * Math.Max(Math.Abs(cosLat), 1e-9d));
         return (lat, lng);
+    }
+
+    [Fact]
+    public void UpdatePlayerLocation_SecondEnemy_ArrivesAtActiveBattleHex_StateHasJoinableBattle()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithCarriedTroops("p1", 3)
+            .WithCarriedTroops("p2", 2)
+            .Build();
+
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 3,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(30),
+        });
+
+        var context = new ServiceTestContext(state);
+        var (lat, lng) = ServiceTestContext.HexCenter(0, 0);
+
+        var result = context.GameplayService.UpdatePlayerLocation(ServiceTestContext.RoomCode, "p2", lat, lng, null);
+
+        result.error.Should().BeNull();
+        result.playerHexChanged.Should().BeTrue();
+
+        var battle = result.state!.ActiveFieldBattles.FirstOrDefault(b => b.Id == battleId);
+        battle.Should().NotBeNull();
+        battle!.Resolved.Should().BeFalse();
+        battle.JoinDeadline.Should().BeAfter(DateTime.UtcNow);
+        battle.InitiatorId.Should().NotBe("p2");
+        battle.JoinedEnemyIds.Should().NotContain("p2");
+        battle.FledEnemyIds.Should().NotContain("p2");
+
+        result.state!.Players.First(p => p.Id == "p2").CarriedTroops.Should().Be(2);
     }
 
 }

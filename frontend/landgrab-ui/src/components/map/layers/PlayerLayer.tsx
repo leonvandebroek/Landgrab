@@ -461,10 +461,13 @@ function PlayerLayerComponent({ map, layerPreferences }: PlayerLayerProps) {
           <g
             key={projectedPlayer.player.id ?? projectedPlayer.player.name}
             className={`player-marker-reticle tricorder-chevron-marker ${projectedPlayer.isCurrentUser ? 'tricorder-chevron-marker--me' : ''}`}
-            transform={`translate(${markerX + dx}, ${markerY + dy})`}
+            transform={projectedPlayer.isCurrentUser ? undefined : `translate(${markerX + dx}, ${markerY + dy})`}
             pointerEvents="none"
             opacity={projectedPlayer.isStale ? 0.4 : 1.0}
-            style={projectedPlayer.isStale ? { filter: 'saturate(0.3)' } : undefined}
+            style={{
+              transform: projectedPlayer.isCurrentUser ? `translate(${markerX + dx}px, ${markerY + dy}px)` : undefined,
+              ...(projectedPlayer.isStale ? { filter: 'saturate(0.3)' } : {}),
+            }}
           >
             <polygon
               points={computeHexPoints(0, 0, 12)}

@@ -215,6 +215,27 @@ input:focus {
   margin: 0.5rem 0;
 }
 
+.gps-denied-callout {
+  background: rgba(230, 176, 50, 0.12);
+  border-left: 3px solid #e6b032;
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.gps-denied-callout__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e6b032;
+  margin: 0 0 0.2rem;
+}
+
+.gps-denied-callout__body {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 0.15rem 0 0;
+}
+
 /* ── Auth page ──────────────────────────────────────────────────────────── */
 .auth-page {
   display: flex;

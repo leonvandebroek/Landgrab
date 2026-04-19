@@ -232,7 +232,13 @@ export function PlayerPanel({
         </button>
       </div>
 
-      {locationError && <p className="error-msg">{locationError}</p>}
+      {locationError && (
+        <div className="gps-denied-callout">
+          <p className="gps-denied-callout__title">{t('game.gpsDenied.title')}</p>
+          <p className="gps-denied-callout__body">{t('game.gpsDenied.arrowHint')}</p>
+          <p className="gps-denied-callout__body">{t('game.gpsDenied.reloadHint')}</p>
+        </div>
+      )}
       {error && <p className="error-msg">{error}</p>}
 
       <GameEventLog events={state.eventLog} players={state.players} />

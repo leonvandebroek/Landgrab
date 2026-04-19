@@ -22,8 +22,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
-                Type = "HostAction",
-                Message = enabled ? "Host entered observer mode." : "Host returned to player mode."
+                Type = enabled ? "HostObserverModeEnabled" : "HostObserverModeDisabled"
             });
 
             var snapshot = SnapshotState(room.State);
@@ -58,8 +57,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
-                Type = "HostAction",
-                Message = "Host updated game dynamics."
+                Type = "HostDynamicsUpdated"
             });
 
             var snapshot = SnapshotState(room.State);
@@ -103,8 +101,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                             target.Troops = 0;
                             AppendEventLog(room.State, new GameEventLogEntry
                             {
-                                Type = "RandomEvent",
-                                Message = $"Calamity! Hex ({target.Q}, {target.R}) lost all troops.",
+                                Type = "RandomEventCalamity",
                                 Q = target.Q,
                                 R = target.R
                             });
@@ -129,8 +126,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                                 target.Troops = Math.Max(0, target.Troops - 2);
                                 AppendEventLog(room.State, new GameEventLogEntry
                                 {
-                                    Type = "RandomEvent",
-                                    Message = $"Epidemic! {targetAlliance.Name} lost 2 troops at ({target.Q}, {target.R}).",
+                                    Type = "RandomEventEpidemic",
                                     AllianceId = targetAlliance.Id,
                                     AllianceName = targetAlliance.Name,
                                     Q = target.Q,
@@ -155,13 +151,14 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
                                 hex.Troops += 2;
                         }
 
-                        var msg = targetAllianceId is not null && targetAlliances.Count > 0
-                            ? $"Bonus Troops! {targetAlliances[0].Name} received +2 troops."
-                            : "Bonus Troops! Every team received +2 troops.";
+                        var bonusType = targetAllianceId is not null && targetAlliances.Count > 0
+                            ? "RandomEventBonusTroopsSingle"
+                            : "RandomEventBonusTroopsAll";
+                        var bonusAllianceName = targetAlliances.Count > 0 ? targetAlliances[0].Name : null;
                         AppendEventLog(room.State, new GameEventLogEntry
                         {
-                            Type = "RandomEvent",
-                            Message = msg
+                            Type = bonusType,
+                            AllianceName = bonusAllianceName
                         });
                         break;
                     }
@@ -228,8 +225,7 @@ public class HostControlService(IGameRoomProvider roomProvider, GameStateService
 
             AppendEventLog(room.State, new GameEventLogEntry
             {
-                Type = "HostAction",
-                Message = paused ? "Host paused the game." : "Host resumed the game."
+                Type = paused ? "GamePaused" : "GameResumed"
             });
 
             var snapshot = SnapshotState(room.State);

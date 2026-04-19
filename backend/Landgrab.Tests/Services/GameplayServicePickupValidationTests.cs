@@ -32,7 +32,7 @@ public sealed class GameplayServicePickupValidationTests
     }
 
     [Fact]
-    public void PickUpTroops_FromAlliedHex_ReturnsOwnHexOnlyError()
+    public void PickUpTroops_FromAlliedHex_Succeeds()
     {
         var state = ServiceTestContext.CreateBuilder()
             .WithGrid(2)
@@ -48,10 +48,10 @@ public sealed class GameplayServicePickupValidationTests
 
         var result = context.GameplayService.PickUpTroops(ServiceTestContext.RoomCode, "p1", 0, 0, 2, lat, lng);
 
-        result.state.Should().BeNull();
-        result.error.Should().Be(PickUpOwnHexesOnlyError);
-        context.Cell(0, 0).Troops.Should().Be(5);
-        context.Player("p1").CarriedTroops.Should().Be(0);
+        result.error.Should().BeNull();
+        result.state.Should().NotBeNull();
+        context.Cell(0, 0).Troops.Should().Be(3);
+        context.Player("p1").CarriedTroops.Should().Be(2);
     }
 
     [Fact]

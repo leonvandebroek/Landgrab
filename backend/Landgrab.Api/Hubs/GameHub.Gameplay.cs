@@ -450,6 +450,39 @@ public partial class GameHub
             }
         }
 
+        // Send FieldBattleInvite to this player if they just stepped onto an active battle hex as an eligible enemy.
+        if (playerHexChanged && state != null)
+        {
+            var movedPlayer = state.Players.FirstOrDefault(p => p.Id == UserId);
+            if (movedPlayer?.CurrentHexQ.HasValue == true && movedPlayer.CurrentHexR.HasValue && movedPlayer.CarriedTroops > 0)
+            {
+                var joinableBattle = state.ActiveFieldBattles.FirstOrDefault(b =>
+                    !b.Resolved &&
+                    b.Q == movedPlayer.CurrentHexQ &&
+                    b.R == movedPlayer.CurrentHexR &&
+                    b.JoinDeadline > DateTime.UtcNow &&
+                    b.InitiatorId != UserId &&
+                    !string.Equals(b.InitiatorAllianceId, movedPlayer.AllianceId, StringComparison.Ordinal) &&
+                    !b.JoinedEnemyIds.Contains(UserId, StringComparer.Ordinal) &&
+                    !b.FledEnemyIds.Contains(UserId, StringComparer.Ordinal));
+
+                if (joinableBattle is not null)
+                {
+                    var allianceName = state.Alliances
+                        .FirstOrDefault(a => a.Id == joinableBattle.InitiatorAllianceId)?.Name ?? "";
+                    await Clients.User(UserId).SendAsync("FieldBattleInvite", new
+                    {
+                        battleId = joinableBattle.Id.ToString(),
+                        initiatorName = joinableBattle.InitiatorName,
+                        initiatorAllianceName = allianceName,
+                        q = joinableBattle.Q,
+                        r = joinableBattle.R,
+                        joinDeadline = joinableBattle.JoinDeadline.ToString("O")
+                    });
+                }
+            }
+        }
+
         // Broadcast full state when the authoritative grid changes OR when mover crosses hex boundaries.
         if (gridChanged || playerHexChanged)
         {
