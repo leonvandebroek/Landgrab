@@ -1684,4 +1684,538 @@ public sealed class AbilityServiceTests
         context.Player("p1").InterceptLockStartAt.Should().BeNull();
     }
 
+    // ── ResolveTacticalStrikeTarget: multi-direction bearing tests ──
+
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(1, -1)]
+    [InlineData(0, -1)]
+    [InlineData(-1, 0)]
+    [InlineData(-1, 1)]
+    [InlineData(0, 1)]
+    public void ResolveTacticalStrikeTarget_AllSixDirections_ResolvesCorrectNeighbor(int targetQ, int targetR)
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (currentLat, currentLng) = ServiceTestContext.HexCenter(0, 0);
+        var (targetLat, targetLng) = ServiceTestContext.HexCenter(targetQ, targetR);
+        var heading = HexService.BearingDegrees(currentLat, currentLng, targetLat, targetLng);
+
+        var result = context.AbilityService.ResolveTacticalStrikeTarget(ServiceTestContext.RoomCode, "p1", heading);
+
+        result.error.Should().BeNull();
+        result.target.Should().Be((targetQ, targetR));
+    }
+
+    [Fact]
+    public void ResolveTacticalStrikeTarget_WhenHeadingDoesNotMatchAnyNeighbor_ReturnsNull()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(1)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (currentLat, currentLng) = ServiceTestContext.HexCenter(1, 0);
+        var (missingLat, missingLng) = ServiceTestContext.HexCenter(2, 0);
+        var heading = HexService.BearingDegrees(currentLat, currentLng, missingLat, missingLng);
+
+        var result = context.AbilityService.ResolveTacticalStrikeTarget(ServiceTestContext.RoomCode, "p1", heading);
+
+        result.error.Should().BeNull();
+        result.target.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveTacticalStrikeTarget_WhenHeadingBetweenTwoNeighbors_PicksClosest()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (currentLat, currentLng) = ServiceTestContext.HexCenter(0, 0);
+        var (lat1, lng1) = ServiceTestContext.HexCenter(1, 0);
+        var (lat2, lng2) = ServiceTestContext.HexCenter(0, 1);
+        var bearing1 = HexService.BearingDegrees(currentLat, currentLng, lat1, lng1);
+        var bearing2 = HexService.BearingDegrees(currentLat, currentLng, lat2, lng2);
+        var midHeading = HexService.NormalizeHeading((bearing1 + bearing2) / 2);
+
+        var result = context.AbilityService.ResolveTacticalStrikeTarget(ServiceTestContext.RoomCode, "p1", midHeading);
+
+        result.error.Should().BeNull();
+        result.target.Should().NotBeNull();
+        var resolved = result.target!.Value;
+        var isOneOfExpected = (resolved == (1, 0)) || (resolved == (0, 1));
+        isOneOfExpected.Should().BeTrue("the midpoint heading should resolve to one of the two adjacent hexes");
+    }
+
+    // ── ResolveTroopTransferTarget: bearing-based ally targeting ──
+
+    [Fact]
+    public void ResolveTroopTransferTarget_WhenPointingAtAlly_ReturnsAlly()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (p1Lat, p1Lng) = ServiceTestContext.HexCenter(0, 0);
+        var (p2Lat, p2Lng) = ServiceTestContext.HexCenter(1, 0);
+        var heading = HexService.BearingDegrees(p1Lat, p1Lng, p2Lat, p2Lng);
+
+        var result = context.AbilityService.ResolveTroopTransferTarget(ServiceTestContext.RoomCode, "p1", heading);
+
+        result.error.Should().BeNull();
+        result.target.Should().NotBeNull();
+        result.target!.Value.id.Should().Be("p2");
+        result.target!.Value.name.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void ResolveTroopTransferTarget_WhenHeadingBeyond45Degrees_ReturnsNull()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (p1Lat, p1Lng) = ServiceTestContext.HexCenter(0, 0);
+        var (p2Lat, p2Lng) = ServiceTestContext.HexCenter(1, 0);
+        var correctHeading = HexService.BearingDegrees(p1Lat, p1Lng, p2Lat, p2Lng);
+        var wrongHeading = HexService.NormalizeHeading(correctHeading + 90);
+
+        var result = context.AbilityService.ResolveTroopTransferTarget(ServiceTestContext.RoomCode, "p1", wrongHeading);
+
+        result.error.Should().BeNull();
+        result.target.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveTroopTransferTarget_WhenMultipleAlliesInCone_PicksClosest()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddPlayer("p3", "Carol", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2", "p3")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .WithPlayerPosition("p3", 2, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (p1Lat, p1Lng) = ServiceTestContext.HexCenter(0, 0);
+        var (p2Lat, p2Lng) = ServiceTestContext.HexCenter(1, 0);
+        var heading = HexService.BearingDegrees(p1Lat, p1Lng, p2Lat, p2Lng);
+
+        var result = context.AbilityService.ResolveTroopTransferTarget(ServiceTestContext.RoomCode, "p1", heading);
+
+        result.error.Should().BeNull();
+        result.target.Should().NotBeNull();
+        result.target!.Value.id.Should().Be("p2", "p2 is closer than p3");
+    }
+
+    [Fact]
+    public void ResolveTroopTransferTarget_WhenPointingAtEnemy_ReturnsNull()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+        var (p1Lat, p1Lng) = ServiceTestContext.HexCenter(0, 0);
+        var (p2Lat, p2Lng) = ServiceTestContext.HexCenter(1, 0);
+        var heading = HexService.BearingDegrees(p1Lat, p1Lng, p2Lat, p2Lng);
+
+        var result = context.AbilityService.ResolveTroopTransferTarget(ServiceTestContext.RoomCode, "p1", heading);
+
+        result.error.Should().BeNull();
+        result.target.Should().BeNull();
+    }
+
+    // ── AttemptIntercept: additional coverage ──
+
+    [Fact]
+    public void AttemptIntercept_WhenNoEngineerSabotaging_ReturnsNoTarget()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", allianceId: "a2", role: PlayerRole.Engineer)
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", 0d);
+
+        result.error.Should().BeNull();
+        result.result!.Status.Should().Be("noTarget");
+    }
+
+    [Fact]
+    public void AttemptIntercept_WhenScoutStopsFacingEngineer_ReturnsBroken()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", allianceId: "a2", role: PlayerRole.Engineer)
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .Build();
+        var scout = state.Players.Single(p => p.Id == "p1");
+        var engineer = state.Players.Single(p => p.Id == "p2");
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        scout.InterceptTargetId = "p2";
+        scout.InterceptLockStartAt = DateTime.UtcNow.AddSeconds(-2);
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", 180d);
+
+        result.error.Should().BeNull();
+        result.result!.Status.Should().Be("broken");
+        scout.InterceptLockStartAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void AttemptIntercept_WhenEngineerFacesScout_ReturnsBroken()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Scout)
+            .AddPlayer("p2", "Bob", allianceId: "a2", role: PlayerRole.Engineer)
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var scout = state.Players.Single(p => p.Id == "p1");
+        var engineer = state.Players.Single(p => p.Id == "p2");
+        var (p1Lat, p1Lng) = ServiceTestContext.HexCenter(0, 0);
+        // Place engineer slightly offset so bearing calculations work
+        engineer.CurrentLat = p1Lat + 0.0001;
+        engineer.CurrentLng = p1Lng + 0.0001;
+        engineer.CurrentHexQ = 0;
+        engineer.CurrentHexR = 0;
+        engineer.SabotageTargetQ = 1;
+        engineer.SabotageTargetR = 0;
+        scout.InterceptTargetId = "p2";
+        scout.InterceptLockStartAt = DateTime.UtcNow.AddSeconds(-2);
+        // Scout faces engineer (correct)
+        var scoutHeading = HexService.BearingDegrees(p1Lat, p1Lng, engineer.CurrentLat!.Value, engineer.CurrentLng!.Value);
+        // Engineer faces scout (within 90 degrees of reverse bearing)
+        var reverseBearing = HexService.BearingDegrees(engineer.CurrentLat!.Value, engineer.CurrentLng!.Value, p1Lat, p1Lng);
+        engineer.CurrentHeading = reverseBearing;
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.AttemptIntercept(ServiceTestContext.RoomCode, "p1", scoutHeading);
+
+        result.error.Should().BeNull();
+        result.result!.Status.Should().Be("broken");
+    }
+
+    // ── Cooldown tests ──
+
+    [Fact]
+    public void ActivateTacticalStrike_WhenOnCooldown_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", role: PlayerRole.Commander)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        state.Players.Single(p => p.Id == "p1").TacticalStrikeCooldownUntil = DateTime.UtcNow.AddMinutes(10);
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateTacticalStrike(ServiceTestContext.RoomCode, "p1", 1, 0);
+
+        result.state.Should().BeNull();
+        result.error.Should().Contain("cooldown");
+    }
+
+    [Fact]
+    public void ActivateCommandoRaid_WhenOnCooldown_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(4)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        state.Players.Single(p => p.Id == "p1").CommandoRaidCooldownUntil = DateTime.UtcNow.AddMinutes(10);
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateCommandoRaid(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Contain("cooldown");
+    }
+
+    [Fact]
+    public void ActivateRallyPoint_WhenOnCooldown_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        state.Players.Single(p => p.Id == "p1").RallyPointCooldownUntil = DateTime.UtcNow.AddMinutes(10);
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateRallyPoint(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().Contain("cooldown");
+    }
+
+    [Fact]
+    public void ActivateRallyPoint_WhenNotOnFriendlyHex_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Commander)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateRallyPoint(ServiceTestContext.RoomCode, "p1");
+
+        result.error.Should().Contain("friendly hex");
+    }
+
+    [Fact]
+    public void ActivateSabotage_WhenOnCooldown_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Engineer)
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .OwnHex(1, 0, "p2", allianceId: "a2")
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        state.Players.Single(p => p.Id == "p1").SabotageCooldownUntil = DateTime.UtcNow.AddMinutes(3);
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateSabotage(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Contain("cooldown");
+    }
+
+    [Fact]
+    public void ActivateSabotage_WhenOnFriendlyHex_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1", role: PlayerRole.Engineer)
+            .OwnHex(0, 0, "p1", allianceId: "a1")
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.ActivateSabotage(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("You can only sabotage an enemy hex.");
+    }
+
+    // ── Fort Construction: not own hex, already fort ──
+
+    [Fact]
+    public void StartFortConstruction_WhenHexNotOwnedByPlayer_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Engineer)
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .OwnHex(0, 0, "p2", "a2", troops: 2)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.StartFortConstruction(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Fort construction must start on one of your own hexes.");
+    }
+
+    [Fact]
+    public void StartFortConstruction_WhenHexAlreadyFort_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(3)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Engineer)
+            .AddAlliance("a1", "Alpha", "p1")
+            .OwnHex(0, 0, "p1", "a1", troops: 2)
+            .WithPlayerPosition("p1", 0, 0)
+            .Build();
+        state.Grid[HexService.Key(0, 0)].IsFort = true;
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.StartFortConstruction(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("This hex is already a fort.");
+    }
+
+    // ── Demolish: no fort, wrong role ──
+
+    [Fact]
+    public void StartDemolish_WhenTargetHexHasNoFort_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Engineer)
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.StartDemolish(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Be("Demolish requires an enemy fort.");
+    }
+
+    [Fact]
+    public void StartDemolish_WhenNotEngineer_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", "a1", role: PlayerRole.Commander)
+            .AddPlayer("p2", "Bob", "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .OwnHex(1, 0, "p2", "a2", troops: 4)
+            .WithPlayerPosition("p1", 1, 0)
+            .Build();
+        state.Grid[HexService.Key(1, 0)].IsFort = true;
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.StartDemolish(ServiceTestContext.RoomCode, "p1");
+
+        result.state.Should().BeNull();
+        result.error.Should().Contain("Engineer");
+    }
+
+    // ── Field Battle: expired ──
+
+    [Fact]
+    public void JoinFieldBattle_WhenBattleExpired_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a2")
+            .AddAlliance("a1", "Alpha", "p1")
+            .AddAlliance("a2", "Beta", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 0, 0)
+            .WithCarriedTroops("p2", 3)
+            .Build();
+        var battleId = Guid.NewGuid();
+        state.ActiveFieldBattles.Add(new ActiveFieldBattle
+        {
+            Id = battleId,
+            InitiatorId = "p1",
+            InitiatorName = "Alice",
+            InitiatorAllianceId = "a1",
+            Q = 0,
+            R = 0,
+            InitiatorTroops = 4,
+            JoinDeadline = DateTime.UtcNow.AddSeconds(-5)
+        });
+        var context = new ServiceTestContext(state);
+
+        var error = context.AbilityService.JoinFieldBattle(ServiceTestContext.RoomCode, "p2", battleId);
+
+        error.Should().Be("Field battle join window has closed.");
+    }
+
+    [Fact]
+    public void InitiateFieldBattle_WhenNoEnemiesOnHex_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithCarriedTroops("p1", 4)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.InitiateFieldBattle(ServiceTestContext.RoomCode, "p1");
+
+        result.battle.Should().BeNull();
+        result.error.Should().Be("No enemy with troops is present on this hex.");
+    }
+
+    // ── Troop Transfer: amount exceeds carried ──
+
+    [Fact]
+    public void InitiateTroopTransfer_WhenAmountExceedsCarriedTroops_Fails()
+    {
+        var state = ServiceTestContext.CreateBuilder()
+            .WithGrid(2)
+            .WithPlayerRolesEnabled()
+            .AddPlayer("p1", "Alice", allianceId: "a1")
+            .AddPlayer("p2", "Bob", allianceId: "a1")
+            .AddAlliance("a1", "Alpha", "p1", "p2")
+            .WithPlayerPosition("p1", 0, 0)
+            .WithPlayerPosition("p2", 1, 0)
+            .WithCarriedTroops("p1", 3)
+            .Build();
+        var context = new ServiceTestContext(state);
+
+        var result = context.AbilityService.InitiateTroopTransfer(ServiceTestContext.RoomCode, "p1", 5, "p2");
+
+        result.transferId.Should().BeNull();
+        result.error.Should().Be("You do not have enough carried troops.");
+    }
+
 }
