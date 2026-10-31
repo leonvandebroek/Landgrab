@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="VirtuBattle.Server.Tests/VirtuBattle.Server.Tests.csproj" />
+  <Project Path="VirtuBattle.Server/VirtuBattle.Server.csproj" />
+</Solution>
