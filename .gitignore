@@ -425,7 +425,7 @@ todos.db
 .worktrees/
 
 # Node.js tool workspaces — compiled output
-tools/landgrab-agent-mcp/dist/
+archive/landgrab/tools/landgrab-agent-mcp/dist/
 
 # Screenshots (use docs/ for intentional documentation images)
 *.png
@@ -436,10 +436,14 @@ tools/landgrab-agent-mcp/dist/
 !docs/**/*.png
 !docs/**/*.jpg
 !frontend/landgrab-ui/public/**/*.png
+!archive/landgrab/resources/**/*.png
+!archive/landgrab/docs/**/*.png
+!archive/landgrab/docs/**/*.jpg
+!archive/landgrab/frontend/landgrab-ui/public/**/*.png
 # Squad: ignore runtime state (logs, inbox, sessions)
-.squad/orchestration-log/
-.squad/log/
-.squad/decisions/inbox/
-.squad/sessions/
+archive/landgrab/.squad/orchestration-log/
+archive/landgrab/.squad/log/
+archive/landgrab/.squad/decisions/inbox/
+archive/landgrab/.squad/sessions/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
