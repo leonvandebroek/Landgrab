@@ -1,8 +1,7 @@
 name: Deploy to Azure
 
+# Switched off (2026-11-26): no paid Azure resources (Container Apps, Static Web Apps). Only by hand from now on.
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
 
 env:
