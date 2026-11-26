@@ -19,14 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-c
  && yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null \
  && $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "platform-tools" > /dev/null
 ARG MOBILE_DIR=mobile
-WORKDIR /src
+# The repository's own layout under /repo: android/app/build.gradle applies app-release/android/signing.gradle by a
+# relative path that climbs out of MOBILE_DIR to the repository root, so that file must sit where it does in the repo.
+WORKDIR /repo/${MOBILE_DIR}
+COPY app-release/android/signing.gradle /repo/app-release/android/signing.gradle
 COPY ${MOBILE_DIR}/package.json ${MOBILE_DIR}/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY ${MOBILE_DIR}/ ./
-# android/app/build.gradle applies app-release/android/signing.gradle by a relative path that climbs out of MOBILE_DIR to
-# the repository root. Only MOBILE_DIR is copied to /src, so put the file where that path lands (/app-release: ".."
-# stops at "/"). Without it, Gradle fails before it builds anything.
-COPY app-release/android/signing.gradle /app-release/android/signing.gradle
 ARG SYNC="npx cap sync android"
 ARG APP_SLUG=app
 ARG VERSION_CODE=1
