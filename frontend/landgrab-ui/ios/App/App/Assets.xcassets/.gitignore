@@ -1,0 +1,2 @@
+# The repository root ignores *.png; the app icons and splash screens are part of the native project.
+!*.png
