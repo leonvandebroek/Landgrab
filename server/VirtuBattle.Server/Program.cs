@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using VirtuBattle.Server.Hubs;
 using VirtuBattle.Server.Rooms;
 
@@ -10,6 +12,11 @@ builder.Services.AddSignalR(options =>
     // Phones on mobile data drop packets; keep the connection alive and detect dead peers reasonably fast.
     options.KeepAliveInterval = TimeSpan.FromSeconds(10);
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+})
+.AddJsonProtocol(options =>
+{
+    // Enums travel as camelCase strings ("closeCombat"), which the Swift client decodes directly.
+    options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 });
 
 var app = builder.Build();

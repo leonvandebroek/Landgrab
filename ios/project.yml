@@ -38,6 +38,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
+        NSLocationWhenInUseUsageDescription: VirtuBattle shows you and the other players on the map and uses your position to decide who you can hit.
         # Needed to reach the dev server on your Mac over Wi-Fi (ws:// on the local network).
         NSLocalNetworkUsageDescription: VirtuBattle connects to a game server on your local network during development.
         NSAppTransportSecurity:

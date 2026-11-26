@@ -105,6 +105,13 @@ public actor HubConnection {
         _ = try await invokeRaw(method, arguments)
     }
 
+    /// Sends a hub invocation without waiting for the server (no invocation id, so no completion comes back).
+    /// For high-rate messages such as position updates, where a lost one is replaced by the next.
+    public func send(_ method: String, _ arguments: any Encodable & Sendable...) async throws {
+        guard isConnected else { throw ConnectionError.notConnected }
+        try await transport.send(try SignalRProtocol.invocation(id: nil, target: method, arguments: arguments))
+    }
+
     private func invokeRaw(_ method: String, _ arguments: [any Encodable & Sendable]) async throws -> Data {
         guard isConnected else { throw ConnectionError.notConnected }
         nextInvocationId += 1

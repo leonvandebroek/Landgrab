@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct VirtuBattleApp: App {
-    @State private var model = AppModel()
+    @State private var model = AppModel(makeLocationSource: { CoreLocationSource() })
 
     var body: some Scene {
         WindowGroup {
@@ -20,7 +20,7 @@ struct RootView: View {
         case .idle, .connecting:
             ConnectView()
         case .inRoom:
-            LobbyView()
+            GameMapView()
         }
     }
 }

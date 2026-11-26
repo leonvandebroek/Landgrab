@@ -57,5 +57,5 @@ struct ConnectView: View {
 
 #Preview {
     ConnectView()
-        .environment(AppModel(defaults: UserDefaults(suiteName: "preview")!))
+        .environment(AppModel(defaults: UserDefaults(suiteName: "preview")!, makeLocationSource: { CoreLocationSource() }))
 }

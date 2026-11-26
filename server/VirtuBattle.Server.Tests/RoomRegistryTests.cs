@@ -85,4 +85,104 @@ public class RoomRegistryTests
 
     [Fact]
     public void Leave_unknown_connection_returns_null() => Assert.Null(_rooms.Leave("nope"));
+
+    // About 0.0009 degrees of latitude is 100 m.
+    private const double Lat = 51.4416, Lon = 5.4697;
+
+    [Fact]
+    public void UpdatePosition_outside_a_room_returns_null() =>
+        Assert.Null(_rooms.UpdatePosition("nope", Lat, Lon, 5, 0));
+
+    [Theory]
+    [InlineData(91, 0, 5)]
+    [InlineData(0, 181, 5)]
+    [InlineData(0, 0, -1)]
+    [InlineData(double.NaN, 0, 5)]
+    public void UpdatePosition_rejects_invalid_values(double lat, double lon, double accuracy)
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        Assert.Throws<ArgumentException>(() => _rooms.UpdatePosition("c1", lat, lon, accuracy, 0));
+    }
+
+    [Fact]
+    public void Single_player_with_a_position_stays_idle()
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        var result = _rooms.UpdatePosition("c1", Lat, Lon, 5, 0);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.ModeChanges);
+    }
+
+    [Fact]
+    public void Two_players_100m_apart_both_become_engaged()
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        _rooms.Join("c2", "ABCD", "Ralph");
+        _rooms.UpdatePosition("c1", Lat, Lon, 5, 0);
+
+        var result = _rooms.UpdatePosition("c2", Lat + 0.0009, Lon, 5, 0);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ModeChanges.Count);
+        Assert.All(result.ModeChanges, c => Assert.Equal(RateMode.Engaged, c.Mode));
+        Assert.All(result.ModeChanges, c => Assert.InRange(c.NearestDistanceMeters!.Value, 95, 105));
+    }
+
+    [Fact]
+    public void Walking_close_switches_to_close_combat_and_only_reports_changes()
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        _rooms.Join("c2", "ABCD", "Ralph");
+        _rooms.UpdatePosition("c1", Lat, Lon, 5, 0);
+        _rooms.UpdatePosition("c2", Lat + 0.0009, Lon, 5, 0);
+
+        var stillEngaged = _rooms.UpdatePosition("c2", Lat + 0.0008, Lon, 5, 0);
+        Assert.Empty(stillEngaged!.ModeChanges);
+
+        var close = _rooms.UpdatePosition("c2", Lat + 0.0002, Lon, 5, 0);
+        Assert.Equal(2, close!.ModeChanges.Count);
+        Assert.All(close.ModeChanges, c => Assert.Equal(RateMode.CloseCombat, c.Mode));
+    }
+
+    [Fact]
+    public void When_the_opponent_leaves_the_remaining_player_goes_idle()
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        _rooms.Join("c2", "ABCD", "Ralph");
+        _rooms.UpdatePosition("c1", Lat, Lon, 5, 0);
+        _rooms.UpdatePosition("c2", Lat + 0.0009, Lon, 5, 0);
+
+        var left = _rooms.Leave("c2");
+
+        var change = Assert.Single(left!.ModeChanges);
+        Assert.Equal("c1", change.ConnectionId);
+        Assert.Equal(RateMode.Idle, change.Mode);
+    }
+
+    [Fact]
+    public void Stale_positions_do_not_count()
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        _rooms.Join("c2", "ABCD", "Ralph");
+        _rooms.UpdatePosition("c2", Lat + 0.0009, Lon, 5, 0);
+        _time.Advance(RoomRegistry.PositionStaleAfter + TimeSpan.FromSeconds(1));
+
+        var result = _rooms.UpdatePosition("c1", Lat, Lon, 5, 0);
+
+        Assert.Empty(result!.ModeChanges);
+    }
+
+    [Fact]
+    public void Late_joiner_gets_existing_positions()
+    {
+        _rooms.Join("c1", "ABCD", "Léoke");
+        _rooms.UpdatePosition("c1", Lat, Lon, 4, 123);
+
+        var joined = _rooms.Join("c2", "ABCD", "Ralph");
+
+        var position = Assert.Single(joined.Positions);
+        Assert.Equal("Léoke", position.Player.DisplayName);
+        Assert.Equal(123, position.Position.ClientTimestampMs);
+    }
 }

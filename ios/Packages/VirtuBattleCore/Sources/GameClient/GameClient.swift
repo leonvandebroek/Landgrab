@@ -4,6 +4,8 @@ import Foundation
 public actor GameClient {
     public enum Event: Sendable, Equatable {
         case rosterChanged(RosterChangedEvent)
+        case playerMoved(PlayerPositionDTO)
+        case rateModeChanged(RateModeChangedEvent)
         case disconnected(reason: String?)
     }
 
@@ -14,7 +16,7 @@ public actor GameClient {
     private let hub: HubConnection
 
     public init(hubURL: URL, transport: any HubTransport = URLSessionWebSocketTransport()) {
-        (events, continuation) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .bufferingNewest(32))
+        (events, continuation) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .bufferingNewest(128))
         hub = HubConnection(url: hubURL, transport: transport)
     }
 
@@ -22,6 +24,12 @@ public actor GameClient {
         let continuation = self.continuation
         await hub.on(HubMethod.rosterChanged, RosterChangedEvent.self) { event in
             continuation.yield(.rosterChanged(event))
+        }
+        await hub.on(HubMethod.playerMoved, PlayerPositionDTO.self) { position in
+            continuation.yield(.playerMoved(position))
+        }
+        await hub.on(HubMethod.rateModeChanged, RateModeChangedEvent.self) { event in
+            continuation.yield(.rateModeChanged(event))
         }
         await hub.onClose { error in
             guard let error else { return }
@@ -32,6 +40,11 @@ public actor GameClient {
 
     public func joinRoom(code: String, displayName: String) async throws -> JoinRoomResponse {
         try await hub.invoke(HubMethod.joinRoom, code, displayName, returning: JoinRoomResponse.self)
+    }
+
+    /// Sends a position fix without waiting for the server.
+    public func sendPosition(_ update: PositionUpdate) async throws {
+        try await hub.send(HubMethod.updatePosition, update)
     }
 
     public func leaveRoom() async throws {

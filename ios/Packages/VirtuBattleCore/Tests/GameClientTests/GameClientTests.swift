@@ -66,7 +66,7 @@ private let hubURL = URL(string: "ws://localhost:5080/hub/game")!
     @Test func joinRoomDecodesTheResponse() async throws {
         let transport = FakeTransport { target, id, _ in
             guard target == HubMethod.joinRoom, let id else { return [] }
-            return [#"{"type":3,"invocationId":"\#(id)","result":{"playerId":"p1","roomCode":"ABCD","players":[{"playerId":"p1","displayName":"Léoke"}],"serverTimeMs":42}}"#]
+            return [#"{"type":3,"invocationId":"\#(id)","result":{"playerId":"p1","roomCode":"ABCD","players":[{"playerId":"p1","displayName":"Léoke"}],"positions":[],"rateMode":{"mode":"idle","intervalMs":10000,"nearestDistanceMeters":null},"serverTimeMs":42}}"#]
         }
         let client = GameClient(hubURL: hubURL, transport: transport)
         try await client.connect()
@@ -75,6 +75,7 @@ private let hubURL = URL(string: "ws://localhost:5080/hub/game")!
 
         #expect(response.playerId == "p1")
         #expect(response.players == [PlayerDTO(playerId: "p1", displayName: "Léoke")])
+        #expect(response.rateMode.mode == .idle)
         await client.disconnect()
         #expect(await transport.closed)
     }
@@ -129,5 +130,36 @@ private let hubURL = URL(string: "ws://localhost:5080/hub/game")!
             try await client.connect()
         }
         #expect(await transport.closed)
+    }
+
+    @Test func positionsAreSentWithoutAnInvocationId() async throws {
+        let transport = FakeTransport()
+        let client = GameClient(hubURL: hubURL, transport: transport)
+        try await client.connect()
+
+        try await client.sendPosition(PositionUpdate(latitude: 51.44, longitude: 5.47, horizontalAccuracy: 6, timestampMs: 99))
+
+        let last = try #require(await transport.sent.last)
+        let json = try #require(try JSONSerialization.jsonObject(with: last.dropLast()) as? [String: Any])
+        #expect(json["target"] as? String == "UpdatePosition")
+        #expect(json["invocationId"] == nil)
+        let argument = try #require((json["arguments"] as? [[String: Any]])?.first)
+        #expect(argument["latitude"] as? Double == 51.44)
+        #expect(argument["timestampMs"] as? Int == 99)
+        await client.disconnect()
+    }
+
+    @Test func movesAndRateModesArriveOnTheStream() async throws {
+        let transport = FakeTransport()
+        let client = GameClient(hubURL: hubURL, transport: transport)
+        try await client.connect()
+
+        await transport.push(#"{"type":1,"target":"PlayerMoved","arguments":[{"playerId":"p2","latitude":51.4425,"longitude":5.4697,"horizontalAccuracy":8,"timestampMs":2000,"serverTimeMs":2100}]}"#)
+        await transport.push(#"{"type":1,"target":"RateModeChanged","arguments":[{"mode":"closeCombat","intervalMs":500,"nearestDistanceMeters":12.5}]}"#)
+
+        var iterator = client.events.makeAsyncIterator()
+        #expect(await iterator.next() == .playerMoved(PlayerPositionDTO(playerId: "p2", latitude: 51.4425, longitude: 5.4697, horizontalAccuracy: 8, timestampMs: 2000, serverTimeMs: 2100)))
+        #expect(await iterator.next() == .rateModeChanged(RateModeChangedEvent(mode: .closeCombat, intervalMs: 500, nearestDistanceMeters: 12.5)))
+        await client.disconnect()
     }
 }

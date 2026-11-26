@@ -1,8 +1,12 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 using VirtuBattle.Server.Hubs;
+using VirtuBattle.Server.Rooms;
 
 namespace VirtuBattle.Server.Tests;
 
@@ -66,6 +70,67 @@ public class GameHubTests(WebApplicationFactory<Program> factory) : IClassFixtur
         Assert.Contains("Room code must be 4 to 8 letters or digits.", ex.Message);
     }
 
+    [Fact]
+    public async Task Positions_are_relayed_and_rate_modes_follow_distance()
+    {
+        await using var alice = Connect();
+        await using var bob = Connect();
+        var aliceMoves = Listen<PlayerPositionDto>(alice, nameof(IGameClient.PlayerMoved));
+        var aliceModes = Listen<RateModeChangedEvent>(alice, nameof(IGameClient.RateModeChanged));
+        var bobModes = Listen<RateModeChangedEvent>(bob, nameof(IGameClient.RateModeChanged));
+        await alice.StartAsync();
+        await bob.StartAsync();
+
+        var aliceJoin = await alice.InvokeAsync<JoinRoomResponse>(nameof(GameHub.JoinRoom), "POSTEST", "Alice");
+        Assert.Equal(RateMode.Idle, aliceJoin.RateMode.Mode);
+        await alice.InvokeAsync(nameof(GameHub.UpdatePosition), new PositionUpdate(51.4416, 5.4697, 5, 1000));
+
+        var bobJoin = await bob.InvokeAsync<JoinRoomResponse>(nameof(GameHub.JoinRoom), "POSTEST", "Bob");
+        Assert.Single(bobJoin.Positions);
+        await bob.InvokeAsync(nameof(GameHub.UpdatePosition), new PositionUpdate(51.4425, 5.4697, 8, 2000));
+
+        var moved = await WaitFor(aliceMoves, m => m.PlayerId == bobJoin.PlayerId);
+        Assert.Equal(51.4425, moved.Latitude, 6);
+        Assert.Equal(2000, moved.TimestampMs);
+
+        var aliceMode = await WaitFor(aliceModes, _ => true);
+        Assert.Equal(RateMode.Engaged, aliceMode.Mode);
+        Assert.Equal(1000, aliceMode.IntervalMs);
+        Assert.Equal(RateMode.Engaged, (await WaitFor(bobModes, _ => true)).Mode);
+    }
+
+    [Fact]
+    public async Task UpdatePosition_before_joining_is_refused()
+    {
+        await using var client = Connect();
+        await client.StartAsync();
+
+        var ex = await Assert.ThrowsAsync<HubException>(() =>
+            client.InvokeAsync(nameof(GameHub.UpdatePosition), new PositionUpdate(51, 5, 5, 0)));
+        Assert.Contains("Join a room before sending positions.", ex.Message);
+    }
+
+    private static Channel<T> Listen<T>(HubConnection connection, string method)
+    {
+        var channel = Channel.CreateUnbounded<T>();
+        connection.On<T>(method, evt => channel.Writer.TryWrite(evt));
+        return channel;
+    }
+
+    private static async Task<T> WaitFor<T>(Channel<T> channel, Func<T, bool> match)
+    {
+        using var cts = new CancellationTokenSource(Timeout);
+        await foreach (var evt in channel.Reader.ReadAllAsync(cts.Token))
+        {
+            if (match(evt))
+            {
+                return evt;
+            }
+        }
+
+        throw new TimeoutException("Expected event never arrived.");
+    }
+
     private HubConnection Connect() =>
         new HubConnectionBuilder()
             .WithUrl(new Uri(factory.Server.BaseAddress, GameHub.Path), o =>
@@ -73,6 +138,7 @@ public class GameHubTests(WebApplicationFactory<Program> factory) : IClassFixtur
                 o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
                 o.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
             })
+            .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)))
             .Build();
 
     private static Channel<RosterChangedEvent> ListenForRosters(HubConnection connection)

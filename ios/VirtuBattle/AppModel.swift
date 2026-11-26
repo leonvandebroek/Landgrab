@@ -1,8 +1,10 @@
+import AimingEngine
 import Foundation
 import GameClient
 import Observation
 
-/// App state for M0: connect to the hub, join a room, show who else is there.
+/// App state: connect to the hub and join a room (M0), then share positions and follow the
+/// server's rate mode (M1).
 @MainActor
 @Observable
 final class AppModel {
@@ -10,6 +12,18 @@ final class AppModel {
         case idle
         case connecting
         case inRoom
+    }
+
+    /// Another player as the map and status panel show them.
+    struct OtherPlayer: Identifiable, Equatable {
+        let player: PlayerDTO
+        let position: PlayerPositionDTO?
+        /// When this phone received the last position.
+        let receivedAt: Date?
+        /// Distance from my last fix, in meters.
+        let distance: Double?
+
+        var id: String { player.playerId }
     }
 
     var serverAddress: String {
@@ -32,10 +46,21 @@ final class AppModel {
     private(set) var joinedRoomCode: String?
     private(set) var roundTripMs: Int?
 
+    private(set) var myFix: LocationFix?
+    private(set) var locationDenied = false
+    private(set) var rateMode: RateModeChangedEvent?
+    private(set) var positionsSent = 0
+    private(set) var positions: [String: PlayerPositionDTO] = [:]
+    private(set) var receivedAt: [String: Date] = [:]
+
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let makeLocationSource: @MainActor () -> any LocationSource
+    @ObservationIgnored private var locationSource: (any LocationSource)?
     @ObservationIgnored private var client: GameClient?
     @ObservationIgnored private var eventsTask: Task<Void, Never>?
     @ObservationIgnored private var latencyTask: Task<Void, Never>?
+    @ObservationIgnored private var locationTask: Task<Void, Never>?
+    @ObservationIgnored private var throttle = PositionThrottle(interval: 10)
 
     private enum Keys {
         static let serverAddress = "serverAddress"
@@ -43,8 +68,9 @@ final class AppModel {
         static let roomCode = "roomCode"
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, makeLocationSource: @escaping @MainActor () -> any LocationSource) {
         self.defaults = defaults
+        self.makeLocationSource = makeLocationSource
         serverAddress = defaults.string(forKey: Keys.serverAddress) ?? ""
         displayName = defaults.string(forKey: Keys.displayName) ?? ""
         roomCode = defaults.string(forKey: Keys.roomCode) ?? ""
@@ -57,6 +83,21 @@ final class AppModel {
             && hubURL != nil
             && !displayName.trimmingCharacters(in: .whitespaces).isEmpty
             && roomCode.trimmingCharacters(in: .whitespaces).count >= 4
+    }
+
+    /// Everyone in the room except me, nearest first, players without a position last.
+    var otherPlayers: [OtherPlayer] {
+        players
+            .filter { $0.playerId != myPlayerId }
+            .map { player in
+                let position = positions[player.playerId]
+                return OtherPlayer(
+                    player: player,
+                    position: position,
+                    receivedAt: receivedAt[player.playerId],
+                    distance: position.flatMap(distanceFromMe))
+            }
+            .sorted { ($0.distance ?? .infinity, $0.player.displayName) < ($1.distance ?? .infinity, $1.player.displayName) }
     }
 
     func join() async {
@@ -77,8 +118,15 @@ final class AppModel {
             myPlayerId = response.playerId
             joinedRoomCode = response.roomCode
             players = response.players
+            let now = Date()
+            for position in response.positions where position.playerId != response.playerId {
+                positions[position.playerId] = position
+                receivedAt[position.playerId] = now
+            }
+            apply(response.rateMode)
             phase = .inRoom
             probeLatency(with: client)
+            shareLocation(with: client)
         } catch {
             await reset()
             errorMessage = error.localizedDescription
@@ -96,13 +144,52 @@ final class AppModel {
                 guard let self else { return }
                 switch event {
                 case .rosterChanged(let roster):
-                    if joinedRoomCode == nil || roster.roomCode == joinedRoomCode {
-                        players = roster.players
-                    }
+                    guard joinedRoomCode == nil || roster.roomCode == joinedRoomCode else { break }
+                    players = roster.players
+                    let present = Set(roster.players.map(\.playerId))
+                    positions = positions.filter { present.contains($0.key) }
+                    receivedAt = receivedAt.filter { present.contains($0.key) }
+                case .playerMoved(let position):
+                    positions[position.playerId] = position
+                    receivedAt[position.playerId] = Date()
+                case .rateModeChanged(let mode):
+                    apply(mode)
                 case .disconnected(let reason):
                     await reset()
                     errorMessage = reason ?? String(localized: "Lost the connection to the server.")
                     return
+                }
+            }
+        }
+    }
+
+    private func apply(_ mode: RateModeChangedEvent) {
+        rateMode = mode
+        throttle.setInterval(mode.interval)
+    }
+
+    private func shareLocation(with client: GameClient) {
+        let source = makeLocationSource()
+        locationSource = source
+        throttle.reset()
+        locationTask = Task { [weak self] in
+            for await event in source.events() {
+                guard let self, !Task.isCancelled else { return }
+                switch event {
+                case .denied:
+                    locationDenied = true
+                case .fix(let fix):
+                    locationDenied = false
+                    myFix = fix
+                    guard throttle.shouldSend(at: ProcessInfo.processInfo.systemUptime) else { continue }
+                    let update = PositionUpdate(
+                        latitude: fix.latitude,
+                        longitude: fix.longitude,
+                        horizontalAccuracy: fix.horizontalAccuracy,
+                        timestampMs: Int64(fix.timestamp.timeIntervalSince1970 * 1000))
+                    if (try? await client.sendPosition(update)) != nil {
+                        positionsSent += 1
+                    }
                 }
             }
         }
@@ -120,11 +207,21 @@ final class AppModel {
         }
     }
 
+    private func distanceFromMe(_ position: PlayerPositionDTO) -> Double? {
+        guard let myFix else { return nil }
+        return GeoMath.distance(
+            from: GeoPoint(latitude: myFix.latitude, longitude: myFix.longitude),
+            to: GeoPoint(latitude: position.latitude, longitude: position.longitude))
+    }
+
     private func reset() async {
         eventsTask?.cancel()
         latencyTask?.cancel()
+        locationTask?.cancel()
         eventsTask = nil
         latencyTask = nil
+        locationTask = nil
+        locationSource = nil
         let client = self.client
         self.client = nil
         await client?.disconnect()
@@ -133,5 +230,10 @@ final class AppModel {
         myPlayerId = nil
         joinedRoomCode = nil
         roundTripMs = nil
+        myFix = nil
+        rateMode = nil
+        positionsSent = 0
+        positions = [:]
+        receivedAt = [:]
     }
 }
