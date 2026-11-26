@@ -1,0 +1,10 @@
+# Background and foreground: the app resumes on the same screen and the web view is still alive.
+appId: ${APP_ID}
+---
+- pressKey: home
+- waitForAnimationToEnd:
+    timeout: 3000
+- launchApp:
+    appId: ${APP_ID}
+    clearState: false
+- runFlow: first-screen.yaml

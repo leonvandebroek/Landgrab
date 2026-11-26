@@ -1,0 +1,8 @@
+[
+ {"id":"dm1q","manufacturer":"Samsung","name":"Galaxy S23","form":"PHYSICAL","supportedVersionIds":["33","34"],"tags":["default"]},
+ {"id":"b0q","manufacturer":"Samsung","name":"Galaxy S22 Ultra","form":"PHYSICAL","supportedVersionIds":["31","33"],"tags":[]},
+ {"id":"old","manufacturer":"Samsung","name":"Galaxy S99","form":"PHYSICAL","supportedVersionIds":["36"],"tags":["deprecated"]},
+ {"id":"panther","manufacturer":"Google","name":"Pixel 7","form":"PHYSICAL","supportedVersionIds":["33","34"],"tags":[]},
+ {"id":"husky","manufacturer":"Google","name":"Pixel 8 Pro","form":"PHYSICAL","supportedVersionIds":["34","35"],"tags":["default"]},
+ {"id":"Pixel2","manufacturer":"Google","name":"Pixel 2","form":"VIRTUAL","supportedVersionIds":["35"],"tags":[]}
+]

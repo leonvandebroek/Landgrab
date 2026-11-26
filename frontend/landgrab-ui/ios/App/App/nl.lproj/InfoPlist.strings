@@ -1,0 +1,3 @@
+/* Toestemmingsteksten in het Nederlands. */
+"NSLocationWhenInUseUsageDescription" = "Landgrab gebruikt je locatie om te laten zien waar je op de spelkaart bent, zodat je de vakjes waar je naartoe loopt kunt veroveren en verdedigen. Andere spelers in je spel zien tijdens het spelen waar je bent.";
+"NSMotionUsageDescription" = "Landgrab gebruikt het kompas om de kaart mee te draaien en vaardigheden te richten in de richting waarin je kijkt.";

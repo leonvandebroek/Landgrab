@@ -1,0 +1,25 @@
+{
+  "primaryLocale": "en-GB",
+  "locales": ["en-GB", "nl-NL"],
+  "copyright": "2026 Leon van de Broek",
+  "ios": {
+    "primaryCategory": "UTILITIES",
+    "secondaryCategory": "PRODUCTIVITY",
+    "contentRights": "DOES_NOT_USE_THIRD_PARTY_CONTENT",
+    "free": true,
+    "baseTerritory": "NLD",
+    "ageRating": "none-of-the-above",
+    "countries": "all",
+    "screenshotSets": {
+      "iphone-69": "APP_IPHONE_67",
+      "ipad-13": "APP_IPAD_PRO_3GEN_129"
+    }
+  },
+  "review": {
+    "contactFirstName": "",
+    "contactLastName": "",
+    "contactPhone": "",
+    "contactEmail": "",
+    "notes": "What the app is for, who uses it, and how the reviewer gets in (the demo account comes from ASC_DEMO_USER and ASC_DEMO_PASSWORD and is never written here). Name every permission the app asks for and why."
+  }
+}

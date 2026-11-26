@@ -1,0 +1,618 @@
+# Landgrab for iPhone, iPad and Android (the app-pipelines skill). Written by app-shipping setup from
+# app-release.config.json; re-run setup (or the upgrade) rather than editing the placeholders' values by hand.
+#
+# The six stops: keys (Key Vault) > package (signed, on a clean machine) > prove (the exact files) > gate (no proof, no
+# publish) > early ring (TestFlight team + early group, Play internal track) > everyone (after one approval).
+#
+# What happens by itself on main:
+#   Android: a signed app bundle (.aab), uploaded to the Play internal test track (no 12-tester rule, no Google review).
+#   iOS:     built on a Mac, signed in Apple's cloud with the App Store Connect API key, uploaded to TestFlight, given to
+#            every App Store Connect user (team group) and to the early group (after Apple's short beta review).
+#   Then, with storeRelease on (once the store page exists): one approval in Azure DevOps, after which iOS goes to App
+#   Store review and out by itself in 7 days, and Android (with androidProduction on) to 20 %, the rest the next night.
+#
+# Keys: Key Vault kv-landgrab-prod through the service connection "Azure-LandGrab-SC" (made once with
+# app-release/keys/app-keys.sh). Nothing in the Library, nothing in the repository, nothing left on a build machine.
+# Google wants the very first bundle of a new app uploaded by hand in Play Console; take it from the "android" artifact.
+
+name: 1.0.$(Rev:r)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - frontend/landgrab-ui/*
+      - app-release/*
+      - app-release.config.json
+
+pr: none
+
+# Finishes a staged Android roll-out the night after it started (only with androidProduction on).
+schedules:
+  - cron: '0 2 * * *'
+    displayName: Finish staged Android roll-outs
+    branches:
+      include:
+        - main
+    always: false
+
+parameters:
+  - name: buildIos
+    displayName: Build iPhone and iPad
+    type: boolean
+    default: true
+  - name: buildAndroid
+    displayName: Build Android
+    type: boolean
+    default: true
+  - name: iosPool
+    displayName: iPhone build machine (microsoft-hosted = Microsoft's macOS-15, or the name of a pool of your own Macs)
+    type: string
+    default: microsoft-hosted
+  - name: androidPool
+    displayName: Android build machine (needs Docker; microsoft-hosted = Microsoft's Ubuntu)
+    type: string
+    default: microsoft-hosted
+  # Simulators and the emulator need a Mac with full Xcode, the Android SDK, Maestro and Docker. Microsoft's Ubuntu has
+  # no KVM for the emulator, and Apple Silicon VMs cannot run it either: a Mac of your own is the dependable choice.
+  - name: proofPool
+    displayName: Agent pool for the simulator and emulator proof
+    type: string
+    default: mac-proof
+  - name: testLab
+    displayName: Also a Robo test on two real phones in Firebase Test Lab (needs firebase-test-lab-sa-json)
+    type: boolean
+    default: false
+  - name: testflightGroup
+    displayName: TestFlight group that gets every build after the gate (besides the team group)
+    type: string
+    default: Early testers
+  # Off until the App Store page (texts, screenshots, privacy answers) exists; then one approval sends iOS to review.
+  - name: storeRelease
+    displayName: After one approval, send the build to App Store review (and Play production)
+    type: boolean
+    default: false
+  # Off while Play does not allow production (a personal account made after November 2023 first needs 12 testers for
+  # 14 days; a business account does not).
+  - name: androidProduction
+    displayName: Include Google Play production (20 %, the rest the next night)
+    type: boolean
+    default: false
+  # The App Store's brake: Apple gives no crash numbers to watch, so pausing the phased release is a hand run.
+  - name: iosPhasedRelease
+    displayName: Only pause or resume the App Store phased release of iosVersion (no build)
+    type: string
+    default: none
+    values:
+      - none
+      - pause
+      - resume
+  - name: iosVersion
+    displayName: Version for iosPhasedRelease
+    type: string
+    default: ' '
+
+variables:
+  - name: versionName
+    value: $(Build.BuildNumber)
+  - name: azureConnection
+    value: 'Azure-LandGrab-SC'
+  - name: keyVault
+    value: kv-landgrab-prod
+  - name: mobileDir
+    value: frontend/landgrab-ui
+  - name: aab
+    value: landgrab-$(versionName).aab
+
+stages:
+  - stage: Check
+    displayName: Release kit checks
+    condition: and(ne(variables['Build.Reason'], 'Schedule'), eq('${{ parameters.iosPhasedRelease }}', 'none'))
+    jobs:
+      - job: Tests
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            fetchDepth: 1
+          - task: UseNode@1
+            inputs: { version: '22.x' }
+          - script: node --test 'app-release/test/*.test.mjs' && node app-release/config.mjs problems
+            displayName: Release scripts and settings
+          # The store texts and pictures only matter once a build goes to review.
+          - ${{ if eq(parameters.storeRelease, true) }}:
+            - script: node app-release/stores/asc-listing.mjs check
+              displayName: Store texts and pictures
+
+  - ${{ if eq(parameters.buildAndroid, true) }}:
+    - stage: Android
+      dependsOn: Check
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'Schedule'))
+      jobs:
+        - job: Bundle
+          timeoutInMinutes: 60
+          pool:
+            ${{ if eq(parameters.androidPool, 'microsoft-hosted') }}:
+              vmImage: ubuntu-latest
+            ${{ else }}:
+              name: ${{ parameters.androidPool }}
+              demands:
+                - docker
+          workspace:
+            clean: all
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: AzureKeyVault@2
+              displayName: Load the Android keys
+              inputs:
+                azureSubscription: $(azureConnection)
+                KeyVaultName: $(keyVault)
+                SecretsFilter: 'android-upload-keystore,android-keystore-env'
+                RunAsPreJob: false
+            # BuildKit secrets are files; Agent.TempDirectory is emptied after the job.
+            - bash: |
+                set -eu
+                umask 077
+                K="$(Agent.TempDirectory)/keys" && mkdir -p "$K"
+                printf '%s' "$KEYSTORE" | base64 -d > "$K/upload.p12"
+                printf '%s\n' "$KEYSTORE_ENV" > "$K/keystore.env"
+                printf '%s' "${GOOGLE_SERVICES:-}" > "$K/google-services.json"
+              displayName: Write the Android keys
+              env:
+                KEYSTORE: $(android-upload-keystore)
+                KEYSTORE_ENV: $(android-keystore-env)
+                # no push: no google-services.json
+            - script: |
+                set -e
+                K="$(Agent.TempDirectory)/keys"
+                DOCKER_BUILDKIT=1 docker build -f app-release/android/android.Dockerfile \
+                  --secret id=google_services,src="$K/google-services.json" \
+                  --secret id=upload_keystore,src="$K/upload.p12" \
+                  --secret id=keystore_env,src="$K/keystore.env" \
+                  --build-arg MOBILE_DIR=$(mobileDir) --build-arg APP_SLUG=landgrab --build-arg SYNC="npm run build && npx cap sync android" \
+                  --build-arg VERSION_CODE=$(Build.BuildId) --build-arg VERSION_NAME=$(versionName) \
+                  --target out --output type=local,dest="$(Build.ArtifactStagingDirectory)/android" .
+              displayName: Build the signed app bundle
+            - publish: $(Build.ArtifactStagingDirectory)/android
+              artifact: android
+
+  - ${{ if eq(parameters.buildIos, true) }}:
+    - stage: iOS
+      dependsOn: Check
+      condition: and(succeeded(), ne(variables['Build.Reason'], 'Schedule'))
+      jobs:
+        - job: TestFlight
+          timeoutInMinutes: 120
+          pool:
+            ${{ if eq(parameters.iosPool, 'microsoft-hosted') }}:
+              vmImage: macOS-15
+            ${{ else }}:
+              name: ${{ parameters.iosPool }}
+              demands:
+                - Agent.OS -equals Darwin
+                - xcode
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - task: AzureKeyVault@2
+              displayName: Load the App Store Connect key
+              inputs:
+                azureSubscription: $(azureConnection)
+                KeyVaultName: $(keyVault)
+                SecretsFilter: 'apple-asc-key-p8,apple-asc-key-id,apple-asc-issuer-id,apple-team-id'
+                RunAsPreJob: false
+            # App Store Connect only takes builds made with a recent SDK (iOS 26 SDK now, Apple raises it every spring).
+            # A machine's default Xcode can be older, so pick the newest released Xcode and stop early if it is too old.
+            - bash: |
+                set -eu
+                MIN=${MIN_XCODE:-26}
+                all="$(ls -d /Applications/Xcode*.app 2>/dev/null || true)"
+                pick=""
+                for x in $all; do
+                  case "$x" in *beta*|*Beta*|*RC*) continue ;; esac
+                  v="$(defaults read "$x/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)"
+                  [ -n "$v" ] && pick="$(printf '%s %s\n%s\n' "$v" "$x" "$pick" | sort -t. -k1,1n -k2,2n | tail -n 1)"
+                done
+                major="$(printf '%s' "$pick" | cut -d' ' -f1 | cut -d. -f1)"
+                if [ -z "$pick" ] || [ "$major" -lt "$MIN" ]; then
+                  echo "##vso[task.logissue type=error]Apple needs Xcode $MIN or newer; this machine has: $(echo $all)"
+                  exit 1
+                fi
+                sudo xcode-select -s "${pick#* }/Contents/Developer"
+                xcodebuild -version
+              displayName: Use the newest Xcode
+            - bash: |
+                set -eu
+                umask 077
+                printf '%s\n' "$ASC_KEY_P8" > "$(Agent.TempDirectory)/asc.p8"
+              displayName: Write the App Store Connect key
+              env:
+                ASC_KEY_P8: $(apple-asc-key-p8)
+            # The API key lets Xcode make and renew the distribution certificate and profile itself (cloud signing), so
+            # no certificate is kept anywhere. Upload goes straight to App Store Connect (ExportOptions.plist).
+            - bash: |
+                set -eu
+                # A Mac agent running as a service may not use UTF-8, and then a certificate name with an accent is not found.
+                export __CF_USER_TEXT_ENCODING=0x1F5:0x08000100:0x08000100
+                cd "$(mobileDir)"
+                npm ci --no-audit --no-fund
+                npm run build && npx cap sync ios
+                cd ios/App
+                xcrun agvtool new-version -all $(Build.BuildId)
+                xcrun agvtool new-marketing-version $(versionName)
+                AUTH="-allowProvisioningUpdates -authenticationKeyPath $(Agent.TempDirectory)/asc.p8 -authenticationKeyID $(apple-asc-key-id) -authenticationKeyIssuerID $(apple-asc-issuer-id)"
+                # The archive is built unsigned: signing it would need a development certificate whose private key
+                # lives on this throwaway machine (Apple refuses a second one for the "same" hosted machine). The export
+                # below signs it in Apple's cloud with the distribution certificate. An ad-hoc signature keeps the
+                # entitlements (push, associated domains) in the app so the export carries them over.
+                xcodebuild -project App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' \
+                  -archivePath "$(Agent.TempDirectory)/App.xcarchive" DEVELOPMENT_TEAM=$(apple-team-id) \
+                  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" archive
+                APP="$(Agent.TempDirectory)/App.xcarchive/Products/Applications/App.app"
+                if [ -f App/App.entitlements ]; then
+                  codesign --force --sign - --entitlements App/App.entitlements --timestamp=none "$APP"
+                fi
+                OPTS="$(Agent.TempDirectory)/ExportOptions.plist"
+                cp "$(Build.SourcesDirectory)/app-release/ios/ExportOptions.plist" "$OPTS"
+                /usr/libexec/PlistBuddy -c "Set :teamID $(apple-team-id)" "$OPTS"
+                xcodebuild -exportArchive -archivePath "$(Agent.TempDirectory)/App.xcarchive" \
+                  -exportOptionsPlist "$OPTS" -exportPath "$(Agent.TempDirectory)/export" $AUTH
+              displayName: Archive and upload to App Store Connect
+
+  - stage: Prove
+    displayName: Prove (simulators, emulator, real phones)
+    dependsOn:
+      - ${{ if eq(parameters.buildAndroid, true) }}:
+        - Android
+      - ${{ if eq(parameters.buildIos, true) }}:
+        - iOS
+    ${{ if and(eq(parameters.buildAndroid, true), eq(parameters.buildIos, true)) }}:
+      condition: and(eq(dependencies.Android.result, 'Succeeded'), eq(dependencies.iOS.result, 'Succeeded'))
+    ${{ elseif eq(parameters.buildAndroid, true) }}:
+      condition: eq(dependencies.Android.result, 'Succeeded')
+    ${{ else }}:
+      condition: eq(dependencies.iOS.result, 'Succeeded')
+    jobs:
+      - ${{ if eq(parameters.buildIos, true) }}:
+        - job: Ios
+          displayName: iPhone and iPad simulators (Maestro)
+          timeoutInMinutes: 75
+          pool:
+            name: ${{ parameters.proofPool }}
+            demands:
+              - Agent.OS -equals Darwin
+              - xcode
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - bash: |
+                set -eu
+                mkdir -p "$(Build.ArtifactStagingDirectory)/proof-ios"
+                sh app-release/proof/ios-proof.sh "$(Build.ArtifactStagingDirectory)/proof-ios/proof-ios.json"
+              displayName: Prove the iPhone and iPad app
+              env:
+                APP_VERSION: $(versionName)
+            - task: PublishPipelineArtifact@1
+              condition: always()
+              inputs:
+                targetPath: $(Build.ArtifactStagingDirectory)/proof-ios
+                artifact: proof-ios
+      - ${{ if eq(parameters.buildAndroid, true) }}:
+        - job: Android
+          displayName: Android emulator, the signed bundle (Maestro)
+          timeoutInMinutes: 75
+          pool:
+            name: ${{ parameters.proofPool }}
+            demands:
+              - Agent.OS -equals Darwin
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - task: DownloadPipelineArtifact@2
+              inputs: { artifact: android, path: $(Pipeline.Workspace)/android }
+            - bash: |
+                set -eu
+                mkdir -p "$(Build.ArtifactStagingDirectory)/proof-android"
+                sh app-release/proof/android-proof.sh "$(Pipeline.Workspace)/android/$(aab)" \
+                  "$(Build.ArtifactStagingDirectory)/proof-android/proof-android.json"
+              displayName: Prove the Android app
+              env:
+                APP_VERSION: $(versionName)
+            - task: PublishPipelineArtifact@1
+              condition: always()
+              inputs:
+                targetPath: $(Build.ArtifactStagingDirectory)/proof-android
+                artifact: proof-android
+        - ${{ if eq(parameters.testLab, true) }}:
+          - job: TestLab
+            displayName: Two real phones (Firebase Test Lab, Robo)
+            timeoutInMinutes: 45
+            pool:
+              vmImage: ubuntu-latest
+            steps:
+              - checkout: self
+                fetchDepth: 1
+              - task: UseNode@1
+                inputs: { version: '22.x' }
+              - task: DownloadPipelineArtifact@2
+                inputs: { artifact: android, path: $(Pipeline.Workspace)/android }
+              - task: AzureKeyVault@2
+                displayName: Load the Test Lab key
+                inputs:
+                  azureSubscription: $(azureConnection)
+                  KeyVaultName: $(keyVault)
+                  SecretsFilter: 'firebase-test-lab-sa-json,firebase-project-id'
+                  RunAsPreJob: false
+              - bash: |
+                  set -eu
+                  mkdir -p "$(Build.ArtifactStagingDirectory)/proof-testlab"
+                  sh app-release/proof/testlab.sh "$(Pipeline.Workspace)/android/$(aab)" \
+                    "$(Build.ArtifactStagingDirectory)/proof-testlab/proof-testlab.json"
+                displayName: Robo test on real phones
+                env:
+                  APP_VERSION: $(versionName)
+                  FIREBASE_TEST_LAB_SA_JSON: $(firebase-test-lab-sa-json)
+                  FIREBASE_PROJECT_ID: $(firebase-project-id)
+              - task: PublishPipelineArtifact@1
+                condition: always()
+                inputs:
+                  targetPath: $(Build.ArtifactStagingDirectory)/proof-testlab
+                  artifact: proof-testlab
+
+  # No proof, no publish: only an explicit Succeeded of every build and proof counts.
+  - stage: Gate
+    displayName: Gate (no proof, no publish)
+    dependsOn:
+      - Prove
+      - ${{ if eq(parameters.buildAndroid, true) }}:
+        - Android
+      - ${{ if eq(parameters.buildIos, true) }}:
+        - iOS
+    ${{ if and(eq(parameters.buildAndroid, true), eq(parameters.buildIos, true)) }}:
+      condition: and(eq(dependencies.Prove.result, 'Succeeded'), eq(dependencies.Android.result, 'Succeeded'), eq(dependencies.iOS.result, 'Succeeded'))
+    ${{ elseif eq(parameters.buildAndroid, true) }}:
+      condition: and(eq(dependencies.Prove.result, 'Succeeded'), eq(dependencies.Android.result, 'Succeeded'))
+    ${{ else }}:
+      condition: and(eq(dependencies.Prove.result, 'Succeeded'), eq(dependencies.iOS.result, 'Succeeded'))
+    jobs:
+      - job: Record
+        pool:
+          vmImage: ubuntu-latest
+        # A self-hosted agent keeps its work folder: an old file next to the new one must never reach the gate.
+        workspace:
+          clean: all
+        steps:
+          - checkout: self
+            fetchDepth: 1
+          - task: UseNode@1
+            inputs: { version: '22.x' }
+          - ${{ if eq(parameters.buildAndroid, true) }}:
+            - task: DownloadPipelineArtifact@2
+              inputs: { artifact: android, path: $(Pipeline.Workspace)/files }
+            - task: DownloadPipelineArtifact@2
+              inputs: { artifact: proof-android, path: $(Pipeline.Workspace)/proofs/proof-android }
+            - ${{ if eq(parameters.testLab, true) }}:
+              - task: DownloadPipelineArtifact@2
+                inputs: { artifact: proof-testlab, path: $(Pipeline.Workspace)/proofs/proof-testlab }
+          - ${{ if eq(parameters.buildIos, true) }}:
+            - task: DownloadPipelineArtifact@2
+              inputs: { artifact: proof-ios, path: $(Pipeline.Workspace)/proofs/proof-ios }
+          - bash: |
+              set -eu
+              mkdir -p "$(Pipeline.Workspace)/files" "$(Build.ArtifactStagingDirectory)/record"
+              EXPECT=""
+              [ "$BUILD_ANDROID" = "True" ] && EXPECT="android"
+              [ "$BUILD_ANDROID" = "True" ] && [ "$TEST_LAB" = "True" ] && EXPECT="$EXPECT,testlab"
+              [ "$BUILD_IOS" = "True" ] && EXPECT="${EXPECT:+$EXPECT,}ios"
+              node app-release/gates/gate.mjs --version "$(versionName)" --expect "$EXPECT" --proofs "$(Pipeline.Workspace)/proofs" \
+                --files "$(Pipeline.Workspace)/files" --cover '\.aab$' --out "$(Build.ArtifactStagingDirectory)/record/release-record.json"
+            displayName: 'Every proof passed on exactly these files'
+            env:
+              BUILD_ANDROID: ${{ parameters.buildAndroid }}
+              BUILD_IOS: ${{ parameters.buildIos }}
+              TEST_LAB: ${{ parameters.testLab }}
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/record
+              artifact: release-record
+
+  # The early ring on phones: TestFlight (team group + early group) and the Play internal track.
+  - stage: EarlyRing
+    displayName: Early ring (TestFlight, Play internal)
+    dependsOn: Gate
+    condition: and(eq(dependencies.Gate.result, 'Succeeded'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - ${{ if eq(parameters.buildAndroid, true) }}:
+        - job: PlayInternal
+          pool:
+            vmImage: ubuntu-latest
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - task: DownloadPipelineArtifact@2
+              inputs: { artifact: android, path: $(Pipeline.Workspace)/android }
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(azureConnection)
+                KeyVaultName: $(keyVault)
+                SecretsFilter: 'play-service-account-json'
+                RunAsPreJob: false
+            - script: node app-release/stores/play.mjs upload --aab "$(Pipeline.Workspace)/android/$(aab)" --track internal --name "$(versionName)"
+              displayName: Upload to the Play internal test track
+              env:
+                PLAY_SERVICE_ACCOUNT_JSON: $(play-service-account-json)
+      - ${{ if eq(parameters.buildIos, true) }}:
+        - job: TestFlight
+          pool:
+            vmImage: ubuntu-latest
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(azureConnection)
+                KeyVaultName: $(keyVault)
+                SecretsFilter: 'apple-asc-key-p8,apple-asc-key-id,apple-asc-issuer-id'
+                RunAsPreJob: false
+            - script: node app-release/stores/asc.mjs testflight --version $(versionName) --build $(Build.BuildId) --group "${{ parameters.testflightGroup }}"
+              displayName: Hand the build to TestFlight group ${{ parameters.testflightGroup }}
+              env:
+                ASC_KEY_P8: $(apple-asc-key-p8)
+                ASC_KEY_ID: $(apple-asc-key-id)
+                ASC_ISSUER_ID: $(apple-asc-issuer-id)
+
+  - ${{ if eq(parameters.storeRelease, true) }}:
+    - stage: Approve
+      displayName: One approval for the stores
+      dependsOn: EarlyRing
+      condition: and(eq(dependencies.EarlyRing.result, 'Succeeded'), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'Schedule'))
+      jobs:
+        - job: Wait
+          displayName: Release this version in the stores?
+          pool: server
+          timeoutInMinutes: 20160
+          steps:
+            - task: ManualValidation@1
+              timeoutInMinutes: 20140
+              inputs:
+                notifyUsers: 'set-pipelines.approvers'
+                approvers: 'set-pipelines.approvers'
+                instructions: 'Version $(versionName) passed the gate (see the release-record artifact) and is in TestFlight and on the Play internal track. Resume to send it to App Store review (7-day phased release) and to Play production at 20 % when that is switched on.'
+                onTimeout: reject
+
+    - stage: Release
+      displayName: Stores
+      dependsOn: Approve
+      condition: succeeded()
+      jobs:
+        - ${{ if eq(parameters.buildIos, true) }}:
+          - job: AppStore
+            pool:
+              vmImage: ubuntu-latest
+            steps:
+              - checkout: self
+                fetchDepth: 1
+              - task: UseNode@1
+                inputs: { version: '22.x' }
+              - task: AzureKeyVault@2
+                inputs:
+                  azureSubscription: $(azureConnection)
+                  KeyVaultName: $(keyVault)
+                  SecretsFilter: 'apple-asc-key-p8,apple-asc-key-id,apple-asc-issuer-id'
+                  RunAsPreJob: false
+              - script: node app-release/stores/asc.mjs submit --version $(versionName) --build $(Build.BuildId)
+                displayName: Send to App Store review (phased release after approval)
+                env:
+                  ASC_KEY_P8: $(apple-asc-key-p8)
+                  ASC_KEY_ID: $(apple-asc-key-id)
+                  ASC_ISSUER_ID: $(apple-asc-issuer-id)
+        - ${{ if and(eq(parameters.buildAndroid, true), eq(parameters.androidProduction, true)) }}:
+          - job: GooglePlay
+            pool:
+              vmImage: ubuntu-latest
+            steps:
+              - checkout: self
+                fetchDepth: 1
+              - task: UseNode@1
+                inputs: { version: '22.x' }
+              - task: AzureKeyVault@2
+                inputs:
+                  azureSubscription: $(azureConnection)
+                  KeyVaultName: $(keyVault)
+                  SecretsFilter: 'play-service-account-json'
+                  RunAsPreJob: false
+              - script: node app-release/stores/play.mjs promote --from internal --to production --fraction 0.2
+                displayName: Release on Google Play to 20 % of devices
+                env:
+                  PLAY_SERVICE_ACCOUNT_JSON: $(play-service-account-json)
+
+  - ${{ if eq(parameters.androidProduction, true) }}:
+    - stage: FinishRollout
+      displayName: Finish staged roll-outs
+      dependsOn: []
+      condition: eq(variables['Build.Reason'], 'Schedule')
+      jobs:
+        - job: GooglePlay
+          pool:
+            vmImage: ubuntu-latest
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(azureConnection)
+                KeyVaultName: $(keyVault)
+                SecretsFilter: 'play-service-account-json'
+                RunAsPreJob: false
+            - bash: |
+                set -eu
+                CODE=$(node app-release/stores/play.mjs staged --track production)
+                if [ -z "$CODE" ]; then
+                  echo "No staged Play roll-out"; echo "##vso[task.setvariable variable=action]none"; exit 0
+                fi
+                node app-release/stores/play.mjs vitals --out "$(Agent.TempDirectory)/health.json" >/dev/null || rm -f "$(Agent.TempDirectory)/health.json"
+                node app-release/gates/rollout-watch.mjs decide --health "$(Agent.TempDirectory)/health.json" --version "$CODE" | tee "$(Agent.TempDirectory)/verdict.txt"
+                echo "##vso[task.setvariable variable=action]$(sed -n 's/^verdict: //p' "$(Agent.TempDirectory)/verdict.txt")"
+              displayName: Crash numbers of the staged version (Play vitals)
+              env:
+                PLAY_SERVICE_ACCOUNT_JSON: $(play-service-account-json)
+            - script: node app-release/stores/play.mjs finish --track production
+              displayName: Healthy, take it to everyone
+              condition: and(succeeded(), eq(variables['action'], 'full'))
+              env:
+                PLAY_SERVICE_ACCOUNT_JSON: $(play-service-account-json)
+            - bash: |
+                set -eu
+                node app-release/stores/play.mjs halt --track production
+                echo "##vso[task.logissue type=error]The staged Play roll-out is halted: the new version crashes more than the previous one, or its numbers could not be read. Resume in Play Console or merge a fix."
+                exit 1
+              displayName: Worse, halt the roll-out
+              condition: and(always(), or(eq(variables['action'], 'halt'), failed()))
+              env:
+                PLAY_SERVICE_ACCOUNT_JSON: $(play-service-account-json)
+            - bash: echo "##vso[task.complete result=SucceededWithIssues;]Play has no numbers for the staged version yet; looking again tomorrow night."
+              displayName: Waiting for numbers
+              condition: and(succeeded(), eq(variables['action'], 'wait'))
+
+  # The App Store's brake by hand (iosPhasedRelease = pause or resume).
+  - ${{ if ne(parameters.iosPhasedRelease, 'none') }}:
+    - stage: AppStorePhased
+      displayName: App Store phased release, ${{ parameters.iosPhasedRelease }}
+      dependsOn: []
+      jobs:
+        - job: Phased
+          pool:
+            vmImage: ubuntu-latest
+          steps:
+            - checkout: self
+              fetchDepth: 1
+            - task: UseNode@1
+              inputs: { version: '22.x' }
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(azureConnection)
+                KeyVaultName: $(keyVault)
+                SecretsFilter: 'apple-asc-key-p8,apple-asc-key-id,apple-asc-issuer-id'
+                RunAsPreJob: false
+            - script: node app-release/stores/asc.mjs ${{ parameters.iosPhasedRelease }} --version "${{ trim(parameters.iosVersion) }}"
+              displayName: ${{ parameters.iosPhasedRelease }} the phased release of ${{ parameters.iosVersion }}
+              env:
+                ASC_KEY_P8: $(apple-asc-key-p8)
+                ASC_KEY_ID: $(apple-asc-key-id)
+                ASC_ISSUER_ID: $(apple-asc-issuer-id)

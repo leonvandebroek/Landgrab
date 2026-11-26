@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import i18n from '../i18n';
 import { haversineDistanceM } from '../utils/geo';
+import { isGeolocationSupported, watchPosition } from '../platform/geolocation';
 
 interface GeoState {
   lat: number | null;
@@ -13,7 +14,7 @@ const MIN_UPDATE_INTERVAL_MS = 500;
 const MIN_DISTANCE_METRES = 1.5;
 
 export function useGeolocation(enabled = true): GeoState {
-  const supported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
+  const supported = isGeolocationSupported();
   const [position, setPosition] = useState<{ lat: number | null; lng: number | null }>({
     lat: null,
     lng: null
@@ -29,13 +30,16 @@ export function useGeolocation(enabled = true): GeoState {
       return;
     }
 
-    let watchId = -1;
+    let stop: (() => void) | null = null;
 
     const startWatch = () => {
-      watchId = navigator.geolocation.watchPosition(
-        pos => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
+      if (stop) {
+        return;
+      }
+      stop = watchPosition(
+        coords => {
+          const lat = coords.latitude;
+          const lng = coords.longitude;
           const now = performance.now();
           const last = lastUpdateRef.current;
 
@@ -67,9 +71,9 @@ export function useGeolocation(enabled = true): GeoState {
     };
 
     const stopWatch = () => {
-      if (watchId !== -1) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = -1;
+      if (stop) {
+        stop();
+        stop = null;
       }
     };
 

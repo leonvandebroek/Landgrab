@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getCurrentPosition, isGeolocationSupported } from '../../platform/geolocation';
 
 interface LocationPoint {
     lat: number;
@@ -49,7 +50,7 @@ export function LocationStep({
             return;
         }
 
-        if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+        if (!isGeolocationSupported()) {
             setRetryLocationError(locationError ?? t('lobby.disabledReason.gpsUnavailable'));
             return;
         }
@@ -57,10 +58,10 @@ export function LocationStep({
         setRetryingGps(true);
         setRetryLocationError(null);
 
-        navigator.geolocation.getCurrentPosition(
-            position => {
+        getCurrentPosition(
+            coords => {
                 setRetryingGps(false);
-                onSetMapLocation(position.coords.latitude, position.coords.longitude);
+                onSetMapLocation(coords.latitude, coords.longitude);
             },
             error => {
                 setRetryingGps(false);
