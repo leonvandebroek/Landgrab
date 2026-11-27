@@ -17,8 +17,8 @@ parameters:
   - name: agentPool
     displayName: Agent pool (self-hosted, needs Docker, az CLI and python3; the org has no hosted minutes)
     type: string
-    default: lokaal-linux-poc
-    values: [lokaal-linux-poc, imac-linux-ci]
+    default: imac-linux-ci
+    values: [imac-linux-ci, lokaal-linux-poc]
 
 variables:
   azureConnection: Azure-LandGrab-SC
@@ -28,76 +28,77 @@ variables:
   stateStorage: stunitytechtfstate
   stateContainer: landgrab
 
-pool:
-  name: ${{ parameters.agentPool }}
-  demands: [docker]
-
-steps:
-  - checkout: self
-  - script: python3 -m unittest discover -s infra -p 'test_*.py'
-    displayName: Plan guard tests
-  - task: AzureCLI@2
-    displayName: Plan (and apply) the Landgrab Key Vault
-    inputs:
-      azureSubscription: $(azureConnection)
-      addSpnToEnvironment: true
-      scriptType: bash
-      scriptLocation: inlineScript
-      inlineScript: |
-        set -euo pipefail
-        export ARM_CLIENT_ID="$servicePrincipalId" ARM_TENANT_ID="$tenantId"
-        export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-        if [ -n "${idToken:-}" ]; then
-          export ARM_USE_OIDC=true ARM_OIDC_TOKEN="$idToken"
-        else
-          export ARM_CLIENT_SECRET="$servicePrincipalKey"
-        fi
-        export ARM_USE_AZUREAD=true
-        export TF_VAR_subscription_id="$ARM_SUBSCRIPTION_ID"
-        export TF_VAR_deployment_principal_id="$(az ad sp show --id "$ARM_CLIENT_ID" --query id -o tsv)"
-        terraform_run() {
-          docker run --rm -v "$PWD:/src" -w /src/infra/azure \
-            -e ARM_CLIENT_ID -e ARM_TENANT_ID -e ARM_SUBSCRIPTION_ID -e ARM_CLIENT_SECRET \
-            -e ARM_USE_OIDC -e ARM_OIDC_TOKEN -e ARM_USE_AZUREAD \
-            -e TF_VAR_subscription_id -e TF_VAR_deployment_principal_id \
-            hashicorp/terraform:1.9.8 "$@"
-        }
-        terraform_run init -input=false -backend-config="resource_group_name=$STATE_GROUP" \
-          -backend-config="storage_account_name=$STATE_STORAGE" -backend-config="container_name=$STATE_CONTAINER" \
-          -backend-config=key=production.tfstate -backend-config=use_azuread_auth=true
-        terraform_run fmt -check
-        terraform_run validate
-        terraform_run plan -input=false -out=deployment.tfplan
-        terraform_run show -json deployment.tfplan | python3 infra/plan_guard.py "$RESOURCE_GROUP"
-        if [ "$APPLY" != "True" ]; then
-          echo 'Plan only. Run again with apply=true from main to create it.'
-          exit 0
-        fi
-        [ "$BUILD_SOURCEBRANCH" = "refs/heads/main" ] || { echo 'Apply runs only from main.'; exit 1; }
-        terraform_run apply -input=false deployment.tfplan
-        [ "$SEED" = "True" ] || exit 0
-        # A new role assignment can take a few minutes to reach Key Vault.
-        for attempt in $(seq 1 20); do
-          az keyvault secret list --vault-name "$KEY_VAULT" -o none 2>/dev/null && break
-          [ "$attempt" = 20 ] && { echo 'Key Vault access did not arrive in time; run again.'; exit 1; }
-          sleep 30
-        done
-        seed() {
-          if az keyvault secret show --vault-name "$KEY_VAULT" --name "$1" -o none 2>/dev/null; then
-            echo "$1 exists, left as it is."
-          else
-            az keyvault secret set --vault-name "$KEY_VAULT" --name "$1" --value "$(openssl rand -base64 "$2" | tr -d '\n=+/')" \
-              --only-show-errors -o none
-            echo "$1 created."
-          fi
-        }
-        seed landgrab-postgres-password 32
-        seed landgrab-jwt-secret 96
-    env:
-      STATE_GROUP: $(stateGroup)
-      STATE_STORAGE: $(stateStorage)
-      STATE_CONTAINER: $(stateContainer)
-      RESOURCE_GROUP: $(resourceGroup)
-      KEY_VAULT: $(keyVault)
-      APPLY: ${{ parameters.apply }}
-      SEED: ${{ parameters.seedSecrets }}
+jobs:
+  - job: Plan
+    pool:
+      name: ${{ parameters.agentPool }}
+      demands: [docker]
+    steps:
+      - checkout: self
+      - script: python3 -m unittest discover -s infra -p 'test_*.py'
+        displayName: Plan guard tests
+      - task: AzureCLI@2
+        displayName: Plan (and apply) the Landgrab Key Vault
+        inputs:
+          azureSubscription: $(azureConnection)
+          addSpnToEnvironment: true
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            export ARM_CLIENT_ID="$servicePrincipalId" ARM_TENANT_ID="$tenantId"
+            export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+            if [ -n "${idToken:-}" ]; then
+              export ARM_USE_OIDC=true ARM_OIDC_TOKEN="$idToken"
+            else
+              export ARM_CLIENT_SECRET="$servicePrincipalKey"
+            fi
+            export ARM_USE_AZUREAD=true
+            export TF_VAR_subscription_id="$ARM_SUBSCRIPTION_ID"
+            export TF_VAR_deployment_principal_id="$(az ad sp show --id "$ARM_CLIENT_ID" --query id -o tsv)"
+            terraform_run() {
+              docker run --rm -v "$PWD:/src" -w /src/infra/azure \
+                -e ARM_CLIENT_ID -e ARM_TENANT_ID -e ARM_SUBSCRIPTION_ID -e ARM_CLIENT_SECRET \
+                -e ARM_USE_OIDC -e ARM_OIDC_TOKEN -e ARM_USE_AZUREAD \
+                -e TF_VAR_subscription_id -e TF_VAR_deployment_principal_id \
+                hashicorp/terraform:1.9.8 "$@"
+            }
+            terraform_run init -input=false -backend-config="resource_group_name=$STATE_GROUP" \
+              -backend-config="storage_account_name=$STATE_STORAGE" -backend-config="container_name=$STATE_CONTAINER" \
+              -backend-config=key=production.tfstate -backend-config=use_azuread_auth=true
+            terraform_run fmt -check
+            terraform_run validate
+            terraform_run plan -input=false -out=deployment.tfplan
+            terraform_run show -json deployment.tfplan | python3 infra/plan_guard.py "$RESOURCE_GROUP"
+            if [ "$APPLY" != "True" ]; then
+              echo 'Plan only. Run again with apply=true from main to create it.'
+              exit 0
+            fi
+            [ "$BUILD_SOURCEBRANCH" = "refs/heads/main" ] || { echo 'Apply runs only from main.'; exit 1; }
+            terraform_run apply -input=false deployment.tfplan
+            [ "$SEED" = "True" ] || exit 0
+            # A new role assignment can take a few minutes to reach Key Vault.
+            for attempt in $(seq 1 20); do
+              az keyvault secret list --vault-name "$KEY_VAULT" -o none 2>/dev/null && break
+              [ "$attempt" = 20 ] && { echo 'Key Vault access did not arrive in time; run again.'; exit 1; }
+              sleep 30
+            done
+            seed() {
+              if az keyvault secret show --vault-name "$KEY_VAULT" --name "$1" -o none 2>/dev/null; then
+                echo "$1 exists, left as it is."
+              else
+                az keyvault secret set --vault-name "$KEY_VAULT" --name "$1" --value "$(openssl rand -base64 "$2" | tr -d '\n=+/')" \
+                  --only-show-errors -o none
+                echo "$1 created."
+              fi
+            }
+            seed landgrab-postgres-password 32
+            seed landgrab-jwt-secret 96
+        env:
+          STATE_GROUP: $(stateGroup)
+          STATE_STORAGE: $(stateStorage)
+          STATE_CONTAINER: $(stateContainer)
+          RESOURCE_GROUP: $(resourceGroup)
+          KEY_VAULT: $(keyVault)
+          APPLY: ${{ parameters.apply }}
+          SEED: ${{ parameters.seedSecrets }}
