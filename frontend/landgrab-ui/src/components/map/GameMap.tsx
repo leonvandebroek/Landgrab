@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet-rotate';
+import './leafletGuards';
 import 'leaflet/dist/leaflet.css';
 import type { GameState, HexCell } from '../../types/game';
 import { DEFAULT_MAP_LAYER_PREFS, type MapLayerPreferences } from '../../types/mapLayerPreferences';
@@ -16,6 +17,8 @@ import { createGameBaseLayers, MAP_LOOK_TO_BASEMAP, MAP_MAX_ZOOM, type BasemapLa
 import { getTimePeriod } from '../../utils/timeOfDay';
 import { TroopSplashLayer } from './TroopSplashLayer';
 import { MapLayerToggle, MapLegend, TimeOverlay } from '../game/map';
+import { LayersSheet } from './LayersSheet';
+import { Icon } from '../ui/Icon';
 import { useCompassHeading } from '../../hooks/useCompassHeading';
 
 interface LocationPoint {
@@ -40,6 +43,13 @@ interface Props {
   onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
   onHexScreenPosition?: (pos: { x: number; y: number } | null) => void;
   navigateRef?: MutableRefObject<((lat: number, lng: number) => void) | null>;
+  /**
+   * 'compact' (play screen): two map buttons and the Layers sheet.
+   * 'none' (previews): no controls. 'full': the older six-button column.
+   */
+  controlsVariant?: 'full' | 'compact' | 'none';
+  /** Labels for the compact buttons; the play screen passes them. */
+  compactLabels?: { layers: string; locate: string };
 }
 
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
@@ -143,6 +153,8 @@ export const GameMap = memo(function GameMap({
   onBoundsChange,
   onHexScreenPosition,
   navigateRef,
+  controlsVariant = 'full',
+  compactLabels,
 }: Props) {
   const { t } = useTranslation();
   const selectedHexKey = useGameplayStore((overlayState) => overlayState.selectedHexKey);
@@ -288,6 +300,24 @@ export const GameMap = memo(function GameMap({
   const handleHexClick = useCallback((q: number, r: number) => {
     onHexClick?.(q, r, renderedGrid[`${q},${r}`]);
   }, [onHexClick, renderedGrid]);
+
+  const handleCompassRotationChange = useCallback((enabled: boolean) => {
+    if (!compassSupported) return;
+    if (!enabled) {
+      setDebugCompassHeading(null);
+      setIsCompassRotationEnabled(false);
+      return;
+    }
+    if (compassPermission === 'prompt') {
+      requestCompassPermission().then(() => {
+        setIsCompassRotationEnabled(true);
+      }).catch(() => {
+        // Permission denied: leave rotation off.
+      });
+      return;
+    }
+    setIsCompassRotationEnabled(true);
+  }, [compassPermission, compassSupported, requestCompassPermission]);
 
   const handleZoomToLocation = useCallback(() => {
     const map = mapRef.current;
@@ -1109,136 +1139,184 @@ export const GameMap = memo(function GameMap({
           </span>
         </aside>
       )}
+      {controlsVariant === 'compact' && (
+        <>
+          <div className="lg-mapbtns" role="group" aria-label={t('game.mapControlsLabel')}>
+            <button
+              type="button"
+              className="lg-iconbtn"
+              onClick={() => setIsLayerPanelOpen(true)}
+              aria-label={compactLabels?.layers ?? t('mapLayers.expandPanel')}
+              title={compactLabels?.layers ?? t('mapLayers.expandPanel')}
+              data-testid="map-layers-btn"
+            >
+              <Icon name="layers" />
+            </button>
+            <button
+              type="button"
+              className="lg-iconbtn lg-iconbtn--accent"
+              data-action="locate"
+              onClick={handleZoomToLocation}
+              aria-label={compactLabels?.locate ?? t('game.zoomToLocation')}
+              title={compactLabels?.locate ?? t('game.zoomToLocation')}
+              disabled={!currentLocation}
+              data-testid="map-locate-btn"
+            >
+              <Icon name="locate" />
+            </button>
+          </div>
+          <LayersSheet
+            open={isLayerPanelOpen}
+            onClose={() => setIsLayerPanelOpen(false)}
+            followMe={isFollowingMe}
+            onFollowMeChange={setIsFollowingMe}
+            canFollow={Boolean(currentLocation)}
+            compassRotation={isCompassRotationEnabled}
+            onCompassRotationChange={handleCompassRotationChange}
+            compassSupported={compassSupported}
+            compassNeedsPermission={compassPermission === 'prompt'}
+            mapLook={mapLookPreset}
+            mapLooks={MAP_LOOK_PRESETS}
+            onMapLookChange={setMapLookPreset}
+            layerPrefs={layerPrefs}
+            onLayerPrefsChange={setLayerPrefs}
+          />
+        </>
+      )}
+      {controlsVariant === 'full' && (
+        <>
       <div className="game-map-controls" role="group" aria-label={t('game.mapControlsLabel')}>
-        <button
-          type="button"
-          className={`map-control-fab${isFollowingMe ? ' is-active' : ''}`}
-          onClick={() => setIsFollowingMe((enabled) => !enabled)}
-          title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-          aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
-          disabled={!currentLocation}
-        >
-          {/* Navigation/Compass Icon */}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {isFollowingMe ? (
-              <path d="M12 2L2 22l10-3 10 3L12 2z" fill="currentColor" fillOpacity="0.2" />
-            ) : (
-              <polygon points="3 11 22 2 13 21 11 13 3 11" />
-            )}
-          </svg>
-        </button>
-        <button
-          className={`map-control-fab map-control-fab--compass${isCompassRotationEnabled ? ' is-active' : ''}`}
-          disabled={!compassSupported}
-          title={
-            !compassSupported
-              ? t('game.compassNotSupported')
-              : compassPermission === 'prompt'
-              ? t('game.compassPermissionNeeded')
-              : isCompassRotationEnabled
-              ? t('game.disableCompassRotation')
-              : t('game.enableCompassRotation')
-          }
-          aria-label={
-            !compassSupported
-              ? t('game.compassNotSupported')
-              : isCompassRotationEnabled
-              ? t('game.disableCompassRotation')
-              : t('game.enableCompassRotation')
-          }
-          onClick={() => {
-            if (!compassSupported) return;
-            if (compassPermission === 'prompt') {
-              requestCompassPermission().then(() => {
-                setIsCompassRotationEnabled(true);
-              }).catch(() => {
-                // permission denied — do nothing
-              });
-            } else {
-              setIsCompassRotationEnabled((prev) => {
-                if (prev) {
-                  setDebugCompassHeading(null);
-                }
-                return !prev;
-              });
-            }
-          }}
-          style={{ '--compass-needle-deg': `${debugCompassHeading ?? compassHeading ?? 0}deg` } as React.CSSProperties}
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10" />
-            <g className="compass-needle">
-              {/* North needle — red */}
-              <polygon points="12,4 10.5,12 12,11 13.5,12" fill="#e74c3c" stroke="none" />
-              {/* South needle — white */}
-              <polygon points="12,20 10.5,12 12,13 13.5,12" fill="white" stroke="none" />
-            </g>
-            <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="map-control-fab locate-fab"
-          data-action="locate"
-          onClick={handleZoomToLocation}
-          title={t('game.zoomToLocation')}
-          aria-label={t('game.zoomToLocation')}
-          disabled={!currentLocation}
-        >
-          {/* Crosshair/Focus Icon */}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="16" />
-            <line x1="8" y1="12" x2="16" y2="12" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className={`map-control-fab${isLayerPanelOpen ? ' is-active' : ''}`}
-          onClick={() => setIsLayerPanelOpen((open) => !open)}
-          title={t('mapLayers.expandPanel')}
-          aria-label={t('mapLayers.expandPanel')}
-          {...layerPanelDisclosureProps}
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+          <button
+            type="button"
+            className={`map-control-fab${isFollowingMe ? ' is-active' : ''}`}
+            onClick={() => setIsFollowingMe((enabled) => !enabled)}
+            title={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+            aria-label={isFollowingMe ? t('game.disableFollowMe') : t('game.enableFollowMe')}
+            disabled={!currentLocation}
           >
-            <path d="M3 6h18" />
-            <path d="M3 12h18" />
-            <path d="M3 18h18" />
-            <path d="M8 3v6" />
-            <path d="M16 9v6" />
-            <path d="M10 15v6" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className={`map-control-fab map-control-fab--map-look map-control-fab--map-look-${mapLookPreset}`}
-          onClick={() => setMapLookPreset(nextMapLookPreset)}
-          title={t('mapLooks.cycleButton', { current: currentMapLookLabel, next: nextMapLookLabel })}
-          aria-label={t('mapLooks.cycleButton', { current: currentMapLookLabel, next: nextMapLookLabel })}
-        >
-          <span className="map-control-fab__stack" aria-hidden="true">
-            <span className="map-control-fab__kicker">MAP</span>
-            <span className="map-control-fab__value">{currentMapLookShortLabel}</span>
-          </span>
-        </button>
-        <MapLegend />
-      </div>
-      <MapLayerToggle
-        prefs={layerPrefs}
-        onPrefsChange={setLayerPrefs}
-        isOpen={isLayerPanelOpen}
-        onClose={() => setIsLayerPanelOpen(false)}
-      />
+            {/* Navigation/Compass Icon */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {isFollowingMe ? (
+                <path d="M12 2L2 22l10-3 10 3L12 2z" fill="currentColor" fillOpacity="0.2" />
+              ) : (
+                <polygon points="3 11 22 2 13 21 11 13 3 11" />
+              )}
+            </svg>
+          </button>
+          <button
+            className={`map-control-fab map-control-fab--compass${isCompassRotationEnabled ? ' is-active' : ''}`}
+            disabled={!compassSupported}
+            title={
+              !compassSupported
+                ? t('game.compassNotSupported')
+                : compassPermission === 'prompt'
+                ? t('game.compassPermissionNeeded')
+                : isCompassRotationEnabled
+                ? t('game.disableCompassRotation')
+                : t('game.enableCompassRotation')
+            }
+            aria-label={
+              !compassSupported
+                ? t('game.compassNotSupported')
+                : isCompassRotationEnabled
+                ? t('game.disableCompassRotation')
+                : t('game.enableCompassRotation')
+            }
+            onClick={() => {
+              if (!compassSupported) return;
+              if (compassPermission === 'prompt') {
+                requestCompassPermission().then(() => {
+                  setIsCompassRotationEnabled(true);
+                }).catch(() => {
+                  // permission denied — do nothing
+                });
+              } else {
+                setIsCompassRotationEnabled((prev) => {
+                  if (prev) {
+                    setDebugCompassHeading(null);
+                  }
+                  return !prev;
+                });
+              }
+            }}
+            style={{ '--compass-needle-deg': `${debugCompassHeading ?? compassHeading ?? 0}deg` } as React.CSSProperties}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <g className="compass-needle">
+                {/* North needle — red */}
+                <polygon points="12,4 10.5,12 12,11 13.5,12" fill="#e74c3c" stroke="none" />
+                {/* South needle — white */}
+                <polygon points="12,20 10.5,12 12,13 13.5,12" fill="white" stroke="none" />
+              </g>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="map-control-fab locate-fab"
+            data-action="locate"
+            onClick={handleZoomToLocation}
+            title={t('game.zoomToLocation')}
+            aria-label={t('game.zoomToLocation')}
+            disabled={!currentLocation}
+          >
+            {/* Crosshair/Focus Icon */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="16" />
+              <line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`map-control-fab${isLayerPanelOpen ? ' is-active' : ''}`}
+            onClick={() => setIsLayerPanelOpen((open) => !open)}
+            title={t('mapLayers.expandPanel')}
+            aria-label={t('mapLayers.expandPanel')}
+            {...layerPanelDisclosureProps}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6h18" />
+              <path d="M3 12h18" />
+              <path d="M3 18h18" />
+              <path d="M8 3v6" />
+              <path d="M16 9v6" />
+              <path d="M10 15v6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`map-control-fab map-control-fab--map-look map-control-fab--map-look-${mapLookPreset}`}
+            onClick={() => setMapLookPreset(nextMapLookPreset)}
+            title={t('mapLooks.cycleButton', { current: currentMapLookLabel, next: nextMapLookLabel })}
+            aria-label={t('mapLooks.cycleButton', { current: currentMapLookLabel, next: nextMapLookLabel })}
+          >
+            <span className="map-control-fab__stack" aria-hidden="true">
+              <span className="map-control-fab__kicker">MAP</span>
+              <span className="map-control-fab__value">{currentMapLookShortLabel}</span>
+            </span>
+          </button>
+          <MapLegend />
+        </div>
+        <MapLayerToggle
+          prefs={layerPrefs}
+          onPrefsChange={setLayerPrefs}
+          isOpen={isLayerPanelOpen}
+          onClose={() => setIsLayerPanelOpen(false)}
+        />
+        </>
+      )}
     </div>
   );
 });

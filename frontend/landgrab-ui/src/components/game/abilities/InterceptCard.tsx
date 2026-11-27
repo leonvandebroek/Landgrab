@@ -4,6 +4,8 @@ import { AbilityCard } from '../AbilityCard';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { useGameplayStore } from '../../../stores';
 import type { AbilityCardProps } from '../../../types/abilities';
+import { Icon } from '../../ui/Icon';
+import { cx } from '../../ui/kit';
 
 export function InterceptCard({ invoke }: AbilityCardProps) {
   const { t } = useTranslation();
@@ -42,49 +44,28 @@ export function InterceptCard({ invoke }: AbilityCardProps) {
     };
   }, [heading, invoke, exitAbilityMode]);
 
-  let statusText: string = t('abilities.intercept.noTarget', 'Scanning for enemy signals...');
-  let statusClass = 'text-gray-400';
-
-  if (targetStatus === 'locking') {
-    statusText = t('abilities.intercept.locking', `Locking on... Signal acquired (${lockSeconds}s)`);
-    statusClass = 'text-yellow-400 font-bold animate-pulse';
-  } else if (targetStatus === 'broken') {
-    statusText = t('abilities.intercept.broken', 'Signal lost! Realign device.');
-    statusClass = 'text-red-500 font-semibold';
-  } else if (targetStatus === 'success') {
-    statusText = t('abilities.intercept.success', 'Intercept Successful!');
-    statusClass = 'text-green-500 font-bold';
-  }
+  const statusText = targetStatus === 'locking'
+    ? t('abilities.intercept.locking' as never, { seconds: lockSeconds })
+    : targetStatus === 'broken'
+      ? t('abilities.intercept.lockBroken' as never)
+      : targetStatus === 'success'
+        ? t('abilities.intercept.success' as never)
+        : t('abilities.intercept.scanning' as never);
+  const live = targetStatus === 'locking' || targetStatus === 'success';
 
   return (
     <AbilityCard
-      title={t('abilities.intercept.title', 'Intercept')}
-      icon="🔭"
+      title={t('abilities.intercept.title' as never)}
+      icon={<Icon name="eye" />}
       onBackToHud={exitAbilityMode}
+      statusContent={(
+        <span className={cx('ability-card__status-pill', live && 'ability-card__status-pill--live')}>{statusText}</span>
+      )}
     >
-      <div className="flex flex-col items-center justify-center p-4 space-y-4">
-        <p className="text-sm text-gray-300 text-center mb-2">
-          {t(
-            'abilities.intercept.instructions',
-            'Point your device around to search for enemy signals. Maintain heading to complete the intercept.',
-          )}
-        </p>
-
-        <div className="text-xl font-mono tracking-wider bg-gray-900 px-4 py-2 rounded-lg border border-gray-700 w-full text-center">
-          Heading: {heading != null ? `${Math.round(heading)}°` : '--°'}
-        </div>
-
-        <div className={`text-center p-3 w-full rounded-md bg-gray-800 border ${
-          targetStatus === 'noTarget' ? 'border-gray-600' :
-          targetStatus === 'locking' ? 'border-yellow-500' :
-          targetStatus === 'broken' ? 'border-red-500' :
-          'border-green-500'
-        }`}>
-          <p className={`text-md ${statusClass}`}>
-            {statusText}
-          </p>
-        </div>
-      </div>
+      <p className="ability-card__status-copy">{t('abilities.intercept.instructions' as never)}</p>
+      {targetStatus === 'locking' && (
+        <div className="lg-score__bar"><span className="lg-score__fill" style={{ width: `${Math.min(100, (lockSeconds / 5) * 100)}%`, background: 'var(--lg-accent)' }} /></div>
+      )}
     </AbilityCard>
   );
 }

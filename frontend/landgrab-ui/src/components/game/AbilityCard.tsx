@@ -1,6 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import '../../styles/ability-card.css';
+import { useGameplayStore } from '../../stores/gameplayStore';
+import { abilityRegistry } from '../../config/abilityRegistry';
+import { Icon } from '../ui/Icon';
 
 export interface AbilityCardProps {
   title: string;
@@ -14,25 +16,10 @@ export interface AbilityCardProps {
   abortLabel?: string;
 }
 
-function CloseIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18"></line>
-      <line x1="6" y1="6" x2="18" y2="18"></line>
-    </svg>
-  );
-}
-
-function AlertIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
-      <line x1="12" y1="8" x2="12" y2="12"></line>
-      <line x1="12" y1="16" x2="12.01" y2="16"></line>
-    </svg>
-  );
-}
-
+/**
+ * Every ability opens here, in the bottom panel over the map: title, who can
+ * use it, what is happening now, and the buttons to act.
+ */
 export function AbilityCard({
   title,
   icon,
@@ -45,47 +32,44 @@ export function AbilityCard({
   abortLabel,
 }: AbilityCardProps) {
   const { t } = useTranslation();
-  
-  const defaultAbortLabel = t('abilities.abortMission', 'Abort Mission');
+  const activeAbility = useGameplayStore((state) => state.abilityUi.activeAbility);
+  const roles = activeAbility ? abilityRegistry[activeAbility]?.roles ?? [] : [];
+  const kicker = roles.length === 1
+    ? t('ui.abilities.roleAbility', { role: t(`ui.roles.${roles[0] as 'Commander' | 'Scout' | 'Engineer'}.title`) })
+    : t('ui.abilities.everyRole');
 
   return (
-    <div className="ability-card">
-      <header className="ability-card__header">
-        <div className="ability-card__title-group">
-          {icon && <div className="ability-card__icon">{icon}</div>}
-          <h2 className="ability-card__title">{title}</h2>
+    <div className="lg-dock ability-card" data-testid="ability-card" role="region" aria-label={title}>
+      <span className="lg-dock__handle" aria-hidden="true" />
+      <header className="lg-dock__head">
+        <div className="lg-row lg-grow" style={{ minWidth: 0 }}>
+          {icon && <div className="ability-card__icon" aria-hidden="true">{icon}</div>}
+          <div className="lg-dock__copy">
+            <h2 className="lg-dock__title ability-card__title">{title}</h2>
+            <span className="lg-dock__sub">{kicker}</span>
+          </div>
         </div>
-        <button 
-          className="ability-card__back-btn" 
+        <button
+          type="button"
+          className="lg-iconbtn lg-iconbtn--small"
           onClick={onBackToHud}
-          aria-label={t('common.cancel', 'Cancel/Back')}
+          aria-label={t('ui.abilities.backToMap')}
+          data-testid="ability-card-close"
         >
-          <CloseIcon />
+          <Icon name="close" size={18} />
         </button>
       </header>
 
-      {statusContent && (
-        <div className="ability-card__status-region">
-          {statusContent}
-        </div>
-      )}
+      {statusContent && <div className="ability-card__status-region">{statusContent}</div>}
 
-      <div className="ability-card__body">
-        {children}
-      </div>
+      <div className="ability-card__body">{children}</div>
 
       {(footerContent || (showAbort && onAbort)) && (
         <footer className="ability-card__footer">
-          {footerContent && (
-            <div className="ability-card__footer-actions">
-              {footerContent}
-            </div>
-          )}
-
+          {footerContent && <div className="ability-card__footer-actions">{footerContent}</div>}
           {showAbort && onAbort && (
-            <button className="ability-card__abort-btn" onClick={onAbort}>
-              <AlertIcon />
-              {abortLabel || defaultAbortLabel}
+            <button type="button" className="lg-btn lg-btn--outline lg-btn--md lg-btn--block ability-card__abort-btn" onClick={onAbort}>
+              {abortLabel || t('ui.abilities.stop')}
             </button>
           )}
         </footer>

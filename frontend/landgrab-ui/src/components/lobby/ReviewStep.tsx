@@ -42,6 +42,8 @@ interface Props {
     onSetAllianceHQ?: (q: number, r: number, allianceId: string) => void;
     onStartGame: () => void;
     invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
+    /** Shown inside the new settings screen: no summary and no start button. */
+    embedded?: boolean;
 }
 
 export function ReviewStep({
@@ -59,6 +61,7 @@ export function ReviewStep({
     onSetAllianceHQ,
     onStartGame,
     invoke,
+    embedded = false,
 }: Props) {
     const { t } = useTranslation();
 
@@ -308,10 +311,12 @@ export function ReviewStep({
             </div>
 
             <div className="wizard-step-body">
-                <ReviewSummary
-                    gameState={gameState}
-                    tileSizeText={formatDistance(gameState.tileSizeMeters)}
-                />
+                {!embedded && (
+                    <ReviewSummary
+                        gameState={gameState}
+                        tileSizeText={formatDistance(gameState.tileSizeMeters)}
+                    />
+                )}
 
                 <p className="wizard-hint">{t('wizard.reviewAutoPlaceNote')}</p>
 
@@ -406,11 +411,11 @@ export function ReviewStep({
                     </>
                 )}
 
-                {isHost && (
+                {isHost && !embedded && (
                     <GameStartButton canStart={canStart} onStartGame={onStartGame} />
                 )}
 
-                {!isHost && (
+                {!isHost && !embedded && (
                     <p className="wizard-hint wizard-waiting">{t('wizard.guestWaitingStart')}</p>
                 )}
             </div>

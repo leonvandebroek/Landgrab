@@ -2,11 +2,21 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { AuthApiError } from '../../hooks/useAuth';
-import { GameIcon } from '../common/GameIcon';
+import { Button, Screen, cx } from '../ui/kit';
 
 interface Props {
   onLogin: (usernameOrEmail: string, password: string) => Promise<unknown>;
   onRegister: (username: string, email: string, password: string) => Promise<unknown>;
+}
+
+export function LandgrabMark({ size = 64 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 64 64" width={size} height={size} role="img" aria-label="Landgrab">
+      <path d="M32 4 56 18v28L32 60 8 46V18L32 4Z" fill="#C6F24E" />
+      <path d="M24 44V20" fill="none" stroke="#0E1418" strokeWidth="4" strokeLinecap="round" />
+      <path d="M24 21h18l-4 6.5 4 6.5H24" fill="none" stroke="#0E1418" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export function AuthPage({ onLogin, onRegister }: Props) {
@@ -45,137 +55,110 @@ export function AuthPage({ onLogin, onRegister }: Props) {
     }
   };
 
+  const switchMode = (next: 'login' | 'register') => {
+    setMode(next);
+    setError('');
+    setFieldErrors({});
+  };
+
   return (
-    <div className="auth-page">
-      <div className="auth-card auth-shell">
-        <div className="auth-hero-panel">
-          <div className="auth-hero-copy">
-            <span className="section-kicker">{t('auth.leadBadge')}</span>
-            <div className="auth-logo">
-              <span className="logo-icon"><GameIcon name="treasureMap" size="lg" /></span>
-              <div>
-                <h1>Landgrab</h1>
-                <p>{t('auth.tagline')}</p>
-              </div>
-            </div>
-
-            <h2>{t('auth.leadTitle')}</h2>
-            <p className="subtitle auth-subtitle">{t('auth.leadBody')}</p>
-          </div>
-
-          <div className="auth-benefit-list" aria-label={t('auth.trustTitle')}>
-            <div className="auth-benefit-card">
-              <strong>{t('auth.trustTitle')}</strong>
-              <span>{t('auth.trustBody')}</span>
-            </div>
-            <div className="auth-benefit-card compact">
-              <strong>{t('auth.playTitle')}</strong>
-              <span>{t('auth.playBody')}</span>
-            </div>
+    <Screen testId="auth-page">
+      <div className="lg-auth lg-stack">
+        <div className="lg-auth__brand">
+          <LandgrabMark />
+          <div className="lg-stack lg-stack--sm">
+            <h1 className="lg-auth__title">Landgrab</h1>
+            <p className="lg-auth__tagline">{t('ui.auth.tagline')}</p>
           </div>
         </div>
 
-        <div className="auth-form-panel">
-          <div className="auth-tabs">
-            <button
-              type="button"
-              data-testid="auth-sign-in-tab"
-              className={mode === 'login' ? 'active' : ''}
-              onClick={() => {
-                setMode('login');
-                setError('');
-                setFieldErrors({});
-              }}
-            >
-              {t('auth.signIn')}
-            </button>
-            <button
-              type="button"
-              data-testid="auth-sign-up-tab"
-              className={mode === 'register' ? 'active' : ''}
-              onClick={() => {
-                setMode('register');
-                setError('');
-                setFieldErrors({});
-              }}
-            >
-              {t('auth.signUp')}
-            </button>
-          </div>
-
-          <div className="auth-form-header">
-            <h3>{mode === 'login' ? t('auth.signInTitle') : t('auth.signUpTitle')}</h3>
-            <p className="section-note">{mode === 'login' ? t('auth.signInBody') : t('auth.signUpBody')}</p>
-          </div>
-
-          <form onSubmit={submit} className="auth-form">
-            <div className="field">
-              <label>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.username')}</label>
-              <input
-                type="text"
-                data-testid="auth-username-input"
-                value={username}
-                onChange={e => {
-                  setUsername(e.target.value);
-                  setFieldErrors(prev => ({ ...prev, username: '' }));
-                }}
-                placeholder={mode === 'login' ? t('auth.usernameOrEmailPlaceholder') : t('auth.usernamePlaceholder')}
-                required
-                autoComplete="username"
-              />
-              {fieldErrors.username && <p className="error-msg field-error">{fieldErrors.username}</p>}
-            </div>
-
-            {mode === 'register' && (
-              <div className="field">
-                <label>{t('auth.email')}</label>
-                <input
-                  type="email"
-                  data-testid="auth-email-input"
-                  value={email}
-                  onChange={e => {
-                    setEmail(e.target.value);
-                    setFieldErrors(prev => ({ ...prev, email: '' }));
-                  }}
-                  placeholder={t('auth.emailPlaceholder')}
-                  required
-                  autoComplete="email"
-                />
-                {fieldErrors.email && <p className="error-msg field-error">{fieldErrors.email}</p>}
-              </div>
-            )}
-
-            <div className="field">
-              <label>{t('auth.password')}</label>
-              <input
-                type="password"
-                data-testid="auth-password-input"
-                value={password}
-                onChange={e => {
-                  setPassword(e.target.value);
-                  setFieldErrors(prev => ({ ...prev, password: '' }));
-                }}
-                placeholder="••••••••"
-                required
-                minLength={8}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              />
-              {fieldErrors.password && <p className="error-msg field-error">{fieldErrors.password}</p>}
-            </div>
-
-            {error && <p className="error-msg">{error}</p>}
-
-            <button type="submit" className="btn-primary auth-submit" data-testid="auth-submit-btn" disabled={loading}>
-              {loading ? t('auth.pleaseWait') : mode === 'login' ? t('auth.signIn') : t('auth.createAccount')}
-            </button>
-          </form>
-
-          <p className="auth-footer">
-            {t('auth.footer')}
-          </p>
+        <div className="lg-seg" role="tablist" aria-label={t('ui.auth.modeLabel')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'login'}
+            className={cx('lg-seg__item', mode === 'login' && 'is-active')}
+            data-testid="auth-sign-in-tab"
+            onClick={() => switchMode('login')}
+          >
+            {t('ui.auth.signIn')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'register'}
+            className={cx('lg-seg__item', mode === 'register' && 'is-active')}
+            data-testid="auth-sign-up-tab"
+            onClick={() => switchMode('register')}
+          >
+            {t('ui.auth.createAccount')}
+          </button>
         </div>
+
+        <form onSubmit={submit} noValidate>
+          <div className="lg-field">
+            <label className="lg-label" htmlFor="auth-username">
+              {mode === 'login' ? t('ui.auth.usernameOrEmail') : t('ui.auth.username')}
+            </label>
+            <input
+              id="auth-username"
+              className={cx('lg-input', fieldErrors.username && 'is-invalid')}
+              type="text"
+              data-testid="auth-username-input"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-invalid={Boolean(fieldErrors.username)}
+            />
+            {fieldErrors.username && <span className="lg-field__error">{fieldErrors.username}</span>}
+          </div>
+
+          {mode === 'register' && (
+            <div className="lg-field">
+              <label className="lg-label" htmlFor="auth-email">{t('ui.auth.email')}</label>
+              <input
+                id="auth-email"
+                className={cx('lg-input', fieldErrors.email && 'is-invalid')}
+                type="email"
+                data-testid="auth-email-input"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                autoCapitalize="none"
+                aria-invalid={Boolean(fieldErrors.email)}
+              />
+              {fieldErrors.email && <span className="lg-field__error">{fieldErrors.email}</span>}
+            </div>
+          )}
+
+          <div className="lg-field">
+            <label className="lg-label" htmlFor="auth-password">{t('ui.auth.password')}</label>
+            <input
+              id="auth-password"
+              className={cx('lg-input', fieldErrors.password && 'is-invalid')}
+              type="password"
+              data-testid="auth-password-input"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              aria-invalid={Boolean(fieldErrors.password)}
+            />
+            {fieldErrors.password && <span className="lg-field__error">{fieldErrors.password}</span>}
+          </div>
+
+          {error && <p className="lg-error" role="alert">{error}</p>}
+
+          <Button type="submit" testId="auth-submit-btn" disabled={loading}>
+            {loading ? t('auth.pleaseWait') : mode === 'login' ? t('ui.auth.signIn') : t('ui.auth.createAccount')}
+          </Button>
+        </form>
+
+        <p className="lg-small lg-center">{t('ui.auth.privacy')}</p>
       </div>
-    </div>
+    </Screen>
   );
 }
 

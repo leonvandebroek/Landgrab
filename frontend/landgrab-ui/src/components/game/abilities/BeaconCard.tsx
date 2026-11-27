@@ -7,6 +7,8 @@ import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import type { AbilityCardProps } from '../../../types/abilities';
 
+const DIRS = ['north', 'northEast', 'east', 'southEast', 'south', 'southWest', 'west', 'northWest'] as const;
+
 export function BeaconCard({ myUserId, invoke }: AbilityCardProps) {
   const { t } = useTranslation();
   const player = useGameStore((store) =>
@@ -123,10 +125,10 @@ export function BeaconCard({ myUserId, invoke }: AbilityCardProps) {
         {!isBeaconLive && (
           <div className="ability-card__sensor-status ability-card__sensor-status--panel">
             <span className="ability-card__sensor-label">
-              Current Heading
+              {t('abilities.beacon.facing' as never)}
             </span>
             <strong className="ability-card__sensor-value">
-              {heading !== null ? `${Math.round(heading)}°` : 'Searching...'}
+              {heading !== null ? t(`ui.directions.${DIRS[Math.round((((heading % 360) + 360) % 360) / 45) % 8]}` as never) : t('abilities.beacon.searching' as never)}
             </strong>
           </div>
         )}

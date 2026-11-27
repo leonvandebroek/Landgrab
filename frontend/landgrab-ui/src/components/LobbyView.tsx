@@ -1,8 +1,6 @@
 import { lazy, Suspense } from 'react';
 import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 import { ConnectionBanner } from './ConnectionBanner';
-import { GameIcon } from './common/GameIcon';
 import { LoadingFallback } from './LoadingFallback';
 import { useGameStore } from '../stores/gameStore';
 import { useUiStore } from '../stores/uiStore';
@@ -97,10 +95,8 @@ export function LobbyView({
   debugToggle,
   actions,
 }: LobbyViewProps) {
-  const { t } = useTranslation();
   const gameState = useGameStore(state => state.gameState);
   const error = useUiStore(state => state.error);
-  const setView = useUiStore(state => state.setView);
 
   return (
     <>
@@ -149,18 +145,6 @@ export function LobbyView({
           invoke={invoke}
         />
       </Suspense>
-
-      {/* Map-editor shortcut – only shown when not already in a game. */}
-      {!gameState && (
-        <button
-          type="button"
-          className="btn-secondary map-editor-toggle"
-          data-testid="lobby-map-editor-toggle"
-          onClick={() => setView('mapEditor')}
-        >
-          <GameIcon name="treasureMap" /> {t('mapEditor.title')}
-        </button>
-      )}
 
       {debugPanel}
       {debugToggle}

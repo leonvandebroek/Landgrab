@@ -1,22 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import '../../../styles/notification-panel.css';
 import { useNotificationStore } from '../../../stores/notificationStore';
+import { useGameStore } from '../../../stores/gameStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
-import { GameIcon } from '../../common/GameIcon';
 import type { InvokeFn } from '../../../types/abilities';
+import { Button, Sheet, SheetHeader } from '../../ui/kit';
 
 function getSecondsLeft(joinDeadline: string | undefined, now: number): number | null {
-  if (!joinDeadline) {
-    return null;
-  }
-
+  if (!joinDeadline) return null;
   const remaining = new Date(joinDeadline).getTime() - now;
-  if (remaining <= 0) {
-    return null;
-  }
-
-  return Math.ceil(remaining / 1000);
+  return remaining > 0 ? Math.ceil(remaining / 1000) : null;
 }
 
 interface FieldBattleInvitePanelProps {
@@ -24,105 +17,71 @@ interface FieldBattleInvitePanelProps {
   onFleeBattle: (battleId: string) => Promise<boolean>;
 }
 
+/** Someone challenges you on a free tile: flee, or stand and fight. */
 export function FieldBattleInvitePanel({ invoke, onFleeBattle }: FieldBattleInvitePanelProps) {
   const { t } = useTranslation();
-  const fieldBattleInvite = useNotificationStore((store) => store.fieldBattleInvite);
-  const setFieldBattleInvite = useNotificationStore((store) => store.setFieldBattleInvite);
+  const invite = useNotificationStore((store) => store.fieldBattleInvite);
+  const setInvite = useNotificationStore((store) => store.setFieldBattleInvite);
+  const gameState = useGameStore((store) => store.gameState);
+  const myId = useGameStore((store) => store.savedSession?.userId);
   const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
 
-  useSecondTick(() => {
-    setNow(Date.now());
-  });
+  useSecondTick(() => setNow(Date.now()));
 
-  const secondsLeft = getSecondsLeft(fieldBattleInvite?.joinDeadline, now);
+  const secondsLeft = getSecondsLeft(invite?.joinDeadline, now);
 
   useEffect(() => {
-    if (fieldBattleInvite && secondsLeft == null) {
-      setFieldBattleInvite(null);
+    if (invite && secondsLeft == null) setInvite(null);
+  }, [invite, secondsLeft, setInvite]);
+
+  if (!invite || secondsLeft == null || invite.isInitiator === true) return null;
+
+  const me = gameState?.players.find((player) => player.id === myId);
+  const battle = gameState?.activeFieldBattles?.find((item) => item.id === invite.battleId);
+
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await work();
+    } finally {
+      setBusy(false);
+      setInvite(null);
     }
-  }, [fieldBattleInvite, secondsLeft, setFieldBattleInvite]);
-
-  if (!fieldBattleInvite || secondsLeft == null) return null;
-
-  const isInitiator = fieldBattleInvite.isInitiator === true;
-
-  const handleJoin = async () => {
-    await invoke?.('JoinFieldBattle', fieldBattleInvite.battleId);
-    setFieldBattleInvite(null);
   };
-
-  const handleFlee = async () => {
-    await onFleeBattle(fieldBattleInvite.battleId);
-    setFieldBattleInvite(null);
-  };
-
-  const handleIgnore = () => {
-    setFieldBattleInvite(null);
-  };
-
-  if (isInitiator) return null;
 
   return (
-    <div className="notification-panel notification-panel--field-battle">
-      <div className="fb-invite__header">
-        <span className="fb-invite__header-icon">
-          <GameIcon name="contested" size="sm" />
-        </span>
-        <h3 className="fb-invite__title">{t('abilities.fieldBattle.battleInviteTitle' as never)}</h3>
+    <Sheet open labelledBy="challenged-title" testId="field-battle-invite-sheet">
+      <SheetHeader
+        title={t('ui.challenged.title', { name: invite.initiatorName })}
+        kicker={t('ui.abilities.fieldBattle.title')}
+        titleId="challenged-title"
+      />
+      <div className="lg-bigcount" role="timer" aria-live="polite">
+        <span className="lg-bigcount__num">{secondsLeft}</span>
+        <span className="lg-bigcount__label">{t('ui.challenged.seconds')}</span>
       </div>
-
-      <div className="fb-invite__initiator">
-        <span className="fb-invite__initiator-label">{t('abilities.fieldBattle.initiatedByLabel' as never)}</span>
-        <span className="fb-invite__initiator-name">{fieldBattleInvite.initiatorName}</span>
-        {fieldBattleInvite.initiatorAllianceName && (
-          <span className="fb-invite__initiator-alliance">{fieldBattleInvite.initiatorAllianceName}</span>
-        )}
-      </div>
-
-      <div className="fb-invite__location">
-        <span className="fb-invite__location-label">{t('abilities.fieldBattle.locationLabel' as never)}</span>
-        <span className="fb-invite__location-coords">
-          ({fieldBattleInvite.q}, {fieldBattleInvite.r})
-        </span>
-      </div>
-
-      {secondsLeft != null && (
-        <div className="fb-invite__timer">
-          <span className="fb-invite__timer-number">{secondsLeft}</span>
-          <span className="fb-invite__timer-label">{t('abilities.fieldBattle.joinWindowLabel' as never)}</span>
+      <p className="lg-muted lg-center">{t('ui.challenged.body')}</p>
+      <div className="lg-versus">
+        <div className="lg-versus__side">
+          <span className="lg-versus__label">{t('ui.play.youCarry')}</span>
+          <span className="lg-versus__num">{me?.carriedTroops ?? 0}</span>
         </div>
-      )}
-
-      <p className="notification-panel__message">
-        {t('abilities.fieldBattle.invite.fleeDescription' as never, { seconds: secondsLeft ?? 30 })}
-        {' '}
-        {t('abilities.fieldBattle.invite.stayDescription' as never)}
-      </p>
-
-      <div className="fb-invite__actions">
-        <button
-          type="button"
-          className="fb-invite__ignore-btn"
-          onClick={() => { void handleFlee(); }}
-        >
-          {t('abilities.fieldBattle.invite.fleeBtn' as never)}
-        </button>
-        <button
-          type="button"
-          className="fb-invite__join-btn"
-          onClick={() => { void handleJoin(); }}
-        >
-          <GameIcon name="fist" size="sm" />
-          {t('abilities.fieldBattle.joinCta' as never)}
-        </button>
-        <button
-          type="button"
-          className="fb-invite__ignore-btn"
-          onClick={handleIgnore}
-        >
-          {t('abilities.fieldBattle.ignoreBtn' as never)}
-        </button>
+        <span className="lg-versus__vs">{t('ui.play.vs')}</span>
+        <div className="lg-versus__side">
+          <span className="lg-versus__label">{t('ui.challenged.theyCarry', { name: invite.initiatorName })}</span>
+          <span className="lg-versus__num">{battle?.initiatorTroops ?? '?'}</span>
+        </div>
       </div>
-    </div>
+      <div className="lg-actions lg-actions--row">
+        <Button variant="secondary" disabled={busy} onClick={() => void act(() => onFleeBattle(invite.battleId))} testId="field-battle-flee">
+          {t('ui.challenged.flee')}
+        </Button>
+        <Button disabled={busy} onClick={() => void act(async () => { await invoke?.('JoinFieldBattle', invite.battleId); })} testId="field-battle-join">
+          {t('ui.challenged.fight')}
+        </Button>
+      </div>
+      <p className="lg-small lg-center">{t('ui.challenged.walkOff')}</p>
+    </Sheet>
   );
 }

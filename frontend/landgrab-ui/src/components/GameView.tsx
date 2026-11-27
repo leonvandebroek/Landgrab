@@ -1,14 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TeamSplash } from './game/TeamSplash';
+import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { MutableRefObject, ReactNode } from 'react';
-import { CombatModal } from './game/CombatModal';
-import { CombatPreviewModal } from './game/CombatPreviewModal';
-import { GameRulesPage } from './game/GameRulesPage';
 import { HostControlPlane } from './game/HostControlPlane';
 import { LoadingFallback } from './LoadingFallback';
-import { TroopDeployModal } from './game/TroopDeployModal';
+import { ClaimDeploySheet, CombatResultSheet } from './game/play/OutcomeSheets';
 import { useGameStore } from '../stores/gameStore';
 import { useGameplayStore } from '../stores';
 import { useUiStore } from '../stores/uiStore';
@@ -22,8 +18,8 @@ import type { LocationPoint } from '../types/common';
 const GameMap = lazy(() =>
   import('./map/GameMap').then(m => ({ default: m.GameMap }))
 );
-const PlayingHud = lazy(() =>
-  import('./game/PlayingHud').then(m => ({ default: m.PlayingHud }))
+const PlayScreen = lazy(() =>
+  import('./game/play/PlayScreen').then(m => ({ default: m.PlayScreen }))
 );
 
 /** All game-action callbacks sourced from useGameActions in App. */
@@ -71,7 +67,7 @@ export interface GameViewProps {
 /**
  * Renders the full in-game UI for `view === 'game'`.
  *
- * Reads gameState, selectedHexKey, combatPreview, combatResult, hasAcknowledgedRules, error,
+ * Reads gameState, selectedHexKey, combatResult, neutralClaimResult, error,
  * setMainMapBounds and setSelectedHexScreenPos directly from Zustand stores.
  * Delegates everything else through props to keep App as a thin orchestrator.
  */
@@ -80,85 +76,24 @@ export function GameView({
   currentLocation,
   currentHex,
   effectiveLocationError,
-  currentPlayerName,
   playerDisplayPrefs,
   onPlayerDisplayPrefsChange,
   mapNavigateRef,
-  onNavigateMap,
   debugToggle,
   debugPanel,
   invoke,
   actions,
 }: GameViewProps) {
   // ── Store reads ─────────────────────────────────────────────────────────
+  const { t } = useTranslation();
   const gameState = useGameStore(state => state.gameState);
   const selectedHexKey = useGameplayStore(state => state.selectedHexKey);
-  const combatPreview = useGameplayStore(state => state.combatPreview);
   const combatResult = useGameplayStore(state => state.combatResult);
   const neutralClaimResult = useGameplayStore(state => state.neutralClaimResult);
-  const setCombatPreview = useGameplayStore(state => state.setCombatPreview);
   const setCombatResult = useGameplayStore(state => state.setCombatResult);
-  const setNeutralClaimResult = useGameplayStore(state => state.setNeutralClaimResult);
-  const hasAcknowledgedRules = useUiStore(state => state.hasAcknowledgedRules);
-  const setHasAcknowledgedRules = useUiStore(state => state.setHasAcknowledgedRules);
   const error = useUiStore(state => state.error);
   const setMainMapBounds = useUiStore(state => state.setMainMapBounds);
   const setSelectedHexScreenPos = useUiStore(state => state.setSelectedHexScreenPos);
-
-  
-  // ── Team Splash logic ───────────────────────────────────────────────────
-  const [showTeamSplash, setShowTeamSplash] = useState(false);
-  const prevPhaseRef = useRef<string | undefined>(undefined);
-  const splashKey = gameState?.roomCode ? `lg-splash-ack-${gameState.roomCode}` : '';
-  const { t } = useTranslation();
-
-  // Re-evaluate on phase change
-  useEffect(() => {
-    const currentPhase = gameState?.phase;
-    
-    // Only trigger when explicitly transitioning to Playing from a different phase
-    if (
-      currentPhase === 'Playing' &&
-      prevPhaseRef.current &&
-      prevPhaseRef.current !== 'Playing' &&
-      splashKey &&
-      sessionStorage.getItem(splashKey) !== 'true'
-    ) {
-      if (gameState?.alliances && gameState.alliances.length > 0) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setShowTeamSplash(true);
-      }
-      sessionStorage.setItem(splashKey, 'true');
-    }
-
-    prevPhaseRef.current = currentPhase;
-  }, [gameState?.phase, gameState?.alliances, splashKey]);
-
-  const splshMe = gameState?.players.find(p => p.id === userId);
-  const splshAlliance = gameState?.alliances?.find(a => a.id === splshMe?.allianceId);
-  
-  const handleDismissSplash = useCallback(() => {
-    setShowTeamSplash(false);
-  }, []);
-
-  // ── Rules-acknowledgment logic ──────────────────────────────────────────
-  // Scoped here because it is exclusively needed by the game view.
-  const rulesKey = gameState?.roomCode ? `lg-rules-ack-${gameState.roomCode}` : '';
-
-  useEffect(() => {
-    if (!rulesKey) {
-      setHasAcknowledgedRules(false);
-      return;
-    }
-    setHasAcknowledgedRules(sessionStorage.getItem(rulesKey) === 'true');
-  }, [rulesKey, setHasAcknowledgedRules]);
-
-  const handleAcknowledgeRules = useCallback(() => {
-    if (rulesKey) {
-      sessionStorage.setItem(rulesKey, 'true');
-    }
-    setHasAcknowledgedRules(true);
-  }, [rulesKey, setHasAcknowledgedRules]);
 
   // ── Derived values ──────────────────────────────────────────────────────
   const myPlayer = useMemo(() => {
@@ -176,7 +111,6 @@ export function GameView({
 
   // Host GPS-bypass: suppress location error banner when host is bypassing GPS
   const isHostBypass = Boolean(gameState?.hostBypassGps && isHost);
-  const shouldShowRulesGate = !hasAcknowledgedRules && !isHost;
 
   // ── All hooks must fire before any conditional return ───────────────────
   if (!gameState) return null;
@@ -216,27 +150,27 @@ export function GameView({
   return (
     <>
       <Suspense fallback={<LoadingFallback />}>
-        <PlayingHud
+        <PlayScreen
+          state={gameState}
           myUserId={userId}
           currentHex={currentHex}
-          onConfirmPickup={actions.onConfirmPickup}
-          onConfirmReinforce={actions.onConfirmReinforce}
-          onReturnToLobby={actions.onReturnToLobby}
+          hasLocation={Boolean(currentLocation)}
           locationError={effectiveLocationError}
           isHostBypass={isHostBypass}
           currentHexActions={actions.currentHexActions}
           onCurrentHexAction={actions.onCurrentHexAction}
+          onConfirmPickup={actions.onConfirmPickup}
+          onConfirmReinforce={actions.onConfirmReinforce}
+          onConfirmAttack={actions.onConfirmAttack}
           onDismissTileActions={actions.onDismissTileActions}
+          onReturnToLobby={actions.onReturnToLobby}
+          onSetObserverMode={actions.onSetObserverMode}
+          onFleeBattle={actions.onFleeBattle}
           invoke={invoke}
           playerDisplayPrefs={playerDisplayPrefs}
           onPlayerDisplayPrefsChange={onPlayerDisplayPrefsChange}
-          currentPlayerName={currentPlayerName}
-          hasLocation={Boolean(currentLocation)}
-          onSetObserverMode={actions.onSetObserverMode}
-          onFleeBattle={actions.onFleeBattle}
           debugToggle={debugToggle}
           debugPanel={debugPanel}
-          onNavigateMap={onNavigateMap}
         >
           <GameMap
             state={gameState}
@@ -249,51 +183,24 @@ export function GameView({
             onBoundsChange={setMainMapBounds}
             onHexScreenPosition={setSelectedHexScreenPos}
             navigateRef={mapNavigateRef}
+            controlsVariant="compact"
+            compactLabels={{ layers: t('ui.layers.title'), locate: t('ui.play.centreOnMe') }}
           />
-        </PlayingHud>
+        </PlayScreen>
       </Suspense>
-      {combatPreview && (
-        <CombatPreviewModal
-          preview={combatPreview.preview}
-          onAttack={() => void actions.onConfirmAttack()}
-          onRetreat={() => setCombatPreview(null)}
-        />
-      )}
       {combatResult && (
-        <CombatModal
+        <CombatResultSheet
+          key={`${combatResult.q},${combatResult.r}`}
           result={combatResult}
-          onDeployTroops={(count) => void actions.onDeployCombatTroops(count)}
+          onDeploy={(count) => void actions.onDeployCombatTroops(count)}
           onClose={() => setCombatResult(null)}
         />
       )}
-      {neutralClaimResult && (
-        <TroopDeployModal
-          claimResult={neutralClaimResult}
+      {!combatResult && neutralClaimResult && (
+        <ClaimDeploySheet
+          key={`${neutralClaimResult.q},${neutralClaimResult.r}`}
+          result={neutralClaimResult}
           onDeploy={(count) => void actions.onDeployNeutralClaimTroops(count)}
-          onClose={() => setNeutralClaimResult(null)}
-        />
-      )}
-      {shouldShowRulesGate && (
-        <div className="rules-gate-overlay">
-          <div
-            className="hud-modal-backdrop"
-            onClick={handleAcknowledgeRules}
-            aria-hidden="true"
-          />
-          <GameRulesPage
-            gameState={gameState}
-            onContinue={handleAcknowledgeRules}
-            isModal
-          />
-        </div>
-      )}
-
-      {showTeamSplash && splshAlliance && (
-        <TeamSplash
-          allianceName={splshAlliance.name}
-          allianceColor={splshAlliance.color}
-          roleName={splshMe?.role && splshMe.role !== 'None' && gameState?.dynamics?.playerRolesEnabled ? t(`roles.${splshMe.role}.title` as never, { defaultValue: t(`phase4.role${splshMe.role}` as never) }) : undefined}
-          onDismiss={handleDismissSplash}
         />
       )}
     </>

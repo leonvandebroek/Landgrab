@@ -1,216 +1,122 @@
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GameIcon } from '../common/GameIcon';
 import { useGameStore } from '../../stores';
 import type { GameState } from '../../types/game';
-import type { GameIconName } from '../../utils/gameIcons';
+import { Icon } from '../ui/Icon';
+import { Button, Screen, cx } from '../ui/kit';
 
 interface Props {
   state: GameState;
+  /** Back to the home screen. */
   onPlayAgain: () => void;
+  /** Back to home and straight into hosting a new room. */
+  onHostNew?: () => void;
+  myUserId?: string;
 }
 
-const confettiColors = [
-  '#f39c12', '#e74c3c', '#2ecc71', '#3498db', '#9b59b6',
-  '#1abc9c', '#e67e22', '#f1c40f', '#e84393', '#00cec9',
-];
+/** Who won, the final score, your own game and the ranking. */
+export function GameOver({ state, onPlayAgain, onHostNew, myUserId }: Props) {
+  const { t } = useTranslation();
+  const savedId = useGameStore((store) => store.savedSession?.userId);
+  const myId = myUserId ?? savedId;
+  const me = state.players.find((player) => player.id === myId);
 
-// Pre-computed random confetti styles (module-level to avoid impure render calls)
-const confettiStyles = Array.from({ length: 40 }, () => ({
-  left: `${Math.random() * 100}%`,
-  animationDelay: `${Math.random() * 2}s`,
-  animationDuration: `${2 + Math.random() * 3}s`,
-  width: `${8 + Math.random() * 6}px`,
-  height: `${8 + Math.random() * 6}px`,
-}));
+  const claimable = Math.max(1, Object.values(state.grid).filter((cell) => !cell.isMasterTile).length);
+  const pct = (tiles: number) => Math.round((tiles / claimable) * 100);
 
-const achievementIcons: Record<string, GameIconName> = {
-  territoryLeader: 'treasureMap',
-  armyCommander: 'contested',
-  conqueror: 'crossbow',
-  firstStrike: 'lightning',
-};
+  const teams = useMemo(() => (state.alliances.length > 0
+    ? state.alliances.map((alliance) => ({ id: alliance.id, name: alliance.name, color: alliance.color, tiles: alliance.territoryCount }))
+    : state.players.map((player) => ({ id: player.id, name: player.name, color: player.color, tiles: player.territoryCount })))
+    .sort((a, b) => b.tiles - a.tiles), [state.alliances, state.players]);
 
-export function GameOver({ state, onPlayAgain }: Props) {
-  const { i18n, t } = useTranslation();
-  const myId = useGameStore((s) => s.savedSession?.userId);
+  const winnerTeam = teams.find((team) => team.id === state.winnerId);
+  const winnerName = state.winnerName ?? winnerTeam?.name ?? '';
+  const iWon = state.isAllianceVictory ? me?.allianceId === state.winnerId : myId === state.winnerId;
 
-  let myRank: number | undefined;
-  if (myId) {
-    if (state.isAllianceVictory) {
-      const sortedAlliances = [...state.alliances].sort((a, b) => b.territoryCount - a.territoryCount);
-      const idx = sortedAlliances.findIndex(a => a.memberIds.includes(myId));
-      if (idx !== -1) myRank = idx + 1;
-    } else {
-      const sortedPlayers = [...state.players].sort((a, b) => b.territoryCount - a.territoryCount);
-      const idx = sortedPlayers.findIndex(p => p.id === myId);
-      if (idx !== -1) myRank = idx + 1;
-    }
-  }
+  const [openedAt] = useState(() => Date.now());
+  const minutes = useMemo(() => {
+    if (!state.gameStartedAt) return null;
+    const end = state.eventLog?.find((event) => event.type === 'GameOver')?.createdAt;
+    const endMs = end ? Date.parse(end) : openedAt;
+    return Math.max(1, Math.round((endMs - Date.parse(state.gameStartedAt)) / 60000));
+  }, [openedAt, state.eventLog, state.gameStartedAt]);
 
-  const winnerColor = state.isAllianceVictory
-    ? state.alliances.find(a => a.id === state.winnerId)?.color
-    : state.players.find(p => p.id === state.winnerId)?.color;
+  const reason = state.winConditionType === 'TimedGame'
+    ? t('ui.over.reasonTime')
+    : state.winConditionType === 'Elimination'
+      ? t('ui.over.reasonElimination')
+      : t('ui.over.reasonTerritory', { pct: state.winConditionValue });
 
-  const totalHexes = Object.values(state.grid).filter(cell => !cell.isMasterTile).length;
-
-  const playerColorMap = new Map(state.players.map(p => [p.id, p.color]));
+  const attacksWon = (state.eventLog ?? []).filter((event) => event.type === 'TileCaptured' && event.playerId === myId).length;
+  const ranking = [...state.players].sort((a, b) => b.territoryCount - a.territoryCount);
 
   return (
-    <div className="gameover-page">
-      {/* Pure CSS confetti celebration */}
-      <div className="confetti-container">
-        {confettiStyles.map((style, i) => (
-          <div
-            key={i}
-            className="confetti-piece"
-            style={{
-              ...style,
-              backgroundColor: confettiColors[i % confettiColors.length],
-              borderRadius: i % 3 === 0 ? '50%' : '2px',
-            }}
-          />
+    <Screen
+      testId="game-over"
+      footer={(
+        <div className="lg-actions">
+          {onHostNew && <Button onClick={onHostNew} testId="gameover-host-new">{t('ui.over.hostNew')}</Button>}
+          <Button variant={onHostNew ? 'secondary' : 'primary'} onClick={onPlayAgain} testId="gameover-home">{t('ui.over.backHome')}</Button>
+        </div>
+      )}
+    >
+      <div className="lg-over__hero">
+        <div className="lg-over__trophy" style={winnerTeam ? { background: winnerTeam.color } : undefined}>
+          <Icon name="trophy" size={36} />
+        </div>
+        <span className="lg-eyebrow">{t('ui.over.kicker')}</span>
+        <h1 className="lg-over__title">{iWon ? t('ui.over.youWin', { name: winnerName }) : t('ui.over.wins', { name: winnerName })}</h1>
+        <p className="lg-muted">
+          {minutes != null ? t('ui.over.after', { reason, count: minutes }) : reason}
+        </p>
+      </div>
+
+      <div className="lg-card lg-stack lg-stack--sm">
+        {teams.slice(0, 4).map((team) => (
+          <div key={team.id} className="lg-stack lg-stack--sm">
+            <div className="lg-row lg-row--between">
+              <span className="lg-row"><span className="lg-dot" style={{ background: team.color }} />{team.name}</span>
+              <strong>{pct(team.tiles)}%</strong>
+            </div>
+            <div className="lg-score__bar"><span className="lg-score__fill" style={{ width: `${pct(team.tiles)}%`, background: team.color }} /></div>
+          </div>
         ))}
       </div>
 
-      <div className="gameover-card">
-        {myRank !== undefined && (
-          <div style={myRank === 1
-            ? { fontSize: '1.6rem', fontWeight: 700, color: '#f39c12', textAlign: 'center', marginBottom: '0.5rem', letterSpacing: '0.02em' }
-            : { fontSize: '1.2rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginBottom: '0.5rem' }
-          }>
-            {myRank === 1 ? '🎉 You won!' : myRank === 2 ? '🥈 You came 2nd' : myRank === 3 ? '🥉 You came 3rd' : `You came in place ${myRank}`}
+      {me && (
+        <section className="lg-stack lg-stack--sm">
+          <h2 className="lg-h3">{t('ui.over.yourGame')}</h2>
+          <div className="lg-stats">
+            <div className="lg-stat"><span className="lg-stat__num">{me.territoryCount}</span><span className="lg-stat__label">{t('ui.over.tilesHeld')}</span></div>
+            <div className="lg-stat"><span className="lg-stat__num">{attacksWon}</span><span className="lg-stat__label">{t('ui.over.attacksWon')}</span></div>
+            <div className="lg-stat"><span className="lg-stat__num">{minutes ?? '–'}</span><span className="lg-stat__label">{t('ui.over.minutes')}</span></div>
           </div>
-        )}
-        <div className="trophy"><GameIcon name="trophy" size="lg" /></div>
-        <h1
-          className="winner-glow"
-          style={{ '--winner-color': winnerColor ?? '#f39c12' } as React.CSSProperties}
-        >
-          {state.winnerName}
-        </h1>
-        <p className="subtitle" style={{ color: winnerColor }}>
-          {state.isAllianceVictory ? t('gameover.allianceVictory') : t('gameover.playerVictory')}
-        </p>
+        </section>
+      )}
 
-        <div className="final-scores">
-          <h3>{t('gameover.finalScores')}</h3>
-          {state.isAllianceVictory
-            ? [...state.alliances]
-              .sort((a, b) => b.territoryCount - a.territoryCount)
-              .map(a => (
-                <div key={a.id} className="score-row final">
-                  <span className="score-dot" style={{ background: a.color }} />
-                  <span className="score-name">{a.name}</span>
-                  <span className="score-count">
-                    {t('gameover.hexCount', {
-                      count: a.territoryCount,
-                      total: totalHexes,
-                      percent: formatTerritoryShare(totalHexes > 0 ? (a.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
-                    })}
-                  </span>
-                  {a.id === state.winnerId && <span className="crown"><GameIcon name="crown" /></span>}
-                </div>
-              ))
-            : [...state.players]
-              .sort((a, b) => b.territoryCount - a.territoryCount)
-              .map(p => (
-                <div key={p.id} className="score-row final">
-                  <span className="score-dot" style={{ background: p.color }} />
-                  <span className="score-name">{p.name}</span>
-                  <span className="score-count">
-                    {t('gameover.hexCount', {
-                      count: p.territoryCount,
-                      total: totalHexes,
-                      percent: formatTerritoryShare(totalHexes > 0 ? (p.territoryCount / totalHexes) * 100 : 0, i18n.resolvedLanguage)
-                    })}
-                  </span>
-                  {p.id === state.winnerId && <span className="crown"><GameIcon name="crown" /></span>}
-                </div>
-              ))
-          }
-        </div>
-
-        {state.achievements && state.achievements.length > 0 && (
-          <div className="achievements-section" style={{ textAlign: 'left' }}>
-            <h3 style={{
-              marginBottom: '0.8rem',
-              color: 'var(--muted)',
-              fontSize: '0.9rem',
-              textTransform: 'uppercase',
-            }}>
-              <GameIcon name="trophy" /> {t('gameover.achievements' as never)}
-            </h3>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-            }}>
-              {state.achievements.map(achievement => {
-                const playerColor = playerColorMap.get(achievement.playerId) ?? '#888';
-                const icon = achievementIcons[achievement.id] ?? 'trophy';
-                return (
-                  <div
-                    key={achievement.id}
-                    style={{
-                      background: 'rgba(18, 25, 38, 0.75)',
-                      backdropFilter: 'blur(16px)',
-                      WebkitBackdropFilter: 'blur(16px)',
-                      border: '1px solid rgba(255, 255, 255, 0.15)',
-                      borderRadius: '12px',
-                      padding: '0.6rem 0.8rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.6rem',
-                      borderLeft: `3px solid ${playerColor}`,
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                    }}
-                  >
-                    <span style={{ fontSize: '1.4rem', flexShrink: 0 }}><GameIcon name={icon} /></span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontWeight: 600,
-                        fontSize: '0.85rem',
-                        color: '#fff',
-                      }}>
-                        {t(achievement.titleKey as never)}
-                      </div>
-                      <div style={{
-                        fontSize: '0.88rem',
-                        color: playerColor,
-                        fontWeight: 500,
-                      }}>
-                        {achievement.playerName}
-                        {achievement.value && (
-                          <span style={{ color: 'var(--muted)', marginLeft: '0.3rem' }}>
-                            ({achievement.value})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+      {(state.achievements?.length ?? 0) > 0 && (
+        <section className="lg-stack lg-stack--sm">
+          <h2 className="lg-h3">{t('ui.over.awards')}</h2>
+          {state.achievements!.map((achievement) => (
+            <div key={achievement.id} className="lg-scorerow">
+              <span className="lg-scorerow__name">{t(achievement.titleKey as never)}</span>
+              <span className="lg-scorerow__tiles">{achievement.playerName}{achievement.value ? ` · ${achievement.value}` : ''}</span>
             </div>
+          ))}
+        </section>
+      )}
+
+      <section className="lg-stack lg-stack--sm">
+        <h2 className="lg-h3">{t('ui.over.ranking')}</h2>
+        {ranking.map((player, index) => (
+          <div key={player.id} className={cx('lg-scorerow', player.id === myId && 'is-me')}>
+            <span className="lg-scorerow__name">
+              {index + 1}. {player.name}{player.id === myId ? ` ${t('ui.menu.youSuffix')}` : ''}
+            </span>
+            <span className="lg-scorerow__tiles">{t('ui.play.tiles', { count: player.territoryCount })}</span>
           </div>
-        )}
-
-        <button className="btn-primary big" onClick={onPlayAgain}>
-          {t('gameover.playAgain')}
-        </button>
-      </div>
-    </div>
+        ))}
+      </section>
+    </Screen>
   );
-}
-
-function formatTerritoryShare(share: number, language?: string): string {
-  if (share <= 0) {
-    return '0%';
-  }
-
-  const formatter = new Intl.NumberFormat(language, {
-    minimumFractionDigits: share < 10 ? 1 : 0,
-    maximumFractionDigits: share < 10 ? 1 : 0
-  });
-
-  return `${formatter.format(share)}%`;
 }

@@ -15,7 +15,7 @@ internal static class GameStateCommon
          "#e91e63", "#00bcd4", "#8bc34a", "#ff5722", "#673ab7", "#009688", "#ffc107", "#795548"];
 
     internal static readonly string[] AllianceColors =
-        ["#ef4444", "#06b6d4", "#f59e0b", "#a855f7", "#10b981", "#ec4899", "#e67e22", "#34495e"];
+        ["#FF7A1A", "#2F6BFF", "#E84393", "#14B8A6", "#FACC15", "#A855F7", "#EF4444", "#A16207"];
 
     internal static readonly string[] PlayerEmojis =
         ["🐺", "🦊", "🐻", "🦁", "🐯", "🐸", "🦅", "🐬", "🦝", "🦨"];

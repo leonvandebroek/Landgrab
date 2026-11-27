@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { GameState, Player } from '../../types/game';
 import { GameIcon } from '../common/GameIcon';
 
-const ALLIANCE_COLORS = ['#ef4444', '#06b6d4', '#f59e0b', '#a855f7', '#10b981', '#ec4899', '#e67e22', '#34495e'];
+const ALLIANCE_COLORS = ['#FF7A1A', '#2F6BFF', '#E84393', '#14B8A6', '#FACC15', '#A855F7', '#EF4444', '#A16207'];
 const MAX_ALLIANCES = 8;
 const MAX_VIRTUAL_PLAYERS = 8;
 
