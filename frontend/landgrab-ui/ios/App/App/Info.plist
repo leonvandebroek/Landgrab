@@ -24,6 +24,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Landgrab uses your location to show where you are on the game map, so you can claim and defend the hexes you walk into. Other players in your game see where you are while you play.</string>
 	<key>NSMotionUsageDescription</key>
