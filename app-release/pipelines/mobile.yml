@@ -233,7 +233,11 @@ stages:
                   echo "##vso[task.logissue type=error]Apple needs Xcode $MIN or newer; this machine has: $(echo $all)"
                   exit 1
                 fi
-                sudo xcode-select -s "${pick#* }/Contents/Developer"
+                # Landgrab change (plugin gap): an own Mac agent has no passwordless sudo, so select Xcode for this
+                # job through DEVELOPER_DIR instead of a machine-wide xcode-select.
+                dev="${pick#* }/Contents/Developer"
+                export DEVELOPER_DIR="$dev"
+                echo "##vso[task.setvariable variable=DEVELOPER_DIR]$dev"
                 xcodebuild -version
               displayName: Use the newest Xcode
             - bash: |
