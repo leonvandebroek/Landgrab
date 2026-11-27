@@ -26,6 +26,7 @@ interface Props {
     onRandomizeRoles: () => void;
     onConfigureAlliances: (names: string[]) => void;
     onDistributePlayers: () => void;
+    onSetVirtualPlayerCount: (count: number) => void;
     onSetTileSize: (meters: number) => void;
     onUseCenteredGameArea: () => void;
     onSetPatternGameArea: (pattern: GameAreaPattern) => void;
@@ -65,6 +66,7 @@ export function SetupWizard({
     onRandomizeRoles,
     onConfigureAlliances,
     onDistributePlayers,
+    onSetVirtualPlayerCount,
     onSetTileSize,
     onUseCenteredGameArea,
     onSetPatternGameArea,
@@ -266,6 +268,7 @@ export function SetupWizard({
                             onSetAlliance={onSetAlliance}
                             onConfigureAlliances={onConfigureAlliances}
                             onDistributePlayers={onDistributePlayers}
+                            onSetVirtualPlayerCount={onSetVirtualPlayerCount}
                         />
                     )}
                     {effectiveStep === 2 && (

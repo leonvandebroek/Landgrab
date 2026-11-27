@@ -211,6 +211,7 @@ public class LobbyService(IGameRoomProvider roomProvider, GameStateService gameS
                 return (null, "Only the host can start the game.");
             if (room.State.Players.Count < 2)
                 return (null, "Need at least 2 players.");
+            VirtualPlayerService.AssignUnallocatedVirtualPlayers(room.State);
             if (room.State.Phase != GamePhase.Lobby)
                 return (null, "Game already started.");
             if (!room.State.HasMapLocation)

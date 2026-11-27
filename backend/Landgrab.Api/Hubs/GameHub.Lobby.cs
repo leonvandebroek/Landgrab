@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Landgrab.Api.Models;
+using Landgrab.Api.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Landgrab.Api.Hubs;
@@ -204,6 +205,26 @@ public partial class GameHub
         }
 
         var (state, error) = gameService.DistributePlayersRandomly(room.Code, UserId);
+        if (error != null)
+        {
+            await SendError(error);
+            return;
+        }
+
+        await BroadcastState(room.Code, state!);
+    }
+
+    /// <summary>Test mode: host sets how many virtual (bot) players are in the lobby.</summary>
+    public async Task SetVirtualPlayerCount(int count)
+    {
+        var room = gameService.GetRoomByConnection(Context.ConnectionId);
+        if (room == null)
+        {
+            await SendError("ROOM_NOT_JOINED", "Not in a room.");
+            return;
+        }
+
+        var (state, error) = virtualPlayerService.SetVirtualPlayerCount(room.Code, UserId, count);
         if (error != null)
         {
             await SendError(error);

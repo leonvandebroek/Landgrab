@@ -122,6 +122,8 @@ export interface Player {
   currentHexR?: number | null;
   isHost: boolean;
   isConnected: boolean;
+  /** Test mode: a server-controlled bot player. */
+  isVirtual?: boolean;
   isWinner?: boolean;
   territoryCount: number;
   role?: PlayerRole;

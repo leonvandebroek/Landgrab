@@ -46,6 +46,7 @@ builder.Services.AddSingleton<SharedAbilityService>();
 builder.Services.AddSingleton<WinConditionService>();
 builder.Services.AddSingleton<GameplayService>();
 builder.Services.AddSingleton<HostControlService>();
+builder.Services.AddSingleton<VirtualPlayerService>();
 builder.Services.AddSingleton<GameService>();        // facade over in-memory game rooms
 builder.Services.AddSingleton<RoomPersistenceService>();
 builder.Services.AddScoped<GlobalMapService>();
@@ -55,6 +56,7 @@ builder.Services.AddSingleton<TokenBlocklist>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHostedService<TroopRegenerationService>();
 builder.Services.AddHostedService<FieldBattleCleanupService>();
+builder.Services.AddHostedService<VirtualPlayerHostedService>();
 
 // ── Authentication (JWT) ─────────────────────────────────────────────────
 

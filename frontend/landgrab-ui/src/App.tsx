@@ -276,6 +276,7 @@ export default function App() {
     handleAssignStartingTile,
     handleConfigureAlliances,
     handleDistributePlayers,
+    handleSetVirtualPlayerCount,
     handleAssignAllianceStartingTile,
     handleStartGame,
     handleReturnToLobby,
@@ -544,6 +545,7 @@ export default function App() {
     onAssignStartingTile: handleAssignStartingTile,
     onConfigureAlliances: handleConfigureAlliances,
     onDistributePlayers: handleDistributePlayers,
+    onSetVirtualPlayerCount: handleSetVirtualPlayerCount,
     onAssignAllianceStartingTile: handleAssignAllianceStartingTile,
     onStartGame: handleStartGame,
     onReturnToLobby: handleReturnToLobby,
@@ -557,7 +559,7 @@ export default function App() {
     handleSetEnemySightingMemory,
     handleSetGameDynamics, handleSetPlayerRole, handleSetAllianceHQ,
     handleSetMasterTile, handleSetMasterTileByHex, handleAssignStartingTile,
-    handleConfigureAlliances, handleDistributePlayers, handleAssignAllianceStartingTile,
+    handleConfigureAlliances, handleDistributePlayers, handleSetVirtualPlayerCount, handleAssignAllianceStartingTile,
     handleStartGame, handleReturnToLobby, handleSetObserverMode,
   ]);
 

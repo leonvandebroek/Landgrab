@@ -43,6 +43,7 @@ interface UseGameActionsLobbyResult {
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;
   handleConfigureAlliances: (names: string[]) => void;
   handleDistributePlayers: () => void;
+  handleSetVirtualPlayerCount: (count: number) => void;
   handleAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
   handleStartGame: () => void;
   handleReturnToLobby: () => void;
@@ -331,6 +332,14 @@ export function useGameActionsLobby({
     invoke('DistributePlayers').catch(cause => setError(String(cause)));
   }, [invoke, setError]);
 
+  const handleSetVirtualPlayerCount = useCallback((count: number): void => {
+    if (!invoke) {
+      return;
+    }
+
+    invoke('SetVirtualPlayerCount', count).catch(cause => setError(String(cause)));
+  }, [invoke, setError]);
+
   const handleAssignAllianceStartingTile = useCallback((q: number, r: number, allianceId: string): void => {
     if (!invoke) {
       return;
@@ -399,6 +408,7 @@ export function useGameActionsLobby({
     handleAssignStartingTile,
     handleConfigureAlliances,
     handleDistributePlayers,
+    handleSetVirtualPlayerCount,
     handleAssignAllianceStartingTile,
     handleStartGame,
     handleReturnToLobby,

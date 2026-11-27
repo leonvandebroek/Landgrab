@@ -57,6 +57,7 @@ export function useGameActions(options: UseGameActionsOptions): UseGameActionsRe
     handleAssignStartingTile: lobbyActions.handleAssignStartingTile,
     handleConfigureAlliances: lobbyActions.handleConfigureAlliances,
     handleDistributePlayers: lobbyActions.handleDistributePlayers,
+    handleSetVirtualPlayerCount: lobbyActions.handleSetVirtualPlayerCount,
     handleAssignAllianceStartingTile: lobbyActions.handleAssignAllianceStartingTile,
     handleStartGame: lobbyActions.handleStartGame,
     handleReturnToLobby: lobbyActions.handleReturnToLobby,
