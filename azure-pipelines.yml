@@ -1,12 +1,9 @@
-trigger:
-  branches:
-    include:
-      - main
+# Switched off (2026-11-26): this pipeline deploys an App Service and Azure SQL, which must not run (no paid Azure
+# resources). Azure DevOps reads the trigger from the pushed commit, so with these set to none no push or PR starts it.
+# The phone apps ship through app-release/pipelines/mobile.yml, which deploys nothing to Azure.
+trigger: none
 
-pr:
-  branches:
-    include:
-      - main
+pr: none
 
 variables:
   buildConfiguration: 'Release'

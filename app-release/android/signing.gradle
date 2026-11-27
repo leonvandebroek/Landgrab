@@ -1,0 +1,21 @@
+// Release signing and version numbers from the pipeline (the google-play skill). Apply it at the bottom of
+// android/app/build.gradle with:   apply from: "../../<path to release>/android/signing.gradle"
+// The upload key arrives only on the build machine (a BuildKit secret, see android.Dockerfile); never in the repo.
+android {
+    defaultConfig {
+        versionCode((project.findProperty('appVersionCode') ?: '1') as Integer)
+        versionName((project.findProperty('appVersionName') ?: '1.0') as String)
+    }
+    def keystorePath = System.getenv('ANDROID_KEYSTORE')
+    if (keystorePath) {
+        signingConfigs {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.release
+    }
+}

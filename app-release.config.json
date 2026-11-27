@@ -1,0 +1,48 @@
+{
+  "app": {
+    "name": "Landgrab",
+    "slug": "landgrab",
+    "publisher": "Leon van de Broek",
+    "country": "NL"
+  },
+  "platforms": {
+    "ios": true,
+    "android": true,
+    "mac": false,
+    "windows": false
+  },
+  "apps": {
+    "main": {
+      "bundleId": "app.landgrab"
+    }
+  },
+  "keys": {
+    "vault": "kv-landgrab-prod",
+    "prefix": "",
+    "dir": "~/app-keys/landgrab"
+  },
+  "pipelines": {
+    "azureConnection": "Azure-LandGrab-SC",
+    "approvers": "leon@unitytech.nl",
+    "proofPool": "mac-proof"
+  },
+  "testflight": {
+    "teamGroup": "Landgrab team",
+    "earlyGroup": "Early testers"
+  },
+  "mobile": {
+    "dir": "frontend/landgrab-ui",
+    "syncIos": "npm run build && npx cap sync ios",
+    "syncAndroid": "npm run build && npx cap sync android",
+    "firstScreen": "Conquer your neighborhood!|Verover je omgeving.*",
+    "offlineText": "You are offline|Je bent offline"
+  },
+  "push": {
+    "android": false
+  },
+  "android": {
+    "firstTrack": "internal",
+    "productionFraction": 0.2
+  },
+  "kit": "1.0.0"
+}

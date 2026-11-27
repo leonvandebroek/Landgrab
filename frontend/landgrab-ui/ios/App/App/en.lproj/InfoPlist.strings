@@ -1,0 +1,3 @@
+/* Permission texts in English (the same as Info.plist, which is the fallback). */
+"NSLocationWhenInUseUsageDescription" = "Landgrab uses your location to show where you are on the game map, so you can claim and defend the hexes you walk into. Other players in your game see where you are while you play.";
+"NSMotionUsageDescription" = "Landgrab uses the compass to turn the map and aim abilities in the direction you are facing.";

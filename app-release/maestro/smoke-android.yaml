@@ -1,0 +1,26 @@
+# Android emulator smoke flow (app-release/proof/android-proof.sh passes APP_ID).
+# Run by hand: maestro test -e APP_ID=<package> app-release/maestro/smoke-android.yaml
+appId: ${APP_ID}
+name: Smoke (Android)
+# Without the devtools hierarchy Maestro sees no text inside a Capacitor web view on Android.
+androidWebViewHierarchy: devtools
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- runFlow: subflows/first-screen.yaml
+- takeScreenshot: android-first-screen
+- runFlow: subflows/resume.yaml
+# Back on the first screen leaves or minimises the app. Either is fine; what must hold is that the app does not crash
+# and comes back when opened again.
+- back
+- waitForAnimationToEnd:
+    timeout: 3000
+- launchApp:
+    appId: ${APP_ID}
+    clearState: false
+- runFlow: subflows/first-screen.yaml
+- setOrientation: LANDSCAPE_LEFT
+- runFlow: subflows/first-screen.yaml
+- setOrientation: PORTRAIT
+- runFlow: subflows/first-screen.yaml

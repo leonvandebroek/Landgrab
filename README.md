@@ -102,7 +102,7 @@ docker compose up --build
 
 - Frontend: `http://localhost`
 - Backend container port: `http://localhost:7000`
-- SQL Server: `localhost:1433`
+- PostgreSQL: `localhost:5432`
 
 ## Azure Deployment
 

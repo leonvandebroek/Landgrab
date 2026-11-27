@@ -1,0 +1,4 @@
+{"devices":{
+ "com.apple.CoreSimulator.SimRuntime.iOS-17-5":[{"name":"iPhone 15","udid":"A1","isAvailable":true},{"name":"iPad Pro 11-inch (M4)","udid":"A2","isAvailable":true}],
+ "com.apple.CoreSimulator.SimRuntime.iOS-26-0":[{"name":"iPhone 17","udid":"B1","isAvailable":true},{"name":"iPhone 17 Pro","udid":"B2","isAvailable":true},{"name":"iPhone Air","udid":"B3","isAvailable":true},{"name":"iPad mini (A17 Pro)","udid":"B4","isAvailable":true},{"name":"iPad Pro 13-inch (M5)","udid":"B5","isAvailable":true}],
+ "com.apple.CoreSimulator.SimRuntime.watchOS-11-0":[{"name":"Apple Watch","udid":"W","isAvailable":true}]}}

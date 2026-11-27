@@ -3,7 +3,20 @@
     "landgrab": {
       "type": "stdio",
       "command": "./tools/landgrab-agent-mcp/node_modules/.bin/tsx",
-      "args": ["./tools/landgrab-agent-mcp/src/server.ts"]
+      "args": [
+        "./tools/landgrab-agent-mcp/src/server.ts"
+      ]
     }
+  },
+  "extraKnownMarketplaces": {
+    "leon-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "leonvandebroek/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "app-shipping@leon-plugins": true
   }
 }

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Landgrab</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #12161c; color: #e8edf2; font-family: system-ui, -apple-system, sans-serif; text-align: center; }
+    main { padding: 24px; max-width: 360px; }
+    h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
+    p { color: #a9b4c0; line-height: 1.5; }
+    button { margin-top: 1rem; padding: .8rem 1.6rem; border: 0; border-radius: 999px; background: #3fb27f;
+      color: #08130d; font-weight: 600; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="title">You are offline</h1>
+    <p id="body">Landgrab needs the internet to reach the game server. Check your connection and try again.</p>
+    <button id="retry" type="button">Try again</button>
+  </main>
+  <script>
+    if ((navigator.language || '').toLowerCase().startsWith('nl')) {
+      document.documentElement.lang = 'nl';
+      document.getElementById('title').textContent = 'Je bent offline';
+      document.getElementById('body').textContent = 'Landgrab heeft internet nodig om de spelserver te bereiken. Controleer je verbinding en probeer het opnieuw.';
+      document.getElementById('retry').textContent = 'Opnieuw proberen';
+    }
+    // The app's live server (server.url in capacitor.config.ts): try it again.
+    document.getElementById('retry').addEventListener('click', function () { location.href = 'https://landgrab.leonvandebroek.nl/'; });
+  </script>
+</body>
+</html>

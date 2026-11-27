@@ -1,0 +1,17 @@
+# iPhone and iPad simulator smoke flow (app-release/proof/ios-proof.sh passes APP_ID). Make it yours: the first screen's
+# text goes in subflows/first-screen.yaml. Run by hand: maestro test -e APP_ID=<bundle id> app-release/maestro/smoke-ios.yaml
+appId: ${APP_ID}
+name: Smoke (iOS)
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- runFlow: subflows/first-screen.yaml
+- takeScreenshot: ios-first-screen
+- runFlow: subflows/resume.yaml
+# The iPad layout is the point of the iPad simulator: the screen must survive both ways round.
+- setOrientation: LANDSCAPE_LEFT
+- runFlow: subflows/first-screen.yaml
+- takeScreenshot: ios-first-screen-landscape
+- setOrientation: PORTRAIT
+- runFlow: subflows/first-screen.yaml

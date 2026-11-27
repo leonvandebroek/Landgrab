@@ -1,0 +1,9 @@
+# The first screen really loaded: not a blank web view, not the app's offline page. Setup writes the app's own words
+# here (mobile.firstScreen and mobile.offlineText in app-release.config.json); no passwords are ever typed in a flow.
+appId: ${APP_ID}
+---
+- extendedWaitUntil:
+    visible: "Conquer your neighborhood!|Verover je omgeving.*"
+    timeout: 90000
+- assertNotVisible:
+    text: "You are offline|Je bent offline"

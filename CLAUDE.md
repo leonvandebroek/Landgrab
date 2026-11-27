@@ -51,5 +51,6 @@ npm run lint      # eslint
 
 ### Infrastructure
 
-- CI/CD via Azure Pipelines (`azure-pipelines.yml`). Deploys backend to Azure Container Apps and frontend to Azure Static Web Apps.
-- Docker full-stack: `docker compose up --build`. Frontend on port 80, backend on port 7000, SQL Server on 1433. Requires `JWT_SECRET` env var.
+- Hosting: the NAS through Azure DevOps (`deploy/nas/pipeline.yml`, `docs/deployment-nas.md`), at https://landgrab.leonvandebroek.nl. The only Azure resource is Key Vault `kv-landgrab-prod` (`infra/`); never deploy Azure resources that cost money. The old `azure-pipelines.yml` (Container Apps/SWA) is disabled.
+- Mobile apps: Capacitor in `frontend/landgrab-ui` (ios/android), shipped by the app-shipping kit in `app-release/` (`app-release.config.json`).
+- Docker full-stack: `docker compose up --build`. Frontend on port 80, backend on port 7000, PostgreSQL on 5432. Requires `JWT_SECRET` env var.
