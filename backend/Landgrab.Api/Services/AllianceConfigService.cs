@@ -122,6 +122,8 @@ public class AllianceConfigService(IGameRoomProvider roomProvider, GameStateServ
                 player.AllianceColor = null;
             }
 
+            VirtualPlayerService.AssignUnallocatedVirtualPlayers(room.State);
+
             var host = room.State.Players.FirstOrDefault(p => p.Id == userId);
             AppendEventLog(room.State, new GameEventLogEntry
             {

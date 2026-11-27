@@ -43,6 +43,7 @@ interface Props {
   onSetAllianceHQ?: (q: number, r: number, allianceId: string) => void;
   onConfigureAlliances: (names: string[]) => void;
   onDistributePlayers: () => void;
+  onSetVirtualPlayerCount: (count: number) => void;
   onAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
   onStartGame: () => void;
   onReturnToLobby: () => void;
@@ -69,6 +70,7 @@ export function GameLobby({
   onRandomizeRoles,
   onConfigureAlliances,
   onDistributePlayers,
+  onSetVirtualPlayerCount,
   onSetMapLocation,
   onSetTileSize,
   onUseCenteredGameArea,
@@ -257,6 +259,7 @@ export function GameLobby({
         onRandomizeRoles={onRandomizeRoles}
         onConfigureAlliances={onConfigureAlliances}
         onDistributePlayers={onDistributePlayers}
+        onSetVirtualPlayerCount={onSetVirtualPlayerCount}
         onSetTileSize={onSetTileSize}
         onUseCenteredGameArea={onUseCenteredGameArea}
         onSetPatternGameArea={onSetPatternGameArea}

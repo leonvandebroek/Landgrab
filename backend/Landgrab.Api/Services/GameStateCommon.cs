@@ -79,6 +79,7 @@ internal static class GameStateCommon
                 CurrentHexR = player.CurrentHexR,
                 IsHost = player.IsHost,
                 IsConnected = player.IsConnected,
+                IsVirtual = player.IsVirtual,
                 TerritoryCount = player.TerritoryCount,
                 Role = player.Role,
                 IsBeacon = player.IsBeacon,

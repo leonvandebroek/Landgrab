@@ -5,6 +5,7 @@ import { GameIcon } from '../common/GameIcon';
 
 const ALLIANCE_COLORS = ['#ef4444', '#06b6d4', '#f59e0b', '#a855f7', '#10b981', '#ec4899', '#e67e22', '#34495e'];
 const MAX_ALLIANCES = 8;
+const MAX_VIRTUAL_PLAYERS = 8;
 
 interface Props {
     gameState: GameState;
@@ -13,6 +14,7 @@ interface Props {
     onSetAlliance: (name: string) => void;
     onConfigureAlliances: (names: string[]) => void;
     onDistributePlayers: () => void;
+    onSetVirtualPlayerCount?: (count: number) => void;
 }
 
 export function TeamsStep({
@@ -22,6 +24,7 @@ export function TeamsStep({
     onSetAlliance,
     onConfigureAlliances,
     onDistributePlayers,
+    onSetVirtualPlayerCount,
 }: Props) {
     const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
@@ -90,6 +93,12 @@ export function TeamsStep({
                             onConfigureAlliances={onConfigureAlliances}
                             onDistributePlayers={onDistributePlayers}
                         />
+                        {onSetVirtualPlayerCount && (
+                            <VirtualPlayersSection
+                                count={gameState.players.filter(player => player.isVirtual).length}
+                                onSetCount={onSetVirtualPlayerCount}
+                            />
+                        )}
                         <AlliancePickerSection
                             title={myAllianceId ? t('wizard.yourAllianceJoined' as never, { alliance: gameState.alliances.find(a => a.id === myAllianceId)?.name ?? '' }) : t('wizard.hostJoinAlliance')}
                             hint={myAllianceId ? t('wizard.switchAllianceHint' as never) : t('wizard.hostJoinAllianceDesc')}
@@ -250,6 +259,48 @@ function HostAllianceBuilder({
     );
 }
 
+function VirtualPlayersSection({
+    count,
+    onSetCount,
+}: {
+    count: number;
+    onSetCount: (count: number) => void;
+}) {
+    const { t } = useTranslation();
+
+    return (
+        <div className="wizard-alliance-section">
+            <h3>🤖 {t('wizard.virtualPlayersTitle')}</h3>
+            <p className="wizard-hint">{t('wizard.virtualPlayersDesc')}</p>
+            <div className="join-form" style={{ alignItems: 'center' }}>
+                <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ flex: '0 0 56px' }}
+                    onClick={() => onSetCount(count - 1)}
+                    disabled={count <= 0}
+                    aria-label={t('wizard.virtualPlayersRemove')}
+                >
+                    −
+                </button>
+                <span className="wizard-hint" style={{ flex: 1, textAlign: 'center', margin: 0, whiteSpace: 'nowrap' }}>
+                    {t('wizard.virtualPlayersCount', { count })}
+                </span>
+                <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ flex: '0 0 56px' }}
+                    onClick={() => onSetCount(count + 1)}
+                    disabled={count >= MAX_VIRTUAL_PLAYERS}
+                    aria-label={t('wizard.virtualPlayersAdd')}
+                >
+                    +
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function AlliancePickerSection({
     title,
     hint,
@@ -307,7 +358,10 @@ function PlayerRow({
         <div className={`player-row${isMe ? ' is-me' : ''}`}>
             <span className="player-dot" style={{ background: player.allianceColor ?? player.color }} />
             <div className="player-copy">
-                <span className="player-name">{player.name} {player.isHost && <GameIcon name="crown" size="sm" />}</span>
+                <span className="player-name">
+                    {player.isVirtual && '🤖 '}{player.name} {player.isHost && <GameIcon name="crown" size="sm" />}
+                    {player.isVirtual && <span className="player-pending-chip">{t('wizard.virtualPlayerTag')}</span>}
+                </span>
             </div>
             {player.allianceName ? (
                 <span className="alliance-tag" style={{ background: player.allianceColor }}>

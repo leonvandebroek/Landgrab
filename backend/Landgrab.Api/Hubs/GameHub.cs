@@ -25,6 +25,7 @@ public partial class GameHub : Hub
     private readonly IHubContext<GameHub> hubContext;
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
+    private readonly VirtualPlayerService virtualPlayerService;
 
     private const string InvalidRequestCode = "INVALID_INPUT";
     private const int MaxCoordinateValue = 1000;
@@ -54,8 +55,10 @@ public partial class GameHub : Hub
         VisibilityBroadcastHelper visibilityBroadcastHelper,
         IHubContext<GameHub> hubContext,
         IServiceScopeFactory scopeFactory,
-        ILogger<GameHub> logger)
+        ILogger<GameHub> logger,
+        VirtualPlayerService virtualPlayerService)
     {
+        this.virtualPlayerService = virtualPlayerService;
         this.gameService = gameService;
         this.globalMap = globalMap;
         this.derivedMapStateService = derivedMapStateService;

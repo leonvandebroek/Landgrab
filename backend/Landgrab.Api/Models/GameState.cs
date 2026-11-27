@@ -111,6 +111,9 @@ public class PlayerDto
     public bool IsConnected { get; set; } = true;
     public int TerritoryCount { get; set; }
 
+    /// <summary>Test mode: a server-controlled bot player added by the host.</summary>
+    public bool IsVirtual { get; set; }
+
     // Phase 4: Player role
     public PlayerRole Role { get; set; } = PlayerRole.None;
 

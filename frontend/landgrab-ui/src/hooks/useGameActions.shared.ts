@@ -82,6 +82,7 @@ export interface UseGameActionsResult {
   handleAssignStartingTile: (q: number, r: number, playerId: string) => void;
   handleConfigureAlliances: (names: string[]) => void;
   handleDistributePlayers: () => void;
+  handleSetVirtualPlayerCount: (count: number) => void;
   handleAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
   handleStartGame: () => void;
   handleReturnToLobby: () => void;

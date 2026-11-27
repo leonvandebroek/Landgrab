@@ -47,6 +47,7 @@ export interface LobbyViewActions {
   onAssignStartingTile: (q: number, r: number, playerId: string) => void;
   onConfigureAlliances: (names: string[]) => void;
   onDistributePlayers: () => void;
+  onSetVirtualPlayerCount: (count: number) => void;
   onAssignAllianceStartingTile: (q: number, r: number, allianceId: string) => void;
   onStartGame: () => void;
   onReturnToLobby: () => void;
@@ -138,6 +139,7 @@ export function LobbyView({
           onAssignStartingTile={actions.onAssignStartingTile}
           onConfigureAlliances={actions.onConfigureAlliances}
           onDistributePlayers={actions.onDistributePlayers}
+          onSetVirtualPlayerCount={actions.onSetVirtualPlayerCount}
           onAssignAllianceStartingTile={actions.onAssignAllianceStartingTile}
           onStartGame={actions.onStartGame}
           onReturnToLobby={actions.onReturnToLobby}
