@@ -23,6 +23,7 @@
   },
   "pipelines": {
     "azureConnection": "Azure-LandGrab-SC",
+    "approvers": "leon@unitytech.nl",
     "proofPool": "mac-proof"
   },
   "testflight": {

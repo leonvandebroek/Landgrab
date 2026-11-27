@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "installed": "2026-11-26T16:32:06.996Z",
+  "installed": "2026-11-27T07:46:33.277Z",
   "files": {
     "android/android.Dockerfile": "bbb7f97ee825951d48d37275bb075de6ce1bf091015aac8568778ac30753e479",
     "android/signing.gradle": "2b791c4edf5895539317ea5ca40edd510c30fd840d0736b4a71d64c4833dac25",
@@ -16,7 +16,7 @@
     "maestro/smoke-ios.yaml": "9b785cd18f349f88bdc673c7498405bc7a1f9be897bbad6bb9839d54adee7df2",
     "maestro/subflows/first-screen.yaml": "46ba2665c9b7273f0ad149ae2636e64e8ba61f10557e1ffca27f7fee0fa0cfce",
     "maestro/subflows/resume.yaml": "3635768074e77cda1e1b790526fd1ee3fdc207a7105c3981f55f9ea829479d99",
-    "pipelines/mobile.yml": "f6bdd2025586e178d94098eae47f71150c57d9df315dd8714c915ded9961dbdd",
+    "pipelines/mobile.yml": "ff454d9a9bdfa1830e94dc52b21bee98349838d9c1a916b31d1fe33d258d2382",
     "proof/android-proof.sh": "d2bc474430f7f5e47c2d76d72e1b5e9fbe9702b6ac5309eec047be9c0752730b",
     "proof/ios-proof.sh": "792e5acbc72cca4bb0d5c814ca6efcace643497e44fe3f2d7ac1ab1b7a3bb7f2",
     "proof/lib.sh": "6c82ea3670df1578fb03cffe6789e0ec9869b03575615936f2a21a1b1f5a78d6",

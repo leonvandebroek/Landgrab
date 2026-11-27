@@ -489,8 +489,8 @@ stages:
             - task: ManualValidation@1
               timeoutInMinutes: 20140
               inputs:
-                notifyUsers: 'set-pipelines.approvers'
-                approvers: 'set-pipelines.approvers'
+                notifyUsers: 'leon@unitytech.nl'
+                approvers: 'leon@unitytech.nl'
                 instructions: 'Version $(versionName) passed the gate (see the release-record artifact) and is in TestFlight and on the Play internal track. Resume to send it to App Store review (7-day phased release) and to Play production at 20 % when that is switched on.'
                 onTimeout: reject
 
