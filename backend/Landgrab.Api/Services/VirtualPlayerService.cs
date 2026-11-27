@@ -343,8 +343,17 @@ public class VirtualPlayerService(
                 c.OwnerId == null && !c.IsMasterTile &&
                 (state.ClaimMode != ClaimMode.AdjacencyRequired || HexService.IsAdjacentToOwned(state.Grid, c.Q, c.R, bot.Id, bot.AllianceId)));
 
+            // Real opponents go after the people they play against: prefer hexes held by a human
+            // (also when it is an even fight), then any other enemy hex they can beat.
+            var humanIds = state.Players.Where(p => !p.IsVirtual).Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+            var humanTargets = state.Grid.Values.Where(c =>
+                c.OwnerId != null && humanIds.Contains(c.OwnerId) && !IsOwn(c) && !c.IsMasterTile && !IsHq(c)
+                && c.Troops <= bot.CarriedTroops);
+
             var roll = random.NextDouble();
-            if (roll < 0.45d && (target = Pick(attackable)) != null)
+            if (roll < 0.6d && (target = Pick(humanTargets)) != null)
+                goal = BotGoal.Attack;
+            else if (roll < 0.75d && (target = Pick(attackable)) != null)
                 goal = BotGoal.Attack;
             else if (roll < 0.9d && (target = Pick(claimable)) != null)
                 goal = BotGoal.Claim;

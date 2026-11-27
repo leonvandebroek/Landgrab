@@ -124,4 +124,41 @@ public sealed class VirtualPlayerServiceTests
 
         result.AnyMoved.Should().BeFalse();
     }
+
+    [Fact]
+    public void EnemyBots_AttackTheHumanPlayersHexes()
+    {
+        var (context, sut, hostId) = CreateLobby();
+        sut.SetVirtualPlayerCount(ServiceTestContext.RoomCode, hostId, 1);
+        var lobby = new LobbyService(context.RoomProvider.Object, context.GameStateService);
+        lobby.StartGame(ServiceTestContext.RoomCode, hostId).error.Should().BeNull();
+
+        var bot = context.State.Players.Single(p => p.IsVirtual);
+        var host = context.State.Players.Single(p => p.Id == hostId);
+        bot.AllianceId.Should().NotBe(host.AllianceId, "a single bot should be the host's opponent");
+
+        // Give the human a ring of lightly defended hexes around the bot.
+        foreach (var cell in context.State.Grid.Values.Where(c =>
+                     !c.IsMasterTile && c.OwnerId == null &&
+                     HexService.HexDistance(c.Q, c.R, bot.CurrentHexQ!.Value, bot.CurrentHexR!.Value) <= 2))
+        {
+            cell.OwnerId = host.Id;
+            cell.OwnerAllianceId = host.AllianceId;
+            cell.OwnerName = host.Name;
+            cell.Troops = 1;
+        }
+
+        var now = DateTime.UtcNow;
+        for (var i = 0; i < 300; i++)
+        {
+            now = now.AddSeconds(2);
+            sut.Tick(ServiceTestContext.RoomCode, TimeSpan.FromSeconds(2), now);
+            if (context.State.EventLog.Any(e => e.Type == "TileCaptured" && e.PlayerId == bot.Id && e.TargetPlayerId == hostId))
+                break;
+        }
+
+        context.State.EventLog.Should().Contain(e =>
+            e.Type == "TileCaptured" && e.PlayerId == bot.Id && e.TargetPlayerId == hostId,
+            "an enemy bot should capture hexes from the human player");
+    }
 }
