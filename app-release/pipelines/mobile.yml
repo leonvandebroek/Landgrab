@@ -56,6 +56,12 @@ parameters:
     displayName: Android build machine (needs Docker; microsoft-hosted = Microsoft's Ubuntu)
     type: string
     default: microsoft-hosted
+  # Landgrab change (plugin gap): the organization has no Microsoft-hosted minutes, so the small Linux jobs (checks, gate,
+  # store uploads) can run on an own pool too. They only need Node.
+  - name: linuxPool
+    displayName: Machine for the small jobs (checks, gate, store uploads; microsoft-hosted = Microsoft's Ubuntu)
+    type: string
+    default: microsoft-hosted
   # Simulators and the emulator need a Mac with full Xcode, the Android SDK, Maestro and Docker. Microsoft's Ubuntu has
   # no KVM for the emulator, and Apple Silicon VMs cannot run it either: a Mac of your own is the dependable choice.
   - name: proofPool
@@ -114,7 +120,10 @@ stages:
     jobs:
       - job: Tests
         pool:
-          vmImage: ubuntu-latest
+          ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+            vmImage: ubuntu-latest
+          ${{ else }}:
+            name: ${{ parameters.linuxPool }}
         steps:
           - checkout: self
             fetchDepth: 1
@@ -224,7 +233,11 @@ stages:
                   echo "##vso[task.logissue type=error]Apple needs Xcode $MIN or newer; this machine has: $(echo $all)"
                   exit 1
                 fi
-                sudo xcode-select -s "${pick#* }/Contents/Developer"
+                # Landgrab change (plugin gap): an own Mac agent has no passwordless sudo, so select Xcode for this
+                # job through DEVELOPER_DIR instead of a machine-wide xcode-select.
+                dev="${pick#* }/Contents/Developer"
+                export DEVELOPER_DIR="$dev"
+                echo "##vso[task.setvariable variable=DEVELOPER_DIR]$dev"
                 xcodebuild -version
               displayName: Use the newest Xcode
             - bash: |
@@ -338,7 +351,10 @@ stages:
             displayName: Two real phones (Firebase Test Lab, Robo)
             timeoutInMinutes: 45
             pool:
-              vmImage: ubuntu-latest
+              ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+                vmImage: ubuntu-latest
+              ${{ else }}:
+                name: ${{ parameters.linuxPool }}
             steps:
               - checkout: self
                 fetchDepth: 1
@@ -387,7 +403,10 @@ stages:
     jobs:
       - job: Record
         pool:
-          vmImage: ubuntu-latest
+          ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+            vmImage: ubuntu-latest
+          ${{ else }}:
+            name: ${{ parameters.linuxPool }}
         # A self-hosted agent keeps its work folder: an old file next to the new one must never reach the gate.
         workspace:
           clean: all
@@ -435,7 +454,10 @@ stages:
       - ${{ if eq(parameters.buildAndroid, true) }}:
         - job: PlayInternal
           pool:
-            vmImage: ubuntu-latest
+            ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+              vmImage: ubuntu-latest
+            ${{ else }}:
+              name: ${{ parameters.linuxPool }}
           steps:
             - checkout: self
               fetchDepth: 1
@@ -456,7 +478,10 @@ stages:
       - ${{ if eq(parameters.buildIos, true) }}:
         - job: TestFlight
           pool:
-            vmImage: ubuntu-latest
+            ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+              vmImage: ubuntu-latest
+            ${{ else }}:
+              name: ${{ parameters.linuxPool }}
           steps:
             - checkout: self
               fetchDepth: 1
@@ -502,7 +527,10 @@ stages:
         - ${{ if eq(parameters.buildIos, true) }}:
           - job: AppStore
             pool:
-              vmImage: ubuntu-latest
+              ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+                vmImage: ubuntu-latest
+              ${{ else }}:
+                name: ${{ parameters.linuxPool }}
             steps:
               - checkout: self
                 fetchDepth: 1
@@ -523,7 +551,10 @@ stages:
         - ${{ if and(eq(parameters.buildAndroid, true), eq(parameters.androidProduction, true)) }}:
           - job: GooglePlay
             pool:
-              vmImage: ubuntu-latest
+              ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+                vmImage: ubuntu-latest
+              ${{ else }}:
+                name: ${{ parameters.linuxPool }}
             steps:
               - checkout: self
                 fetchDepth: 1
@@ -548,7 +579,10 @@ stages:
       jobs:
         - job: GooglePlay
           pool:
-            vmImage: ubuntu-latest
+            ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+              vmImage: ubuntu-latest
+            ${{ else }}:
+              name: ${{ parameters.linuxPool }}
           steps:
             - checkout: self
               fetchDepth: 1
@@ -598,7 +632,10 @@ stages:
       jobs:
         - job: Phased
           pool:
-            vmImage: ubuntu-latest
+            ${{ if eq(parameters.linuxPool, 'microsoft-hosted') }}:
+              vmImage: ubuntu-latest
+            ${{ else }}:
+              name: ${{ parameters.linuxPool }}
           steps:
             - checkout: self
               fetchDepth: 1
