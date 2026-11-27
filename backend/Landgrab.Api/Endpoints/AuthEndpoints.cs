@@ -104,29 +104,24 @@ public static class AuthEndpoints
         if (!passwords.Verify(req.Password, user.PasswordHash))
         {
             // Atomic increment + conditional lockout — avoids last-write-wins race under concurrency
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                $"""
-                UPDATE Users
-                SET FailedLoginAttempts = FailedLoginAttempts + 1,
-                    LockedUntil = CASE WHEN FailedLoginAttempts + 1 >= 5
-                        THEN DATEADD(MINUTE, 15, GETUTCDATE())
-                        ELSE LockedUntil END
-                WHERE Id = {user.Id}
-                """);
+            var lockUntil = DateTime.UtcNow.AddMinutes(15);
+            await db.Users
+                .Where(u => u.Id == user.Id)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(u => u.LockedUntil, u => u.FailedLoginAttempts + 1 >= 5 ? lockUntil : u.LockedUntil)
+                    .SetProperty(u => u.FailedLoginAttempts, u => u.FailedLoginAttempts + 1));
             return Results.Unauthorized();
         }
 
         // Successful login — clear lockout state, but only if account is still unlocked
         // (guards against TOCTOU: a concurrent 5th failed attempt could have set LockedUntil
         //  between the check above and here; 0 rows updated = account became locked mid-request)
-        var rowsReset = await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-            UPDATE Users
-            SET FailedLoginAttempts = 0,
-                LockedUntil = NULL
-            WHERE Id = {user.Id}
-              AND (LockedUntil IS NULL OR LockedUntil <= GETUTCDATE())
-            """);
+        var now = DateTime.UtcNow;
+        var rowsReset = await db.Users
+            .Where(u => u.Id == user.Id && (u.LockedUntil == null || u.LockedUntil <= now))
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(u => u.FailedLoginAttempts, 0)
+                .SetProperty(u => u.LockedUntil, (DateTime?)null));
 
         if (rowsReset == 0)
             return Results.BadRequest(new { error = "Account temporarily locked. Try again later." });

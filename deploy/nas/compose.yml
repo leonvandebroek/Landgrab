@@ -1,0 +1,45 @@
+# Landgrab on the NAS (docs/deployment-nas.md). nas-deploy.sh runs it from /volume1/docker/landgrab with the .env next to
+# it; the release pipeline (deploy/nas/pipeline.yml) sets IMAGE_TAG and the secrets from Key Vault kv-landgrab-prod.
+# Only the web container has a port, on the NAS's LAN address; Nginx Proxy Manager puts https://landgrab.leonvandebroek.nl
+# in front of it. The API and Postgres are reachable inside this stack only.
+name: landgrab
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: landgrab
+      POSTGRES_USER: landgrab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is missing in .env}
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U landgrab -d landgrab"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 256m
+
+  backend:
+    image: ${IMAGE_REPO:-unitytech.azurecr.io/landgrab}-api:${IMAGE_TAG:?IMAGE_TAG is missing in .env}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=db;Database=landgrab;Username=landgrab;Password=${POSTGRES_PASSWORD}
+      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is missing in .env}
+      App__BaseUrl: ${PUBLIC_ORIGIN:-https://landgrab.leonvandebroek.nl}
+      AllowedOrigins__0: ${PUBLIC_ORIGIN:-https://landgrab.leonvandebroek.nl}
+    mem_limit: 512m
+
+  frontend:
+    image: ${IMAGE_REPO:-unitytech.azurecr.io/landgrab}-ui:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${LANDGRAB_BIND_IP:-10.233.1.253}:${LANDGRAB_PORT:-8150}:8080"
+    mem_limit: 64m

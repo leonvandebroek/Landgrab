@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Text;
 using System.Threading.RateLimiting;
 using Landgrab.Api.Auth;
@@ -22,9 +23,9 @@ builder.Services.AddResponseCompression(options =>
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(
+    options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null)));
+        npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(30), null)));
 
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<IGameRoomProvider>(sp => sp.GetRequiredService<RoomService>());
@@ -159,9 +160,23 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// ── Behind proxies ────────────────────────────────────────────────────────
+// On the NAS a request passes Nginx Proxy Manager (TLS) and the web container's nginx before it reaches this API, whose
+// port is published nowhere. Taking the client address and https from X-Forwarded-For/-Proto keeps the rate limits per
+// player and stops UseHttpsRedirection from redirecting requests that arrived over https.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 2;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 // ─────────────────────────────────────────────────────────────────────────
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // ── Middleware ────────────────────────────────────────────────────────────
 

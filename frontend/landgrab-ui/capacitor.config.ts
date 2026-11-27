@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // SameSite=Strict cookie and the API and game hub are called on relative /api and /hub URLs, which only work on the
 // server's own origin. Web changes then reach the app without a store build; only native changes (plugins,
 // permissions) need one. dist/ is still bundled: offline.html is shown when the server cannot be reached.
-const LIVE_URL = process.env.LANDGRAB_APP_URL ?? 'https://app-landgrab-prod.azurewebsites.net';
+const LIVE_URL = process.env.LANDGRAB_APP_URL ?? 'https://landgrab.leonvandebroek.nl';
 
 const config: CapacitorConfig = {
   appId: 'app.landgrab',

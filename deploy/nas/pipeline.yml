@@ -1,0 +1,154 @@
+# Landgrab web app and game server on the NAS (docs/deployment-nas.md). Azure DevOps project LandGrab, pipeline "Landgrab NAS".
+#
+# Publish (imac-linux-ci): builds the API and web images for linux/amd64 and pushes them to unitytech.azurecr.io.
+# Deploy (lokaal-linux-poc, on the LAN): reads the secrets from Key Vault kv-landgrab-prod, sends one bundle to the NAS over
+#   SSH and runs nas-deploy.sh there (pull, up, health check, rollback). Then checks https://landgrab.leonvandebroek.nl.
+# ProxyHosts: makes Nginx Proxy Manager match deploy/proxy-hosts/hosts.json, once the pipeline variable proxyHosts=true.
+#
+# Costs nothing new: the NAS, the registry (already paid for) and Key Vault only. Nothing else in Azure.
+
+trigger:
+  batch: false
+  branches:
+    include: [main]
+  paths:
+    include:
+      - backend/Landgrab.Api/*
+      - frontend/landgrab-ui/src/*
+      - frontend/landgrab-ui/public/*
+      - frontend/landgrab-ui/index.html
+      - frontend/landgrab-ui/package.json
+      - frontend/landgrab-ui/package-lock.json
+      - frontend/landgrab-ui/nginx.conf
+      - frontend/landgrab-ui/Dockerfile
+      - deploy/nas/*
+      - deploy/proxy-hosts/*
+
+pr: none
+
+parameters:
+  - name: deployToNas
+    displayName: Deploy to the NAS (a push to main always deploys)
+    type: boolean
+    default: false
+  - name: agentPool
+    displayName: Agent pool (Publish)
+    type: string
+    default: imac-linux-ci
+    values: [imac-linux-ci, lokaal, localbuilders]
+  - name: deployPool
+    displayName: Agent pool (Deploy, needs LAN access to the NAS)
+    type: string
+    default: lokaal-linux-poc
+    values: [lokaal-linux-poc, imac-linux-ci, lokaal]
+
+variables:
+  imageRepo: unitytech.azurecr.io/landgrab
+  imagePlatform: linux/amd64
+  nasProjectDir: /volume1/docker/landgrab
+  publicOrigin: https://landgrab.leonvandebroek.nl
+  azureConnection: Azure-LandGrab-SC
+  keyVault: kv-landgrab-prod
+
+stages:
+  - stage: Publish
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: Images
+        pool:
+          name: ${{ parameters.agentPool }}
+          demands: [docker]
+        steps:
+          - checkout: self
+          - task: Docker@2
+            inputs:
+              command: login
+              containerRegistry: Unitytech ACR
+          - bash: |
+              set -eu
+              docker build --platform "$(imagePlatform)" -t "$(imageRepo)-api:$(Build.SourceVersion)" backend/Landgrab.Api
+              docker build --platform "$(imagePlatform)" -t "$(imageRepo)-ui:$(Build.SourceVersion)" frontend/landgrab-ui
+              docker push "$(imageRepo)-api:$(Build.SourceVersion)"
+              docker push "$(imageRepo)-ui:$(Build.SourceVersion)"
+            displayName: Build and push the API and web images
+
+  - stage: Deploy
+    dependsOn: Publish
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), or(${{ eq(parameters.deployToNas, true) }}, in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')))
+    jobs:
+      - deployment: Nas
+        environment: landgrab-production
+        pool:
+          name: ${{ parameters.deployPool }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureKeyVault@2
+                  displayName: Read the app secrets from Key Vault
+                  inputs:
+                    azureSubscription: $(azureConnection)
+                    KeyVaultName: $(keyVault)
+                    SecretsFilter: landgrab-postgres-password,landgrab-jwt-secret
+                    RunAsPreJob: false
+                # The secrets travel inside the bundle (settings.env), which is a secret variable: never in a log or on disk here
+                # beyond this job's temp folder, which the agent empties afterwards.
+                - bash: |
+                    set -eu
+                    umask 077
+                    S="$(Agent.TempDirectory)/settings.env"
+                    printf 'POSTGRES_PASSWORD=%s\nJWT_SECRET=%s\nPUBLIC_ORIGIN=%s\n' "$PG" "$JWT" "$(publicOrigin)" > "$S"
+                    SETTINGS_FILE="$S" sh deploy/nas/pack-release.sh --azure "$(Agent.TempDirectory)/release"
+                    rm -f "$S"
+                  displayName: Pack the release bundle
+                  env:
+                    PG: $(landgrab-postgres-password)
+                    JWT: $(landgrab-jwt-secret)
+                # A launcher only: the SSH task splits commands at ";", so this line uses && and | and nothing else.
+                - task: SSH@0
+                  displayName: Deploy on the NAS
+                  timeoutInMinutes: 20
+                  inputs:
+                    sshEndpoint: UnitystationPro SSH
+                    runOptions: commands
+                    failOnStdErr: false
+                    commands: cd $(nasProjectDir) && rm -rf .landgrab-release && mkdir -m 700 .landgrab-release && echo "$(releaseB64)" | base64 -d > .landgrab-release/release.tgz && echo "$(releaseSha)  .landgrab-release/release.tgz" | sha256sum -c - && tar -xzf .landgrab-release/release.tgz -C .landgrab-release && sh .landgrab-release/nas-deploy.sh $(Build.SourceVersion) .landgrab-release
+                - bash: |
+                    set -eu
+                    for i in $(seq 1 24); do
+                      curl --fail --silent --show-error --max-time 5 "$(publicOrigin)/health" && exit 0
+                      sleep 5
+                    done
+                    echo "##vso[task.logissue type=warning]$(publicOrigin)/health does not answer yet (DNS or the proxy host may still be missing)"
+                  displayName: Check the public address
+
+      - job: ProxyHosts
+        dependsOn: Nas
+        condition: and(succeeded(), eq(variables['proxyHosts'], 'true'))
+        continueOnError: true
+        pool:
+          name: ${{ parameters.deployPool }}
+        steps:
+          - checkout: self
+          - task: AzureKeyVault@2
+            displayName: Read the NPM service user from Key Vault
+            inputs:
+              azureSubscription: $(azureConnection)
+              KeyVaultName: $(keyVault)
+              SecretsFilter: npm-landgrab-proxy-identity,npm-landgrab-proxy-secret
+              RunAsPreJob: false
+          - bash: |
+              set -eu
+              if command -v python3 > /dev/null; then
+                python3 scripts/nas/proxy-host.py sync --apply --verify
+              else
+                docker run --rm --network host -e NPM_URL -e NPM_IDENTITY -e NPM_SECRET -e NPM_BACKUP_DIR -v "$PWD:/src:ro" -w /src \
+                  python:3.12-alpine python3 scripts/nas/proxy-host.py sync --apply --verify
+              fi
+            displayName: Make Nginx Proxy Manager match the hosts file
+            env:
+              NPM_URL: http://10.233.1.253:8081
+              NPM_IDENTITY: $(npm-landgrab-proxy-identity)
+              NPM_SECRET: $(npm-landgrab-proxy-secret)
+              NPM_BACKUP_DIR: $(Agent.TempDirectory)/npm-backups

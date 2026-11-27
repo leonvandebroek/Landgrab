@@ -1,0 +1,7 @@
+node_modules
+dist
+ios
+android
+e2e
+playwright-report
+test-results

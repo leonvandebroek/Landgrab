@@ -1,0 +1,34 @@
+{
+  "about": "Landgrab's proxy host in Nginx Proxy Manager on the NAS (docs/deployment-nas.md). scripts/nas/proxy-host.py sync makes NPM match this file. Field names are NPM's own. Only names under allowed_suffixes can be changed, never Time for Guests or identity.unitytech.nl.",
+  "owner": "landgrab",
+  "allowed_suffixes": [
+    "landgrab.leonvandebroek.nl"
+  ],
+  "defaults": {
+    "forward_scheme": "http",
+    "forward_host": "10.233.1.253",
+    "ssl_forced": true,
+    "http2_support": true,
+    "hsts_enabled": false,
+    "hsts_subdomains": false,
+    "block_exploits": true,
+    "caching_enabled": false,
+    "allow_websocket_upgrade": false,
+    "trust_forwarded_proto": false,
+    "access_list_id": 0,
+    "advanced_config": "",
+    "locations": [],
+    "certificate": "letsencrypt"
+  },
+  "hosts": [
+    {
+      "domain_names": [
+        "landgrab.leonvandebroek.nl"
+      ],
+      "forward_port": 8150,
+      "hsts_enabled": true,
+      "allow_websocket_upgrade": true,
+      "note": "Web app, /api and the SignalR hub /hub/game (WebSockets) through the landgrab frontend container's nginx."
+    }
+  ]
+}

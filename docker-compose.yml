@@ -2,25 +2,21 @@ version: '3.9'
 
 services:
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    platform: linux/amd64
-    # MSSQL requires root for initial setup in Docker
-    user: "0:0"
+    image: postgres:17-alpine
     environment:
-      ACCEPT_EULA: "Y"
+      POSTGRES_DB: landgrab
+      POSTGRES_USER: landgrab
       # Override via .env file or environment variable
-      SA_PASSWORD: "${SA_PASSWORD:-Dev_Password1!}"
-      MSSQL_PID: Developer
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-Dev_Password1!}"
     ports:
-      - "1433:1433"
+      - "5432:5432"
     volumes:
-      - sqldata:/var/opt/mssql
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${SA_PASSWORD:-Dev_Password1!}' -Q 'SELECT 1' -No -b"]
+      test: ["CMD-SHELL", "pg_isready -U landgrab -d landgrab"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
 
   backend:
     build:
@@ -31,7 +27,7 @@ services:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Server=db,1433;Initial Catalog=landgrab;User Id=sa;Password=${SA_PASSWORD:-Dev_Password1!};Encrypt=False;TrustServerCertificate=True;
+      - ConnectionStrings__DefaultConnection=Host=db;Database=landgrab;Username=landgrab;Password=${POSTGRES_PASSWORD:-Dev_Password1!}
       - Jwt__Secret=${JWT_SECRET:?JWT_SECRET environment variable must be set}
       - App__BaseUrl=${APP_URL:-http://localhost}
       - AllowedOrigins__0=http://localhost
@@ -48,4 +44,4 @@ services:
       - "80:8080"
 
 volumes:
-  sqldata:
+  pgdata:
