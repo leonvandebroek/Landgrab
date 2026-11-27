@@ -43,8 +43,9 @@ and `lokaal-linux-poc`. Azure connection: `Azure-LandGrab-SC` (workload identity
 
 ## Operating
 
-- Logs: `cd /volume1/docker/landgrab && docker compose logs -f backend`.
-- Roll back by hand: `cp .env.previous .env && cp compose.yml.previous compose.yml && docker compose up -d`.
-- Database backup: `docker compose exec db pg_dump -U landgrab landgrab > landgrab-$(date +%F).sql`.
+`.env` and `compose.yml` are readable by `DeployAgent` only (mode 600, the secrets are in `.env`), so `docker compose` commands there run as DeployAgent. As your own user, use the containers directly:
+- Logs: `docker logs -f landgrab-backend-1`.
+- Database backup: `docker exec landgrab-db-1 pg_dump -U landgrab landgrab > landgrab-$(date +%F).sql`.
+- Roll back by hand (as DeployAgent, in `/volume1/docker/landgrab`): `cp .env.previous .env && cp compose.yml.previous compose.yml && docker compose up -d`. Or re-run an older Landgrab NAS run.
 - EF Core migrations run when the API starts (`Program.cs`).
 - Cloud sessions and feature branches never deploy: Publish and Deploy only run for `refs/heads/main`.
