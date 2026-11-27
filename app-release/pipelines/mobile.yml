@@ -44,30 +44,31 @@ parameters:
     displayName: Build iPhone and iPad
     type: boolean
     default: true
+  # Landgrab: off until the Play Console app and the Android keys exist; a push to main then builds iOS only.
   - name: buildAndroid
     displayName: Build Android
     type: boolean
-    default: true
+    default: false
   - name: iosPool
     displayName: iPhone build machine (microsoft-hosted = Microsoft's macOS-15, or the name of a pool of your own Macs)
     type: string
-    default: microsoft-hosted
+    default: imac-linux-ci
   - name: androidPool
     displayName: Android build machine (needs Docker; microsoft-hosted = Microsoft's Ubuntu)
     type: string
-    default: microsoft-hosted
+    default: imac-linux-ci
   # Landgrab change (plugin gap): the organization has no Microsoft-hosted minutes, so the small Linux jobs (checks, gate,
   # store uploads) can run on an own pool too. They only need Node.
   - name: linuxPool
     displayName: Machine for the small jobs (checks, gate, store uploads; microsoft-hosted = Microsoft's Ubuntu)
     type: string
-    default: microsoft-hosted
+    default: imac-linux-ci
   # Simulators and the emulator need a Mac with full Xcode, the Android SDK, Maestro and Docker. Microsoft's Ubuntu has
   # no KVM for the emulator, and Apple Silicon VMs cannot run it either: a Mac of your own is the dependable choice.
   - name: proofPool
     displayName: Agent pool for the simulator and emulator proof
     type: string
-    default: mac-proof
+    default: imac-linux-ci
   - name: testLab
     displayName: Also a Robo test on two real phones in Firebase Test Lab (needs firebase-test-lab-sa-json)
     type: boolean
@@ -75,7 +76,9 @@ parameters:
   - name: testflightGroup
     displayName: TestFlight group that gets every build after the gate (besides the team group)
     type: string
-    default: Early testers
+    # Landgrab: the internal team group gets every build without review. Switch to "Early testers" once TestFlight's
+    # Test Information (beta description, feedback email, review contact) is filled in.
+    default: Landgrab team
   # Off until the App Store page (texts, screenshots, privacy answers) exists; then one approval sends iOS to review.
   - name: storeRelease
     displayName: After one approval, send the build to App Store review (and Play production)
