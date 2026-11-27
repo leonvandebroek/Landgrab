@@ -14,6 +14,11 @@ parameters:
     displayName: Create missing runtime secrets after apply (never overwrites)
     type: boolean
     default: true
+  - name: agentPool
+    displayName: Agent pool (self-hosted, needs Docker, az CLI and python3; the org has no hosted minutes)
+    type: string
+    default: lokaal-linux-poc
+    values: [lokaal-linux-poc, imac-linux-ci]
 
 variables:
   azureConnection: Azure-LandGrab-SC
@@ -24,7 +29,8 @@ variables:
   stateContainer: landgrab
 
 pool:
-  vmImage: ubuntu-latest
+  name: ${{ parameters.agentPool }}
+  demands: [docker]
 
 steps:
   - checkout: self
