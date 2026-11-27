@@ -6,6 +6,7 @@ import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
 import { useSecondTick } from '../../../hooks/useSecondTick';
+import { describeTile } from './tileName';
 import type { AbilityCardProps } from '../../../types/abilities';
 
 export function DemolishCard({ myUserId, invoke }: AbilityCardProps) {
@@ -27,7 +28,8 @@ export function DemolishCard({ myUserId, invoke }: AbilityCardProps) {
 
   const currentHexKey = currentHex ? `${currentHex[0]},${currentHex[1]}` : null;
   const currentHexCell = currentHexKey ? gameState?.grid[currentHexKey] ?? null : null;
-  const { heading } = useDeviceOrientation(true);
+  // Keeps the compass running so the server sees which way you face.
+  useDeviceOrientation(true);
   const [now, setNow] = useState(() => Date.now());
 
   useSecondTick(() => {
@@ -51,7 +53,7 @@ export function DemolishCard({ myUserId, invoke }: AbilityCardProps) {
 
   const demolishProgress = player?.demolishApproachDirectionsMade?.length ?? 0;
   const isMissionInProgress = Boolean(player?.demolishTargetKey) || abilityUi.mode === 'inProgress';
-  const currentHexLabel = currentHex ? `${currentHex[0]}, ${currentHex[1]}` : '—';
+  const currentHexLabel = describeTile(t, gameState, player, currentHex?.[0], currentHex?.[1]);
 
   const isHolding = Boolean(player?.demolishFacingLockStartAt);
   const lockStartAt = player?.demolishFacingLockStartAt;
@@ -63,12 +65,12 @@ export function DemolishCard({ myUserId, invoke }: AbilityCardProps) {
 
   const getStatusText = () => {
     if (!isMissionInProgress) return t('abilities.demolish.targetingSummary' as never);
-    if (demolishProgress >= 3) return 'Demolition complete!';
-    if (isHolding) return `Holding… ${holdProgressSec.toFixed(1)}s / 5.0s`;
+    if (demolishProgress >= 3) return t('abilities.demolish.complete' as never);
+    if (isHolding) return t('abilities.demolish.holdProgress' as never, { seconds: holdProgressSec.toFixed(1) });
     if (currentHexKey !== null && currentHexKey === facingHexKey && !isHolding) {
-      return 'Facing lock lost — hold steady';
+      return t('abilities.demolish.facingBroken' as never);
     }
-    return 'Face the fort and hold for 5 seconds';
+    return t('abilities.demolish.faceTheFort' as never);
   };
 
   const handleBackToHud = () => {
@@ -120,22 +122,6 @@ export function DemolishCard({ myUserId, invoke }: AbilityCardProps) {
             </span>
             <span className="ability-card__meta-value">
               {isMissionInProgress ? `${demolishProgress}/3` : currentHexLabel}
-            </span>
-          </div>
-
-          {isMissionInProgress && (
-            <div className="ability-card__meta-row">
-              <span className="ability-card__meta-label">Target Hex</span>
-              <span className="ability-card__meta-value">
-                {player?.demolishTargetKey ?? '—'}
-              </span>
-            </div>
-          )}
-
-          <div className="ability-card__meta-row">
-            <span className="ability-card__meta-label">Heading</span>
-            <span className="ability-card__meta-value">
-              {heading !== null ? `${Math.round(heading)}°` : '—'}
             </span>
           </div>
 

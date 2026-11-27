@@ -5,6 +5,7 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceOrientation } from '../../../hooks/useDeviceOrientation';
+import { describeTile } from './tileName';
 import type { AbilityCardProps } from '../../../types/abilities';
 import { resolveTacticalStrikeTarget } from '../../../utils/combatCalculations';
 
@@ -81,14 +82,14 @@ export function TacticalStrikeCard({ myUserId, invoke }: AbilityCardProps) {
           <p className="ability-card__status-copy">
             {isArmed
               ? t('abilities.tacticalStrike.armedSummary' as never)
-              : (resolvedTarget ? 'Target acquired.' : 'Point your device to find a target')}
+              : (resolvedTarget ? t('abilities.tacticalStrike.targetFound' as never) : t('abilities.tacticalStrike.pointToTarget' as never))}
           </p>
 
           {!isArmed && (
             <div className="ability-card__meta-row">
-              <span className="ability-card__meta-label">Target Hex</span>
+              <span className="ability-card__meta-label">{t('abilities.tacticalStrike.targetLabel' as never)}</span>
               <span className="ability-card__meta-value">
-                {resolvedTarget ? `${resolvedTarget[0]}, ${resolvedTarget[1]}` : 'No target in direction'}
+                {resolvedTarget ? describeTile(t, gameState, player, resolvedTarget[0], resolvedTarget[1]) : t('abilities.tacticalStrike.noTarget' as never)}
               </span>
             </div>
           )}
@@ -112,7 +113,7 @@ export function TacticalStrikeCard({ myUserId, invoke }: AbilityCardProps) {
           }}
           disabled={!resolvedTarget}
         >
-          Lock Target
+          {t('abilities.tacticalStrike.lockTarget' as never)}
         </button>
       ) : undefined}
       onBackToHud={handleBackToHud}

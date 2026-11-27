@@ -5,6 +5,7 @@ import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
 import { useDeviceMotion } from '../../../hooks/useDeviceMotion';
+import { describeTile } from './tileName';
 import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatTimeRemaining(until: string | undefined): string | null {
@@ -54,12 +55,10 @@ export function RallyPointCard({ myUserId, invoke }: AbilityCardProps) {
   const isRallyActive = Boolean(player?.rallyPointActive) || abilityUi.mode === 'active';
   const rallyCountdown = formatTimeRemaining(player?.rallyPointDeadline);
   const rallyHexLabel = player?.rallyPointQ != null && player?.rallyPointR != null
-    ? `${player.rallyPointQ}, ${player.rallyPointR}`
-    : currentHex
-      ? `${currentHex[0]}, ${currentHex[1]}`
-      : '—';
+    ? describeTile(t, gameState, player, player.rallyPointQ, player.rallyPointR)
+    : describeTile(t, gameState, player, currentHex?.[0], currentHex?.[1]);
 
-  const currentHexLabel = currentHex ? `${currentHex[0]}, ${currentHex[1]}` : '—';
+  const currentHexLabel = describeTile(t, gameState, player, currentHex?.[0], currentHex?.[1]);
   const rallyHexCell = useMemo(() => {
     if (!gameState || player?.rallyPointQ == null || player.rallyPointR == null) return null;
     return gameState.grid[`${player.rallyPointQ},${player.rallyPointR}`] ?? null;
@@ -181,15 +180,15 @@ export function RallyPointCard({ myUserId, invoke }: AbilityCardProps) {
               className="ability-card__secondary-btn"
               onClick={() => void requestPermission()}
             >
-              Grant Motion Access
+              {t('abilities.rallyPoint.grantMotion' as never)}
             </button>
           )}
           {supported ? (
             <div className="ability-card__pitch-indicator">
               <p className="ability-card__status-copy">
                 {pitch !== null && pitch >= 60
-                  ? <strong>Holding steady… {(holdProgress / 1000).toFixed(1)}s / 2.0s</strong>
-                  : "Raise your device to signal the rally"}
+                  ? <strong>{t('abilities.rallyPoint.holdSteady' as never, { seconds: (holdProgress / 1000).toFixed(1) })}</strong>
+                  : t('abilities.rallyPoint.raiseDevice' as never)}
               </p>
               <div className="ability-card__progress-container">
                 <progress value={holdProgress} max={2000} className="ability-card__progress-bar" />
@@ -200,7 +199,7 @@ export function RallyPointCard({ myUserId, invoke }: AbilityCardProps) {
                 onClick={() => void handleActivate()}
                 disabled={!isFriendlyHex}
               >
-                Tap to override
+                {t('abilities.rallyPoint.tapInstead' as never)}
               </button>
             </div>
           ) : (
@@ -210,7 +209,7 @@ export function RallyPointCard({ myUserId, invoke }: AbilityCardProps) {
               onClick={() => void handleActivate()}
               disabled={!isFriendlyHex}
             >
-              Tap to activate
+              {t('abilities.rallyPoint.start' as never)}
             </button>
           )}
         </div>
@@ -230,7 +229,7 @@ export function RallyPointCard({ myUserId, invoke }: AbilityCardProps) {
             {!isFriendlyHex ? (
               <p className="ability-card__warning">{t('abilities.rallyPoint.invalidHexHint' as never)}</p>
             ) : (
-              <p>Raise your device (≥ 60°) to signal a rally point to your team.</p>
+              <p>{t('abilities.rallyPoint.raiseHint' as never)}</p>
             )}
           </div>
         )}

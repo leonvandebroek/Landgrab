@@ -36,6 +36,8 @@ import { clearLocalHexSightings } from './utils/localVisibility';
 import { installAgentBridge, uninstallAgentBridge } from './testing/agentBridge';
 import './styles/index.css';
 import './styles/tricorder-v2.css';
+// The field kit goes last so it wins over the legacy styles above.
+import './styles/lg.css';
 
 import type { SignalRInvoke, LocationPoint } from './types/common';
 
@@ -74,17 +76,11 @@ export default function App() {
     if (!auth || !gameState) return null;
     return gameState.players.find(player => player.id === auth.userId) ?? null;
   }, [auth, gameState]);
-  const isHostOnLocationSetupStep = useMemo(() => {
-    if (!gameState || gameState.phase !== 'Lobby' || !myPlayer?.isHost) {
-      return false;
-    }
-
-    if (typeof gameState.currentWizardStep === 'number') {
-      return gameState.currentWizardStep === 0;
-    }
-
-    return !gameState.hasMapLocation || gameState.mapLat == null || gameState.mapLng == null;
-  }, [gameState, myPlayer?.isHost]);
+  // The host needs a location while setting up the room, so the play area
+  // can be placed around them, whatever setup screen they are on.
+  const isHostOnLocationSetupStep = Boolean(
+    gameState && gameState.phase === 'Lobby' && myPlayer?.isHost,
+  );
   const shouldEnableGeolocation = Boolean(auth) && (
     gameState?.phase === 'Playing'
     || isHostOnLocationSetupStep
@@ -636,7 +632,15 @@ export default function App() {
     return (
       <>
         {connectionBanner && <ConnectionBanner message={connectionBanner} />}
-        <GameOver state={gameState} onPlayAgain={handlePlayAgain} />
+        <GameOver
+          state={gameState}
+          myUserId={auth.userId}
+          onPlayAgain={handlePlayAgain}
+          onHostNew={() => {
+            handlePlayAgain();
+            handleCreateRoom();
+          }}
+        />
       </>
     );
   }

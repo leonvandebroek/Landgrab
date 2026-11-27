@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
+import { useCallback, useEffect, useState } from 'react';
 import type { ClaimMode, GameAreaPattern, GameDynamics, GameState, HexCoordinate, RoomSummary, WinConditionType } from '../../types/game';
-import { SetupWizard } from './SetupWizard';
-import { GuestWizardView } from './GuestWizardView';
+import { HomeScreen } from './HomeScreen';
+import { RoomScreen } from './RoomScreen';
+import { SettingsScreen } from './SettingsScreen';
 
 interface LocationPoint {
   lat: number;
@@ -53,259 +52,101 @@ interface Props {
   invoke?: (method: string, ...args: unknown[]) => Promise<unknown>;
 }
 
-export function GameLobby({
-  username,
-  myUserId,
-  authToken,
-  gameState,
-  connected,
-  currentLocation,
-  locationError,
-  locationLoading,
-  recentRooms,
-  onCreateRoom,
-  onJoinRoom,
-  onSetAlliance,
-  onAssignPlayerRole,
-  onRandomizeRoles,
-  onConfigureAlliances,
-  onDistributePlayers,
-  onSetVirtualPlayerCount,
-  onSetMapLocation,
-  onSetTileSize,
-  onUseCenteredGameArea,
-  onSetPatternGameArea,
-  onSetCustomGameArea,
-  onSetClaimMode,
-  onSetWinCondition,
-  onSetBeaconEnabled,
-  onSetTileDecayEnabled,
-  onSetEnemySightingMemory,
-  onSetGameDynamics,
-  onSetPlayerRole,
-  onSetMasterTileByHex,
-  onAssignStartingTile,
-  onSetAllianceHQ,
-  onStartGame,
-  onReturnToLobby,
-  onLogout,
-  onSetObserverMode,
-  error,
-  invoke,
-}: Props) {
-  const { t } = useTranslation();
-  const [joinCode, setJoinCode] = useState('');
+const ROOM_STEP = 1;
+const SETTINGS_STEP = 2;
 
-  const canSubmitJoinCode = connected && joinCode.trim().length === 6;
-  const me = gameState?.players.find(p => p.id === myUserId);
+/**
+ * Lobby router: home (no room), game room (host step 1 and every guest) and
+ * game settings (host step 2). The step is synced with the server so guests
+ * can see what the host is doing.
+ */
+export function GameLobby(props: Props) {
+  const { gameState, myUserId, invoke } = props;
+  const me = gameState?.players.find((player) => player.id === myUserId);
   const isHost = me?.isHost ?? false;
+  const [localStep, setLocalStep] = useState<number | null>(null);
 
-  // ── No room: entry screen ──────────────────────────────────────
+  const serverStep = gameState?.currentWizardStep;
+  const step = localStep ?? (typeof serverStep === 'number' ? serverStep : ROOM_STEP);
+
+  const goToStep = useCallback((next: number) => {
+    setLocalStep(next);
+    if (!invoke) return;
+    void invoke('SetWizardStep', next)
+      .catch((cause) => {
+        console.error('Failed to sync the room step with the server.', cause);
+        setLocalStep(null);
+      });
+  }, [invoke]);
+
+  // Drop the optimistic step once the server confirms it.
+  useEffect(() => {
+    if (localStep !== null && serverStep === localStep) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLocalStep(null);
+    }
+  }, [localStep, serverStep]);
+
   if (!gameState) {
     return (
-      <div className="lobby-page" data-testid="lobby-entry">
-        <div className="lobby-card is-entry">
-          <div className="lobby-entry-hero">
-            <div className="lobby-entry-copy">
-              <span className="section-kicker">{t('lobby.stagingBadge')}</span>
-              <h2>{t('lobby.lobbyLeadTitle')}</h2>
-              <p className="subtitle">{t('lobby.lobbyLeadBody')}</p>
-            </div>
-
-            <div className="lobby-entry-meta">
-              <div className="entry-user-chip">
-                <strong>{t('lobby.welcome', { username })}</strong>
-                <span>{connected ? t('lobby.roomStatusConnected') : t('lobby.connectingToServer')}</span>
-              </div>
-              <div className="entry-highlight-card">
-                <span className="room-code" data-testid="lobby-room-code">6</span>
-                <div>
-                  <strong>{t('lobby.joinRoomTitle')}</strong>
-                  <span>{t('lobby.joinRoomDetail')}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="lobby-entry-layout">
-            <div className="lobby-entry-main">
-              <div className="setting-card entry-panel entry-panel-primary">
-                <div className="card-header">
-                  <div>
-                    <span className="section-kicker">{t('lobby.chooseYourBattle')}</span>
-                    <h3>{t('lobby.createRoomTitle')}</h3>
-                    <p className="section-note">{t('lobby.createRoomDetail')}</p>
-                  </div>
-                  <span className={`status-chip${connected ? ' is-ready' : ''}`}>
-                    {connected ? t('lobby.roomStatusConnected') : t('lobby.connectingToServer')}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn-primary big"
-                  data-testid="lobby-create-room-btn"
-                  onClick={onCreateRoom}
-                  disabled={!connected}
-                >
-                  {t('lobby.createRoom')}
-                </button>
-              </div>
-
-              <div className="setting-card entry-panel">
-                <div className="card-header">
-                  <div>
-                    <span className="section-kicker">{t('lobby.orJoin')}</span>
-                    <h3>{t('lobby.joinRoomTitle')}</h3>
-                    <p className="section-note">{t('lobby.joinRoomDetail')}</p>
-                  </div>
-                </div>
-
-                <div className="join-form entry-join-form">
-                  <input
-                    type="text"
-                    data-testid="lobby-join-code-input"
-                    value={joinCode}
-                    onChange={event => setJoinCode(event.target.value.trim().toUpperCase())}
-                    placeholder={t('lobby.roomCodePlaceholder')}
-                    maxLength={6}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    data-testid="lobby-join-btn"
-                    onClick={() => onJoinRoom(joinCode.trim().toUpperCase())}
-                    disabled={!canSubmitJoinCode}
-                    title={getJoinDisabledReason(joinCode, connected, t) ?? undefined}
-                  >
-                    {t('lobby.join')}
-                  </button>
-                </div>
-                {!canSubmitJoinCode && (
-                  <p className="section-note">{getJoinDisabledReason(joinCode, connected, t)}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="lobby-entry-side">
-              <div className="setting-card entry-panel entry-panel-secondary">
-                <div className="card-header">
-                  <div>
-                    <h3>{t('lobby.recentRooms')}</h3>
-                    <p className="section-note">{t('lobby.recentRoomsNote')}</p>
-                  </div>
-                </div>
-
-                {recentRooms.length > 0 ? (
-                  <div className="recent-rooms-list">
-                    {recentRooms.map(room => (
-                      <button
-                        key={room.code}
-                        type="button"
-                        className="recent-room-button"
-                        onClick={() => onJoinRoom(room.code.trim().toUpperCase())}
-                      >
-                        <div className="recent-room-copy">
-                          <div className="recent-room-heading">
-                            <span className="room-code">{room.code}</span>
-                            <span className="phase-badge">{t(`phase.${room.phase}`)}</span>
-                          </div>
-                          <span className="section-note">
-                            {t('lobby.roomHostedBy', { name: room.hostName })} · {t('lobby.roomPlayerCount', { count: room.playerCount })}
-                          </span>
-                        </div>
-                        <span className="recent-room-status">
-                          {room.isConnected ? t('lobby.roomStatusConnected') : t('lobby.roomStatusDisconnected')}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="stage-spotlight-card compact">
-                    <strong>{t('lobby.joinRoomTitle')}</strong>
-                    <span>{t('lobby.joinRoomDetail')}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="entry-footer-actions">
-                {error && <p className="error-msg">{error}</p>}
-                {!connected && <p className="info-msg">{t('lobby.connectingToServer')}</p>}
-                <button type="button" className="btn-ghost" data-testid="lobby-sign-out-btn" onClick={onLogout}>{t('lobby.signOut')}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <HomeScreen
+        username={props.username}
+        connected={props.connected}
+        recentRooms={props.recentRooms}
+        error={props.error}
+        onCreateRoom={props.onCreateRoom}
+        onJoinRoom={props.onJoinRoom}
+        onLogout={props.onLogout}
+      />
     );
   }
 
-  // ── In room: wizard ────────────────────────────────────────────
-  if (isHost) {
+  if (isHost && step >= SETTINGS_STEP) {
     return (
-      <SetupWizard
+      <SettingsScreen
         gameState={gameState}
         myUserId={myUserId}
-        authToken={authToken}
-        currentLocation={currentLocation}
-        locationError={locationError}
-        locationLoading={locationLoading}
-        onSetMapLocation={onSetMapLocation}
-        onSetAlliance={onSetAlliance}
-        onAssignPlayerRole={onAssignPlayerRole}
-        onRandomizeRoles={onRandomizeRoles}
-        onConfigureAlliances={onConfigureAlliances}
-        onDistributePlayers={onDistributePlayers}
-        onSetVirtualPlayerCount={onSetVirtualPlayerCount}
-        onSetTileSize={onSetTileSize}
-        onUseCenteredGameArea={onUseCenteredGameArea}
-        onSetPatternGameArea={onSetPatternGameArea}
-        onSetCustomGameArea={onSetCustomGameArea}
-        onSetClaimMode={onSetClaimMode}
-        onSetWinCondition={onSetWinCondition}
-        onSetBeaconEnabled={onSetBeaconEnabled}
-        onSetTileDecayEnabled={onSetTileDecayEnabled}
-        onSetEnemySightingMemory={onSetEnemySightingMemory}
-        onSetGameDynamics={onSetGameDynamics}
-        onSetPlayerRole={onSetPlayerRole}
-        onSetMasterTileByHex={onSetMasterTileByHex}
-        onAssignStartingTile={onAssignStartingTile}
-        onSetAllianceHQ={onSetAllianceHQ}
-        onStartGame={onStartGame}
-        onReturnToLobby={onReturnToLobby}
-        onLogout={onLogout}
-        onSetObserverMode={onSetObserverMode}
-        error={error}
+        authToken={props.authToken}
+        currentLocation={props.currentLocation}
+        locationError={props.locationError}
+        locationLoading={props.locationLoading}
+        error={props.error}
+        onBack={() => goToStep(ROOM_STEP)}
+        onSetMapLocation={props.onSetMapLocation}
+        onSetTileSize={props.onSetTileSize}
+        onUseCenteredGameArea={props.onUseCenteredGameArea}
+        onSetPatternGameArea={props.onSetPatternGameArea}
+        onSetCustomGameArea={props.onSetCustomGameArea}
+        onSetClaimMode={props.onSetClaimMode}
+        onSetWinCondition={props.onSetWinCondition}
+        onSetBeaconEnabled={props.onSetBeaconEnabled}
+        onSetTileDecayEnabled={props.onSetTileDecayEnabled}
+        onSetEnemySightingMemory={props.onSetEnemySightingMemory}
+        onSetGameDynamics={props.onSetGameDynamics}
+        onAssignPlayerRole={props.onAssignPlayerRole}
+        onRandomizeRoles={props.onRandomizeRoles}
+        onSetMasterTileByHex={props.onSetMasterTileByHex}
+        onAssignStartingTile={props.onAssignStartingTile}
+        onSetAllianceHQ={props.onSetAllianceHQ}
+        onSetObserverMode={props.onSetObserverMode}
+        onStartGame={props.onStartGame}
         invoke={invoke}
       />
     );
   }
 
   return (
-    <GuestWizardView
+    <RoomScreen
       gameState={gameState}
       myUserId={myUserId}
-      authToken={authToken}
-      currentLocation={currentLocation}
-      onSetAlliance={onSetAlliance}
-      onAssignPlayerRole={onAssignPlayerRole}
-      onRandomizeRoles={onRandomizeRoles}
-      onSetPlayerRole={onSetPlayerRole}
-      onSetMasterTileByHex={onSetMasterTileByHex}
-      onAssignStartingTile={onAssignStartingTile}
-      onStartGame={onStartGame}
-      onReturnToLobby={onReturnToLobby}
-      onLogout={onLogout}
-      error={error}
+      error={props.error}
+      onSetAlliance={props.onSetAlliance}
+      onConfigureAlliances={props.onConfigureAlliances}
+      onDistributePlayers={props.onDistributePlayers}
+      onSetVirtualPlayerCount={props.onSetVirtualPlayerCount}
+      onSetPlayerRole={props.onSetPlayerRole}
+      onNext={() => goToStep(SETTINGS_STEP)}
+      onLeave={props.onReturnToLobby}
     />
   );
-}
-
-function getJoinDisabledReason(joinCode: string, connected: boolean, t: TFunction): string | null {
-  if (!connected) return t('lobby.disabledReason.connecting');
-  if (joinCode.trim().length !== 6) return t('lobby.disabledReason.roomCodeLength');
-  return null;
 }

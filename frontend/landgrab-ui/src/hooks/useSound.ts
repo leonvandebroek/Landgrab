@@ -48,7 +48,13 @@ function saveSoundEnabled(enabled: boolean): void {
   } catch {
     // localStorage unavailable – silently ignore
   }
+  // Keep every useSound() instance in step (the menu toggle and the game sounds).
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SOUND_EVENT, { detail: enabled }));
+  }
 }
+
+const SOUND_EVENT = 'landgrab:sound-enabled';
 
 // ---------------------------------------------------------------------------
 // Synthesized sound effects (Web Audio API oscillators)
@@ -260,6 +266,15 @@ export function useSound(): UseSoundReturn {
   const ctxRef = useRef<AudioContext | null>(null);
   const unlockedRef = useRef(false);
 
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      const next = (event as CustomEvent<boolean>).detail;
+      if (typeof next === 'boolean') setSoundEnabledState(next);
+    };
+    window.addEventListener(SOUND_EVENT, onChange);
+    return () => window.removeEventListener(SOUND_EVENT, onChange);
+  }, []);
+
   // Lazily create / resume the AudioContext.
   // Returns the context or null if creation failed.
   const getContext = useCallback((): AudioContext | null => {
@@ -354,11 +369,7 @@ export function useSound(): UseSoundReturn {
   }, []);
 
   const toggleSound = useCallback((): void => {
-    setSoundEnabledState((prev) => {
-      const next = !prev;
-      saveSoundEnabled(next);
-      return next;
-    });
+    saveSoundEnabled(!loadSoundEnabled());
   }, []);
 
   return { playSound, soundEnabled, toggleSound, setSoundEnabled };

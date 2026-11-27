@@ -1,86 +1,71 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import '../../../styles/notification-panel.css';
 import { useNotificationStore } from '../../../stores/notificationStore';
+import { useGameStore } from '../../../stores/gameStore';
 import { useSecondTick } from '../../../hooks/useSecondTick';
 import type { InvokeFn } from '../../../types/abilities';
+import { Button, Sheet, SheetHeader } from '../../ui/kit';
 
 function getSecondsLeft(expiresAt: string | undefined, now: number): number | null {
-  if (!expiresAt) {
-    return null;
-  }
-
+  if (!expiresAt) return null;
   const remaining = new Date(expiresAt).getTime() - now;
-  if (remaining <= 0) {
-    return null;
-  }
-
-  return Math.ceil(remaining / 1000);
+  return remaining > 0 ? Math.ceil(remaining / 1000) : null;
 }
 
 interface TroopTransferReceivedPanelProps {
   invoke: InvokeFn | null;
 }
 
+/** A teammate offers you troops: accept or decline before the timer runs out. */
 export function TroopTransferReceivedPanel({ invoke }: TroopTransferReceivedPanelProps) {
   const { t } = useTranslation();
-  const troopTransferRequest = useNotificationStore((store) => store.troopTransferRequest);
-  const setTroopTransferRequest = useNotificationStore((store) => store.setTroopTransferRequest);
-  const [now, setNow] = useState(() => Date.now());
-
-  useSecondTick(() => {
-    setNow(Date.now());
+  const request = useNotificationStore((store) => store.troopTransferRequest);
+  const setRequest = useNotificationStore((store) => store.setTroopTransferRequest);
+  const myCarried = useGameStore((store) => {
+    const id = store.savedSession?.userId;
+    return store.gameState?.players.find((player) => player.id === id)?.carriedTroops ?? 0;
   });
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
 
-  const secondsLeft = getSecondsLeft(troopTransferRequest?.expiresAt, now);
+  useSecondTick(() => setNow(Date.now()));
+
+  const secondsLeft = getSecondsLeft(request?.expiresAt, now);
 
   useEffect(() => {
-    if (troopTransferRequest && secondsLeft == null) {
-      setTroopTransferRequest(null);
+    if (request && secondsLeft == null) setRequest(null);
+  }, [request, secondsLeft, setRequest]);
+
+  if (!request || secondsLeft == null) return null;
+
+  const respond = async (accept: boolean) => {
+    setBusy(true);
+    try {
+      await invoke?.('RespondToTroopTransfer', request.transferId, accept);
+    } finally {
+      setBusy(false);
+      setRequest(null);
     }
-  }, [troopTransferRequest, secondsLeft, setTroopTransferRequest]);
-
-  if (!troopTransferRequest) return null;
-
-  const handleAccept = async () => {
-    await invoke?.('RespondToTroopTransfer', troopTransferRequest.transferId, true);
-    setTroopTransferRequest(null);
-  };
-
-  const handleDecline = async () => {
-    await invoke?.('RespondToTroopTransfer', troopTransferRequest.transferId, false);
-    setTroopTransferRequest(null);
   };
 
   return (
-    <div className="notification-panel notification-panel--troop-transfer">
-      <p className="notification-panel__message">
-        {t('abilities.troopTransfer.received' as never, {
-          name: troopTransferRequest.initiatorName,
-          count: troopTransferRequest.amount,
-        })}
-      </p>
-      {secondsLeft != null && (
-        <p className="notification-panel__countdown">
-          {t('abilities.troopTransfer.expiresIn' as never, { seconds: secondsLeft })}
-        </p>
-      )}
-      <div className="notification-panel__actions">
-        <button
-          type="button"
-          className="ability-card__primary-btn"
-          onClick={() => { void handleAccept(); }}
-        >
-          {t('abilities.troopTransfer.accept' as never)}
-        </button>
-        <button
-          type="button"
-          className="ability-card__secondary-btn"
-          onClick={() => { void handleDecline(); }}
-        >
-          {t('abilities.troopTransfer.decline' as never)}
-        </button>
+    <Sheet open onClose={() => void respond(false)} labelledBy="transfer-in-title" testId="troop-offer-sheet">
+      <SheetHeader
+        title={t('ui.transferIn.title', { name: request.initiatorName, count: request.amount })}
+        kicker={t('ui.abilities.troopTransfer.title')}
+        status={t('ui.transferIn.left', { time: `0:${String(secondsLeft).padStart(2, '0')}` })}
+        statusTone="live"
+        titleId="transfer-in-title"
+      />
+      <p className="lg-muted">{t('ui.transferIn.body', { now: myCarried, after: myCarried + request.amount })}</p>
+      <div className="lg-actions lg-actions--row">
+        <Button variant="secondary" disabled={busy} onClick={() => void respond(false)} testId="troop-offer-decline">
+          {t('ui.transferIn.decline')}
+        </Button>
+        <Button disabled={busy} onClick={() => void respond(true)} testId="troop-offer-accept">
+          {t('ui.transferIn.accept', { count: request.amount })}
+        </Button>
       </div>
-    </div>
+    </Sheet>
   );
 }

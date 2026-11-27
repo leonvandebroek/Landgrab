@@ -4,6 +4,7 @@ import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { describeTile } from './tileName';
 import type { AbilityCardProps } from '../../../types/abilities';
 
 function formatTimeRemaining(until: string | undefined): string | null {
@@ -88,13 +89,13 @@ export function CommandoRaidCard({ myUserId, invoke }: AbilityCardProps) {
           {!isRaidActive && !cooldownCountdown && hasLocation && player && (
             <div className="ability-card__meta-row">
               <span className="ability-card__meta-label">{t('abilities.commandoRaid.targetLabel' as never)}</span>
-              <span className="ability-card__meta-value">{player.currentHexQ}, {player.currentHexR}</span>
+              <span className="ability-card__meta-value">{describeTile(t, gameState, player, player.currentHexQ, player.currentHexR)}</span>
             </div>
           )}
           {isRaidActive && activeRaid && (
             <div className="ability-card__meta-row">
               <span className="ability-card__meta-label">{t('abilities.commandoRaid.targetLabel' as never)}</span>
-              <span className="ability-card__meta-value">{activeRaid.targetQ}, {activeRaid.targetR}</span>
+              <span className="ability-card__meta-value">{describeTile(t, gameState, player, activeRaid.targetQ, activeRaid.targetR)}</span>
             </div>
           )}
           {(raidCountdown || cooldownCountdown) && (

@@ -3,6 +3,7 @@ import { GameIcon } from '../../common/GameIcon';
 import { AbilityCard } from '../AbilityCard';
 import { useGameStore } from '../../../stores/gameStore';
 import { useGameplayStore } from '../../../stores/gameplayStore';
+import { describeTile } from './tileName';
 import type { AbilityCardProps } from '../../../types/abilities';
 
 export function FortConstructionCard({ myUserId, invoke }: AbilityCardProps) {
@@ -33,7 +34,7 @@ export function FortConstructionCard({ myUserId, invoke }: AbilityCardProps) {
 
   const fortProgress = player?.fortPerimeterVisited?.length ?? 0;
   const isMissionInProgress = Boolean(player?.fortTargetQ != null) || abilityUi.mode === 'inProgress';
-  const currentHexLabel = currentHex ? `${currentHex[0]}, ${currentHex[1]}` : '—';
+  const currentHexLabel = describeTile(t, gameState, player, currentHex?.[0], currentHex?.[1]);
 
   const handleBackToHud = () => {
     if (isMissionInProgress) {
