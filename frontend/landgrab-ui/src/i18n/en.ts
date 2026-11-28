@@ -481,6 +481,8 @@ const en = {
       TileReinforced: '{{playerName}} reinforced a tile.',
       CombatWon: '{{playerName}} won a battle against {{targetPlayerName}}.',
       CombatLost: '{{playerName}} lost a battle to {{targetPlayerName}}.',
+      FieldBattleWon: '{{playerName}} won a field battle against {{targetPlayerName}}.',
+      FieldBattleLost: '{{playerName}} lost a field battle against {{targetPlayerName}}.',
       CombatRepelled: '{{playerName}} was repelled at ({{q}}, {{r}}) by {{targetPlayerName}}.',
       HQCaptured: "{{playerName}} captured {{allianceName}}'s HQ! Their claims are frozen for 5 minutes.",
       CommandoRaidSuccess: '{{allianceName}} captured ({{q}}, {{r}}) in a commando raid!',

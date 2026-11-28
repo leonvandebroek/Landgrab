@@ -18,6 +18,9 @@ import {
   timeLeftMs,
 } from './observerModel';
 import type { FeedFilter, Happening, ObserverPlayer, ObserverStats } from './observerModel';
+import { HostToolsSheet } from './HostToolsSheet';
+import type { ObserverHostControls } from './HostToolsSheet';
+import '../../styles/observer.css';
 
 const GameMap = lazy(() => import('../map/GameMap').then((m) => ({ default: m.GameMap })));
 
@@ -47,17 +50,24 @@ type PanelTab = 'teams' | 'now' | 'feed';
 
 interface Props {
   state: GameState;
-  /** The account that is watching. It is never a player in this game. */
+  /** The account that is watching, or empty for a host who watches their own game. */
   viewerId: string;
   reconnecting: boolean;
-  onLeave: () => void;
+  /** Spectators leave with this. A host has host tools instead. */
+  onLeave?: () => void;
+  /** Present when the host watches their own game: pause, message, rules. */
+  host?: ObserverHostControls;
+  /** Something the host tried did not work. */
+  error?: string;
+  /** Start in big screen mode, for a TV that opens a saved link. */
+  initialBig?: boolean;
 }
 
 /**
  * The whole game on one screen, for a tablet, laptop or TV: the full map
  * without fog, the score, who is where and what is happening right now.
  */
-export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props) {
+export function ObserverScreen({ state, viewerId, reconnecting, onLeave, host, error, initialBig = false }: Props) {
   const { t, i18n } = useTranslation();
   const compact = useCompactLayout();
   const camera = useUiStore((ui) => ui.mapCameraController);
@@ -66,12 +76,51 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
   const [viewTeamId, setViewTeamId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [tab, setTab] = useState<PanelTab>('teams');
+  const [big, setBig] = useState(initialBig);
+  const [awake, setAwake] = useState(true);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const wakeTimer = useRef<number | null>(null);
+
+  // Big screen: nobody holds a mouse, so the one button hides until someone moves it.
+  const wake = useCallback(() => {
+    setAwake(true);
+    if (wakeTimer.current !== null) window.clearTimeout(wakeTimer.current);
+    wakeTimer.current = window.setTimeout(() => setAwake(false), 3000);
+  }, []);
+  useEffect(() => {
+    // A screen that starts in big mode has had no mouse movement to start the timer.
+    if (initialBig) wakeTimer.current = window.setTimeout(() => setAwake(false), 3000);
+    return () => {
+      if (wakeTimer.current !== null) window.clearTimeout(wakeTimer.current);
+    };
+  }, [initialBig]);
+
+  const enterBig = useCallback(() => {
+    setFollowId(null);
+    setViewTeamId(null);
+    setBig(true);
+    wake();
+    void document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }, [wake]);
+
+  const exitBig = useCallback(() => {
+    setBig(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!big) return undefined;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') exitBig(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [big, exitBig]);
 
   useSecondTick(() => setNow(Date.now()));
 
   const stats = useMemo(() => buildStats(state), [state]);
   const happenings = useMemo(() => buildHappenings(state, now), [state, now]);
   const feed = useMemo(() => buildFeed(state.eventLog, filter), [state.eventLog, filter]);
+  const latest = useMemo(() => buildFeed(state.eventLog, 'all', 1)[0] ?? null, [state.eventLog]);
   const timeFormat = useMemo(
     () => new Intl.DateTimeFormat(i18n.resolvedLanguage, { hour: '2-digit', minute: '2-digit' }),
     [i18n.resolvedLanguage],
@@ -194,7 +243,12 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
   );
 
   return (
-    <div className={cx('lg-obs', compact && 'lg-obs--compact')} data-testid="observer-screen">
+    <div
+      className={cx('lg-obs', compact && !big && 'lg-obs--compact', big && 'lg-obs--big', big && !awake && 'is-asleep')}
+      data-testid="observer-screen"
+      onPointerMove={big ? wake : undefined}
+    >
+      {!big && (
       <header className="lg-obs__top">
         <div className="lg-obs__brand">
           <span className="lg-obs__logo">Landgrab</span>
@@ -231,13 +285,65 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
               <span className="lg-obs__clocklabel">{left != null ? t('ui.watch.timeLeft') : t('ui.watch.timePlayed')}</span>
             </div>
           )}
-          <Button variant="secondary" size="sm" block={false} icon="logout" onClick={onLeave} testId="observer-leave">
-            <span className="lg-obs__leavetext">{t('ui.watch.leave')}</span>
-          </Button>
+          {host && !isLobby && !isOver && (
+            <Button variant="secondary" size="sm" block={false} icon={state.isPaused ? 'play' : 'pause'} onClick={() => host.onPauseGame(!state.isPaused)} testId="observer-pause">
+              <span className="lg-obs__leavetext">{state.isPaused ? t('ui.watch.host.resume') : t('ui.watch.host.pause')}</span>
+            </Button>
+          )}
+          {hasMap && (
+            <Button variant="secondary" size="sm" block={false} icon="screen" onClick={enterBig} testId="observer-big" aria-label={t('ui.watch.bigScreen')}>
+              <span className="lg-obs__leavetext">{t('ui.watch.bigScreen')}</span>
+            </Button>
+          )}
+          {host && (
+            <Button variant="secondary" size="sm" block={false} icon="wrench" onClick={() => setToolsOpen(true)} testId="observer-host-tools" aria-label={t('ui.watch.host.tools')}>
+              <span className="lg-obs__leavetext">{t('ui.watch.host.tools')}</span>
+            </Button>
+          )}
+          {onLeave && (
+            <Button variant="secondary" size="sm" block={false} icon="logout" onClick={onLeave} testId="observer-leave" aria-label={t('ui.watch.leave')}>
+              <span className="lg-obs__leavetext">{t('ui.watch.leave')}</span>
+            </Button>
+          )}
         </div>
       </header>
+      )}
 
-      {!compact && (
+      {big && (
+        <aside className="lg-big" data-testid="observer-board">
+          <div className="lg-big__head">
+            <span className="lg-big__logo">Landgrab</span>
+            <span className={cx('lg-obs__status', `lg-obs__status--${status}`)}>
+              <span className="lg-obs__statusdot" aria-hidden="true" />{statusLabel}
+            </span>
+          </div>
+          {(left != null || played != null) && (
+            <div className="lg-big__clock">
+              <span className="lg-big__time">{formatClock(left ?? played ?? 0)}</span>
+              <span className="lg-big__label">{left != null ? t('ui.watch.timeLeft') : t('ui.watch.timePlayed')}</span>
+            </div>
+          )}
+          <div className="lg-big__teams">
+            {stats.teams.map((team) => (
+              <div key={team.id} className="lg-big__team">
+                <div className="lg-big__teamhead">
+                  <span className="lg-big__teamname">{team.name}</span>
+                  <span className="lg-big__teampct" style={{ color: team.color }}>{team.pct}%</span>
+                </div>
+                <div className="lg-big__bar" aria-hidden="true">
+                  <span style={{ width: `${stats.teams[0].tiles > 0 ? (100 * team.tiles) / stats.teams[0].tiles : 0}%`, background: team.color }} />
+                </div>
+                <span className="lg-big__sub">
+                  {t('ui.play.tiles', { count: team.tiles })} · {t('ui.watch.troops', { count: team.troops })} · {team.players.map((player) => player.name).join(', ')}
+                </span>
+              </div>
+            ))}
+          </div>
+          <span className="lg-big__label lg-big__room">{t('ui.watch.room', { code: state.roomCode })}</span>
+        </aside>
+      )}
+
+      {!compact && !big && (
         <aside className="lg-obs__rail" aria-label={t('ui.watch.teams')}>
           <h2 className="lg-obs__h">{t('ui.watch.teams')}</h2>
           <div className="lg-obs__scroll">{teamsSection}</div>
@@ -265,7 +371,26 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
           </div>
         )}
 
-        {hasMap && (
+        {hasMap && big && latest && (
+          <div className="lg-big__ticker" data-testid="observer-ticker">
+            <span className="lg-big__tickermark" style={{ background: eventTeamColor(latest, state) ?? 'var(--lg-line-2)' }} aria-hidden="true" />
+            <span className="lg-big__tickertext">{formatGameLogEntry(latest, t)}</span>
+            {happenings[0] && (
+              <span className="lg-big__tickernext">
+                {t('ui.watch.next', { text: t(`ui.watch.happening.${happenings[0].kind}`, { name: happenings[0].playerName }) })}
+              </span>
+            )}
+          </div>
+        )}
+
+        {hasMap && big && isOver && state.winnerName && (
+          <div className="lg-obs__over lg-obs__over--big" role="status">
+            <Icon name="trophy" size={40} />
+            <span>{t('ui.watch.winner', { name: state.winnerName })}</span>
+          </div>
+        )}
+
+        {hasMap && !big && (
           <>
             <div className="lg-obs__maptop">
               {followed ? (
@@ -315,12 +440,16 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
           </>
         )}
 
+        {error && !reconnecting && !big && (
+          <div className="lg-obs__offline lg-obs__offline--error" role="alert">{error}</div>
+        )}
+
         {reconnecting && (
           <div className="lg-obs__offline" role="status"><Icon name="radio" size={18} />{t('ui.watch.reconnecting')}</div>
         )}
       </main>
 
-      {!compact && (
+      {!compact && !big && (
         <aside className="lg-obs__rail lg-obs__rail--right">
           <section className="lg-obs__block" aria-labelledby="observer-now-title">
             <h2 className="lg-obs__h" id="observer-now-title">{t('ui.watch.now')}</h2>
@@ -333,7 +462,7 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
         </aside>
       )}
 
-      {compact && (
+      {compact && !big && (
         <section className="lg-obs__panel">
           <Segmented<PanelTab>
             value={tab}
@@ -351,6 +480,14 @@ export function ObserverScreen({ state, viewerId, reconnecting, onLeave }: Props
           </div>
         </section>
       )}
+
+      {big && (
+        <button type="button" className="lg-big__exit" onClick={exitBig} data-testid="observer-big-exit">
+          <Icon name="close" size={18} />{t('ui.watch.exitBigScreen')}
+        </button>
+      )}
+
+      {host && <HostToolsSheet open={toolsOpen} onClose={() => setToolsOpen(false)} state={state} host={host} />}
     </div>
   );
 }

@@ -43,7 +43,8 @@ export type IconName =
   | 'globe'
   | 'pause'
   | 'play'
-  | 'crown';
+  | 'crown'
+  | 'screen';
 
 const PATHS: Record<IconName, string[]> = {
   menu: ['M4 7h16', 'M4 12h16', 'M4 17h16'],
@@ -85,6 +86,7 @@ const PATHS: Record<IconName, string[]> = {
   pause: ['M8 5v14', 'M16 5v14'],
   play: ['M7 5v14l11-7L7 5Z'],
   crown: ['M4 18h16', 'M4 18 3 7l5 4 4-6 4 6 5-4-1 11'],
+  screen: ['M3 5h18v11H3z', 'M8 20h8', 'M12 16v4'],
 };
 
 interface IconProps {

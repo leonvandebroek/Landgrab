@@ -567,12 +567,21 @@ public sealed class SharedAbilityService(
             }
 
             room.State.ActiveFieldBattles.RemoveAll(item => item.Id == battle.Id);
+            var opponentNames = string.Join(", ", joinedEnemies.Select(enemy => enemy.Name));
             AppendEventLog(room.State, new GameEventLogEntry
             {
                 Type = "FieldBattleResolved",
-                Message = $"{battle.InitiatorName}'s field battle at ({battle.Q}, {battle.R}) resolved.",
+                Message = initiatorWon
+                    ? $"{battle.InitiatorName} won a field battle against {opponentNames} at ({battle.Q}, {battle.R})."
+                    : $"{battle.InitiatorName} lost a field battle against {opponentNames} at ({battle.Q}, {battle.R}).",
                 PlayerId = battle.InitiatorId,
                 PlayerName = battle.InitiatorName,
+                TargetPlayerId = joinedEnemies[0].Id,
+                TargetPlayerName = opponentNames,
+                AllianceId = battle.InitiatorAllianceId,
+                // The feed tells who won by comparing this with the initiator's name.
+                WinnerId = initiatorWon ? battle.InitiatorId : joinedEnemies[0].Id,
+                WinnerName = initiatorWon ? battle.InitiatorName : opponentNames,
                 Q = battle.Q,
                 R = battle.R
             });

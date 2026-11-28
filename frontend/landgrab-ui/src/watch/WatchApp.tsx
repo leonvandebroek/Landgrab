@@ -73,6 +73,8 @@ function WatchSession({ auth, onLogout }: { auth: AuthState; onLogout: () => Pro
   const [activeCode, setActiveCode] = useState(() => readCodeFromAddress() || readStoredCode());
   const [errorKey, setErrorKey] = useState<ErrorKey | null>(null);
   const [removed, setRemoved] = useState(false);
+  // A TV can open /watch?code=…&screen=big and go straight to the scoreboard.
+  const [startBig] = useState(() => new URLSearchParams(window.location.search).get('screen') === 'big');
   const lastErrorCode = useRef<string | null>(null);
 
   const stop = useCallback((options: { removed?: boolean; error?: ErrorKey | null } = {}) => {
@@ -154,6 +156,7 @@ function WatchSession({ auth, onLogout }: { auth: AuthState; onLogout: () => Pro
           state={gameState}
           viewerId={auth.userId}
           reconnecting={!connected}
+          initialBig={startBig}
           onLeave={leave}
         />
       </Suspense>

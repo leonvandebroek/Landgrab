@@ -591,6 +591,8 @@ export const GameMap = memo(function GameMap({
     }
 
     const resizeObserver = new ResizeObserver(() => {
+      // The screen around the map can change size while the map is being removed.
+      if (mapRef.current !== map) return;
       map.invalidateSize({ animate: false });
     });
 

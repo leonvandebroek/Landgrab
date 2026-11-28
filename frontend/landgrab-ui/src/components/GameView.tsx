@@ -2,7 +2,6 @@ import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { MutableRefObject, ReactNode } from 'react';
-import { HostControlPlane } from './game/HostControlPlane';
 import { LoadingFallback } from './LoadingFallback';
 import { ClaimDeploySheet, CombatResultSheet } from './game/play/OutcomeSheets';
 import { useGameStore } from '../stores/gameStore';
@@ -15,6 +14,9 @@ import type { InvokeFn } from '../types/abilities';
 import type { LocationPoint } from '../types/common';
 
 // Heavy components loaded lazily — same split as original App.
+const ObserverScreen = lazy(() =>
+  import('./observer/ObserverScreen').then(m => ({ default: m.ObserverScreen }))
+);
 const GameMap = lazy(() =>
   import('./map/GameMap').then(m => ({ default: m.GameMap }))
 );
@@ -120,29 +122,21 @@ export function GameView({
 
   if (isObserverMode) {
     return (
-      <>
-        <Suspense fallback={<LoadingFallback />}>
-          <HostControlPlane
-            state={gameState}
-            onSwitchToPlayer={() => actions.onSetObserverMode(false)}
-            onUpdateDynamics={actions.onUpdateDynamicsLive}
-            onSendMessage={actions.onSendHostMessage}
-            onPauseGame={actions.onPauseGame}
-            onReturnToLobby={actions.onReturnToLobby}
-            error={error}
-          >
-            <GameMap
-              state={gameState}
-              myUserId={userId}
-              currentLocation={currentLocation}
-              constrainViewportToGrid
-              onHexClick={actions.onHexClick}
-              selectedHex={selectedHex}
-              playerDisplayPrefs={playerDisplayPrefs}
-            />
-          </HostControlPlane>
-        </Suspense>
-      </>
+      <Suspense fallback={<LoadingFallback />}>
+        <ObserverScreen
+          state={gameState}
+          viewerId=""
+          reconnecting={false}
+          error={error}
+          host={{
+            onPauseGame: actions.onPauseGame,
+            onSendMessage: actions.onSendHostMessage,
+            onUpdateDynamics: actions.onUpdateDynamicsLive,
+            onBackToPlaying: () => actions.onSetObserverMode(false),
+            onReturnToLobby: actions.onReturnToLobby,
+          }}
+        />
+      </Suspense>
     );
   }
 

@@ -481,6 +481,8 @@ const nl = {
       TileReinforced: '{{playerName}} versterkte een tegel.',
       CombatWon: '{{playerName}} won een gevecht van {{targetPlayerName}}.',
       CombatLost: '{{playerName}} verloor een gevecht van {{targetPlayerName}}.',
+      FieldBattleWon: '{{playerName}} won een veldslag tegen {{targetPlayerName}}.',
+      FieldBattleLost: '{{playerName}} verloor een veldslag van {{targetPlayerName}}.',
       CombatRepelled: '{{playerName}} werd teruggeslagen bij ({{q}}, {{r}}) door {{targetPlayerName}}.',
       HQCaptured: '{{playerName}} veroverde het HQ van {{allianceName}}! Hun claims zijn bevroren voor 5 minuten.',
       CommandoRaidSuccess: '{{allianceName}} veroverde ({{q}}, {{r}}) in een commandoinval!',
