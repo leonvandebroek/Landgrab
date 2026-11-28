@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import type { CombatResult, FieldBattleInvite, FieldBattleResult, GameDynamics, GameState, NeutralClaimResult, Player, TroopTransferRequest, TroopTransferResult } from '../types/game';
+import type { CombatResult, FieldBattleInvite, FieldBattleResult, GameDynamics, GameState, NeutralClaimResult, Player, SpectatorInfo, TroopTransferRequest, TroopTransferResult } from '../types/game';
 import { recordAgentEvent, setAgentConnectionStatus } from '../testing/agentBridge';
 
 const AUTO_RECONNECT_DELAYS = [0, 1000, 2000, 5000, 10000, 15000, 30000, 30000, 30000, 30000, 60000, 60000, 60000];
@@ -31,6 +31,9 @@ export interface GameEvents {
   onHostMessage?: (data: { message: string; fromHost: boolean }) => void;
   // Map Editor
   onTemplateSaved?: (data: { templateId: string; name: string }) => void;
+  // Spectators
+  onSpectatorInfoUpdated?: (info: SpectatorInfo) => void;
+  onSpectatorRemoved?: (data: { roomCode: string }) => void;
 }
 
 export function useSignalR(token: string | null, events: GameEvents) {
@@ -142,6 +145,8 @@ export function useSignalR(token: string | null, events: GameEvents) {
     conn.on('Error', (msg: string) => eventsRef.current.onError?.(msg));
     conn.on('HostMessage', (data: { message: string; fromHost: boolean }) => eventsRef.current.onHostMessage?.(data));
     conn.on('TemplateSaved', (data: { templateId: string; name: string }) => eventsRef.current.onTemplateSaved?.(data));
+    conn.on('SpectatorInfoUpdated', (info: SpectatorInfo) => eventsRef.current.onSpectatorInfoUpdated?.(info));
+    conn.on('SpectatorRemoved', (data: { roomCode: string }) => eventsRef.current.onSpectatorRemoved?.(data));
     conn.on('DrainTick', (data: { q: number; r: number; troopsLost: number; allianceId: string | null }) => eventsRef.current.onDrainTick?.(data));
     conn.on('DynamicsChanged', (dynamics: GameDynamics) => eventsRef.current.onDynamicsChanged?.(dynamics));
     conn.on('TroopTransferReceived', (data: TroopTransferRequest) =>

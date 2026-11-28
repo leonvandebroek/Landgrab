@@ -7,6 +7,7 @@ import { useGameStore } from '../stores/gameStore';
 import { useInfoLedgeStore } from '../stores/infoLedgeStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useUiStore } from '../stores/uiStore';
+import { useSpectatorStore } from '../stores/spectatorStore';
 import type { SoundName } from './useSound';
 import type { GameEvents } from './useSignalR';
 import type { AttackPrompt, CombatPreviewState, FieldBattleInvite, FieldBattleResult, GameState, PickupPrompt, ReinforcePrompt, TroopTransferRequest, TroopTransferResult } from '../types/game';
@@ -678,6 +679,9 @@ export function useSignalRHandlers({
         icon: 'gearHammer',
         message: t('game.dynamicsChanged' as never),
       });
+    },
+    onSpectatorInfoUpdated: (info) => {
+      useSpectatorStore.getState().setInfo(info);
     },
     onTemplateSaved: () => {
     },

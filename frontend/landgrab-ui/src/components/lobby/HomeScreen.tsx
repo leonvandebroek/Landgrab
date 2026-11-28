@@ -94,6 +94,15 @@ export function HomeScreen({ username, connected, recentRooms, error, onCreateRo
         <Icon name="chevronRight" size={20} className="lg-listrow__chev" />
       </button>
 
+      <a className="lg-listrow" href="/watch" data-testid="lobby-watch-link">
+        <Icon name="eye" />
+        <span className="lg-listrow__copy">
+          <span className="lg-listrow__title">{t('ui.home.watchTitle')}</span>
+          <span className="lg-listrow__sub">{t('ui.home.watchHelp')}</span>
+        </span>
+        <Icon name="chevronRight" size={20} className="lg-listrow__chev" />
+      </a>
+
       {activeRooms.length > 0 && (
         <div className="lg-stack">
           <h2 className="lg-eyebrow">{t('ui.home.resumeTitle')}</h2>

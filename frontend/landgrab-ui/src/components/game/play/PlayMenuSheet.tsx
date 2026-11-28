@@ -6,6 +6,7 @@ import { useSound } from '../../../hooks/useSound';
 import { Icon } from '../../ui/Icon';
 import { Button, Segmented, Sheet, SheetHeader, SwitchRow, cx } from '../../ui/kit';
 import { formatGameLogEntry } from '../gameLogFormat';
+import { SpectatorsRow, SpectatorsSheet } from '../../spectators/SpectatorsSheet';
 
 export type MenuTab = 'scores' | 'feed' | 'settings';
 
@@ -45,6 +46,7 @@ export function PlayMenuSheet({
   const { t, i18n } = useTranslation();
   const [tab, setTab] = useState<MenuTab>(initialTab);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [spectatorsOpen, setSpectatorsOpen] = useState(false);
   const { soundEnabled, toggleSound } = useSound();
   const me = state.players.find((player) => player.id === myUserId);
 
@@ -82,7 +84,8 @@ export function PlayMenuSheet({
   const tileCount = (count: number) => t('ui.play.tiles', { count });
 
   return (
-    <Sheet open={open} onClose={close} labelledBy="play-menu-title" tall testId="play-menu-sheet">
+    <>
+    <Sheet open={open && !spectatorsOpen} onClose={close} labelledBy="play-menu-title" tall testId="play-menu-sheet">
       <SheetHeader
         title={<span onClick={onTitleTap}>{t('ui.menu.title')}</span>}
         titleId="play-menu-title"
@@ -200,6 +203,10 @@ export function PlayMenuSheet({
         </div>
       )}
 
+      {me?.isHost && tab === 'settings' && (
+        <SpectatorsRow enabled={Boolean(state.spectatorsEnabled)} onOpen={() => setSpectatorsOpen(true)} />
+      )}
+
       <div className="lg-section__box">
         <button type="button" className="lg-listrow" onClick={onShowRules}>
           <Icon name="info" />
@@ -228,5 +235,7 @@ export function PlayMenuSheet({
         </Button>
       )}
     </Sheet>
+    <SpectatorsSheet open={spectatorsOpen} onClose={() => setSpectatorsOpen(false)} />
+    </>
   );
 }

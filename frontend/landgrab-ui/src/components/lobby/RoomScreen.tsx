@@ -4,6 +4,7 @@ import type { GameState, Player, PlayerRole } from '../../types/game';
 import { Icon } from '../ui/Icon';
 import { Button, Screen, TopBar, cx } from '../ui/kit';
 import { RolePickerSheet, roleTitleKey } from './RolePickerSheet';
+import { SpectatorsRow, SpectatorsSheet } from '../spectators/SpectatorsSheet';
 
 const MAX_TEAMS = 8;
 const MAX_BOTS = 8;
@@ -46,6 +47,7 @@ export function RoomScreen({
   const [addingTeam, setAddingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [rolePickerOpen, setRolePickerOpen] = useState(false);
+  const [spectatorsOpen, setSpectatorsOpen] = useState(false);
   const didCreateDefaultTeams = useRef(false);
   const didJoinFirstTeam = useRef(false);
 
@@ -285,6 +287,13 @@ export function RoomScreen({
             </div>
           </div>
         </div>
+      )}
+
+      {isHost && (
+        <>
+          <SpectatorsRow enabled={Boolean(gameState.spectatorsEnabled)} onOpen={() => setSpectatorsOpen(true)} />
+          <SpectatorsSheet open={spectatorsOpen} onClose={() => setSpectatorsOpen(false)} />
+        </>
       )}
 
       {rolesEnabled && onSetPlayerRole && (
