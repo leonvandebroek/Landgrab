@@ -12,6 +12,7 @@ public partial class GameHub
 {
     public async Task CreateRoom()
     {
+        await StopSpectatingBeforePlaying();
         var room = gameService.CreateRoom(UserId, Username, Context.ConnectionId);
         await Groups.AddToGroupAsync(Context.ConnectionId, room.Code);
         var state = gameService.GetStateSnapshot(room.Code);
@@ -44,7 +45,11 @@ public partial class GameHub
             return;
         }
 
+        // Only once the join worked: a refused join must not end what this connection was watching.
+        await StopSpectatingBeforePlaying();
         await Groups.AddToGroupAsync(Context.ConnectionId, room!.Code);
+        // A player may not also watch the same game from another device.
+        await DropSpectatorConnections(room, spectatorService.RemoveUser(room, UserId));
         var state = gameService.GetStateSnapshot(room.Code);
         if (state != null)
         {
@@ -86,6 +91,7 @@ public partial class GameHub
             throw new HubException(message);
         }
 
+        await StopSpectatingBeforePlaying();
         await Groups.AddToGroupAsync(Context.ConnectionId, room.Code);
         var state = gameService.GetStateSnapshot(room.Code);
         if (state == null)

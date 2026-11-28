@@ -25,6 +25,8 @@ public partial class GameHub
             return;
         }
 
+        await DropSpectatorConnections(room, spectatorService.RemovePlayersFromSpectators(room));
+
         room.VisibilityMemory.Clear();
         foreach (var player in state!.Players)
         {

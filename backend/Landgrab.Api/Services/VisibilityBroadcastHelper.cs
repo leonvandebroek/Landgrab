@@ -78,6 +78,49 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
                 }
             }
         }));
+
+        await BroadcastToSpectators(room, state, clientProxy, derivedMapStateService, aliasEvent);
+    }
+
+    /// <summary>
+    /// Sends spectators the whole state, without fog of war. Only needed while players get a projected
+    /// state: otherwise the room's group broadcast already reaches spectators.
+    /// </summary>
+    private static async Task BroadcastToSpectators(
+        GameRoom room,
+        GameState state,
+        Func<string, IClientProxy> clientProxy,
+        DerivedMapStateService derivedMapStateService,
+        string? aliasEvent)
+    {
+        if (room.SpectatorConnections.IsEmpty)
+        {
+            return;
+        }
+
+        var fullState = CreateSharedState(state, derivedMapStateService);
+        foreach (var connectionId in room.SpectatorConnections.Keys)
+        {
+            var proxy = clientProxy(connectionId);
+            if (!string.IsNullOrWhiteSpace(aliasEvent))
+            {
+                await proxy.SendAsync(aliasEvent, fullState);
+            }
+
+            await proxy.SendAsync("StateUpdated", fullState);
+            if (fullState.Phase == GamePhase.GameOver)
+            {
+                await proxy.SendAsync("GameOver", BuildGameOverPayload(fullState));
+            }
+        }
+    }
+
+    /// <summary>The state a spectator sees: everything, with derived map data attached.</summary>
+    public GameState CreateStateForSpectator(GameState state, DerivedMapStateService derivedMapStateService)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(derivedMapStateService);
+        return CreateSharedState(state, derivedMapStateService);
     }
 
     /// <summary>
@@ -98,6 +141,15 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
         {
             var players = CreatePlayersForViewer(room, state, viewerUserId, visibilityService);
             await clientProxy(connectionId).SendAsync("PlayersMoved", players);
+        }
+
+        if (!room.SpectatorConnections.IsEmpty)
+        {
+            var allPlayers = state.Players.Select(ClonePlayer).ToList();
+            foreach (var connectionId in room.SpectatorConnections.Keys)
+            {
+                await clientProxy(connectionId).SendAsync("PlayersMoved", allPlayers);
+            }
         }
     }
 
@@ -161,7 +213,7 @@ public class VisibilityBroadcastHelper(VisibilityService visibilityService)
         }
 
         var payload = BuildGameOverPayload(state);
-        foreach (var connectionId in room.ConnectionMap.Keys)
+        foreach (var connectionId in room.ConnectionMap.Keys.Concat(room.SpectatorConnections.Keys))
         {
             await clientProxy(connectionId).SendAsync("GameOver", payload);
         }
