@@ -1558,3 +1558,13 @@ select.lg-input {
 .lg-play .leaflet-control-rotate,
 .lg-play .leaflet-control-layers,
 .lg-play .leaflet-control-zoom { display: none !important; }
+
+/* ── Spectators (host) ──────────────────────────────────────────────────── */
+
+a.lg-listrow { text-decoration: none; }
+.lg-watchcode { font: 600 34px var(--lg-display); letter-spacing: 3px; color: var(--lg-text); }
+.lg-watchers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.lg-watchers__row { display: flex; align-items: center; gap: 12px; min-height: 56px; border-top: 1px solid var(--lg-line); }
+.lg-watchers__row:first-child { border-top: 0; }
+.lg-watchers__icon { color: var(--lg-muted); flex: 0 0 auto; }
+.lg-watchers__name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

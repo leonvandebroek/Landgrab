@@ -238,6 +238,8 @@ export interface GameState {
   hostBypassGps?: boolean;
   maxFootprintMetersOverride?: number | null;
   hostObserverMode?: boolean;
+  /** True while the host lets spectators watch with the watch code. */
+  spectatorsEnabled?: boolean;
   isPaused?: boolean;
   activeRaids?: ActiveCommandoRaid[];
   activeTroopTransfers?: ActiveTroopTransfer[];
@@ -438,4 +440,18 @@ export interface FieldBattleResult {
   initiatorTroopsLost: number;
   enemyTroopsLost: number;
   noEnemiesJoined: boolean;
+}
+
+// ── Spectators ─────────────────────────────────────────────────
+
+export interface SpectatorSummary {
+  userId: string;
+  name: string;
+}
+
+/** What the host sees about spectators: the switch, the watch code and who is watching. */
+export interface SpectatorInfo {
+  enabled: boolean;
+  watchCode: string;
+  spectators: SpectatorSummary[];
 }

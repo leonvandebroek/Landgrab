@@ -26,6 +26,7 @@ import type { SavedSession } from './stores/gameStore';
 import { useGameplayStore } from './stores';
 import { useInfoLedgeStore } from './stores/infoLedgeStore';
 import { useUiStore } from './stores/uiStore';
+import { useSpectatorStore } from './stores/spectatorStore';
 import { getErrorMessage, localizeLobbyError } from './utils/gameHelpers';
 import {
   clearPersistedDebugLocation,
@@ -150,6 +151,16 @@ export default function App() {
   useLayoutEffect(() => {
     invokeRef.current = invoke;
   });
+
+  // The spectators sheet talks to the hub from the room and from the play menu.
+  useEffect(() => {
+    useSpectatorStore.getState().setInvoke(connected ? invoke : null);
+    return () => useSpectatorStore.getState().setInvoke(null);
+  }, [connected, invoke]);
+  const roomCode = gameState?.roomCode ?? null;
+  useEffect(() => {
+    useSpectatorStore.getState().setInfo(null);
+  }, [roomCode]);
 
   // Now we have connected + invoke — call useAutoResume.
   const { saveSession, clearSession, resolveResumeFromState, resolveResumeFromError, pendingResumeRef } =
