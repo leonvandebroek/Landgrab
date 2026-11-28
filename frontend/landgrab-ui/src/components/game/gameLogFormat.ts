@@ -207,6 +207,15 @@ export function formatGameLogEntry(
     case 'RandomEvent':
     case 'HostMessage':
       return event.message || t('gameLog.events.Unknown');
+    case 'FieldBattleResolved':
+      if (!event.targetPlayerName || !event.winnerName) {
+        return event.message || t('gameLog.events.Unknown');
+      }
+
+      return t(event.winnerId === event.playerId ? 'gameLog.events.FieldBattleWon' : 'gameLog.events.FieldBattleLost', {
+        playerName,
+        targetPlayerName,
+      });
     case 'GameOver':
       if (winnerName) {
         return event.isAllianceVictory

@@ -863,6 +863,13 @@ public sealed class AbilityServiceTests
         result.state.Should().NotBeNull();
         result.result.Should().NotBeNull();
         context.State.ActiveFieldBattles.Should().BeEmpty();
+
+        // The feed can tell who won and against whom.
+        var entry = context.State.EventLog.Should().ContainSingle(e => e.Type == "FieldBattleResolved").Subject;
+        entry.PlayerName.Should().Be("Alice");
+        entry.TargetPlayerName.Should().Be("Bob");
+        entry.WinnerName.Should().Be("Alice");
+        entry.AllianceId.Should().Be("a1");
     }
 
     // ── Area 1: Ability cancel paths ─────────────────────────────────────────
@@ -1128,6 +1135,8 @@ public sealed class AbilityServiceTests
         result.error.Should().BeNull();
         result.result.Should().NotBeNull();
         result.result!.InitiatorWon.Should().BeFalse();
+        context.State.EventLog.Should().ContainSingle(e => e.Type == "FieldBattleResolved")
+            .Which.WinnerName.Should().Be("Bob");
         context.Player("p1").CarriedTroops.Should().Be(0);
         context.Player("p2").CarriedTroops.Should().BeGreaterThan(0);
         context.State.ActiveFieldBattles.Should().BeEmpty();
