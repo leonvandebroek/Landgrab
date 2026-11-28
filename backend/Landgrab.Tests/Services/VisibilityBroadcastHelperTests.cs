@@ -186,6 +186,101 @@ public sealed class VisibilityBroadcastHelperTests
         viewerState.Grid[HexService.Key(4, 0)].VisibilityTier.Should().NotBe(VisibilityTier.Hidden);
     }
 
+    private static (GameRoom room, GameState state, string hostId, string enemyId) CreateFoggedRoom()
+    {
+        var hostUserId = Guid.NewGuid();
+        var enemyUserId = Guid.NewGuid().ToString();
+        var state = new TestSupport.GameStateBuilder()
+            .WithGrid(5)
+            .WithMap()
+            .WithGameMode(GameMode.Alliances)
+            .AddPlayer(hostUserId.ToString(), "Host")
+            .AddPlayer(enemyUserId, "Enemy")
+            .AddAlliance("a1", "Blue", hostUserId.ToString())
+            .AddAlliance("a2", "Red", enemyUserId)
+            .WithPlayerPosition(hostUserId.ToString(), 0, 0)
+            .WithPlayerPosition(enemyUserId, 4, 0)
+            .OwnHex(0, 0, hostUserId.ToString(), "a1", troops: 5)
+            .OwnHex(4, 0, enemyUserId, "a2", troops: 7)
+            .Build();
+
+        var room = new GameRoom { Code = state.RoomCode, HostUserId = hostUserId, State = state };
+        room.ConnectionMap.TryAdd("conn-host", hostUserId.ToString());
+        room.ConnectionMap.TryAdd("conn-enemy", enemyUserId);
+        return (room, state, hostUserId.ToString(), enemyUserId);
+    }
+
+    [Fact]
+    public async Task BroadcastPerViewer_SendsSpectatorsTheWholeMapAndPlayersStillGetFog()
+    {
+        var (room, state, hostId, enemyId) = CreateFoggedRoom();
+        room.SpectatorConnections.TryAdd("conn-watch", new SpectatorConnection(Guid.NewGuid().ToString(), "TV"));
+        var proxies = new Dictionary<string, RecordingClientProxy>(StringComparer.Ordinal)
+        {
+            ["conn-host"] = new(), ["conn-enemy"] = new(), ["conn-watch"] = new()
+        };
+        var groupProxy = new RecordingClientProxy();
+
+        await new VisibilityBroadcastHelper(new VisibilityService()).BroadcastPerViewer(
+            room, state, groupProxy, connectionId => proxies[connectionId], new DerivedMapStateService(), "GameStarted");
+
+        groupProxy.Calls.Should().BeEmpty();
+        var watched = proxies["conn-watch"].SingleStateUpdated();
+        watched.Grid.Values.Should().OnlyContain(cell => cell.VisibilityTier == VisibilityTier.Visible);
+        watched.Grid[HexService.Key(0, 0)].Troops.Should().Be(5);
+        watched.Grid[HexService.Key(4, 0)].Troops.Should().Be(7);
+        watched.Players.Should().OnlyContain(player => player.CurrentHexQ.HasValue);
+        proxies["conn-watch"].Calls.Select(call => call.Method).Should().Equal("GameStarted", "StateUpdated");
+
+        // Players are unaffected by a spectator being present.
+        proxies["conn-host"].SingleStateUpdated().Grid[HexService.Key(4, 0)].VisibilityTier.Should().Be(VisibilityTier.Hidden);
+        proxies["conn-enemy"].SingleStateUpdated().Grid[HexService.Key(0, 0)].VisibilityTier.Should().Be(VisibilityTier.Hidden);
+        proxies["conn-enemy"].SingleStateUpdated().Players.Single(player => player.Id == hostId).CurrentHexQ.Should().BeNull();
+        _ = enemyId;
+    }
+
+    [Fact]
+    public async Task BroadcastPlayersPerViewer_SendsSpectatorsEveryPlayer()
+    {
+        var (room, state, hostId, enemyId) = CreateFoggedRoom();
+        room.SpectatorConnections.TryAdd("conn-watch", new SpectatorConnection(Guid.NewGuid().ToString(), "TV"));
+        var proxies = new Dictionary<string, RecordingClientProxy>(StringComparer.Ordinal)
+        {
+            ["conn-host"] = new(), ["conn-enemy"] = new(), ["conn-watch"] = new()
+        };
+
+        await new VisibilityBroadcastHelper(new VisibilityService()).BroadcastPlayersPerViewer(
+            room, state, connectionId => proxies[connectionId], new VisibilityService());
+
+        var watched = proxies["conn-watch"].SinglePlayersMoved();
+        watched.Select(player => player.Id).Should().BeEquivalentTo([hostId, enemyId]);
+        watched.Should().OnlyContain(player => player.CurrentHexQ.HasValue);
+        proxies["conn-host"].SinglePlayersMoved().Select(player => player.Id).Should().BeEquivalentTo([hostId]);
+    }
+
+    [Fact]
+    public async Task BroadcastPerViewer_WhenGameIsOver_TellsSpectatorsToo()
+    {
+        var (room, state, hostId, _) = CreateFoggedRoom();
+        state.Phase = GamePhase.GameOver;
+        state.WinnerId = hostId;
+        state.WinnerName = "Host";
+        room.SpectatorConnections.TryAdd("conn-watch", new SpectatorConnection(Guid.NewGuid().ToString(), "TV"));
+        var proxies = new Dictionary<string, RecordingClientProxy>(StringComparer.Ordinal)
+        {
+            ["conn-host"] = new(), ["conn-enemy"] = new(), ["conn-watch"] = new()
+        };
+        var groupProxy = new RecordingClientProxy();
+
+        await new VisibilityBroadcastHelper(new VisibilityService()).BroadcastPerViewer(
+            room, state, groupProxy, connectionId => proxies[connectionId], new DerivedMapStateService());
+
+        // Outside a running game everyone shares one state through the room's group.
+        groupProxy.Calls.Select(call => call.Method).Should().Equal("StateUpdated");
+        proxies["conn-watch"].Calls.Select(call => call.Method).Should().Equal("GameOver");
+        proxies["conn-host"].Calls.Select(call => call.Method).Should().Equal("GameOver");
+    }
+
     private sealed class RecordingClientProxy : IClientProxy
     {
         public List<(string Method, object?[] Args)> Calls { get; } = [];

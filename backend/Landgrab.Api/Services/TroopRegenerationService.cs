@@ -72,6 +72,18 @@ public sealed class TroopRegenerationService(
                                 allianceId = drainTick.allianceId
                             }, stoppingToken);
                         }
+
+                        // Spectators see every drain tick.
+                        foreach (var connectionId in room.SpectatorConnections.Keys)
+                        {
+                            await hubContext.Clients.Client(connectionId).SendAsync("DrainTick", new
+                            {
+                                q = drainTick.q,
+                                r = drainTick.r,
+                                troopsLost = drainTick.troopsLost,
+                                allianceId = drainTick.allianceId
+                            }, stoppingToken);
+                        }
                     }
 
                     await visibilityBroadcastHelper.BroadcastPerViewer(

@@ -213,6 +213,8 @@ internal static class GameStateCommon
             MaxFootprintMetersOverride = state.MaxFootprintMetersOverride,
             HostObserverMode = state.HostObserverMode,
             IsPaused = state.IsPaused,
+            SpectatorsEnabled = state.SpectatorsEnabled,
+            SpectatorEpoch = state.SpectatorEpoch,
             ActiveRaids = state.ActiveRaids.Select(r => new ActiveCommandoRaid
             {
                 Id = r.Id,

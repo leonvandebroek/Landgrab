@@ -26,6 +26,7 @@ public partial class GameHub : Hub
     private readonly IServiceScopeFactory scopeFactory;
     private readonly ILogger<GameHub> logger;
     private readonly VirtualPlayerService virtualPlayerService;
+    private readonly SpectatorService spectatorService;
 
     private const string InvalidRequestCode = "INVALID_INPUT";
     private const int MaxCoordinateValue = 1000;
@@ -56,8 +57,10 @@ public partial class GameHub : Hub
         IHubContext<GameHub> hubContext,
         IServiceScopeFactory scopeFactory,
         ILogger<GameHub> logger,
-        VirtualPlayerService virtualPlayerService)
+        VirtualPlayerService virtualPlayerService,
+        SpectatorService spectatorService)
     {
+        this.spectatorService = spectatorService;
         this.virtualPlayerService = virtualPlayerService;
         this.gameService = gameService;
         this.globalMap = globalMap;
@@ -79,6 +82,12 @@ public partial class GameHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         _lastLocationUpdate.TryRemove(Context.ConnectionId, out _);
+
+        var watchedRoom = spectatorService.Leave(Context.ConnectionId);
+        if (watchedRoom != null)
+        {
+            await NotifyHostOfSpectators(watchedRoom);
+        }
 
         var room = gameService.GetRoomByConnection(Context.ConnectionId);
         if (room != null)

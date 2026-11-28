@@ -299,6 +299,11 @@ public class GameState
     public int? MaxFootprintMetersOverride { get; set; }
     public bool HostObserverMode { get; set; } = false;
     public bool IsPaused { get; set; } = false;
+
+    // Spectators: whether people may watch with a watch code. The code itself is never part of the
+    // state (players would receive it); it is derived from the room and this epoch on the server.
+    public bool SpectatorsEnabled { get; set; } = false;
+    public int SpectatorEpoch { get; set; }
 }
 
 public class GameRoom
@@ -313,8 +318,33 @@ public class GameRoom
     public ConcurrentDictionary<string, string> ConnectionMap { get; } = new();
     [JsonIgnore]
     public ConcurrentDictionary<string, PlayerVisibilityMemory> VisibilityMemory { get; } = new();
+    /// <summary>Spectator connections (connectionId → who is watching). Never part of the player list.</summary>
+    [JsonIgnore]
+    public ConcurrentDictionary<string, SpectatorConnection> SpectatorConnections { get; } = new();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? EndedAt { get; set; }
+}
+
+public sealed record SpectatorConnection(string UserId, string Name);
+
+public class SpectatorDto
+{
+    public string UserId { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
+/// <summary>What the host sees about spectating. Only ever sent to the host.</summary>
+public class SpectatorInfoDto
+{
+    public bool Enabled { get; set; }
+    public string? WatchCode { get; set; }
+    public List<SpectatorDto> Spectators { get; set; } = [];
+}
+
+/// <summary>What a spectator gets back after joining with a watch code.</summary>
+public class SpectateResultDto
+{
+    public string RoomCode { get; set; } = "";
 }
 
 public class Achievement
